@@ -1,0 +1,63 @@
+substitutions:
+  _IMAGE_BASE: 'asia-northeast1-docker.pkg.dev'
+  _REPO_PATH: 'ap-repo/ap_mv'
+  _ENV_PREFIX: 'develop'
+  _CACHE_TAG: 'develop-latest'
+  _SERVICE_NAME: 'ap-mv-service'
+  _REGION: 'asia-northeast1'
+
+steps:
+  # ---------------------------------------------------
+  # Step 1: レポからキャッシュ用イメージの事前プル (高速化)
+  # ---------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Pull Cache Image'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull ${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_CACHE_TAG} || exit 0
+
+  # ---------------------------------------------------
+  # Step 2: Docker BuildKit を利用したマルチステージビルド
+  # ---------------------------------------------------
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build Container Image with Cache'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    args:
+      - 'build'
+      - '-t'
+      - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_ENV_PREFIX}-${SHORT_SHA}'
+      - '-t'
+      - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_CACHE_TAG}'
+      - '--cache-from'
+      - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_CACHE_TAG}'
+      - '--build-arg'
+      - 'BUILDKIT_INLINE_CACHE=1'
+      - '.'
+
+  # ---------------------------------------------------
+  # Step 3: Cloud Run への自動サーバーレスデプロイ
+  # ---------------------------------------------------
+  - name: 'gcr.io/google.com/cloudsdktool/cloudsdk'
+    id: 'Deploy to Cloud Run'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image=${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_ENV_PREFIX}-${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,LYRIA_MODEL=lyria-3-pro-preview,IMAGE_MODEL=gemini-3-pro-image-preview'
+
+# Artifact Registry へ永続化・追跡させるイメージ群
+images:
+  - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_ENV_PREFIX}-${SHORT_SHA}'
+  - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_CACHE_TAG}'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
