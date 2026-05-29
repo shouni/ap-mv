@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - AP MV Orchestrator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        zunda: {
+                            50: '#f4f9f1',
+                            100: '#e6f2de',
+                            200: '#cfe4be',
+                            500: '#7cb342', // コアとなるずんだグリーン
+                            600: '#689f38',
+                            700: '#558b2f',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-zunda-50 text-slate-800 min-h-screen flex flex-col">
+
+    <header class="bg-white border-b border-zunda-200 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 bg-zunda-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md">
+                    🎬
+                </div>
+                <span class="text-xl font-black tracking-tight text-zunda-700">AP <span class="text-zunda-500">MV</span></span>
+            </div>
+            <nav class="flex items-center space-x-4">
+                <span class="text-xs bg-zunda-100 text-zunda-700 px-2.5 py-1 rounded-full font-semibold">v3.0 - Pipe & Filter</span>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="text-center max-w-3xl mx-auto mb-12">
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl mb-4">
+                Music Recipe Driven <span class="text-zunda-500">Veo Orchestrator</span>
+            </h1>
+            <p class="text-lg text-slate-600">
+                プロット原稿から音楽・映像のタイムラインを展開し、キャラクターの一貫性を完全に維持した連続カット動画を自動生成します。
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div class="bg-white border border-zunda-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition duration-200">
+                <div class="w-12 h-12 bg-zunda-100 rounded-xl flex items-center justify-center text-2xl mb-4">📝</div>
+                <h2 class="text-xl font-bold text-slate-900 mb-2">通常生成 (Compose)</h2>
+                <p class="text-slate-600 text-sm mb-6">WebページURL、テキスト原稿から、作詞・作曲・動画台本をトータルでAI推論し、新規生成タスクをキューイングします。</p>
+                <a href="/web/compose" class="inline-flex items-center justify-center px-4 py-2.5 border border-transparent text-sm font-medium rounded-xl text-white bg-zunda-500 hover:bg-zunda-600 shadow-sm transition duration-150">
+                    作成フォームを開く
+                </a>
+            </div>
+
+            <div class="bg-white border border-zunda-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition duration-200">
+                <div class="w-12 h-12 bg-zunda-100 rounded-xl flex items-center justify-center text-2xl mb-4">🔁</div>
+                <h2 class="text-xl font-bold text-slate-900 mb-2">レシピから再生成 (Resume)</h2>
+                <p class="text-slate-600 text-sm mb-6">既存の <code>MusicRecipe JSON</code> を直接投入。Scripting工程をスキップし、失敗したカットからのリカバリや高速な再ビルドを行います。</p>
+                <a href="/web/generate-from-recipe" class="inline-flex items-center justify-center px-4 py-2.5 border border-zunda-500 text-sm font-medium rounded-xl text-zunda-700 bg-zunda-50 hover:bg-zunda-100 transition duration-150">
+                    JSON入力を開く
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-zunda-200 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
+            &copy; 2026 AP MV Orchestrator. Powered by Google Veo & Lyria 3.
+        </div>
+    </footer>
+
+</body>
+</html>

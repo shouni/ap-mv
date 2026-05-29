@@ -3,6 +3,7 @@ module ap-mv
 go 1.26
 
 require (
+	github.com/go-chi/chi/v5 v5.3.0
 	github.com/shouni/go-remote-io v1.5.2
 	github.com/shouni/go-utils v1.0.20
 	github.com/shouni/netarmor v1.0.3
