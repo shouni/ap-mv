@@ -46,6 +46,12 @@ func parseCommaSeparatedList(value string) []string {
 	return text.ParseCommaSeparatedList(value)
 }
 
+func normalizeGCSBucket(bucket string) string {
+	bucket = strings.TrimSpace(bucket)
+	bucket = strings.TrimPrefix(bucket, "gs://")
+	return strings.Trim(bucket, "/")
+}
+
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
 func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
@@ -72,6 +78,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.ServiceAccountEmail == "" {
 		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
+	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
 	if c.GCSBucket == "" {
 		return fmt.Errorf("GCS_MUSIC_BUCKET が設定されていません")
 	}
@@ -106,5 +113,5 @@ func (c *Config) ValidateEssentialConfig() error {
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
 func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(c.GCSBucket, path)
+	return remoteio.BuildGCSURI(normalizeGCSBucket(c.GCSBucket), path)
 }

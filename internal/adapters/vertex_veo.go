@@ -22,7 +22,7 @@ import (
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
 const veoHTTPTimeout = 30 * time.Second
-const maxVeoPollConsecutiveErrors = 3
+const maxVeoPollConsecutiveErrors = 10
 
 // VertexVeoRunner calls the Vertex AI Veo long-running video generation API.
 type VertexVeoRunner struct {
@@ -364,23 +364,23 @@ type vertexVideo struct {
 	SizeBytes int64  `json:"sizeBytes,omitempty"`
 }
 
-func firstGeneratedVideo(op *vertexOperation) (*vertexVideo, error) {
+func firstGeneratedVideo(op *vertexOperation) (vertexVideo, error) {
 	if op.Response == nil {
-		return nil, fmt.Errorf("Veo operation response is empty")
+		return vertexVideo{}, fmt.Errorf("Veo operation response is empty")
 	}
 	if len(op.Response.Videos) > 0 {
 		video := op.Response.Videos[0]
 		if video.GCSURI == "" {
 			video.GCSURI = video.URI
 		}
-		return &video, nil
+		return video, nil
 	}
 	if len(op.Response.GeneratedVideos) > 0 {
 		video := op.Response.GeneratedVideos[0].Video
 		if video.GCSURI == "" {
 			video.GCSURI = video.URI
 		}
-		return &video, nil
+		return video, nil
 	}
-	return nil, fmt.Errorf("Veo operation response contains no videos")
+	return vertexVideo{}, fmt.Errorf("Veo operation response contains no videos")
 }

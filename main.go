@@ -18,6 +18,8 @@ import (
 	"ap-mv/internal/worker/pipeline"
 )
 
+const localCSRFSessionSecret = "local-development-csrf-session-secret"
+
 //go:embed assets/templates/*
 var assetsFS embed.FS
 
@@ -38,7 +40,7 @@ func main() {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      serverWriteTimeout(cfg),
 		IdleTimeout:       60 * time.Second,
 	}
 
@@ -64,7 +66,7 @@ func buildHandler(ctx context.Context, cfg *config.Config) (http.Handler, func()
 		if err != nil {
 			return nil, func() {}, err
 		}
-		handler, err := web.NewRouter(assetsFS, container.TaskQueue, event.Dispatcher{Pipeline: container.Pipeline})
+		handler, err := web.NewRouter(assetsFS, container.TaskQueue, event.Dispatcher{Pipeline: container.Pipeline}, cfg.SessionSecret)
 		if err != nil {
 			container.Close()
 			return nil, func() {}, err
@@ -75,8 +77,22 @@ func buildHandler(ctx context.Context, cfg *config.Config) (http.Handler, func()
 	pipe := pipeline.New(videoRunner)
 	queue := ports.InlineTaskQueue{}
 	dispatcher := event.Dispatcher{Pipeline: pipe}
-	handler, err := web.NewRouter(assetsFS, queue, dispatcher)
+	handler, err := web.NewRouter(assetsFS, queue, dispatcher, routerSessionSecret(cfg))
 	return handler, func() {}, err
+}
+
+func routerSessionSecret(cfg *config.Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.SessionSecret) == "" {
+		return localCSRFSessionSecret
+	}
+	return cfg.SessionSecret
+}
+
+func serverWriteTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil || cfg.VeoOperationTimeout <= 0 {
+		return 21 * time.Minute
+	}
+	return cfg.VeoOperationTimeout + time.Minute
 }
 
 func isProduction() bool {

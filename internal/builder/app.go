@@ -46,6 +46,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config, videoRunner ports.V
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
 	pipe := buildPipeline(ctx, cfg, rio, httpClient, videoRunner)
 	queue := taskQueueAdapter{enqueuer: enqueuer}
+	pipe.TaskQueue = queue
 
 	return &app.Container{
 		Config:       cfg,

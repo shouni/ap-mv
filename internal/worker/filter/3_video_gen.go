@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
@@ -59,8 +60,30 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		cut.VideoID = res.VideoID
 		cut.VideoURL = res.CloudURL
 		lastVideoID = res.VideoID
+		if hasPendingCuts(fc.Recipe) && fc.TaskQueue != nil {
+			nextTask := *fc.Task
+			nextTask.Command = domain.CommandGenerateFromRecipe
+			nextTask.Recipe = fc.Recipe
+			nextTask.CreatedAt = time.Now().UTC()
+			if err := fc.TaskQueue.Enqueue(ctx, &nextTask); err != nil {
+				return fmt.Errorf("enqueue continuation after cut %d: %w", cut.Index, err)
+			}
+			return ErrPipelineDeferred
+		}
 	}
 	return nil
+}
+
+func hasPendingCuts(recipe *domain.MusicRecipe) bool {
+	if recipe == nil {
+		return false
+	}
+	for i := range recipe.Cuts {
+		if recipe.Cuts[i].Status != domain.CutStatusGenerated {
+			return true
+		}
+	}
+	return false
 }
 
 func videoPrompt(cut domain.VideoCut) string {

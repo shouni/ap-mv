@@ -43,7 +43,7 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 	}
 
 	dispatcher := event.Dispatcher{Pipeline: appCtx.Pipeline}
-	webHandler, err := web.NewRouter(assets, appCtx.TaskQueue, dispatcher)
+	webHandler, err := web.NewRouter(assets, appCtx.TaskQueue, dispatcher, appCtx.Config.SessionSecret)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}

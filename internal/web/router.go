@@ -3,8 +3,10 @@ package web
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,16 +22,16 @@ const (
 	csrfSessionKey  = "csrf_token"
 )
 
-func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher) (http.Handler, error) {
+func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher, sessionSecret string) (http.Handler, error) {
 	h, err := controllers.NewHandler(assets, queue, dispatcher)
 	if err != nil {
 		return nil, err
 	}
-	sessionKey, err := randomHex(32)
-	if err != nil {
-		return nil, err
+	sessionSecret = strings.TrimSpace(sessionSecret)
+	if sessionSecret == "" {
+		return nil, fmt.Errorf("session secret is required")
 	}
-	csrfStore := sessions.NewCookieStore([]byte(sessionKey))
+	csrfStore := sessions.NewCookieStore([]byte(sessionSecret))
 	csrfStore.Options = &sessions.Options{
 		Path:     "/",
 		HttpOnly: true,

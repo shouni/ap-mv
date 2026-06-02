@@ -16,7 +16,7 @@ import (
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
-	router, err := NewRouter(os.DirFS("../.."), ports.InlineTaskQueue{}, event.Dispatcher{})
+	router, err := NewRouter(os.DirFS("../.."), ports.InlineTaskQueue{}, event.Dispatcher{}, "test-session-secret")
 	if err != nil {
 		t.Fatalf("NewRouter() error = %v", err)
 	}

@@ -53,6 +53,8 @@ func LoadConfig() *Config {
 	allowedEmails := getEnv("ALLOWED_EMAILS", "")
 	allowedDomains := getEnv("ALLOWED_DOMAINS", "")
 
+	gcsBucket := normalizeGCSBucket(getEnv("GCS_MUSIC_BUCKET", ""))
+
 	cfg := Config{
 		ServiceURL:          serviceURL,
 		Port:                getEnv("PORT", DefaultPort),
@@ -61,7 +63,7 @@ func LoadConfig() *Config {
 		QueueID:             getEnv("CLOUD_TASKS_QUEUE_ID", ""),
 		TaskAudienceURL:     getEnv("TASK_AUDIENCE_URL", serviceURL),
 		ServiceAccountEmail: getEnv("SERVICE_ACCOUNT_EMAIL", ""),
-		GCSBucket:           getEnv("GCS_MUSIC_BUCKET", ""),
+		GCSBucket:           gcsBucket,
 		SlackWebhookURL:     getEnv("SLACK_WEBHOOK_URL", ""),
 		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
 		GeminiModel:         getEnv("GEMINI_MODEL", DefaultGeminiModel),

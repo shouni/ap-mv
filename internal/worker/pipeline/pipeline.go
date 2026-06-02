@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"ap-mv/internal/domain"
@@ -11,6 +12,7 @@ import (
 
 type Runner struct {
 	VideoRunner ports.VideoRunner
+	TaskQueue   ports.TaskQueue
 	Filters     []filter.Filter
 }
 
@@ -22,13 +24,16 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
-	fc := &filter.Context{Task: task, Recipe: task.Recipe, VideoRunner: r.VideoRunner}
+	fc := &filter.Context{Task: task, Recipe: task.Recipe, VideoRunner: r.VideoRunner, TaskQueue: r.TaskQueue}
 	filters := r.Filters
 	if len(filters) == 0 {
 		filters = defaultFilters(task.Command, r.VideoRunner)
 	}
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
+			if errors.Is(err, filter.ErrPipelineDeferred) {
+				return fc.Recipe, nil
+			}
 			return nil, fmt.Errorf("filter %s: %w", flt.Name(), err)
 		}
 	}
