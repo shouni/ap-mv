@@ -21,6 +21,8 @@ import (
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+const veoHTTPTimeout = 30 * time.Second
+const maxVeoPollConsecutiveErrors = 3
 
 // VertexVeoRunner calls the Vertex AI Veo long-running video generation API.
 type VertexVeoRunner struct {
@@ -71,8 +73,11 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		aspectRatio = config.DefaultVeoAspect
 	}
 
+	baseClient := &http.Client{Timeout: veoHTTPTimeout}
+	ctxWithClient := context.WithValue(ctx, oauth2.HTTPClient, baseClient)
+
 	return &VertexVeoRunner{
-		client:           oauth2.NewClient(ctx, ts),
+		client:           oauth2.NewClient(ctxWithClient, ts),
 		projectID:        strings.TrimSpace(cfg.ProjectID),
 		locationID:       strings.TrimSpace(cfg.LocationID),
 		model:            model,
@@ -136,17 +141,23 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 	ticker := time.NewTicker(r.pollInterval)
 	defer ticker.Stop()
 
+	consecutiveErrors := 0
 	for {
 		var op vertexOperation
 		body := map[string]string{"operationName": operationName}
 		if err := r.postJSON(ctx, r.modelURL("fetchPredictOperation"), body, &op); err != nil {
-			return nil, fmt.Errorf("fetch Veo operation: %w", err)
-		}
-		if op.Done {
-			if op.Error != nil {
-				return nil, fmt.Errorf("Veo operation failed: %s", op.Error.message())
+			consecutiveErrors++
+			if consecutiveErrors >= maxVeoPollConsecutiveErrors {
+				return nil, fmt.Errorf("fetch Veo operation failed consecutively %d times: %w", consecutiveErrors, err)
 			}
-			return &op, nil
+		} else {
+			consecutiveErrors = 0
+			if op.Done {
+				if op.Error != nil {
+					return nil, fmt.Errorf("Veo operation failed: %s", op.Error.message())
+				}
+				return &op, nil
+			}
 		}
 
 		select {
@@ -232,7 +243,7 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 		return fmt.Errorf("duration_sec must be positive")
 	}
 	if req.Seed < 0 || req.Seed > math.MaxUint32 {
-		return fmt.Errorf("seed must be between 0 and %d", uint64(math.MaxUint32))
+		return fmt.Errorf("seed must be between 0 and %d", math.MaxUint32)
 	}
 	return nil
 }

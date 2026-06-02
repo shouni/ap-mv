@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/gorilla/sessions v1.4.0
 	github.com/shouni/gcp-kit v1.1.3
 	github.com/shouni/go-http-kit v1.4.2
 	github.com/shouni/go-remote-io v1.5.2
@@ -53,7 +54,6 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
-	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

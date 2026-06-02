@@ -1,0 +1,10 @@
+<form method="post" action="/web/compose">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <label>URL</label>
+    <input name="url" placeholder="https://example.com/source">
+    <label>Text</label>
+    <textarea name="text" placeholder="原稿、コンセプト、歌詞の方向性など"></textarea>
+    <label>Image URL</label>
+    <input name="image_url" placeholder="https://example.com/reference.png">
+    <button type="submit">Queue Compose</button>
+</form>

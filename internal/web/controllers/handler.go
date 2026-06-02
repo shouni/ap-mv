@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"bytes"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -20,6 +22,7 @@ type Handler struct {
 	Queue      ports.TaskQueue
 	Dispatcher event.Dispatcher
 	Index      *template.Template
+	Pages      *template.Template
 }
 
 type PageData struct {
@@ -27,6 +30,7 @@ type PageData struct {
 	CSRFToken string
 	JobID     string
 	Message   string
+	Body      template.HTML
 }
 
 func NewHandler(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher) (*Handler, error) {
@@ -34,7 +38,17 @@ func NewHandler(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher
 	if err != nil {
 		return nil, fmt.Errorf("parse index template: %w", err)
 	}
-	return &Handler{Queue: queue, Dispatcher: dispatcher, Index: index}, nil
+	pages, err := template.ParseFS(
+		assets,
+		"assets/templates/simple_layout.html",
+		"assets/templates/compose.html",
+		"assets/templates/recipe.html",
+		"assets/templates/history.html",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse page templates: %w", err)
+	}
+	return &Handler{Queue: queue, Dispatcher: dispatcher, Index: index, Pages: pages}, nil
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
@@ -42,12 +56,16 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "Compose", CSRFToken: csrfTokenFromContext(r.Context())}, composeFormHTML)
+	h.renderSimplePage(w, PageData{Title: "Compose", CSRFToken: csrfTokenFromContext(r.Context())}, "compose.html")
 }
 
 func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if !validCSRFToken(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
 		return
 	}
 	jobID, err := domain.NewJobID("compose")
@@ -67,12 +85,16 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}, recipeFormHTML)
+	h.renderSimplePage(w, PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}, "recipe.html")
 }
 
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	if !validCSRFToken(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
 		return
 	}
 	var recipe domain.MusicRecipe
@@ -103,7 +125,7 @@ func (h *Handler) TaskGenerate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) History(w http.ResponseWriter, _ *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, historyHTML)
+	h.renderSimplePage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
 }
 
 func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
@@ -136,13 +158,29 @@ func (h *Handler) renderIndex(w http.ResponseWriter, _ *http.Request, data PageD
 	}
 }
 
-func (h *Handler) renderSimplePage(w http.ResponseWriter, data PageData, body string) {
+func (h *Handler) renderSimplePage(w http.ResponseWriter, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	page := strings.ReplaceAll(simpleLayoutHTML, "{{TITLE}}", template.HTMLEscapeString(data.Title))
-	page = strings.ReplaceAll(page, "{{BODY}}", body)
-	page = strings.ReplaceAll(page, "{{CSRF}}", template.HTMLEscapeString(data.CSRFToken))
-	page = strings.ReplaceAll(page, "{{MESSAGE}}", template.HTMLEscapeString(data.Message))
-	_, _ = w.Write([]byte(page))
+	var body bytes.Buffer
+	if err := h.Pages.ExecuteTemplate(&body, templateName, data); err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	data.Body = template.HTML(body.String())
+	if err := h.Pages.ExecuteTemplate(w, "simple_layout.html", data); err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func validCSRFToken(r *http.Request) bool {
+	expected := csrfTokenFromContext(r.Context())
+	submitted := strings.TrimSpace(r.FormValue("csrf_token"))
+	if submitted == "" {
+		submitted = strings.TrimSpace(r.Header.Get("X-CSRF-Token"))
+	}
+	if expected == "" || submitted == "" || len(expected) != len(submitted) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(submitted)) == 1
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -150,11 +188,3 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
-
-const simpleLayoutHTML = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{TITLE}} - AP MV</title><style>body{font-family:ui-sans-serif,system-ui;margin:0;background:#f4f9f1;color:#172033}.wrap{max-width:880px;margin:48px auto;padding:0 20px}.card{background:#fff;border:1px solid #cfe4be;border-radius:20px;padding:28px;box-shadow:0 8px 30px #263b1a12}label{display:block;font-weight:700;margin:16px 0 6px}input,textarea{width:100%;box-sizing:border-box;border:1px solid #bdd7aa;border-radius:12px;padding:12px;font:inherit}textarea{min-height:220px}button,a.btn{display:inline-block;margin-top:18px;background:#689f38;color:#fff;border:0;border-radius:12px;padding:12px 18px;text-decoration:none;font-weight:700}.nav{color:#558b2f;text-decoration:none}</style></head><body><main class="wrap"><a class="nav" href="/">AP MV</a><section class="card"><h1>{{TITLE}}</h1>{{BODY}}</section></main></body></html>`
-
-const composeFormHTML = `<form method="post" action="/web/compose"><input type="hidden" name="csrf_token" value="{{CSRF}}"><label>URL</label><input name="url" placeholder="https://example.com/source"><label>Text</label><textarea name="text" placeholder="原稿、コンセプト、歌詞の方向性など"></textarea><label>Image URL</label><input name="image_url" placeholder="https://example.com/reference.png"><button type="submit">Queue Compose</button></form>`
-
-const recipeFormHTML = `<form method="post" action="/web/generate-from-recipe"><input type="hidden" name="csrf_token" value="{{CSRF}}"><label>MusicRecipe JSON</label><textarea name="recipe_json" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea><button type="submit">Queue Recipe Generation</button></form>`
-
-const historyHTML = `<p>{{MESSAGE}}</p><a class="btn" href="/">Back Home</a>`

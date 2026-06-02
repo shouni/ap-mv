@@ -8,10 +8,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/sessions"
 
 	"ap-mv/internal/ports"
 	"ap-mv/internal/web/controllers"
 	"ap-mv/internal/worker/event"
+)
+
+const (
+	csrfSessionName = "ap-mv-csrf"
+	csrfSessionKey  = "csrf_token"
 )
 
 func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher) (http.Handler, error) {
@@ -19,12 +25,23 @@ func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher)
 	if err != nil {
 		return nil, err
 	}
+	sessionKey, err := randomHex(32)
+	if err != nil {
+		return nil, err
+	}
+	csrfStore := sessions.NewCookieStore([]byte(sessionKey))
+	csrfStore.Options = &sessions.Options{
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(csrfTokenMiddleware)
+	r.Use(csrfTokenMiddleware(csrfStore))
 
 	r.Get("/", h.Home)
 	r.Route("/web", func(r chi.Router) {
@@ -39,13 +56,41 @@ func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher)
 	return r, nil
 }
 
-func csrfTokenMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, 16)
-		if _, err := rand.Read(buf); err != nil {
-			http.Error(w, "csrf token generation failed", http.StatusInternalServerError)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(controllers.WithCSRFToken(r.Context(), hex.EncodeToString(buf))))
-	})
+func csrfTokenMiddleware(store sessions.Store) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session, err := store.Get(r, csrfSessionName)
+			if err != nil {
+				session, err = store.New(r, csrfSessionName)
+				if err != nil {
+					http.Error(w, "csrf session creation failed", http.StatusInternalServerError)
+					return
+				}
+			}
+
+			token, _ := session.Values[csrfSessionKey].(string)
+			if token == "" {
+				token, err = randomHex(16)
+				if err != nil {
+					http.Error(w, "csrf token generation failed", http.StatusInternalServerError)
+					return
+				}
+				session.Values[csrfSessionKey] = token
+				if err := session.Save(r, w); err != nil {
+					http.Error(w, "csrf session save failed", http.StatusInternalServerError)
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r.WithContext(controllers.WithCSRFToken(r.Context(), token)))
+		})
+	}
+}
+
+func randomHex(size int) (string, error) {
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
