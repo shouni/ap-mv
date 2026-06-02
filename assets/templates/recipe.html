@@ -1,0 +1,6 @@
+<form method="post" action="/web/generate-from-recipe">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <label>MusicRecipe JSON</label>
+    <textarea name="recipe_json" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
+    <button type="submit">Queue Recipe Generation</button>
+</form>

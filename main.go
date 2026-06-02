@@ -1,74 +1,112 @@
 package main
 
 import (
+	"context"
 	"embed"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"ap-mv/internal/adapters"
+	"ap-mv/internal/builder"
+	"ap-mv/internal/config"
+	"ap-mv/internal/ports"
+	"ap-mv/internal/web"
+	"ap-mv/internal/worker/event"
+	"ap-mv/internal/worker/pipeline"
 )
+
+const localCSRFSessionSecret = "local-development-csrf-session-secret"
 
 //go:embed assets/templates/*
 var assetsFS embed.FS
 
-type PageData struct {
-	Title string
-}
-
 func main() {
-	// 構造化ロガーの設定
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("AP MV テンプレート疎通テストサーバーを起動しています...")
-
-	// embed.FS から index.html テンプレートを事前パース
-	tmpl, err := template.ParseFS(assetsFS, "assets/templates/index.html")
+	cfg := config.LoadConfig()
+	router, cleanup, err := buildHandler(context.Background(), cfg)
 	if err != nil {
-		slog.Error("テンプレートの解析に失敗しました", "error", err)
+		slog.Error("application initialization failed", "error", err)
 		os.Exit(1)
 	}
-
-	r := chi.NewRouter()
-
-	// 最小限の標準ミドルウェア
-	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	// トップ画面 (Home) の表示ハンドラー
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		data := PageData{
-			Title: "Home",
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := tmpl.Execute(w, data); err != nil {
-			slog.Error("テンプレートのレンダリングに失敗しました", "error", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-	})
-
-	// ポート設定（Cloud Run等の環境変数に準拠、デフォルトは8080）
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	defer cleanup()
 
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      serverWriteTimeout(cfg),
+		IdleTimeout:       60 * time.Second,
 	}
 
-	slog.Info("HTTP サーバーが稼働しました", "port", port, "url", "http://localhost:"+port)
-	if err := srv.ListenAndServe(); err != nil {
-		slog.Error("サーバーが停止しました", "error", err)
+	slog.Info("HTTP server started", "port", cfg.Port, "url", "http://localhost:"+cfg.Port, "env", appEnv())
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
+}
+
+func buildHandler(ctx context.Context, cfg *config.Config) (http.Handler, func(), error) {
+	var videoRunner ports.VideoRunner = adapters.NewMockVeoRunner(cfg)
+	if isProduction() {
+		if err := cfg.ValidateEssentialConfig(); err != nil {
+			return nil, func() {}, err
+		}
+		runner, err := adapters.NewVertexVeoRunner(ctx, cfg)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		videoRunner = runner
+		container, err := builder.BuildContainer(ctx, cfg, videoRunner)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		handler, err := web.NewRouter(assetsFS, container.TaskQueue, event.Dispatcher{Pipeline: container.Pipeline}, cfg.SessionSecret)
+		if err != nil {
+			container.Close()
+			return nil, func() {}, err
+		}
+		return handler, container.Close, nil
+	}
+
+	pipe := pipeline.New(videoRunner)
+	queue := ports.InlineTaskQueue{}
+	dispatcher := event.Dispatcher{Pipeline: pipe}
+	handler, err := web.NewRouter(assetsFS, queue, dispatcher, routerSessionSecret(cfg))
+	return handler, func() {}, err
+}
+
+func routerSessionSecret(cfg *config.Config) string {
+	if cfg == nil || strings.TrimSpace(cfg.SessionSecret) == "" {
+		return localCSRFSessionSecret
+	}
+	return cfg.SessionSecret
+}
+
+func serverWriteTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil || cfg.VeoOperationTimeout <= 0 {
+		return 21 * time.Minute
+	}
+	return cfg.VeoOperationTimeout + time.Minute
+}
+
+func isProduction() bool {
+	env := appEnv()
+	return env == "production" || env == "prod"
+}
+
+func appEnv() string {
+	env := strings.TrimSpace(os.Getenv("APP_ENV"))
+	if env == "" {
+		env = strings.TrimSpace(os.Getenv("ENV"))
+	}
+	if env == "" {
+		return "local"
+	}
+	return strings.ToLower(env)
 }

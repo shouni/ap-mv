@@ -51,7 +51,7 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,LYRIA_MODEL=lyria-3-pro-preview,IMAGE_MODEL=gemini-3-pro-image-preview'
+      - '--set-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,LYRIA_MODEL=lyria-3-pro-preview,IMAGE_MODEL=gemini-3-pro-image-preview,VEO_MODEL=veo-3.1-generate-001,VEO_OUTPUT_PREFIX=ap-mv/veo'
 
 # Artifact Registry へ永続化・追跡させるイメージ群
 images:
