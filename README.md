@@ -27,6 +27,12 @@
 
 動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成途中でタイムアウトやAPIエラーにより失敗した場合でも、再試行時は `status=generated` のカットを自動的にスキップ。保持済みの `video_id` を次カットの `PreviousVideoID` に引き継ぎ、**「途中のカットから安全に再開」** することができる回復性（Resilience）を備えています。
 
+### ⛓ Cut-by-Cut Task Chaining (Cloud Tasks タイムアウト対策)
+
+Veo の1カット生成は長時間の Long-Running Operation になるため、複数カットを1つのHTTPワーカー内で直列生成し続けると、Cloud Tasks / Cloud Run のタイムアウトに衝突します。現在の `VideoGenerationFilter` は **1回のワーカー実行で未生成カットを1つだけ生成** し、まだ未生成カットが残っている場合は、更新済みの `MusicRecipe` を `generate_from_recipe` タスクとして再度 Cloud Tasks に投入します。
+
+これにより、各ワーカー実行の責務は「1カット生成 + 状態更新 + 次タスク委譲」に分割されます。`status=generated` のカットは後続タスクでスキップされ、最後のカットが完了した実行だけが `Publishing` へ進みます。
+
 ### ⏳ Audio-Driven Timeline Logic (柔軟なタイムライン展開)
 
 原稿から抽出された `MusicRecipe` JSON が `sections` ベース（長尺セクション単位）で届いた場合でも、システム内の正規化機構（`Normalize()`）によって、各セクションの `duration_seconds` から独立した `cuts` 列（秒数、開始・終了時間）を自動計算・展開。テンポ（`tempo_bpm`）や雰囲気（`style`）に完全に同期したタイムラインを動的に組み立てます。
@@ -36,6 +42,7 @@
 * **Token-Bucket & Semaphore**: `golang.org/x/time/rate` による流量制御とセマフォによる同時実行数制御を行い、Veo/Lyria API のレートリミット（429）を全自動で回避。
 * **Network Armor**: `go-http-kit` と連動し、外部API通信およびGCSリクエストの接続直前で SSRF、DNS Rebinding、TOCTOU攻撃をIPレベルで遮断。
 * **Singleflight Protection**: 大容量の動画・音声アセットの重複フェッチや二重アップロードをインメモリで完全に抑制。
+* **Session-backed CSRF**: WebフォームのCSRFトークンは `gorilla/sessions` のCookieセッションに保存し、POST時に定数時間比較で検証します。Cookie署名キーには起動時ランダム値ではなく `SESSION_SECRET` を使うため、Cloud Run の再起動や複数インスタンス間でも検証が安定します。
 
 ---
 
@@ -47,7 +54,7 @@
 | --- | --- | --- |
 | **1. Scripting** | `1_scripting.go` | 原稿（URL/Text/Image）から `go-web-reader` でコンテキスト収集。歌詞・構成・拍子・Audio Cueを含む **Music & Video Recipe JSON** を生成（`go-gemini-client` 駆動）。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `gemini-image-kit` を内包。キャラクター固有 Seed とビジュアル特徴、参照URLから、ブレのない高精度なキーフレーム静止画をインメモリ圧縮しながら一括生成。 |
-| **3. Video Gen (Veo)** | `3_video_gen.go` | **【核心部】** キーフレーム（`ImageReference` 優先）、`AudioReference`、プロンプト、`PreviousVideoID`、Seed をまとめ、流量制御下で Veo API 実装へ投入。Video-to-Video 連鎖とレジューム（スキップ）を制御。 |
+| **3. Video Gen (Veo)** | `3_video_gen.go` | **【核心部】** キーフレーム（`ImageReference` 優先）、`AudioReference`、プロンプト、`PreviousVideoID`、Seed をまとめ、Veo API 実装へ投入。未生成カットを1つ生成し、残りがあれば更新済みレシピを次の Cloud Tasks へ委譲。Video-to-Video 連鎖とレジューム（スキップ）を制御。 |
 | **4. Publishing** | `4_publishing.go` | 生成された複数のカット動画（mp4）と音声セグメント（WAV/MP3）をロスレス統合またはエンコード。完成動画と更新された `video_music_meta.json` を GCS へ永続化。 |
 
 ---
@@ -63,6 +70,8 @@ production では `internal/adapters.VertexVeoRunner` を DI します。local /
 * Application Default Credentials で `https://www.googleapis.com/auth/cloud-platform` の OAuth token を取得
 * Vertex AI Veo の `:predictLongRunning` にリクエストを送信
 * `:fetchPredictOperation` をポーリングし、完了した `gcsUri` を取得
+* OAuth2 HTTP クライアントには30秒の単一リクエストタイムアウトを設定
+* ポーリング中の一時的な通信エラーは連続10回まで許容
 * `ImageReference` がある場合は `image.gcsUri` として投入
 * 前カットの `VideoID` が `gs://...mp4` の場合は `video.gcsUri` として投入し、Video-to-Video 連鎖を維持
 * 生成結果の `gcsUri` を `VideoResponse.CloudURL` と `VideoResponse.VideoID` に返し、次カットへ引き継ぐ
@@ -78,7 +87,18 @@ production では `internal/adapters.VertexVeoRunner` を DI します。local /
 | `VEO_POLL_INTERVAL_SECONDS` | `10` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT_SECONDS` | `1200` | 1カット生成の最大待機秒数 |
 
-production 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_MUSIC_BUCKET` も必須です。実行サービスアカウントには Vertex AI の実行権限と、`GCS_MUSIC_BUCKET` への書き込み権限が必要です。
+production 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_MUSIC_BUCKET` も必須です。`GCS_MUSIC_BUCKET` は `my-bucket` または `gs://my-bucket` のどちらでも受け付け、設定ロード時に `gs://` プレフィックスを取り除いて正規化します。実行サービスアカウントには Vertex AI の実行権限と、`GCS_MUSIC_BUCKET` への書き込み権限が必要です。
+
+### Web Security Environment Variables
+
+| 変数 | 用途 |
+| --- | --- |
+| `SESSION_SECRET` | OAuth セッションおよびCSRF CookieセッションのHMAC署名キー。productionでは必須。Cloud Run の全インスタンスで同じ値を設定してください。 |
+| `SESSION_ENCRYPT_KEY` | OAuth セッション暗号化キー。productionでは必須。16 / 24 / 32 bytes のいずれか。 |
+| `GOOGLE_CLIENT_ID` | Google OAuth クライアントID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
+
+local / non-production で `SESSION_SECRET` が未設定の場合、WebフォームCSRF用には開発用固定キーを使います。本番では `ValidateEssentialConfig()` が `SESSION_SECRET` 未設定をエラーにします。
 
 ---
 
@@ -98,7 +118,7 @@ ap-mv/
     ├── domain/             # 外部依存のない純粋なドメインモデル（music_recipe, cut, job_id検証）
     ├── web/
     │   ├── controllers/    # フロントエンド制御（Google OAuth認証、セッション、共通フォーム処理）
-    │   └── router.go       # chiを用いたWeb/Authルーティング、CSRFミドルウェア適用
+    │   └── router.go       # chiを用いたWebルーティング、SESSION_SECRETベースのCSRFミドルウェア適用
     └── worker/
         ├── event/          # Cloud Tasks ペイロードのデコードおよびディスパッチャー
         ├── pipeline/       # command 別の生成フロー（mv_pipeline.go）と共通エラーハンドリング
@@ -160,27 +180,24 @@ sequenceDiagram
     F2-->>Pipeline: []KeyframeImages
 
     Pipeline->>F3: Execute(recipe, keyframes)
-    Note over F3: Loop内で Video-to-VideoID 連鎖 (lastVideoID)<br/>generated済みカットはステータスを見て自動スキップ（レジューム）
-    loop 各カットごと (流量制御 & netarmor防壁下)
-        F3->>F3: 既にstatus=generatedならSkip、lastVideoIDを更新して次へ
-        F3->>F3: BuildVideoRequest(lastVideoID, keyframe, audio_cue)
-        F3-->>Pipeline: カット動画レスポンス (mp4 Data + 新VideoID)
-        F3->>F3: cut.status = "generated" / video_id 更新
-    end
-    F3-->>Pipeline: []CutsMetadata (更新済み)
+    Note over F3: 1ワーカー実行では未生成カットを1つだけ生成<br/>generated済みカットはステータスを見て自動スキップ（レジューム）
+    F3->>F3: BuildVideoRequest(lastVideoID, keyframe, audio_cue)
+    F3-->>Pipeline: カット動画レスポンス (mp4 Data + 新VideoID)
+    F3->>F3: cut.status = "generated" / video_id 更新
 
-    Pipeline->>F4: Execute(cuts)
-    F4->>GCS: go-remote-io を通じた透過的保存 (mp4/WAV/video_music_meta.json)
-    F4-->>Pipeline: PublishResult
-
-    %% 通知・リカバリフェーズ
-    alt 生成・保存に成功
+    alt 未生成カットが残っている
+        F3->>Queue: 更新済みMusicRecipeを generate_from_recipe として再投入
+        Pipeline-->>Worker: nil (Task Success / deferred)
+    else 全カット生成済み
+        Pipeline->>F4: Execute(cuts)
+        F4->>GCS: go-remote-io を通じた透過的保存 (mp4/WAV/video_music_meta.json)
+        F4-->>Pipeline: PublishResult
         Pipeline->>Slack: 完了通知 (History URL / 各種 Signed URL)
-    else 生成・保存に失敗
-        Pipeline->>Slack: エラー通知 (category, source, seed, error)
+        Pipeline-->>Worker: nil (Task Success)
     end
-    Pipeline-->>Worker: nil (Task Success)
 
+    %% リカバリフェーズ
+    Pipeline->>Slack: エラー時のみ失敗通知 (category, source, seed, error)
 ```
 
 ---
@@ -191,7 +208,7 @@ sequenceDiagram
 
 1. Google OAuthで安全にログインします。
 2. トップ画面より、`url`、`text`、`image`を入力し送信します（Cloud Tasks 経由で即座に202 Accepted）。
-3. 非同期ワーカーが起動し、`Filter 1`〜`Filter 4` がストリーム駆動。完了すると成果物のメタデータがGCSの `video_music_meta.json` にパブリッシュされ、Slackに通知が飛びます。
+3. 非同期ワーカーが起動し、`Filter 1`〜`Filter 4` がストリーム駆動します。動画生成は1カットずつ Cloud Tasks に再投入され、最後のカット完了後に成果物のメタデータがGCSの `video_music_meta.json` にパブリッシュされ、Slackに通知が飛びます。
 
 ### 2. 確定済み MusicRecipe JSON からのダイレクト動画再生成 / レジューム
 
