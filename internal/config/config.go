@@ -7,6 +7,9 @@ import (
 const (
 	DefaultPort          = "8080"
 	DefaultGeminiModel   = "gemini-3.5-flash"
+	DefaultVeoModel      = "veo-3.1-generate-001"
+	DefaultVeoAspect     = "16:9"
+	DefaultVeoOutputRoot = "ap-mv/veo"
 	DefaultShutdownGrace = 15 * time.Second
 )
 
@@ -23,6 +26,12 @@ type Config struct {
 	SlackWebhookURL     string
 	GeminiAPIKey        string
 	GeminiModel         string
+	VeoModel            string
+	VeoOutputPrefix     string
+	VeoAspectRatio      string
+	VeoGenerateAudio    bool
+	VeoPollInterval     time.Duration
+	VeoOperationTimeout time.Duration
 	ShutdownTimeout     time.Duration
 
 	// OAuth & Session Settings
@@ -56,6 +65,12 @@ func LoadConfig() *Config {
 		SlackWebhookURL:     getEnv("SLACK_WEBHOOK_URL", ""),
 		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
 		GeminiModel:         getEnv("GEMINI_MODEL", DefaultGeminiModel),
+		VeoModel:            getEnv("VEO_MODEL", DefaultVeoModel),
+		VeoOutputPrefix:     getEnv("VEO_OUTPUT_PREFIX", DefaultVeoOutputRoot),
+		VeoAspectRatio:      getEnv("VEO_ASPECT_RATIO", DefaultVeoAspect),
+		VeoGenerateAudio:    getEnvAsBool("VEO_GENERATE_AUDIO", false),
+		VeoPollInterval:     time.Duration(getEnvAsInt("VEO_POLL_INTERVAL_SECONDS", 10)) * time.Second,
+		VeoOperationTimeout: time.Duration(getEnvAsInt("VEO_OPERATION_TIMEOUT_SECONDS", 20*60)) * time.Second,
 		ShutdownTimeout:     DefaultShutdownGrace,
 
 		// OAuth & Session

@@ -52,39 +52,33 @@
 
 ---
 
-## 🔌 ポートによる外部抽象化 (Adapter Boundary)
+## 🔌 Veo Adapter Boundary
 
-本システムは、Veo API への実通信を **`ports.VideoRunner`** インターフェースとして完全に分離しています。リポジトリ内部には本番用 Veo adapter 実装を持たせず、利用側のアプリケーションや実行環境に応じたアダプターをDI（依存注入）します。
+Veo API への実通信は **`ports.VideoRunner`** インターフェースに分離しています。`ports.VideoRunner` / `VideoGenerationRequest` / `VideoResponse` は `github.com/shouni/go-veo-orchestrator v1.0.4` の型を alias しており、オーケストレーター側の契約と同じ形で扱います。
 
-### `ports.VideoRunner` インターフェースの責務
+production では `internal/adapters.VertexVeoRunner` を DI します。local / non-production では `MockVeoRunner` を使い、実 API を呼ばずにパイプラインを検証できます。
 
-* Vertex AI / Google Cloud / Gemini API などの認証およびエンドポイント管理
-* `ImageReference` / `AudioReference` がある場合はその URI（`gs://...`等）を最優先で解決
-* 上記参照が空の場合のみ、`InputImage` / `InputAudio`（バイト列）を GCS 等へアップロードして URI 化
-* Veo API への動画生成リクエスト送信、および長時間 Operation のポーリング、タイムアウト、リトライ制御
-* 次カットへ引き継ぐための `VideoResponse.VideoID` およびブラウザ再生用の `CloudURL` の返却
+### `VertexVeoRunner` の責務
 
-```go
-// アプリケーション側で実装して投入する Veo 実行用アダプターの例
-type MyVeoRunner struct {
-    // client, bucket, model, location などの依存
-}
+* Application Default Credentials で `https://www.googleapis.com/auth/cloud-platform` の OAuth token を取得
+* Vertex AI Veo の `:predictLongRunning` にリクエストを送信
+* `:fetchPredictOperation` をポーリングし、完了した `gcsUri` を取得
+* `ImageReference` がある場合は `image.gcsUri` として投入
+* 前カットの `VideoID` が `gs://...mp4` の場合は `video.gcsUri` として投入し、Video-to-Video 連鎖を維持
+* 生成結果の `gcsUri` を `VideoResponse.CloudURL` と `VideoResponse.VideoID` に返し、次カットへ引き継ぐ
 
-func (r *MyVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
-    // 1. ネットワーク防壁（netarmor）の保護下でリクエストを構築
-    // 2. 参照URIの解決、またはバイト列のアップロード
-    // 3. Veo API へのリクエスト送信とポーリングループ
-    // 4. 次のカットへ連鎖するための VideoID と CloudURL を返却
-    return &ports.VideoResponse{
-        CloudURL:    "gs://my-bucket/assets/out_cut_001.mp4",
-        VideoID:     "veo-generated-video-axis-id",
-        CutIndex:    req.CutIndex,
-        DurationSec: req.DurationSec,
-        MimeType:    "video/mp4",
-    }, nil
-}
+### Veo Environment Variables
 
-```
+| 変数 | デフォルト | 用途 |
+| --- | --- | --- |
+| `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID |
+| `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
+| `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16` |
+| `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
+| `VEO_POLL_INTERVAL_SECONDS` | `10` | long-running operation のポーリング間隔 |
+| `VEO_OPERATION_TIMEOUT_SECONDS` | `1200` | 1カット生成の最大待機秒数 |
+
+production 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_MUSIC_BUCKET` も必須です。実行サービスアカウントには Vertex AI の実行権限と、`GCS_MUSIC_BUCKET` への書き込み権限が必要です。
 
 ---
 

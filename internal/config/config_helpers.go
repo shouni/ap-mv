@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/envutil"
@@ -22,6 +23,22 @@ func getEnv(key string, defaultValue string) string {
 // getEnvAsInt は環境変数を整数として取得し、存在しないか変換に失敗した場合はデフォルト値を返します。
 func getEnvAsInt(key string, defaultValue int) int {
 	return envutil.GetEnvAsInt(key, defaultValue)
+}
+
+// getEnvAsBool は環境変数をboolとして取得し、存在しないか変換に失敗した場合はデフォルト値を返します。
+func getEnvAsBool(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(getEnv(key, ""))
+	if value == "" {
+		return defaultValue
+	}
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return defaultValue
+	}
 }
 
 // parseCommaSeparatedList はカンマ区切りの文字列をパースしてスライスを返します。
@@ -57,6 +74,21 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 	if c.GCSBucket == "" {
 		return fmt.Errorf("GCS_MUSIC_BUCKET が設定されていません")
+	}
+	if c.VeoModel == "" {
+		return fmt.Errorf("VEO_MODEL が設定されていません")
+	}
+	if c.VeoOutputPrefix == "" {
+		return fmt.Errorf("VEO_OUTPUT_PREFIX が設定されていません")
+	}
+	if c.VeoAspectRatio != "16:9" && c.VeoAspectRatio != "9:16" {
+		return fmt.Errorf("VEO_ASPECT_RATIO は 16:9 または 9:16 である必要があります")
+	}
+	if c.VeoPollInterval <= 0 {
+		return fmt.Errorf("VEO_POLL_INTERVAL_SECONDS は正の整数である必要があります")
+	}
+	if c.VeoOperationTimeout <= 0 {
+		return fmt.Errorf("VEO_OPERATION_TIMEOUT_SECONDS は正の整数である必要があります")
 	}
 
 	if c.SessionEncryptKey == "" {
