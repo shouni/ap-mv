@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/gorilla/sessions v1.4.0
 	github.com/shouni/gcp-kit v1.1.4
+	github.com/shouni/go-gemini-client v1.5.0
 	github.com/shouni/go-http-kit v1.4.2
 	github.com/shouni/go-remote-io v1.5.3
 	github.com/shouni/go-veo-orchestrator v1.0.5
@@ -54,9 +55,10 @@ require (
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jellydator/ttlcache/v3 v3.4.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/shouni/gemini-image-kit v1.7.3 // indirect
-	github.com/shouni/go-gemini-client v1.5.0 // indirect
+	github.com/shouni/go-utils v1.0.20 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.42.0 // indirect

@@ -12,9 +12,11 @@ import (
 
 type mockCutKeyframeRunner struct {
 	images []*imagePorts.ImageResponse
+	calls  int
 }
 
 func (m *mockCutKeyframeRunner) Run(ctx context.Context, recipe *ports.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
+	m.calls++
 	return m.images, nil
 }
 
@@ -42,19 +44,17 @@ func TestVideoTimelineRunner_RunChainsPreviousVideoID(t *testing.T) {
 		MusicRecipe:  ports.MusicRecipe{Style: "symphonic rock"},
 		Cuts: []ports.Cut{
 			{
-				CutIndex:          1,
-				DurationSec:       5,
-				AudioCue:          "intro pad",
-				VisualAnchor:      "slow dolly in",
-				KeyframeReference: "gs://images/cut_1.png",
-				AudioReference:    "gs://audio/seg_1.mp3",
+				CutIndex:       1,
+				DurationSec:    5,
+				AudioCue:       "intro pad",
+				VisualAnchor:   "slow dolly in",
+				AudioReference: "gs://audio/seg_1.mp3",
 			},
 			{
-				CutIndex:          2,
-				DurationSec:       5,
-				AudioCue:          "heavy chorus",
-				VisualAnchor:      "fast orbit camera",
-				KeyframeReference: "gs://images/cut_2.png",
+				CutIndex:     2,
+				DurationSec:  5,
+				AudioCue:     "heavy chorus",
+				VisualAnchor: "fast orbit camera",
 			},
 		},
 	}
@@ -86,7 +86,7 @@ func TestVideoTimelineRunner_RunChainsPreviousVideoID(t *testing.T) {
 	if string(video.requests[0].InputImage) != "image-1" {
 		t.Errorf("Expected first input image data, got %q", string(video.requests[0].InputImage))
 	}
-	if video.requests[0].ImageReference != "gs://images/cut_1.png" {
+	if video.requests[0].ImageReference != "" {
 		t.Errorf("Expected first image reference, got %q", video.requests[0].ImageReference)
 	}
 	if video.requests[0].AudioReference != "gs://audio/seg_1.mp3" {
@@ -103,6 +103,46 @@ func TestVideoTimelineRunner_RunChainsPreviousVideoID(t *testing.T) {
 	}
 	if recipe.Cuts[1].VideoID != "video-2" {
 		t.Errorf("Expected recipe to be updated with video ID, got %q", recipe.Cuts[1].VideoID)
+	}
+}
+
+func TestVideoTimelineRunner_RunUsesSavedKeyframeReferences(t *testing.T) {
+	ctx := context.Background()
+	recipe := &ports.VideoRecipe{
+		ProjectTitle: "saved keyframes",
+		Cuts: []ports.Cut{
+			{
+				CutIndex:          1,
+				DurationSec:       5,
+				VisualAnchor:      "first saved keyframe",
+				KeyframeReference: "gs://images/cut_1.png",
+			},
+			{
+				CutIndex:          2,
+				DurationSec:       5,
+				VisualAnchor:      "second saved keyframe",
+				KeyframeReference: "gs://images/cut_2.png",
+			},
+		},
+	}
+	keyframes := &mockCutKeyframeRunner{}
+	video := &mockVideoRunner{}
+	runner := NewVideoTimelineRunner(keyframes, video, nil)
+
+	if _, err := runner.Run(ctx, recipe); err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if keyframes.calls != 0 {
+		t.Fatalf("keyframe runner calls = %d, want 0", keyframes.calls)
+	}
+	if len(video.requests) != 2 {
+		t.Fatalf("video requests = %d, want 2", len(video.requests))
+	}
+	if video.requests[0].ImageReference != "gs://images/cut_1.png" {
+		t.Fatalf("first image reference = %q", video.requests[0].ImageReference)
+	}
+	if len(video.requests[0].InputImage) != 0 {
+		t.Fatalf("first input image should be empty when image reference exists")
 	}
 }
 

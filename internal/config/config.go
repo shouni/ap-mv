@@ -9,25 +9,26 @@ import (
 
 // Config はアプリ設定です。
 type Config struct {
-	ServiceURL          string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	Port                string        `env:"PORT" envDefault:"8080"`
-	ProjectID           string        `env:"GCP_PROJECT_ID"`
-	LocationID          string        `env:"GCP_LOCATION_ID"`
-	QueueID             string        `env:"CLOUD_TASKS_QUEUE_ID"`
-	TaskAudienceURL     string        `env:"TASK_AUDIENCE_URL"`
-	ServiceAccountEmail string        `env:"SERVICE_ACCOUNT_EMAIL"`
-	GCSBucket           string        `env:"GCS_MUSIC_BUCKET"`
-	SlackWebhookURL     string        `env:"SLACK_WEBHOOK_URL"`
-	GeminiAPIKey        string        `env:"GEMINI_API_KEY"`
-	GeminiModel         string        `env:"GEMINI_MODEL" envDefault:"gemini-3.5-flash"`
-	ImageModel          string        `env:"IMAGE_MODEL" envDefault:"gemini-3-pro-image-preview"`
-	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
-	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
-	VeoGenerateAudio    bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
-	VeoPollInterval     time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
-	VeoOperationTimeout time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
-	ShutdownTimeout     time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
+	ServiceURL            string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	Port                  string        `env:"PORT" envDefault:"8080"`
+	ProjectID             string        `env:"GCP_PROJECT_ID"`
+	LocationID            string        `env:"GCP_LOCATION_ID"`
+	QueueID               string        `env:"CLOUD_TASKS_QUEUE_ID"`
+	TaskAudienceURL       string        `env:"TASK_AUDIENCE_URL"`
+	ServiceAccountEmail   string        `env:"SERVICE_ACCOUNT_EMAIL"`
+	GCSBucket             string        `env:"GCS_MUSIC_BUCKET"`
+	SlackWebhookURL       string        `env:"SLACK_WEBHOOK_URL"`
+	GeminiAPIKey          string        `env:"GEMINI_API_KEY"`
+	GeminiModel           string        `env:"GEMINI_MODEL" envDefault:"gemini-3.5-flash"`
+	ImageModel            string        `env:"IMAGE_MODEL" envDefault:"gemini-3-pro-image-preview"`
+	CharacterReferenceURL string        `env:"CHARACTER_REFERENCE_URL"`
+	VeoModel              string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
+	VeoOutputPrefix       string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
+	VeoAspectRatio        string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
+	VeoGenerateAudio      bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
+	VeoPollInterval       time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
+	VeoOperationTimeout   time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
+	ShutdownTimeout       time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 
 	// OAuth & Session Settings
 	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"`
