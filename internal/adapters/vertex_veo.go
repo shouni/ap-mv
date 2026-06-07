@@ -57,11 +57,11 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 
 	pollInterval := cfg.VeoPollInterval
 	if pollInterval <= 0 {
-		pollInterval = 10 * time.Second
+		pollInterval = config.DefaultVeoPollInterval
 	}
 	operationTimeout := cfg.VeoOperationTimeout
 	if operationTimeout <= 0 {
-		operationTimeout = 20 * time.Minute
+		operationTimeout = config.DefaultVeoOperationTimeout
 	}
 
 	model := strings.TrimSpace(cfg.VeoModel)

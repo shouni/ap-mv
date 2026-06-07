@@ -1,7 +1,11 @@
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
+
+	"github.com/caarlos0/env/v11"
 )
 
 const (
@@ -10,80 +14,81 @@ const (
 	DefaultVeoModel      = "veo-3.1-generate-001"
 	DefaultVeoAspect     = "16:9"
 	DefaultVeoOutputRoot = "ap-mv/veo"
-	DefaultShutdownGrace = 15 * time.Second
+
+	DefaultVeoPollInterval     = 10 * time.Second
+	DefaultVeoOperationTimeout = 20 * time.Minute
+	DefaultShutdownGrace       = 15 * time.Second
 )
 
 // Config はアプリ設定です。
 type Config struct {
-	ServiceURL          string
-	Port                string
-	ProjectID           string
-	LocationID          string
-	QueueID             string
-	TaskAudienceURL     string
-	ServiceAccountEmail string
-	GCSBucket           string
-	SlackWebhookURL     string
-	GeminiAPIKey        string
-	GeminiModel         string
-	VeoModel            string
-	VeoOutputPrefix     string
-	VeoAspectRatio      string
-	VeoGenerateAudio    bool
-	VeoPollInterval     time.Duration
-	VeoOperationTimeout time.Duration
-	ShutdownTimeout     time.Duration
+	ServiceURL          string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	Port                string        `env:"PORT" envDefault:"8080"`
+	ProjectID           string        `env:"GCP_PROJECT_ID"`
+	LocationID          string        `env:"GCP_LOCATION_ID"`
+	QueueID             string        `env:"CLOUD_TASKS_QUEUE_ID"`
+	TaskAudienceURL     string        `env:"TASK_AUDIENCE_URL"`
+	ServiceAccountEmail string        `env:"SERVICE_ACCOUNT_EMAIL"`
+	GCSBucket           string        `env:"GCS_MUSIC_BUCKET"`
+	SlackWebhookURL     string        `env:"SLACK_WEBHOOK_URL"`
+	GeminiAPIKey        string        `env:"GEMINI_API_KEY"`
+	GeminiModel         string        `env:"GEMINI_MODEL" envDefault:"gemini-3.5-flash"`
+	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
+	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
+	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
+	VeoGenerateAudio    bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
+	VeoPollInterval     time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
+	VeoOperationTimeout time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
+	ShutdownTimeout     time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 
 	// OAuth & Session Settings
-	GoogleClientID     string
-	GoogleClientSecret string
+	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"`
+	GoogleClientSecret string `env:"GOOGLE_CLIENT_SECRET"`
 	// SessionSecret はセッションデータのHMAC署名用シークレットキーです。
-	SessionSecret string
+	SessionSecret string `env:"SESSION_SECRET"`
 	// SessionEncryptKey はセッションデータのAES暗号化用シークレットキーです。 16, 24, 32 バイトのいずれかである必要があります。
-	SessionEncryptKey string
+	SessionEncryptKey string `env:"SESSION_ENCRYPT_KEY"`
 
 	// Authz Settings
-	AllowedEmails  []string
-	AllowedDomains []string
+	AllowedEmails  []string `env:"ALLOWED_EMAILS"`
+	AllowedDomains []string `env:"ALLOWED_DOMAINS"`
+}
+
+func (c *Config) normalize() {
+	if c.TaskAudienceURL == "" {
+		c.TaskAudienceURL = c.ServiceURL
+	}
+	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
+	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
+	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
 }
 
 // LoadConfig は環境変数から設定を読み込みます。
 func LoadConfig() *Config {
-	serviceURL := getEnv("SERVICE_URL", "http://localhost:8080")
-	allowedEmails := getEnv("ALLOWED_EMAILS", "")
-	allowedDomains := getEnv("ALLOWED_DOMAINS", "")
-
-	gcsBucket := normalizeGCSBucket(getEnv("GCS_MUSIC_BUCKET", ""))
-
-	cfg := Config{
-		ServiceURL:          serviceURL,
-		Port:                getEnv("PORT", DefaultPort),
-		ProjectID:           getEnv("GCP_PROJECT_ID", ""),
-		LocationID:          getEnv("GCP_LOCATION_ID", ""),
-		QueueID:             getEnv("CLOUD_TASKS_QUEUE_ID", ""),
-		TaskAudienceURL:     getEnv("TASK_AUDIENCE_URL", serviceURL),
-		ServiceAccountEmail: getEnv("SERVICE_ACCOUNT_EMAIL", ""),
-		GCSBucket:           gcsBucket,
-		SlackWebhookURL:     getEnv("SLACK_WEBHOOK_URL", ""),
-		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
-		GeminiModel:         getEnv("GEMINI_MODEL", DefaultGeminiModel),
-		VeoModel:            getEnv("VEO_MODEL", DefaultVeoModel),
-		VeoOutputPrefix:     getEnv("VEO_OUTPUT_PREFIX", DefaultVeoOutputRoot),
-		VeoAspectRatio:      getEnv("VEO_ASPECT_RATIO", DefaultVeoAspect),
-		VeoGenerateAudio:    getEnvAsBool("VEO_GENERATE_AUDIO", false),
-		VeoPollInterval:     time.Duration(getEnvAsInt("VEO_POLL_INTERVAL_SECONDS", 10)) * time.Second,
-		VeoOperationTimeout: time.Duration(getEnvAsInt("VEO_OPERATION_TIMEOUT_SECONDS", 20*60)) * time.Second,
-		ShutdownTimeout:     DefaultShutdownGrace,
-
-		// OAuth & Session
-		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-		SessionSecret:      getEnv("SESSION_SECRET", ""),
-		SessionEncryptKey:  getEnv("SESSION_ENCRYPT_KEY", ""),
-
-		AllowedEmails:  parseCommaSeparatedList(allowedEmails),
-		AllowedDomains: parseCommaSeparatedList(allowedDomains),
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		panic(fmt.Errorf("load config: %w", err))
 	}
+	return cfg
+}
 
-	return &cfg
+// LoadConfigFromEnv は環境変数から設定を読み込み、変換エラーを返します。
+func LoadConfigFromEnv() (*Config, error) {
+	var cfg Config
+	if err := env.Parse(&cfg); err != nil {
+		return nil, err
+	}
+	cfg.normalize()
+	return &cfg, nil
+}
+
+func normalizeStringSlice(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			normalized = append(normalized, value)
+		}
+	}
+	return normalized
 }

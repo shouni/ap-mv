@@ -84,8 +84,8 @@ production では `internal/adapters.VertexVeoRunner` を DI します。local /
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
 | `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16` |
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
-| `VEO_POLL_INTERVAL_SECONDS` | `10` | long-running operation のポーリング間隔 |
-| `VEO_OPERATION_TIMEOUT_SECONDS` | `1200` | 1カット生成の最大待機秒数 |
+| `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
+| `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
 
 production 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_MUSIC_BUCKET` も必須です。`GCS_MUSIC_BUCKET` は `my-bucket` または `gs://my-bucket` のどちらでも受け付け、設定ロード時に `gs://` プレフィックスを取り除いて正規化します。実行サービスアカウントには Vertex AI の実行権限と、`GCS_MUSIC_BUCKET` への書き込み権限が必要です。
 
