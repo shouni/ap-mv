@@ -3,6 +3,7 @@ package builder
 import (
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
@@ -14,7 +15,8 @@ import (
 const defaultPromptMode = "default"
 
 type scriptPrompt struct {
-	builder *promptkit.Builder
+	builder   *promptkit.Builder
+	templates map[string]string
 }
 
 type scriptPromptData struct {
@@ -23,17 +25,22 @@ type scriptPromptData struct {
 }
 
 func newScriptPrompt() (*scriptPrompt, error) {
-	content, err := fs.ReadFile(assets.Prompts, "prompts/default.md")
-	if err != nil {
-		return nil, fmt.Errorf("read default script prompt: %w", err)
-	}
-	builder, err := promptkit.NewBuilder(map[string]string{
-		defaultPromptMode: string(content),
-	})
+	templates, err := loadPromptTemplates(assets.Prompts, assets.PromptDir)
 	if err != nil {
 		return nil, err
 	}
-	return &scriptPrompt{builder: builder}, nil
+	return newScriptPromptFromTemplates(templates)
+}
+
+func newScriptPromptFromTemplates(templates map[string]string) (*scriptPrompt, error) {
+	builder, err := promptkit.NewBuilder(templates)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := templates[defaultPromptMode]; !ok {
+		return nil, fmt.Errorf("default script prompt is required")
+	}
+	return &scriptPrompt{builder: builder, templates: templates}, nil
 }
 
 func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
@@ -47,10 +54,35 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	if mode == "" {
 		mode = defaultPromptMode
 	}
-	return p.builder.Build(defaultPromptMode, scriptPromptData{
+	templateMode := mode
+	if _, ok := p.templates[templateMode]; !ok {
+		templateMode = defaultPromptMode
+	}
+	return p.builder.Build(templateMode, scriptPromptData{
 		Mode:      mode,
 		InputText: strings.TrimSpace(data.InputText),
 	})
+}
+
+func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, error) {
+	entries, err := fs.ReadDir(fileSystem, rootDir)
+	if err != nil {
+		return nil, fmt.Errorf("read prompt directory: %w", err)
+	}
+
+	templates := make(map[string]string)
+	for _, entry := range entries {
+		if entry.IsDir() || path.Ext(entry.Name()) != ".md" {
+			continue
+		}
+		mode := strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
+		content, err := fs.ReadFile(fileSystem, path.Join(rootDir, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read script prompt %s: %w", entry.Name(), err)
+		}
+		templates[mode] = string(content)
+	}
+	return templates, nil
 }
 
 type keyframePrompt struct {

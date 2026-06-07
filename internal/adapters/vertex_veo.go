@@ -287,7 +287,14 @@ func audioMedia(req ports.VideoGenerationRequest) map[string]any {
 }
 
 func detectedAudioMimeType(data []byte) string {
-	mimeType := http.DetectContentType(data)
+	if len(data) == 0 {
+		return "audio/mpeg"
+	}
+	limit := 512
+	if len(data) < limit {
+		limit = len(data)
+	}
+	mimeType := http.DetectContentType(data[:limit])
 	switch mimeType {
 	case "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4":
 		return mimeType

@@ -38,6 +38,8 @@ type Task struct {
 
 var jobIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 
+const gcsURIPrefix = "gs://"
+
 func NewJobID(prefix string) (string, error) {
 	prefix = strings.Trim(strings.ToLower(prefix), "_- ")
 	if prefix == "" {
@@ -73,15 +75,35 @@ func (t *Task) Validate() error {
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("compose task requires source_url, text, or image_url")
 		}
+		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
+			return err
+		}
 	case CommandGenerateFromRecipe:
 		if t.Recipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("generate_from_recipe task requires recipe or recipe_url")
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
+		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
+			return err
 		}
 		if t.Recipe != nil {
 			return t.Recipe.Validate()
 		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
+	}
+	return nil
+}
+
+func validateOptionalGCSURI(fieldName, value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if !strings.HasPrefix(value, gcsURIPrefix) || strings.TrimSpace(strings.TrimPrefix(value, gcsURIPrefix)) == "" {
+		return fmt.Errorf("%s must be a valid GCS URI (gs://...)", fieldName)
 	}
 	return nil
 }
