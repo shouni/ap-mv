@@ -49,14 +49,13 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '-update-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,IMAGE_MODEL=gemini-3-pro-image-preview,VEO_MODEL=veo-3.1-generate-001,VEO_OUTPUT_PREFIX=ap-mv/veo'
+      - '--update-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,IMAGE_MODEL=gemini-3-pro-image-preview,VEO_MODEL=veo-3.1-generate-001,VEO_OUTPUT_PREFIX=ap-mv/veo'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push Cache Image'
     args:
       - 'push'
       - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_CACHE_TAG}'
-
 options:
   machineType: 'E2_HIGHCPU_8'
   logging: CLOUD_LOGGING_ONLY

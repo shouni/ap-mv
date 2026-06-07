@@ -56,22 +56,9 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	}
 
 	pollInterval := cfg.VeoPollInterval
-	if pollInterval <= 0 {
-		pollInterval = config.DefaultVeoPollInterval
-	}
 	operationTimeout := cfg.VeoOperationTimeout
-	if operationTimeout <= 0 {
-		operationTimeout = config.DefaultVeoOperationTimeout
-	}
-
 	model := strings.TrimSpace(cfg.VeoModel)
-	if model == "" {
-		model = config.DefaultVeoModel
-	}
 	aspectRatio := strings.TrimSpace(cfg.VeoAspectRatio)
-	if aspectRatio == "" {
-		aspectRatio = config.DefaultVeoAspect
-	}
 
 	baseClient := &http.Client{Timeout: veoHTTPTimeout}
 	ctxWithClient := context.WithValue(ctx, oauth2.HTTPClient, baseClient)
@@ -250,9 +237,6 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 
 func buildVeoOutputStorageURI(bucket, prefix string) string {
 	cleanPrefix := strings.Trim(path.Clean("/"+strings.TrimSpace(prefix)), "/")
-	if cleanPrefix == "" || cleanPrefix == "." {
-		cleanPrefix = config.DefaultVeoOutputRoot
-	}
 	return fmt.Sprintf("gs://%s/%s/", strings.TrimSpace(bucket), cleanPrefix)
 }
 

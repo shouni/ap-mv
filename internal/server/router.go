@@ -7,20 +7,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/shouni/gcp-kit/auth"
-	"github.com/shouni/gcp-kit/worker"
 
-	"ap-mv/internal/domain"
+	"ap-mv/internal/builder"
 	"ap-mv/internal/server/handlers"
 )
 
-type RouterHandlers struct {
-	Auth   *auth.Handler
-	Web    *handlers.Handler
-	Worker *worker.Handler[domain.Task]
-}
-
 // NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
-func NewRouter(h RouterHandlers) http.Handler {
+func NewRouter(h *builder.AppHandlers) http.Handler {
 	r := chi.NewRouter()
 	setupCommonMiddleware(r)
 	setupRoutes(r, h)
@@ -35,13 +28,13 @@ func setupCommonMiddleware(r *chi.Mux) {
 	r.Use(middleware.CleanPath)
 }
 
-func setupRoutes(r chi.Router, h RouterHandlers) {
+func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	if h.Auth != nil {
+	if h != nil && h.Auth != nil {
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/login", h.Auth.Login)
 			r.Get("/callback", h.Auth.Callback)
@@ -49,8 +42,8 @@ func setupRoutes(r chi.Router, h RouterHandlers) {
 	}
 
 	r.Group(func(r chi.Router) {
-		if h.Auth == nil {
-			if h.Web != nil {
+		if h == nil || h.Auth == nil {
+			if h != nil && h.Web != nil {
 				slog.Error("Auth handler is nil, skipping protected web routes")
 			}
 			return
@@ -65,8 +58,8 @@ func setupRoutes(r chi.Router, h RouterHandlers) {
 	})
 
 	r.Group(func(r chi.Router) {
-		if h.Auth == nil {
-			if h.Worker != nil {
+		if h == nil || h.Auth == nil {
+			if h != nil && h.Worker != nil {
 				slog.Error("Auth handler is nil, skipping worker routes")
 			}
 			return

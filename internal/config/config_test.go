@@ -75,17 +75,17 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.ServiceURL != "http://localhost:8080" {
 		t.Fatalf("ServiceURL = %q, want localhost default", cfg.ServiceURL)
 	}
-	if cfg.Port != DefaultPort {
-		t.Fatalf("Port = %q, want %q", cfg.Port, DefaultPort)
+	if cfg.Port != "8080" {
+		t.Fatalf("Port = %q, want 8080", cfg.Port)
 	}
 	if cfg.TaskAudienceURL != cfg.ServiceURL {
 		t.Fatalf("TaskAudienceURL = %q, want ServiceURL %q", cfg.TaskAudienceURL, cfg.ServiceURL)
 	}
-	if cfg.VeoPollInterval != DefaultVeoPollInterval {
-		t.Fatalf("VeoPollInterval = %s, want %s", cfg.VeoPollInterval, DefaultVeoPollInterval)
+	if cfg.VeoPollInterval != 10*time.Second {
+		t.Fatalf("VeoPollInterval = %s, want 10s", cfg.VeoPollInterval)
 	}
-	if cfg.VeoOperationTimeout != DefaultVeoOperationTimeout {
-		t.Fatalf("VeoOperationTimeout = %s, want %s", cfg.VeoOperationTimeout, DefaultVeoOperationTimeout)
+	if cfg.VeoOperationTimeout != 20*time.Minute {
+		t.Fatalf("VeoOperationTimeout = %s, want 20m", cfg.VeoOperationTimeout)
 	}
 }
 

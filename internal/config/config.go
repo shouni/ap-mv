@@ -1,23 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
-)
-
-const (
-	DefaultPort          = "8080"
-	DefaultGeminiModel   = "gemini-3.5-flash"
-	DefaultVeoModel      = "veo-3.1-generate-001"
-	DefaultVeoAspect     = "16:9"
-	DefaultVeoOutputRoot = "ap-mv/veo"
-
-	DefaultVeoPollInterval     = 10 * time.Second
-	DefaultVeoOperationTimeout = 20 * time.Minute
-	DefaultShutdownGrace       = 15 * time.Second
 )
 
 // Config はアプリ設定です。
@@ -64,12 +51,8 @@ func (c *Config) normalize() {
 }
 
 // LoadConfig は環境変数から設定を読み込みます。
-func LoadConfig() *Config {
-	cfg, err := LoadConfigFromEnv()
-	if err != nil {
-		panic(fmt.Errorf("load config: %w", err))
-	}
-	return cfg
+func LoadConfig() (*Config, error) {
+	return LoadConfigFromEnv()
 }
 
 // LoadConfigFromEnv は環境変数から設定を読み込み、変換エラーを返します。
