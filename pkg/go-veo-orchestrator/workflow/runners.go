@@ -44,24 +44,22 @@ func (m *manager) buildScriptRunner() (*runner.VideoScriptRunner, error) {
 
 // buildDesignRunner は、キャラクターデザインを担当する Runner を作成します。
 func (m *manager) buildDesignRunner() (*runner.DesignRunner, error) {
-	quality := m.generationManager.Quality
 	return runner.NewDesignRunner(
-		quality.recipeComposer,
-		quality.imageGenerator,
+		m.generationUnit.recipeComposer,
+		m.generationUnit.imageGenerator,
 		m.writer,
-		quality.model,
+		m.generationUnit.model,
 		m.cfg.StyleSuffix,
 	), nil
 }
 
 // buildKeyframeRunner は、カットのキーフレーム画像生成を担当する Runner を作成します。
 func (m *manager) buildKeyframeRunner() (*runner.CutKeyframeRunner, error) {
-	standard := m.generationManager.Standard
 	keyframeGen := keyframe.NewKeyframeGenerator(
-		standard.recipeComposer,
-		standard.imageGenerator,
+		m.generationUnit.recipeComposer,
+		m.generationUnit.imageGenerator,
 		m.promptDeps.KeyframePrompt,
-		standard.model,
+		m.generationUnit.model,
 		keyframe.WithKeyframeMaxConcurrency(m.cfg.MaxConcurrency),
 		keyframe.WithKeyframeRateInterval(m.cfg.RateInterval),
 	)

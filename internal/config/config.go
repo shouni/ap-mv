@@ -20,6 +20,7 @@ type Config struct {
 	SlackWebhookURL     string        `env:"SLACK_WEBHOOK_URL"`
 	GeminiAPIKey        string        `env:"GEMINI_API_KEY"`
 	GeminiModel         string        `env:"GEMINI_MODEL" envDefault:"gemini-3.5-flash"`
+	ImageModel          string        `env:"IMAGE_MODEL" envDefault:"gemini-3-pro-image-preview"`
 	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
 	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
 	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`

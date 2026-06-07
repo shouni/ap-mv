@@ -5,19 +5,26 @@ import (
 	"errors"
 	"fmt"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
 	"ap-mv/internal/worker/filter"
 )
 
 type Runner struct {
-	VideoRunner ports.VideoRunner
-	TaskQueue   ports.TaskQueue
-	Filters     []filter.Filter
+	VideoRunner        ports.VideoRunner
+	TaskQueue          ports.TaskQueue
+	Filters            []filter.Filter
+	OrchestratorConfig orchestrator.Config
 }
 
-func New(videoRunner ports.VideoRunner) *Runner {
-	return &Runner{VideoRunner: videoRunner}
+func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
+	r := &Runner{VideoRunner: videoRunner}
+	if len(cfg) > 0 {
+		r.OrchestratorConfig = cfg[0]
+	}
+	return r
 }
 
 func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecipe, error) {

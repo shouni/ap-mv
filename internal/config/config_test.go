@@ -18,6 +18,7 @@ var configEnvKeys = []string{
 	"SLACK_WEBHOOK_URL",
 	"GEMINI_API_KEY",
 	"GEMINI_MODEL",
+	"IMAGE_MODEL",
 	"VEO_MODEL",
 	"VEO_OUTPUT_PREFIX",
 	"VEO_ASPECT_RATIO",
@@ -87,6 +88,9 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.VeoOperationTimeout != 20*time.Minute {
 		t.Fatalf("VeoOperationTimeout = %s, want 20m", cfg.VeoOperationTimeout)
 	}
+	if cfg.ImageModel != "gemini-3-pro-image-preview" {
+		t.Fatalf("ImageModel = %q", cfg.ImageModel)
+	}
 }
 
 func TestLoadConfigFromEnvOverrides(t *testing.T) {
@@ -94,6 +98,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	t.Setenv("SERVICE_URL", "https://example.com")
 	t.Setenv("TASK_AUDIENCE_URL", "https://tasks.example.com")
 	t.Setenv("GCS_MUSIC_BUCKET", "gs://music-bucket/output/")
+	t.Setenv("IMAGE_MODEL", "image-standard")
 	t.Setenv("VEO_GENERATE_AUDIO", "true")
 	t.Setenv("VEO_POLL_INTERVAL", "7s")
 	t.Setenv("VEO_OPERATION_TIMEOUT", "30s")
@@ -113,6 +118,9 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	}
 	if !cfg.VeoGenerateAudio {
 		t.Fatal("VeoGenerateAudio = false, want true")
+	}
+	if cfg.ImageModel != "image-standard" {
+		t.Fatalf("ImageModel = %q", cfg.ImageModel)
 	}
 	if cfg.VeoPollInterval != 7*time.Second {
 		t.Fatalf("VeoPollInterval = %s, want 7s", cfg.VeoPollInterval)
