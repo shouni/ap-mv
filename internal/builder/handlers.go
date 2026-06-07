@@ -11,7 +11,7 @@ import (
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
 	"ap-mv/internal/domain"
-	"ap-mv/internal/web/controllers"
+	"ap-mv/internal/server/handlers"
 )
 
 const defaultSessionName = "ap-mv-session"
@@ -19,7 +19,7 @@ const defaultSessionName = "ap-mv-session"
 // AppHandlers は生成されたHTTPハンドラーを保持します。
 type AppHandlers struct {
 	Auth   *auth.Handler
-	Web    *controllers.Handler
+	Web    *handlers.Handler
 	Worker *worker.Handler[domain.Task]
 }
 
@@ -40,7 +40,7 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	webHandler, err := controllers.NewHandler(assets, appCtx.TaskQueue)
+	webHandler, err := handlers.NewHandler(assets, appCtx.TaskQueue)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}

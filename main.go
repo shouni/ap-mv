@@ -6,13 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"ap-mv/internal/adapters"
 	"ap-mv/internal/builder"
 	"ap-mv/internal/config"
-	"ap-mv/internal/web"
+	"ap-mv/internal/server"
 )
 
 //go:embed assets/templates/*
@@ -30,16 +28,9 @@ func main() {
 	}
 	defer cleanup()
 
-	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           router,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      serverWriteTimeout(cfg),
-		IdleTimeout:       60 * time.Second,
-	}
+	srv := server.NewHTTPServer(cfg, router)
 
-	slog.Info("HTTP server started", "port", cfg.Port, "url", "http://localhost:"+cfg.Port, "env", appEnv())
+	slog.Info("HTTP server started", "port", cfg.Port, "url", "http://localhost:"+cfg.Port)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("server stopped", "error", err)
 		os.Exit(1)
@@ -64,28 +55,10 @@ func buildHandler(ctx context.Context, cfg *config.Config) (http.Handler, func()
 		container.Close()
 		return nil, func() {}, err
 	}
-	handler := web.NewRouter(web.RouterHandlers{
+	handler := server.NewRouter(server.RouterHandlers{
 		Auth:   handlers.Auth,
 		Web:    handlers.Web,
 		Worker: handlers.Worker,
 	})
 	return handler, container.Close, nil
-}
-
-func serverWriteTimeout(cfg *config.Config) time.Duration {
-	if cfg == nil || cfg.VeoOperationTimeout <= 0 {
-		return 21 * time.Minute
-	}
-	return cfg.VeoOperationTimeout + time.Minute
-}
-
-func appEnv() string {
-	env := strings.TrimSpace(os.Getenv("APP_ENV"))
-	if env == "" {
-		env = strings.TrimSpace(os.Getenv("ENV"))
-	}
-	if env == "" {
-		return "local"
-	}
-	return strings.ToLower(env)
 }

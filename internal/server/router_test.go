@@ -1,4 +1,4 @@
-package web
+package server
 
 import (
 	"net/http"
@@ -13,7 +13,7 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 
 	"ap-mv/internal/ports"
-	"ap-mv/internal/web/controllers"
+	"ap-mv/internal/server/handlers"
 )
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
@@ -98,9 +98,9 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("auth.NewHandler() error = %v", err)
 	}
 
-	webHandler, err := controllers.NewHandler(os.DirFS("../.."), ports.InlineTaskQueue{})
+	webHandler, err := handlers.NewHandler(os.DirFS("../.."), ports.InlineTaskQueue{})
 	if err != nil {
-		t.Fatalf("controllers.NewHandler() error = %v", err)
+		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
 	router := NewRouter(RouterHandlers{Auth: authHandler, Web: webHandler})

@@ -1,4 +1,4 @@
-package web
+package server
 
 import (
 	"log/slog"
@@ -10,12 +10,12 @@ import (
 	"github.com/shouni/gcp-kit/worker"
 
 	"ap-mv/internal/domain"
-	"ap-mv/internal/web/controllers"
+	"ap-mv/internal/server/handlers"
 )
 
 type RouterHandlers struct {
 	Auth   *auth.Handler
-	Web    *controllers.Handler
+	Web    *handlers.Handler
 	Worker *worker.Handler[domain.Task]
 }
 
@@ -80,7 +80,7 @@ func setupRoutes(r chi.Router, h RouterHandlers) {
 	})
 }
 
-func registerWebRoutes(r chi.Router, h *controllers.Handler) {
+func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Get("/", h.Home)
 	r.Route("/web", func(r chi.Router) {
 		r.Get("/compose", h.ComposeForm)
@@ -105,7 +105,7 @@ func csrfContextMiddleware(authHandler *auth.Handler) func(http.Handler) http.Ha
 				}
 				csrfToken = token
 			}
-			next.ServeHTTP(w, r.WithContext(controllers.WithCSRFToken(r.Context(), csrfToken)))
+			next.ServeHTTP(w, r.WithContext(handlers.WithCSRFToken(r.Context(), csrfToken)))
 		})
 	}
 }
