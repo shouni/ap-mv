@@ -2,6 +2,7 @@ package filter
 
 import (
 	"math"
+	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -68,6 +69,22 @@ func toVideoRecipe(recipe *domain.MusicRecipe) (*orchestrator.VideoRecipe, error
 	}
 	videoRecipe.Normalize()
 	return videoRecipe, nil
+}
+
+func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *orchestrator.VideoRecipe) {
+	if task == nil || recipe == nil {
+		return
+	}
+	audioURL := strings.TrimSpace(task.AudioURL)
+	if audioURL == "" {
+		return
+	}
+	recipe.Normalize()
+	for i := range recipe.Cuts {
+		if strings.TrimSpace(recipe.Cuts[i].AudioReference) == "" {
+			recipe.Cuts[i].AudioReference = audioURL
+		}
+	}
 }
 
 func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, error) {

@@ -35,6 +35,10 @@ func buildWorkflow(
 	if err != nil {
 		return nil, err
 	}
+	scriptPrompt, err := newScriptPrompt()
+	if err != nil {
+		return nil, err
+	}
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
 		Config:      buildOrchestratorConfig(cfg),
@@ -45,7 +49,7 @@ func buildWorkflow(
 		VideoRunner: videoRunner,
 		PromptDeps: &workflow.PromptDeps{
 			Characters:     characters,
-			ScriptPrompt:   scriptPrompt{},
+			ScriptPrompt:   scriptPrompt,
 			KeyframePrompt: keyframePrompt{styleSuffix: buildOrchestratorConfig(cfg).StyleSuffix},
 		},
 	})

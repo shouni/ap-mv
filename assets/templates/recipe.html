@@ -1,5 +1,9 @@
 <form method="post" action="/web/generate-from-recipe">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <label>MusicRecipe GCS URL</label>
+    <input name="recipe_url" placeholder="gs://bucket/path/video_music_meta.json">
+    <label>Music Audio GCS URL</label>
+    <input name="audio_url" placeholder="gs://bucket/path/music.mp3">
     <label>MusicRecipe JSON</label>
     <textarea name="recipe_json" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
     <button type="submit">Queue Recipe Generation</button>

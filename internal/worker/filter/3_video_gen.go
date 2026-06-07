@@ -22,12 +22,16 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 	if fc.Workflows != nil && fc.Workflows.Video != nil {
 		if fc.VideoRecipe == nil {
+			if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
+				return err
+			}
 			recipe, err := toVideoRecipe(fc.Recipe)
 			if err != nil {
 				return err
 			}
 			fc.VideoRecipe = recipe
 		}
+		applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 		if fc.VideoRecipe == nil {
 			return fmt.Errorf("video generation requires recipe")
 		}
