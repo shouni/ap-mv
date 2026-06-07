@@ -32,3 +32,9 @@ func (c *imageCache) Get(key string) (any, bool) {
 func (c *imageCache) Set(key string, value any, ttl time.Duration) {
 	c.cache.Set(key, value, ttl)
 }
+
+func (c *imageCache) Stop() {
+	if c != nil && c.cache != nil {
+		c.cache.Stop()
+	}
+}

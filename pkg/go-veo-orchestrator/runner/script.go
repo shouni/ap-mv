@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-veo-orchestrator/ports"
@@ -107,20 +106,9 @@ func (r *VideoScriptRunner) readContent(ctx context.Context, url string) (string
 		slog.WarnContext(ctx, "制限サイズに達したため切り捨てられました",
 			"url", url,
 			"limit_bytes", maxInputSize)
-
-		// UTF-8の文字境界に合わせて末尾の不正なバイトを取り除く
-		if !utf8.Valid(content) {
-			for len(content) > 0 {
-				isStart := utf8.RuneStart(content[len(content)-1])
-				content = content[:len(content)-1]
-				if isStart {
-					break
-				}
-			}
-		}
 	}
 
-	return string(content), nil
+	return strings.ToValidUTF8(string(content), ""), nil
 }
 
 // parseResponse は AI の応答から JSON を抽出し、構造体に変換します。
@@ -150,13 +138,31 @@ func extractJSONString(raw string) string {
 		return matches[1]
 	}
 
-	first := strings.Index(cleanRaw, "{")
-	last := strings.LastIndex(cleanRaw, "}")
+	first := firstJSONDelimiter(cleanRaw)
+	last := lastJSONDelimiter(cleanRaw)
 	if first != -1 && last != -1 && last > first {
 		return cleanRaw[first : last+1]
 	}
 
 	return ""
+}
+
+func firstJSONDelimiter(s string) int {
+	firstObj := strings.Index(s, "{")
+	firstArr := strings.Index(s, "[")
+	if firstObj == -1 || (firstArr != -1 && firstArr < firstObj) {
+		return firstArr
+	}
+	return firstObj
+}
+
+func lastJSONDelimiter(s string) int {
+	lastObj := strings.LastIndex(s, "}")
+	lastArr := strings.LastIndex(s, "]")
+	if lastObj == -1 || (lastArr != -1 && lastArr > lastObj) {
+		return lastArr
+	}
+	return lastObj
 }
 
 // truncateString は指定された長さで文字列を安全に切り捨てます。
