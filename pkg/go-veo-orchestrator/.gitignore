@@ -1,0 +1,44 @@
+# --- Go specific ---
+# バイナリ出力
+bin/
+# 依存関係（通常は go.mod/sum で管理するが、vendor を使う場合のみ無視）
+vendor/
+# テスト結果やカバレッジ
+*.out
+*.test
+*.prof
+.gocache/
+
+# --- Environment / Secrets ---
+# APIキーやプロジェクトIDを含む設定ファイル
+.env
+.env.local
+.env.*.local
+config.yaml
+# 以前の config.go で言及していた SSHキーや認証情報
+*.pem
+*.key
+credentials.json
+
+# --- OS / IDE specific ---
+# macOS
+.DS_Store
+# JetBrains (GoLand / IntelliJ)
+.idea/
+*.iml
+# VS Code
+.vscode/
+*.code-workspace
+
+# --- Application specific ---
+# ローカル実行時に保存された生成画像やキャッシュ
+output/
+temp/
+cache/
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# --- Docker ---
+.docker/
