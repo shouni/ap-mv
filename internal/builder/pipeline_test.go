@@ -12,7 +12,10 @@ func TestBuildPipelinePassesOrchestratorConfig(t *testing.T) {
 		ImageModel:  "gemini-image",
 	}
 
-	runner := buildPipeline(t.Context(), cfg, nil, nil, nil)
+	runner, err := buildPipeline(t.Context(), cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("buildPipeline() error = %v", err)
+	}
 
 	if runner.OrchestratorConfig.GeminiModel != "gemini-text" {
 		t.Fatalf("GeminiModel = %q", runner.OrchestratorConfig.GeminiModel)

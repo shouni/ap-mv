@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	imagePorts "github.com/shouni/gemini-image-kit/ports"
 	"github.com/shouni/go-veo-orchestrator/ports"
 )
 
@@ -42,12 +43,16 @@ func (r *VideoTimelineRunner) Run(ctx context.Context, recipe *ports.VideoRecipe
 	}
 
 	recipe.Normalize()
-	keyframes, err := r.keyframeRunner.Run(ctx, recipe)
-	if err != nil {
-		return nil, fmt.Errorf("カットキーフレーム生成に失敗しました: %w", err)
-	}
-	if len(keyframes) != len(recipe.Cuts) {
-		return nil, fmt.Errorf("生成されたキーフレーム数(%d)とカット数(%d)が一致しません", len(keyframes), len(recipe.Cuts))
+	keyframes := make([]*imagePorts.ImageResponse, len(recipe.Cuts))
+	if requiresKeyframeGeneration(recipe) {
+		generated, err := r.keyframeRunner.Run(ctx, recipe)
+		if err != nil {
+			return nil, fmt.Errorf("カットキーフレーム生成に失敗しました: %w", err)
+		}
+		if len(generated) != len(recipe.Cuts) {
+			return nil, fmt.Errorf("生成されたキーフレーム数(%d)とカット数(%d)が一致しません", len(generated), len(recipe.Cuts))
+		}
+		keyframes = generated
 	}
 
 	responses := make([]*ports.VideoResponse, 0, len(recipe.Cuts))
@@ -90,6 +95,18 @@ func (r *VideoTimelineRunner) Run(ctx context.Context, recipe *ports.VideoRecipe
 	}
 
 	return responses, nil
+}
+
+func requiresKeyframeGeneration(recipe *ports.VideoRecipe) bool {
+	for _, cut := range recipe.Cuts {
+		if cut.IsGenerated() {
+			continue
+		}
+		if cut.KeyframeReference == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // RunAndSave は動画生成後、VideoRecipe を video_music_meta.json として保存します。

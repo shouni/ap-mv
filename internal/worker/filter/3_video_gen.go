@@ -17,9 +17,31 @@ type VideoGenerationFilter struct {
 func (VideoGenerationFilter) Name() string { return "video_gen" }
 
 func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
-	if fc == nil || fc.Task == nil || fc.Recipe == nil {
+	if fc == nil || fc.Task == nil {
 		return fmt.Errorf("video generation requires task and recipe")
 	}
+	if fc.Workflows != nil && fc.Workflows.Video != nil {
+		if fc.VideoRecipe == nil {
+			recipe, err := toVideoRecipe(fc.Recipe)
+			if err != nil {
+				return err
+			}
+			fc.VideoRecipe = recipe
+		}
+		if fc.VideoRecipe == nil {
+			return fmt.Errorf("video generation requires recipe")
+		}
+		if _, err := fc.Workflows.Video.Run(ctx, fc.VideoRecipe); err != nil {
+			return err
+		}
+		recipe, err := toDomainRecipe(fc.VideoRecipe)
+		fc.Recipe = recipe
+		return err
+	}
+	if fc.Recipe == nil {
+		return fmt.Errorf("video generation requires recipe")
+	}
+
 	if err := fc.Recipe.Normalize(); err != nil {
 		return err
 	}

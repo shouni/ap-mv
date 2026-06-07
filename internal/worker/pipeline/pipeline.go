@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -17,6 +18,8 @@ type Runner struct {
 	TaskQueue          ports.TaskQueue
 	Filters            []filter.Filter
 	OrchestratorConfig orchestrator.Config
+	Workflows          *orchestrator.Workflows
+	OutputBaseURI      string
 }
 
 func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
@@ -31,7 +34,14 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
-	fc := &filter.Context{Task: task, Recipe: task.Recipe, VideoRunner: r.VideoRunner, TaskQueue: r.TaskQueue}
+	fc := &filter.Context{
+		Task:        task,
+		Recipe:      task.Recipe,
+		VideoRunner: r.VideoRunner,
+		TaskQueue:   r.TaskQueue,
+		Workflows:   r.Workflows,
+		OutputPath:  r.outputPath(task),
+	}
 	filters := r.Filters
 	if len(filters) == 0 {
 		filters = defaultFilters(task.Command, r.VideoRunner)
@@ -45,6 +55,13 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 		}
 	}
 	return fc.Recipe, nil
+}
+
+func (r *Runner) outputPath(task *domain.Task) string {
+	if task == nil || strings.TrimSpace(r.OutputBaseURI) == "" {
+		return ""
+	}
+	return strings.TrimRight(r.OutputBaseURI, "/") + "/" + task.JobID + "/"
 }
 
 // Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。

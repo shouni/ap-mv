@@ -49,7 +49,10 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
-	pipe := buildPipeline(ctx, cfg, rio, httpClient, videoRunner)
+	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
+	}
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	pipe.TaskQueue = queue
 
