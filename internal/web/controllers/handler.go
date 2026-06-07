@@ -15,14 +15,12 @@ import (
 
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
-	"ap-mv/internal/worker/event"
 )
 
 type Handler struct {
-	Queue      ports.TaskQueue
-	Dispatcher event.Dispatcher
-	Index      *template.Template
-	Pages      *template.Template
+	Queue ports.TaskQueue
+	Index *template.Template
+	Pages *template.Template
 }
 
 type PageData struct {
@@ -33,7 +31,7 @@ type PageData struct {
 	Body      template.HTML
 }
 
-func NewHandler(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher) (*Handler, error) {
+func NewHandler(assets fs.FS, queue ports.TaskQueue) (*Handler, error) {
 	index, err := template.ParseFS(assets, "assets/templates/index.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse index template: %w", err)
@@ -48,7 +46,7 @@ func NewHandler(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher
 	if err != nil {
 		return nil, fmt.Errorf("parse page templates: %w", err)
 	}
-	return &Handler{Queue: queue, Dispatcher: dispatcher, Index: index, Pages: pages}, nil
+	return &Handler{Queue: queue, Index: index, Pages: pages}, nil
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
@@ -113,15 +111,6 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	task := &domain.Task{JobID: jobID, Command: domain.CommandGenerateFromRecipe, Recipe: &recipe, CreatedAt: time.Now().UTC()}
 	h.enqueue(w, r, task)
-}
-
-func (h *Handler) TaskGenerate(w http.ResponseWriter, r *http.Request) {
-	recipe, err := h.Dispatcher.Dispatch(r.Context(), r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, http.StatusOK, recipe)
 }
 
 func (h *Handler) History(w http.ResponseWriter, _ *http.Request) {

@@ -1,50 +1,86 @@
 package web
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"io/fs"
+	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/gorilla/sessions"
+	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/worker"
 
-	"ap-mv/internal/ports"
+	"ap-mv/internal/domain"
 	"ap-mv/internal/web/controllers"
-	"ap-mv/internal/worker/event"
 )
 
-const (
-	csrfSessionName = "ap-mv-csrf"
-	csrfSessionKey  = "csrf_token"
-)
+type RouterHandlers struct {
+	Auth   *auth.Handler
+	Web    *controllers.Handler
+	Worker *worker.Handler[domain.Task]
+}
 
-func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher, sessionSecret string) (http.Handler, error) {
-	h, err := controllers.NewHandler(assets, queue, dispatcher)
-	if err != nil {
-		return nil, err
-	}
-	sessionSecret = strings.TrimSpace(sessionSecret)
-	if sessionSecret == "" {
-		return nil, fmt.Errorf("session secret is required")
-	}
-	csrfStore := sessions.NewCookieStore([]byte(sessionSecret))
-	csrfStore.Options = &sessions.Options{
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
-
+// NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
+func NewRouter(h RouterHandlers) http.Handler {
 	r := chi.NewRouter()
+	setupCommonMiddleware(r)
+	setupRoutes(r, h)
+	return r
+}
+
+func setupCommonMiddleware(r *chi.Mux) {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(csrfTokenMiddleware(csrfStore))
+	r.Use(middleware.CleanPath)
+}
 
+func setupRoutes(r chi.Router, h RouterHandlers) {
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	if h.Auth != nil {
+		r.Route("/auth", func(r chi.Router) {
+			r.Get("/login", h.Auth.Login)
+			r.Get("/callback", h.Auth.Callback)
+		})
+	}
+
+	r.Group(func(r chi.Router) {
+		if h.Auth == nil {
+			if h.Web != nil {
+				slog.Error("Auth handler is nil, skipping protected web routes")
+			}
+			return
+		}
+
+		r.Use(h.Auth.Middleware)
+		r.Use(csrfContextMiddleware(h.Auth))
+
+		if h.Web != nil {
+			registerWebRoutes(r, h.Web)
+		}
+	})
+
+	r.Group(func(r chi.Router) {
+		if h.Auth == nil {
+			if h.Worker != nil {
+				slog.Error("Auth handler is nil, skipping worker routes")
+			}
+			return
+		}
+
+		r.Use(h.Auth.TaskOIDCVerificationMiddleware)
+
+		if h.Worker != nil {
+			r.Post("/tasks/generate", h.Worker.ProcessTask)
+		}
+	})
+}
+
+func registerWebRoutes(r chi.Router, h *controllers.Handler) {
 	r.Get("/", h.Home)
 	r.Route("/web", func(r chi.Router) {
 		r.Get("/compose", h.ComposeForm)
@@ -54,45 +90,22 @@ func NewRouter(assets fs.FS, queue ports.TaskQueue, dispatcher event.Dispatcher,
 		r.Get("/history", h.History)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 	})
-	r.Post("/tasks/generate", h.TaskGenerate)
-	return r, nil
 }
 
-func csrfTokenMiddleware(store sessions.Store) func(http.Handler) http.Handler {
+func csrfContextMiddleware(authHandler *auth.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(r, csrfSessionName)
-			if err != nil {
-				session, err = store.New(r, csrfSessionName)
+			csrfToken := authHandler.GetCSRFTokenFromSession(r)
+			if csrfToken == "" && r.Method == http.MethodGet {
+				token, err := authHandler.GenerateAndSaveCSRFToken(w, r)
 				if err != nil {
-					http.Error(w, "csrf session creation failed", http.StatusInternalServerError)
+					slog.Error("Failed to auto-generate CSRF token", "error", err)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					return
 				}
+				csrfToken = token
 			}
-
-			token, _ := session.Values[csrfSessionKey].(string)
-			if token == "" {
-				token, err = randomHex(16)
-				if err != nil {
-					http.Error(w, "csrf token generation failed", http.StatusInternalServerError)
-					return
-				}
-				session.Values[csrfSessionKey] = token
-				if err := session.Save(r, w); err != nil {
-					http.Error(w, "csrf session save failed", http.StatusInternalServerError)
-					return
-				}
-			}
-
-			next.ServeHTTP(w, r.WithContext(controllers.WithCSRFToken(r.Context(), token)))
+			next.ServeHTTP(w, r.WithContext(controllers.WithCSRFToken(r.Context(), csrfToken)))
 		})
 	}
-}
-
-func randomHex(size int) (string, error) {
-	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(buf), nil
 }

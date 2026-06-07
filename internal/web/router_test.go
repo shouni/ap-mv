@@ -9,19 +9,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorilla/sessions"
+	"github.com/shouni/gcp-kit/auth"
+
 	"ap-mv/internal/ports"
-	"ap-mv/internal/worker/event"
+	"ap-mv/internal/web/controllers"
 )
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
-	router, err := NewRouter(os.DirFS("../.."), ports.InlineTaskQueue{}, event.Dispatcher{}, "test-session-secret")
-	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
-	}
+	router, loginCookies := newAuthenticatedTestRouter(t)
 
 	getReq := httptest.NewRequest(http.MethodGet, "/web/compose", nil)
+	for _, cookie := range loginCookies {
+		getReq.AddCookie(cookie)
+	}
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
@@ -31,9 +34,9 @@ func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
 	if len(matches) != 2 {
 		t.Fatalf("GET /web/compose did not render csrf token")
 	}
-	cookies := getRec.Result().Cookies()
-	if len(cookies) == 0 {
-		t.Fatalf("GET /web/compose did not set session cookie")
+	cookies := mergeCookies(loginCookies, getRec.Result().Cookies())
+	if len(getRec.Result().Cookies()) == 0 {
+		t.Fatalf("GET /web/compose did not set csrf session cookie")
 	}
 
 	forbiddenReq := newComposePostRequest("")
@@ -55,6 +58,93 @@ func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
 	if acceptedRec.Code != http.StatusAccepted {
 		t.Fatalf("POST /web/compose with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
 	}
+}
+
+func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/web/compose", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("GET /web/compose status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/auth/login") {
+		t.Fatalf("redirect location = %q, want /auth/login", location)
+	}
+}
+
+func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
+	t.Helper()
+
+	const (
+		sessionName = "ap-mv-session"
+		authKey     = "0123456789abcdef0123456789abcdef"
+		encryptKey  = "0123456789abcdef0123456789abcdef"
+		userEmail   = "user@example.com"
+	)
+
+	authHandler, err := auth.NewHandler(auth.Config{
+		ClientID:          "client-id",
+		ClientSecret:      "client-secret",
+		RedirectURL:       "http://localhost:8080/auth/callback",
+		SessionAuthKey:    authKey,
+		SessionEncryptKey: encryptKey,
+		SessionName:       sessionName,
+		AllowedEmails:     []string{userEmail},
+		TaskAudienceURL:   "http://localhost:8080/tasks/generate",
+	})
+	if err != nil {
+		t.Fatalf("auth.NewHandler() error = %v", err)
+	}
+
+	webHandler, err := controllers.NewHandler(os.DirFS("../.."), ports.InlineTaskQueue{})
+	if err != nil {
+		t.Fatalf("controllers.NewHandler() error = %v", err)
+	}
+
+	router := NewRouter(RouterHandlers{Auth: authHandler, Web: webHandler})
+	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
+}
+
+func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encryptKey []byte, userEmail string) []*http.Cookie {
+	t.Helper()
+
+	store := sessions.NewCookieStore(authKey, encryptKey)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   60 * 60 * 24 * 7,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	session, err := store.Get(req, sessionName)
+	if err != nil {
+		t.Fatalf("store.Get() error = %v", err)
+	}
+	session.Values[auth.DefaultUserSessionKey] = userEmail
+	if err := session.Save(req, rec); err != nil {
+		t.Fatalf("session.Save() error = %v", err)
+	}
+	return rec.Result().Cookies()
+}
+
+func mergeCookies(base, overrides []*http.Cookie) []*http.Cookie {
+	cookiesByName := make(map[string]*http.Cookie, len(base)+len(overrides))
+	for _, cookie := range base {
+		cookiesByName[cookie.Name] = cookie
+	}
+	for _, cookie := range overrides {
+		cookiesByName[cookie.Name] = cookie
+	}
+
+	merged := make([]*http.Cookie, 0, len(cookiesByName))
+	for _, cookie := range cookiesByName {
+		merged = append(merged, cookie)
+	}
+	return merged
 }
 
 func newComposePostRequest(csrfToken string) *http.Request {

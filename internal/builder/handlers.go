@@ -3,7 +3,6 @@ package builder
 import (
 	"fmt"
 	"io/fs"
-	"net/http"
 	"net/url"
 
 	"github.com/shouni/gcp-kit/auth"
@@ -12,8 +11,7 @@ import (
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
 	"ap-mv/internal/domain"
-	"ap-mv/internal/web"
-	"ap-mv/internal/worker/event"
+	"ap-mv/internal/web/controllers"
 )
 
 const defaultSessionName = "ap-mv-session"
@@ -21,7 +19,7 @@ const defaultSessionName = "ap-mv-session"
 // AppHandlers は生成されたHTTPハンドラーを保持します。
 type AppHandlers struct {
 	Auth   *auth.Handler
-	Web    http.Handler
+	Web    *controllers.Handler
 	Worker *worker.Handler[domain.Task]
 }
 
@@ -42,8 +40,7 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	dispatcher := event.Dispatcher{Pipeline: appCtx.Pipeline}
-	webHandler, err := web.NewRouter(assets, appCtx.TaskQueue, dispatcher, appCtx.Config.SessionSecret)
+	webHandler, err := controllers.NewHandler(assets, appCtx.TaskQueue)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
