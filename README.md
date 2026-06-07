@@ -80,6 +80,8 @@ production では `internal/adapters.VertexVeoRunner` を DI します。local /
 
 | 変数 | デフォルト | 用途 |
 | --- | --- | --- |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | 台本生成などのテキスト生成モデル |
+| `IMAGE_MODEL` | `gemini-3-pro-image-preview` | 標準キーフレーム生成モデル |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID |
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
 | `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16` |

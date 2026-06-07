@@ -14,10 +14,10 @@ import (
 // buildPipeline は、パイプラインの実行に必要な境界実装を注入して返します。
 func buildPipeline(
 	_ context.Context,
-	_ *config.Config,
+	cfg *config.Config,
 	_ *app.RemoteIO,
 	_ httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 ) *pipeline.Runner {
-	return pipeline.New(videoRunner)
+	return pipeline.New(videoRunner, buildOrchestratorConfig(cfg))
 }
