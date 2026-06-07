@@ -164,6 +164,9 @@ func (r *VertexVeoRunner) buildGenerateBody(req ports.VideoGenerationRequest) ma
 	} else if media := imageMedia(req); media != nil {
 		instance["image"] = media
 	}
+	if media := audioMedia(req); media != nil {
+		instance["audio"] = media
+	}
 
 	parameters := map[string]any{
 		"storageUri":      r.outputStorageURI,
@@ -264,6 +267,32 @@ func previousVideoMedia(previousVideoID string) map[string]any {
 	return map[string]any{
 		"gcsUri":   ref,
 		"mimeType": mimeTypeFromURI(ref, "video/mp4"),
+	}
+}
+
+func audioMedia(req ports.VideoGenerationRequest) map[string]any {
+	if ref := strings.TrimSpace(req.AudioReference); ref != "" {
+		return map[string]any{
+			"gcsUri":   ref,
+			"mimeType": mimeTypeFromURI(ref, "audio/mpeg"),
+		}
+	}
+	if len(req.InputAudio) == 0 {
+		return nil
+	}
+	return map[string]any{
+		"bytesBase64Encoded": base64.StdEncoding.EncodeToString(req.InputAudio),
+		"mimeType":           detectedAudioMimeType(req.InputAudio),
+	}
+}
+
+func detectedAudioMimeType(data []byte) string {
+	mimeType := http.DetectContentType(data)
+	switch mimeType {
+	case "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4":
+		return mimeType
+	default:
+		return "audio/mpeg"
 	}
 }
 

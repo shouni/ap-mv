@@ -2,57 +2,55 @@ package builder
 
 import (
 	"fmt"
+	"io/fs"
 	"strings"
 
+	promptkit "github.com/shouni/go-prompt-kit/prompts"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
+	"ap-mv/assets"
 )
 
-type scriptPrompt struct{}
+const defaultPromptMode = "default"
 
-func (scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
+type scriptPrompt struct {
+	builder *promptkit.Builder
+}
+
+type scriptPromptData struct {
+	Mode      string
+	InputText string
+}
+
+func newScriptPrompt() (*scriptPrompt, error) {
+	content, err := fs.ReadFile(assets.Prompts, "prompts/default.md")
+	if err != nil {
+		return nil, fmt.Errorf("read default script prompt: %w", err)
+	}
+	builder, err := promptkit.NewBuilder(map[string]string{
+		defaultPromptMode: string(content),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &scriptPrompt{builder: builder}, nil
+}
+
+func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
 	if data == nil || strings.TrimSpace(data.InputText) == "" {
 		return "", fmt.Errorf("input text is required")
 	}
-	return fmt.Sprintf(`You are generating a structured music video recipe for an asynchronous Veo pipeline.
-Return only valid JSON. Do not wrap it in Markdown.
-
-Mode: %s
-Source:
-%s
-
-JSON schema:
-{
-  "project_title": "short title",
-  "title": "song or video title",
-  "theme": "main theme",
-  "mood": "music and visual mood",
-  "tempo": 120,
-  "instruments": ["instrument names"],
-  "music_recipe": {
-    "tempo_bpm": 120,
-    "total_duration_sec": 24,
-    "style": "music style"
-  },
-  "cuts": [
-    {
-      "cut_index": 1,
-      "duration_sec": 8,
-      "audio_cue": "musical timing cue",
-      "visual_anchor": "visual scene prompt for keyframe and video",
-      "character_id": "default"
-    }
-  ]
-}
-
-Rules:
-- Create 2 to 5 cuts unless the source strongly requires a different count.
-- Use duration_sec values suitable for Veo.
-- Set every character_id to "default" unless the source clearly names another available character.
-- Make visual_anchor concrete enough for image generation and video generation.
-- Keep the response parseable as JSON.`,
-		strings.TrimSpace(mode),
-		strings.TrimSpace(data.InputText),
-	), nil
+	if p == nil || p.builder == nil {
+		return "", fmt.Errorf("script prompt builder is not configured")
+	}
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = defaultPromptMode
+	}
+	return p.builder.Build(defaultPromptMode, scriptPromptData{
+		Mode:      mode,
+		InputText: strings.TrimSpace(data.InputText),
+	})
 }
 
 type keyframePrompt struct {

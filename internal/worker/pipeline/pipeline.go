@@ -19,6 +19,7 @@ type Runner struct {
 	Filters            []filter.Filter
 	OrchestratorConfig orchestrator.Config
 	Workflows          *orchestrator.Workflows
+	Reader             orchestrator.ContentReader
 	OutputBaseURI      string
 }
 
@@ -40,6 +41,7 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 		VideoRunner: r.VideoRunner,
 		TaskQueue:   r.TaskQueue,
 		Workflows:   r.Workflows,
+		Reader:      r.Reader,
 		OutputPath:  r.outputPath(task),
 	}
 	filters := r.Filters
@@ -74,6 +76,8 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 	filters := []filter.Filter{}
 	if command == domain.CommandCompose {
 		filters = append(filters, filter.ScriptingFilter{})
+	} else {
+		filters = append(filters, filter.RecipeLoadFilter{})
 	}
 	filters = append(filters,
 		filter.CutKeyframeFilter{},

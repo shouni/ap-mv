@@ -30,6 +30,8 @@ type Task struct {
 	SourceURL string       `json:"source_url,omitempty"`
 	Text      string       `json:"text,omitempty"`
 	ImageURL  string       `json:"image_url,omitempty"`
+	RecipeURL string       `json:"recipe_url,omitempty"`
+	AudioURL  string       `json:"audio_url,omitempty"`
 	Recipe    *MusicRecipe `json:"recipe,omitempty"`
 	CreatedAt time.Time    `json:"created_at"`
 }
@@ -72,10 +74,12 @@ func (t *Task) Validate() error {
 			return fmt.Errorf("compose task requires source_url, text, or image_url")
 		}
 	case CommandGenerateFromRecipe:
-		if t.Recipe == nil {
-			return fmt.Errorf("generate_from_recipe task requires recipe")
+		if t.Recipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("generate_from_recipe task requires recipe or recipe_url")
 		}
-		return t.Recipe.Validate()
+		if t.Recipe != nil {
+			return t.Recipe.Validate()
+		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
 	}

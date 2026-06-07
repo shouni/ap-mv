@@ -77,6 +77,7 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 		SourceURL: strings.TrimSpace(r.FormValue("url")),
 		Text:      strings.TrimSpace(r.FormValue("text")),
 		ImageURL:  strings.TrimSpace(r.FormValue("image_url")),
+		AudioURL:  strings.TrimSpace(r.FormValue("audio_url")),
 		CreatedAt: time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
@@ -95,21 +96,33 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid csrf token", http.StatusForbidden)
 		return
 	}
-	var recipe domain.MusicRecipe
-	if err := json.Unmarshal([]byte(r.FormValue("recipe_json")), &recipe); err != nil {
-		http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := recipe.Normalize(); err != nil {
-		http.Error(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
-		return
+	var recipe *domain.MusicRecipe
+	recipeJSON := strings.TrimSpace(r.FormValue("recipe_json"))
+	if recipeJSON != "" {
+		var parsed domain.MusicRecipe
+		if err := json.Unmarshal([]byte(recipeJSON), &parsed); err != nil {
+			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := parsed.Normalize(); err != nil {
+			http.Error(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		recipe = &parsed
 	}
 	jobID, err := domain.NewJobID("recipe")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	task := &domain.Task{JobID: jobID, Command: domain.CommandGenerateFromRecipe, Recipe: &recipe, CreatedAt: time.Now().UTC()}
+	task := &domain.Task{
+		JobID:     jobID,
+		Command:   domain.CommandGenerateFromRecipe,
+		RecipeURL: strings.TrimSpace(r.FormValue("recipe_url")),
+		AudioURL:  strings.TrimSpace(r.FormValue("audio_url")),
+		Recipe:    recipe,
+		CreatedAt: time.Now().UTC(),
+	}
 	h.enqueue(w, r, task)
 }
 

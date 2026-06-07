@@ -17,6 +17,7 @@ type Context struct {
 	Recipe      *domain.MusicRecipe
 	VideoRecipe *orchestrator.VideoRecipe
 	Workflows   *orchestrator.Workflows
+	Reader      orchestrator.ContentReader
 	VideoRunner ports.VideoRunner
 	TaskQueue   ports.TaskQueue
 	OutputPath  string
