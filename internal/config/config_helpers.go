@@ -5,45 +5,12 @@ import (
 	"strings"
 
 	"github.com/shouni/go-remote-io/remoteio"
-	"github.com/shouni/go-utils/envutil"
-	"github.com/shouni/go-utils/text"
 	"github.com/shouni/netarmor/securenet"
 )
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
 func (c *Config) IsSecureServiceURL() bool {
 	return securenet.IsSecureServiceURL(c.ServiceURL)
-}
-
-// getEnv は環境変数を取得し、存在しない場合はデフォルト値を返します。
-func getEnv(key string, defaultValue string) string {
-	return envutil.GetEnv(key, defaultValue)
-}
-
-// getEnvAsInt は環境変数を整数として取得し、存在しないか変換に失敗した場合はデフォルト値を返します。
-func getEnvAsInt(key string, defaultValue int) int {
-	return envutil.GetEnvAsInt(key, defaultValue)
-}
-
-// getEnvAsBool は環境変数をboolとして取得し、存在しないか変換に失敗した場合はデフォルト値を返します。
-func getEnvAsBool(key string, defaultValue bool) bool {
-	value := strings.TrimSpace(getEnv(key, ""))
-	if value == "" {
-		return defaultValue
-	}
-	switch strings.ToLower(value) {
-	case "1", "true", "yes", "y", "on":
-		return true
-	case "0", "false", "no", "n", "off":
-		return false
-	default:
-		return defaultValue
-	}
-}
-
-// parseCommaSeparatedList はカンマ区切りの文字列をパースしてスライスを返します。
-func parseCommaSeparatedList(value string) []string {
-	return text.ParseCommaSeparatedList(value)
 }
 
 func normalizeGCSBucket(bucket string) string {
@@ -92,10 +59,10 @@ func (c *Config) ValidateEssentialConfig() error {
 		return fmt.Errorf("VEO_ASPECT_RATIO は 16:9 または 9:16 である必要があります")
 	}
 	if c.VeoPollInterval <= 0 {
-		return fmt.Errorf("VEO_POLL_INTERVAL_SECONDS は正の整数である必要があります")
+		return fmt.Errorf("VEO_POLL_INTERVAL は正の duration である必要があります")
 	}
 	if c.VeoOperationTimeout <= 0 {
-		return fmt.Errorf("VEO_OPERATION_TIMEOUT_SECONDS は正の整数である必要があります")
+		return fmt.Errorf("VEO_OPERATION_TIMEOUT は正の duration である必要があります")
 	}
 
 	if c.SessionEncryptKey == "" {
