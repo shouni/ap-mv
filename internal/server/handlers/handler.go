@@ -18,7 +18,7 @@ import (
 
 type Handler struct {
 	Queue        ports.TaskQueue
-	Templates    fs.FS
+	Templates    map[string]*template.Template
 	ModelOptions ModelOptions
 }
 
@@ -82,23 +82,29 @@ type PageData struct {
 }
 
 func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOptions) (*Handler, error) {
-	for _, path := range []string{
-		"templates/layout.html",
-		"templates/index.html",
-		"templates/compose.html",
-		"templates/recipe.html",
-		"templates/history.html",
+	templates := make(map[string]*template.Template)
+	for _, name := range []string{
+		"index.html",
+		"compose.html",
+		"recipe.html",
+		"history.html",
 	} {
-		if _, err := fs.Stat(assets, path); err != nil {
-			return nil, fmt.Errorf("load template %s: %w", path, err)
+		tmpl, err := template.ParseFS(
+			assets,
+			"templates/layout.html",
+			"templates/"+name,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("parse template %s: %w", name, err)
 		}
+		templates[name] = tmpl
 	}
 	options := ModelOptions{}
 	if len(modelOptions) > 0 {
 		options = modelOptions[0]
 	}
 	options.normalize()
-	return &Handler{Queue: queue, Templates: assets, ModelOptions: options}, nil
+	return &Handler{Queue: queue, Templates: templates, ModelOptions: options}, nil
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
@@ -248,13 +254,9 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 
 func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl, err := template.ParseFS(
-		h.Templates,
-		"templates/layout.html",
-		"templates/"+templateName,
-	)
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	tmpl, ok := h.Templates[templateName]
+	if !ok {
+		http.Error(w, "Template Not Found", http.StatusInternalServerError)
 		return
 	}
 	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {

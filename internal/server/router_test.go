@@ -75,6 +75,27 @@ func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	}
 }
 
+func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	cssReq := httptest.NewRequest(http.MethodGet, "/static/css/app.css", nil)
+	cssRec := httptest.NewRecorder()
+	router.ServeHTTP(cssRec, cssReq)
+	if cssRec.Code != http.StatusOK {
+		t.Fatalf("GET /static/css/app.css status = %d, want %d", cssRec.Code, http.StatusOK)
+	}
+	if !strings.Contains(cssRec.Body.String(), "--zunda-green") {
+		t.Fatalf("GET /static/css/app.css body did not contain app css")
+	}
+
+	templateReq := httptest.NewRequest(http.MethodGet, "/static/templates/layout.html", nil)
+	templateRec := httptest.NewRecorder()
+	router.ServeHTTP(templateRec, templateReq)
+	if templateRec.Code != http.StatusNotFound {
+		t.Fatalf("GET /static/templates/layout.html status = %d, want %d", templateRec.Code, http.StatusNotFound)
+	}
+}
+
 func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 	t.Helper()
 

@@ -78,7 +78,12 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 }
 
 func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
-	r.Handle("/static/*", http.FileServer(http.FS(staticFiles)))
+	subFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		r.Handle("/static/*", http.NotFoundHandler())
+		return
+	}
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(subFS))))
 }
 
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {
