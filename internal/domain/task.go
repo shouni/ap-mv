@@ -26,8 +26,9 @@ const (
 )
 
 type Task struct {
-	JobID     string       `json:"job_id"`
-	Command   TaskCommand  `json:"command"`
+	JobID   string      `json:"job_id"`
+	Command TaskCommand `json:"command"`
+	AIModels
 	SourceURL string       `json:"source_url,omitempty"`
 	Text      string       `json:"text,omitempty"`
 	ImageURL  string       `json:"image_url,omitempty"`

@@ -4,9 +4,11 @@ import (
 	"context"
 
 	"github.com/shouni/go-http-kit/httpkit"
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
+	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
 	"ap-mv/internal/worker/pipeline"
 )
@@ -25,6 +27,21 @@ func buildPipeline(
 		return nil, err
 	}
 	runner.Workflows = workflows
+	runner.WorkflowFactory = func(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
+		taskCfg := *cfg
+		if task != nil {
+			if task.TextModel != "" {
+				taskCfg.GeminiModel = task.TextModel
+			}
+			if task.ImageModel != "" {
+				taskCfg.ImageModel = task.ImageModel
+			}
+		}
+		taskCfg.GeminiModels = nil
+		taskCfg.ImageModels = nil
+		taskCfg.NormalizeModels()
+		return buildWorkflow(ctx, &taskCfg, rio, httpClient, videoRunner)
+	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
 	}

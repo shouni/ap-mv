@@ -19,6 +19,7 @@ type Runner struct {
 	Filters            []filter.Filter
 	OrchestratorConfig orchestrator.Config
 	Workflows          *orchestrator.Workflows
+	WorkflowFactory    func(context.Context, *domain.Task) (*orchestrator.Workflows, error)
 	Reader             orchestrator.ContentReader
 	OutputBaseURI      string
 }
@@ -35,12 +36,16 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
+	workflows, err := r.workflowsForTask(ctx, task)
+	if err != nil {
+		return nil, err
+	}
 	fc := &filter.Context{
 		Task:        task,
 		Recipe:      task.Recipe,
 		VideoRunner: r.VideoRunner,
 		TaskQueue:   r.TaskQueue,
-		Workflows:   r.Workflows,
+		Workflows:   workflows,
 		Reader:      r.Reader,
 		OutputPath:  r.outputPath(task),
 	}
@@ -57,6 +62,30 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 		}
 	}
 	return fc.Recipe, nil
+}
+
+func (r *Runner) workflowsForTask(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
+	if r == nil {
+		return nil, nil
+	}
+	if r.WorkflowFactory == nil || !r.usesCustomModels(task) {
+		return r.Workflows, nil
+	}
+	workflows, err := r.WorkflowFactory(ctx, task)
+	if err != nil {
+		return nil, fmt.Errorf("build workflow for selected models: %w", err)
+	}
+	return workflows, nil
+}
+
+func (r *Runner) usesCustomModels(task *domain.Task) bool {
+	if task == nil {
+		return false
+	}
+	if task.TextModel != "" && task.TextModel != r.OrchestratorConfig.GeminiModel {
+		return true
+	}
+	return task.ImageModel != "" && task.ImageModel != r.OrchestratorConfig.ImageModel
 }
 
 func (r *Runner) outputPath(task *domain.Task) string {

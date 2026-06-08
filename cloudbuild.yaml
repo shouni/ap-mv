@@ -6,6 +6,10 @@ substitutions:
   _SERVICE_NAME: 'ap-mv'
   _TAG: '${_ENV_PREFIX}-${SHORT_SHA}'
   _CACHE_TAG: '${_ENV_PREFIX}-latest'
+  _GEMINI_MODELS: 'gemini-3.5-flash,gemini-3.1-pro-preview'
+  _IMAGE_MODELS: 'gemini-3.1-flash-image,gemini-3-pro-image'
+  _VEO_MODEL: 'veo-3.1-generate-001'
+  _VEO_OUTPUT_PREFIX: 'ap-mv/veo'
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
@@ -49,7 +53,7 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--update-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODEL=gemini-3-flash-preview,IMAGE_MODEL=gemini-3-pro-image-preview,VEO_MODEL=veo-3.1-generate-001,VEO_OUTPUT_PREFIX=ap-mv/veo'
+      - '--update-env-vars=GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION_ID=${_REGION},GEMINI_MODELS=${_GEMINI_MODELS},IMAGE_MODELS=${_IMAGE_MODELS},VEO_MODEL=${_VEO_MODEL},VEO_OUTPUT_PREFIX=${_VEO_OUTPUT_PREFIX}'
 
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push Cache Image'

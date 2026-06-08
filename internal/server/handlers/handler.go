@@ -18,20 +18,70 @@ import (
 )
 
 type Handler struct {
-	Queue ports.TaskQueue
-	Index *template.Template
-	Pages *template.Template
+	Queue        ports.TaskQueue
+	Index        *template.Template
+	Pages        *template.Template
+	ModelOptions ModelOptions
+}
+
+type ModelOptions struct {
+	GeminiModels       []string
+	ImageModels        []string
+	DefaultGeminiModel string
+	DefaultImageModel  string
+}
+
+func (o *ModelOptions) normalize() {
+	o.GeminiModels = normalizeModelOptions(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
+	o.ImageModels = normalizeModelOptions(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
+	o.DefaultGeminiModel = normalizeSelectedModel(o.DefaultGeminiModel, o.GeminiModels)
+	o.DefaultImageModel = normalizeSelectedModel(o.DefaultImageModel, o.ImageModels)
+}
+
+func normalizeModelOptions(values []string, preferred, fallback string) []string {
+	seen := make(map[string]bool, len(values)+1)
+	result := make([]string, 0, len(values)+1)
+	if preferred = strings.TrimSpace(preferred); preferred != "" {
+		result = append(result, preferred)
+		seen[preferred] = true
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && !seen[value] {
+			result = append(result, value)
+			seen[value] = true
+		}
+	}
+	if len(result) == 0 {
+		result = append(result, fallback)
+	}
+	return result
+}
+
+func normalizeSelectedModel(value string, values []string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	if len(values) > 0 {
+		return values[0]
+	}
+	return ""
 }
 
 type PageData struct {
-	Title     string
-	CSRFToken string
-	JobID     string
-	Message   string
-	Body      template.HTML
+	Title               string
+	CSRFToken           string
+	JobID               string
+	Message             string
+	Body                template.HTML
+	GeminiModels        []string
+	ImageModels         []string
+	SelectedGeminiModel string
+	SelectedImageModel  string
 }
 
-func NewHandler(assets fs.FS, queue ports.TaskQueue) (*Handler, error) {
+func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOptions) (*Handler, error) {
 	index, err := template.ParseFS(assets, "assets/templates/index.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse index template: %w", err)
@@ -46,7 +96,12 @@ func NewHandler(assets fs.FS, queue ports.TaskQueue) (*Handler, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse page templates: %w", err)
 	}
-	return &Handler{Queue: queue, Index: index, Pages: pages}, nil
+	options := ModelOptions{}
+	if len(modelOptions) > 0 {
+		options = modelOptions[0]
+	}
+	options.normalize()
+	return &Handler{Queue: queue, Index: index, Pages: pages, ModelOptions: options}, nil
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +109,10 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "Compose", CSRFToken: csrfTokenFromContext(r.Context())}, "compose.html")
+	h.renderSimplePage(w, h.withModelOptions(PageData{
+		Title:     "Compose",
+		CSRFToken: csrfTokenFromContext(r.Context()),
+	}), "compose.html")
 }
 
 func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +133,7 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	task := &domain.Task{
 		JobID:     jobID,
 		Command:   command,
+		AIModels:  h.aiModelsFromForm(r),
 		SourceURL: strings.TrimSpace(r.FormValue("url")),
 		Text:      strings.TrimSpace(r.FormValue("text")),
 		ImageURL:  strings.TrimSpace(r.FormValue("image_url")),
@@ -90,6 +149,33 @@ func composeCommandFromRunMode(runMode string) domain.TaskCommand {
 		return domain.CommandComposeToKeyframe
 	default:
 		return domain.CommandCompose
+	}
+}
+
+func (h *Handler) withModelOptions(data PageData) PageData {
+	options := h.ModelOptions
+	options.normalize()
+	data.GeminiModels = options.GeminiModels
+	data.ImageModels = options.ImageModels
+	data.SelectedGeminiModel = options.DefaultGeminiModel
+	data.SelectedImageModel = options.DefaultImageModel
+	return data
+}
+
+func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
+	options := h.ModelOptions
+	options.normalize()
+	textModel := strings.TrimSpace(r.FormValue("text_model"))
+	if textModel == "" {
+		textModel = options.DefaultGeminiModel
+	}
+	imageModel := strings.TrimSpace(r.FormValue("image_model"))
+	if imageModel == "" {
+		imageModel = options.DefaultImageModel
+	}
+	return domain.AIModels{
+		TextModel:  textModel,
+		ImageModel: imageModel,
 	}
 }
 
