@@ -2,10 +2,12 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -81,9 +83,9 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 	}
 }
 
-func buildCharacters(cfg *config.Config) (*orchestrator.Characters, error) {
+func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 	referenceURL := defaultCharacterReferenceURL(cfg)
-	return orchestrator.NewCharacters([]orchestrator.Character{
+	data, err := json.Marshal([]characterkit.Character{
 		{
 			ID:           "default",
 			Name:         "Main character",
@@ -93,10 +95,18 @@ func buildCharacters(cfg *config.Config) (*orchestrator.Characters, error) {
 				"expressive anime-style face",
 				"clear silhouette",
 			},
-			Seed:      10001,
+			Seed:      int64Ptr(10001),
 			IsDefault: true,
 		},
 	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal default characters: %w", err)
+	}
+	return characterkit.ParseCharacters(data)
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func defaultCharacterReferenceURL(cfg *config.Config) string {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-veo-orchestrator/ports"
@@ -18,9 +19,6 @@ func TestNewBuildsWorkflows(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	if workflows.Design == nil {
-		t.Fatal("Design runner is nil")
-	}
 	if workflows.Script == nil {
 		t.Fatal("Script runner is nil")
 	}
@@ -36,9 +34,15 @@ func TestNewBuildsWorkflows(t *testing.T) {
 }
 
 func testManagerArgs() ManagerArgs {
-	chars, err := ports.NewCharacters([]ports.Character{
-		{ID: "main", Name: "Main", VisualCues: []string{"blue jacket"}, ReferenceURL: "gs://bucket/main.png", IsDefault: true},
-	})
+	chars, err := characterkit.ParseCharacters([]byte(`[
+		{
+			"id": "main",
+			"name": "Main",
+			"visual_cues": ["blue jacket"],
+			"reference_url": "gs://bucket/main.png",
+			"is_default": true
+		}
+	]`))
 	if err != nil {
 		panic(err)
 	}
@@ -156,6 +160,6 @@ func (fakeScriptPrompt) Build(string, *ports.TemplateData) (string, error) {
 
 type fakeKeyframePrompt struct{}
 
-func (fakeKeyframePrompt) BuildCut(ports.Cut, *ports.Character) (string, string) {
+func (fakeKeyframePrompt) BuildCut(ports.Cut, *characterkit.Character) (string, string) {
 	return "user", "system"
 }

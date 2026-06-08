@@ -107,7 +107,7 @@ func (g *KeyframeGenerator) Execute(ctx context.Context, keyframes []ports.Cut) 
 					NegativePrompt: negativeKeyframePrompt,
 					AspectRatio:    CutAspectRatio,
 					ImageSize:      ImageSize1K,
-					Seed:           &seed,
+					Seed:           seed,
 				},
 				Image: imagePorts.ImageURI{
 					FileAPIURI:   fileURI,

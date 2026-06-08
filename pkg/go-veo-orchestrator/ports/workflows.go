@@ -8,16 +8,10 @@ import (
 
 // Workflows は、構築済みの各 Runner を保持します。
 type Workflows struct {
-	Design      DesignRunner
 	Script      ScriptRunner
 	CutKeyframe CutKeyframeRunner
 	Video       VideoTimelineRunner
 	Publish     VideoPublishRunner
-}
-
-// DesignRunner は、キャラクターIDに基づいてデザインシートを生成し、Seed値を特定する責務を持ちます。
-type DesignRunner interface {
-	Run(ctx context.Context, charIDs []string, seed int64, outputDir string) (string, int64, error)
 }
 
 // ScriptRunner は、ソース（URLやテキスト）を解析し、Music Recipe を含む動画台本を生成する責務を持ちます。

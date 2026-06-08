@@ -2,9 +2,11 @@ package keyframe
 
 import (
 	"context"
+	"encoding/json"
 	"sync/atomic"
 	"testing"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-veo-orchestrator/ports"
 )
 
@@ -35,14 +37,22 @@ type mockBackend struct {
 
 func (m *mockBackend) IsVertexAI() bool { return m.isVertex }
 
-func mustNewCharacters(t *testing.T, list []ports.Character) *ports.Characters {
+func mustNewCharacters(t *testing.T, list []characterkit.Character) *characterkit.Characters {
 	t.Helper()
 
-	chars, err := ports.NewCharacters(list)
+	data, err := json.Marshal(list)
 	if err != nil {
-		t.Fatalf("NewCharacters failed: %v", err)
+		t.Fatalf("Marshal characters failed: %v", err)
+	}
+	chars, err := characterkit.ParseCharacters(data)
+	if err != nil {
+		t.Fatalf("ParseCharacters failed: %v", err)
 	}
 	return chars
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 // --- Tests ---
@@ -52,7 +62,7 @@ func TestVideoComposer_PrepareCharacterResources(t *testing.T) {
 	assetMgr := &mockAssetManager{}
 	backend := &mockBackend{isVertex: false}
 
-	cm := mustNewCharacters(t, []ports.Character{
+	cm := mustNewCharacters(t, []characterkit.Character{
 		{
 			ID:           "zundamon",
 			Name:         "ずんだもん",
