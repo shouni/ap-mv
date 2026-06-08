@@ -2,18 +2,15 @@ package main
 
 import (
 	"context"
-	"embed"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"ap-mv/assets"
 	"ap-mv/internal/config"
 	"ap-mv/internal/server"
 )
-
-//go:embed assets/templates/*
-var assetsFS embed.FS
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -27,7 +24,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := server.Run(ctx, cfg, assetsFS); err != nil {
+	if err := server.Run(ctx, cfg, assets.Templates, assets.StaticFiles); err != nil {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}

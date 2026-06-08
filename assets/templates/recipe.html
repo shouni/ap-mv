@@ -1,10 +1,27 @@
-<form method="post" action="/web/generate-from-recipe">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-    <label>MusicRecipe GCS URL</label>
-    <input name="recipe_url" placeholder="gs://bucket/path/video_music_meta.json">
-    <label>Music Audio GCS URL</label>
-    <input name="audio_url" placeholder="gs://bucket/path/music.mp3">
-    <label>MusicRecipe JSON</label>
-    <textarea name="recipe_json" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
-    <button type="submit">Queue Recipe Generation</button>
-</form>
+{{define "content"}}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 fw-bold mb-4">Generate From Recipe</h1>
+                <form method="post" action="/web/generate-from-recipe">
+                    <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">MusicRecipe GCS URL</label>
+                        <input class="form-control" name="recipe_url" placeholder="gs://bucket/path/video_music_meta.json">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Music Audio GCS URL</label>
+                        <input class="form-control" name="audio_url" placeholder="gs://bucket/path/music.mp3">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">MusicRecipe JSON</label>
+                        <textarea class="form-control" name="recipe_json" rows="12" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Queue Recipe Generation</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

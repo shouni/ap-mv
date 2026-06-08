@@ -1,35 +1,64 @@
-<form method="post" action="/web/compose">
-    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-    <label>URL</label>
-    <input name="url" placeholder="https://example.com/source">
-    <label>Text</label>
-    <textarea name="text" placeholder="原稿、コンセプト、歌詞の方向性など"></textarea>
-    <label>Image URL</label>
-    <input name="image_url" placeholder="https://example.com/reference.png">
-    <label>Music Audio GCS URL</label>
-    <input name="audio_url" placeholder="gs://bucket/path/music.mp3">
-    <label>Gemini Model</label>
-    <select name="text_model">
-        {{range .GeminiModels}}
-        <option value="{{.}}" {{if eq . $.SelectedGeminiModel}}selected{{end}}>{{.}}</option>
-        {{end}}
-    </select>
-    <label>Image Model</label>
-    <select name="image_model">
-        {{range .ImageModels}}
-        <option value="{{.}}" {{if eq . $.SelectedImageModel}}selected{{end}}>{{.}}</option>
-        {{end}}
-    </select>
-    <fieldset>
-        <legend>Run Mode</legend>
-        <label>
-            <input type="radio" name="run_mode" value="compose" checked>
-            Full compose: Scripting -> Keyframe -> Video -> Publishing
-        </label>
-        <label>
-            <input type="radio" name="run_mode" value="keyframe">
-            Keyframe only: Scripting -> Keyframe
-        </label>
-    </fieldset>
-    <button type="submit">Queue Compose</button>
-</form>
+{{define "content"}}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4 p-md-5">
+                <h1 class="h3 fw-bold mb-4">Compose</h1>
+                <form method="post" action="/web/compose">
+                    <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">URL</label>
+                        <input class="form-control" name="url" placeholder="https://example.com/source">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Text</label>
+                        <textarea class="form-control" name="text" rows="8" placeholder="原稿、コンセプト、歌詞の方向性など"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Image URL</label>
+                        <input class="form-control" name="image_url" placeholder="https://example.com/reference.png">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Music Audio GCS URL</label>
+                        <input class="form-control" name="audio_url" placeholder="gs://bucket/path/music.mp3">
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Gemini Model</label>
+                            <select class="form-select" name="text_model">
+                                {{range .GeminiModels}}
+                                <option value="{{.}}" {{if eq . $.SelectedGeminiModel}}selected{{end}}>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-semibold">Image Model</label>
+                            <select class="form-select" name="image_model">
+                                {{range .ImageModels}}
+                                <option value="{{.}}" {{if eq . $.SelectedImageModel}}selected{{end}}>{{.}}</option>
+                                {{end}}
+                            </select>
+                        </div>
+                    </div>
+
+                    <fieldset class="mt-4">
+                        <legend class="h6 fw-bold">Run Mode</legend>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="run_mode_compose" name="run_mode" value="compose" checked>
+                            <label class="form-check-label" for="run_mode_compose">Full compose: Scripting -> Keyframe -> Video -> Publishing</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" id="run_mode_keyframe" name="run_mode" value="keyframe">
+                            <label class="form-check-label" for="run_mode_keyframe">Keyframe only: Scripting -> Keyframe</label>
+                        </div>
+                    </fieldset>
+
+                    <button class="btn btn-primary mt-4" type="submit">Queue Compose</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

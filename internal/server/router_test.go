@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/shouni/gcp-kit/auth"
 
+	"ap-mv/assets"
 	"ap-mv/internal/builder"
 	"ap-mv/internal/ports"
 	"ap-mv/internal/server/handlers"
@@ -99,12 +99,12 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("auth.NewHandler() error = %v", err)
 	}
 
-	webHandler, err := handlers.NewHandler(os.DirFS("../.."), ports.InlineTaskQueue{})
+	webHandler, err := handlers.NewHandler(assets.Templates, ports.InlineTaskQueue{})
 	if err != nil {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
-	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler})
+	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler, StaticFiles: assets.StaticFiles})
 	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
 }
 
