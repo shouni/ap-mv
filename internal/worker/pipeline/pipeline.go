@@ -82,10 +82,7 @@ func (r *Runner) usesCustomModels(task *domain.Task) bool {
 	if task == nil {
 		return false
 	}
-	if task.TextModel != "" && task.TextModel != r.OrchestratorConfig.GeminiModel {
-		return true
-	}
-	return task.ImageModel != "" && task.ImageModel != r.OrchestratorConfig.ImageModel
+	return !r.OrchestratorConfig.UsesModels(task.TextModel, task.ImageModel)
 }
 
 func (r *Runner) outputPath(task *domain.Task) string {

@@ -23,9 +23,21 @@ func buildWorkflow(
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 ) (*orchestrator.Workflows, error) {
+	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner)
+}
+
+func buildWorkflowWithConfig(
+	ctx context.Context,
+	cfg *config.Config,
+	orchCfg orchestrator.Config,
+	rio *app.RemoteIO,
+	httpClient httpkit.HTTPClient,
+	videoRunner ports.VideoRunner,
+) (*orchestrator.Workflows, error) {
 	if cfg == nil || rio == nil || rio.Reader == nil || rio.Writer == nil || httpClient == nil {
 		return nil, nil
 	}
+	orchCfg.ApplyDefaults()
 
 	aiClient, err := gemini.NewClient(ctx, geminiConfig(cfg))
 	if err != nil {
@@ -41,7 +53,7 @@ func buildWorkflow(
 	}
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
-		Config:      buildOrchestratorConfig(cfg),
+		Config:      orchCfg,
 		HTTPClient:  httpClient,
 		Reader:      workflowReader{delegate: rio.Reader},
 		Writer:      rio.Writer,
@@ -50,7 +62,7 @@ func buildWorkflow(
 		PromptDeps: &workflow.PromptDeps{
 			Characters:     characters,
 			ScriptPrompt:   scriptPrompt,
-			KeyframePrompt: keyframePrompt{styleSuffix: buildOrchestratorConfig(cfg).StyleSuffix},
+			KeyframePrompt: keyframePrompt{styleSuffix: orchCfg.StyleSuffix},
 		},
 	})
 	if err != nil {

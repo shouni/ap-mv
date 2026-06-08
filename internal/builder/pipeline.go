@@ -28,19 +28,11 @@ func buildPipeline(
 	}
 	runner.Workflows = workflows
 	runner.WorkflowFactory = func(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
-		taskCfg := *cfg
+		orchCfg := runner.OrchestratorConfig
 		if task != nil {
-			if task.TextModel != "" {
-				taskCfg.GeminiModel = task.TextModel
-			}
-			if task.ImageModel != "" {
-				taskCfg.ImageModel = task.ImageModel
-			}
+			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
 		}
-		taskCfg.GeminiModels = nil
-		taskCfg.ImageModels = nil
-		taskCfg.NormalizeModels()
-		return buildWorkflow(ctx, &taskCfg, rio, httpClient, videoRunner)
+		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner)
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}

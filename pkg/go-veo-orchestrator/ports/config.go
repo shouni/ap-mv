@@ -1,6 +1,7 @@
 package ports
 
 import (
+	"strings"
 	"time"
 )
 
@@ -41,4 +42,27 @@ func (c *Config) ApplyDefaults() {
 	if c.StyleSuffix == "" {
 		c.StyleSuffix = DefaultStyleSuffix
 	}
+}
+
+// WithModels は、指定されたモデル名で上書きした Config のコピーを返します。
+// 空文字は「変更なし」として扱い、返却前にデフォルト値を適用します。
+func (c Config) WithModels(geminiModel, imageModel string) Config {
+	c.ApplyDefaults()
+	if geminiModel = strings.TrimSpace(geminiModel); geminiModel != "" {
+		c.GeminiModel = geminiModel
+	}
+	if imageModel = strings.TrimSpace(imageModel); imageModel != "" {
+		c.ImageModel = imageModel
+	}
+	c.ApplyDefaults()
+	return c
+}
+
+// UsesModels は、指定モデルを適用しても現在の Config と同じモデル構成かを返します。
+func (c Config) UsesModels(geminiModel, imageModel string) bool {
+	current := c
+	current.ApplyDefaults()
+	selected := c.WithModels(geminiModel, imageModel)
+	return current.GeminiModel == selected.GeminiModel &&
+		current.ImageModel == selected.ImageModel
 }
