@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 
+	"ap-mv/assets"
 	"ap-mv/internal/domain"
 )
 
@@ -23,7 +23,7 @@ func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 
 func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	queue := &recordingQueue{}
-	h, err := NewHandler(os.DirFS("../../.."), queue, ModelOptions{
+	h, err := NewHandler(assets.Templates, queue, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
 		ImageModels:        []string{"image-default", "image-alt"},
 		DefaultGeminiModel: "gemini-default",
@@ -66,7 +66,7 @@ func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 
 func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 	queue := &recordingQueue{}
-	h, err := NewHandler(os.DirFS("../../.."), queue)
+	h, err := NewHandler(assets.Templates, queue)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
@@ -94,7 +94,7 @@ func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 }
 
 func TestComposeFormRendersModelSelects(t *testing.T) {
-	h, err := NewHandler(os.DirFS("../../.."), nil, ModelOptions{
+	h, err := NewHandler(assets.Templates, nil, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
 		ImageModels:        []string{"image-default", "image-alt"},
 		DefaultGeminiModel: "gemini-default",

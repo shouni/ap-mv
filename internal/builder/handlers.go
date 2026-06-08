@@ -18,13 +18,14 @@ const defaultSessionName = "ap-mv-session"
 
 // AppHandlers は生成されたHTTPハンドラーを保持します。
 type AppHandlers struct {
-	Auth   *auth.Handler
-	Web    *handlers.Handler
-	Worker *worker.Handler[domain.Task]
+	Auth        *auth.Handler
+	Web         *handlers.Handler
+	Worker      *worker.Handler[domain.Task]
+	StaticFiles fs.FS
 }
 
 // BuildHandlers は認証、Web、Cloud Tasks workerのハンドラーを組み立てます。
-func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
+func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 	if appCtx == nil || appCtx.Config == nil {
 		return nil, fmt.Errorf("app container and config are required")
 	}
@@ -40,7 +41,7 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	webHandler, err := handlers.NewHandler(assets, appCtx.TaskQueue, handlers.ModelOptions{
+	webHandler, err := handlers.NewHandler(templates, appCtx.TaskQueue, handlers.ModelOptions{
 		GeminiModels:       appCtx.Config.GeminiModels,
 		ImageModels:        appCtx.Config.ImageModels,
 		DefaultGeminiModel: appCtx.Config.GeminiModel,
@@ -53,9 +54,10 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)
 
 	return &AppHandlers{
-		Auth:   authHandler,
-		Web:    webHandler,
-		Worker: workerHandler,
+		Auth:        authHandler,
+		Web:         webHandler,
+		Worker:      workerHandler,
+		StaticFiles: staticFiles,
 	}, nil
 }
 

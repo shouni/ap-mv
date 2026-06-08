@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -33,6 +34,9 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	if h != nil && h.StaticFiles != nil {
+		registerStaticRoutes(r, h.StaticFiles)
+	}
 
 	if h != nil && h.Auth != nil {
 		r.Route("/auth", func(r chi.Router) {
@@ -71,6 +75,15 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			r.Post("/tasks/generate", h.Worker.ProcessTask)
 		}
 	})
+}
+
+func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
+	subFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		r.Handle("/static/*", http.NotFoundHandler())
+		return
+	}
+	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(subFS))))
 }
 
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {

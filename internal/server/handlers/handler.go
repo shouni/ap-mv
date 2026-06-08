@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -19,8 +18,7 @@ import (
 
 type Handler struct {
 	Queue        ports.TaskQueue
-	Index        *template.Template
-	Pages        *template.Template
+	Templates    map[string]*template.Template
 	ModelOptions ModelOptions
 }
 
@@ -75,6 +73,8 @@ type PageData struct {
 	JobID               string
 	Message             string
 	Body                template.HTML
+	CSS                 []string
+	JS                  []string
 	GeminiModels        []string
 	ImageModels         []string
 	SelectedGeminiModel string
@@ -82,34 +82,37 @@ type PageData struct {
 }
 
 func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOptions) (*Handler, error) {
-	index, err := template.ParseFS(assets, "assets/templates/index.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse index template: %w", err)
-	}
-	pages, err := template.ParseFS(
-		assets,
-		"assets/templates/simple_layout.html",
-		"assets/templates/compose.html",
-		"assets/templates/recipe.html",
-		"assets/templates/history.html",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("parse page templates: %w", err)
+	templates := make(map[string]*template.Template)
+	for _, name := range []string{
+		"index.html",
+		"compose.html",
+		"recipe.html",
+		"history.html",
+	} {
+		tmpl, err := template.ParseFS(
+			assets,
+			"templates/layout.html",
+			"templates/"+name,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("parse template %s: %w", name, err)
+		}
+		templates[name] = tmpl
 	}
 	options := ModelOptions{}
 	if len(modelOptions) > 0 {
 		options = modelOptions[0]
 	}
 	options.normalize()
-	return &Handler{Queue: queue, Index: index, Pages: pages, ModelOptions: options}, nil
+	return &Handler{Queue: queue, Templates: templates, ModelOptions: options}, nil
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
-	h.renderIndex(w, r, PageData{Title: "Home"})
+	h.renderPage(w, PageData{Title: "Home"}, "index.html")
 }
 
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderSimplePage(w, h.withModelOptions(PageData{
+	h.renderPage(w, h.withModelOptions(PageData{
 		Title:     "Compose",
 		CSRFToken: csrfTokenFromContext(r.Context()),
 	}), "compose.html")
@@ -180,7 +183,7 @@ func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
 }
 
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}, "recipe.html")
+	h.renderPage(w, PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}, "recipe.html")
 }
 
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +226,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) History(w http.ResponseWriter, _ *http.Request) {
-	h.renderSimplePage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
+	h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
 }
 
 func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
@@ -249,22 +252,14 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
-func (h *Handler) renderIndex(w http.ResponseWriter, _ *http.Request, data PageData) {
+func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := h.Index.Execute(w, data); err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
-}
-
-func (h *Handler) renderSimplePage(w http.ResponseWriter, data PageData, templateName string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	var body bytes.Buffer
-	if err := h.Pages.ExecuteTemplate(&body, templateName, data); err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	tmpl, ok := h.Templates[templateName]
+	if !ok {
+		http.Error(w, "Template Not Found", http.StatusInternalServerError)
 		return
 	}
-	data.Body = template.HTML(body.String())
-	if err := h.Pages.ExecuteTemplate(w, "simple_layout.html", data); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

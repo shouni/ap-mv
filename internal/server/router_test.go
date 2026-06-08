@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/shouni/gcp-kit/auth"
 
+	"ap-mv/assets"
 	"ap-mv/internal/builder"
 	"ap-mv/internal/ports"
 	"ap-mv/internal/server/handlers"
@@ -75,6 +75,27 @@ func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	}
 }
 
+func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	cssReq := httptest.NewRequest(http.MethodGet, "/static/css/app.css", nil)
+	cssRec := httptest.NewRecorder()
+	router.ServeHTTP(cssRec, cssReq)
+	if cssRec.Code != http.StatusOK {
+		t.Fatalf("GET /static/css/app.css status = %d, want %d", cssRec.Code, http.StatusOK)
+	}
+	if !strings.Contains(cssRec.Body.String(), "--zunda-green") {
+		t.Fatalf("GET /static/css/app.css body did not contain app css")
+	}
+
+	templateReq := httptest.NewRequest(http.MethodGet, "/static/templates/layout.html", nil)
+	templateRec := httptest.NewRecorder()
+	router.ServeHTTP(templateRec, templateReq)
+	if templateRec.Code != http.StatusNotFound {
+		t.Fatalf("GET /static/templates/layout.html status = %d, want %d", templateRec.Code, http.StatusNotFound)
+	}
+}
+
 func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 	t.Helper()
 
@@ -99,12 +120,12 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("auth.NewHandler() error = %v", err)
 	}
 
-	webHandler, err := handlers.NewHandler(os.DirFS("../.."), ports.InlineTaskQueue{})
+	webHandler, err := handlers.NewHandler(assets.Templates, ports.InlineTaskQueue{})
 	if err != nil {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
-	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler})
+	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler, StaticFiles: assets.StaticFiles})
 	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
 }
 

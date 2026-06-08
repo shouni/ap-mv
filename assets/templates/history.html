@@ -1,2 +1,9 @@
-<p>{{.Message}}</p>
-<a class="btn" href="/">Back Home</a>
+{{define "content"}}
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <h1 class="h3 fw-bold">History</h1>
+        <p class="text-muted mb-4">{{.Message}}</p>
+        <a class="btn btn-primary" href="/">Back Home</a>
+    </div>
+</div>
+{{end}}
