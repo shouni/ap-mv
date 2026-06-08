@@ -12,7 +12,9 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、`go-veo-
 
 ## ✨ コア・アーキテクチャ・原則 (Design Principles)
 
-本システムは、従来のヘキサゴナルアーキテクチャが陥りがちだった「アダプター層の肥大化と階層移動のオーバーヘッド」を解消するため、データの流れる美しさに特化した **「パイプ＆フィルター (Pipe and Filter)」** と、堅牢な非同期バッチを支える **「イベント駆動型 (Event-Driven)」** のハイブリッド構成を採用しています。
+本システムは、外部サービス境界には ports/adapters による疎結合を維持しつつ、生成処理の本体はデータ変換の流れが追いやすい **「パイプ＆フィルター (Pipe and Filter)」** として構成しています。
+
+また、Web UI からの受付と重い生成処理を分離するため、Cloud Tasks を用いた **非同期タスク駆動 (Task/Event-Driven) Worker Execution** を採用し、タイムアウトしやすい動画生成バッチを安全に継続・再実行できる構成にしています。
 
 ### 🧬 クアッド・ファクター・コンシステンシー制御 (Consistency Control)
 
@@ -25,7 +27,7 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、`go-veo-
 
 ### 🔁 Resumable Video Chain (レジューム機能)
 
-動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成途中でタイムアウトやAPIエラーにより失敗した場合でも、再試行時は `status=generated` のカットを自動的にスキップ。保持済みの `video_id` を次カットの `PreviousVideoID` に引き継ぎ、**「途中のカットから安全に再開」** することができる回復性（Resilience）を備えています。
+動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成済み状態を含む `video_music_meta.json` または Recipe を再投入した場合、`status=generated` のカットをスキップし、保持済みの `video_id` を次カットの `PreviousVideoID` に引き継げます。これにより、生成済みメタデータを起点に途中カットから再開しやすい回復性（Resilience）を備えています。
 
 ### ⛓ Cloud Tasks Worker Execution
 
@@ -37,8 +39,8 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 ### 🛡 エンタープライズ・コンカレンシー & 防壁 (Security Layer)
 
-* **Token-Bucket & Semaphore**: `golang.org/x/time/rate` によるキーフレーム生成の流量制御と同時実行数制御を行い、生成系 API のレートリミットを避けます。
-* **Network Armor**: `go-http-kit` と連動し、外部API通信およびGCSリクエストの接続直前で SSRF、DNS Rebinding、TOCTOU攻撃をIPレベルで遮断。
+* **Token-Bucket & Bounded Concurrency**: `golang.org/x/time/rate` と `errgroup.SetLimit` によるキーフレーム生成の流量制御と同時実行数制御を行い、生成系 API のレートリミットを避けます。
+* **Network Safety**: 外部HTTP取得には `go-http-kit` 系の安全な HTTP client を注入し、GCS 入出力は `go-remote-io` の GCS adapter に集約します。`SERVICE_URL` は `netarmor` による安全スキーム判定を通し、本番では HTTPS を必須化します。
 * **Singleflight Protection**: 大容量の動画・音声アセットの重複フェッチや二重アップロードをインメモリで完全に抑制。
 * **Session-backed CSRF**: WebフォームのCSRFトークンは `gorilla/sessions` のCookieセッションに保存し、POST時に定数時間比較で検証します。Cookie署名キーには起動時ランダム値ではなく `SESSION_SECRET` を使うため、Cloud Run の再起動や複数インスタンス間でも検証が安定します。
 
@@ -52,7 +54,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | --- | --- | --- |
 | **1. Scripting** | `1_scripting.go` | `Workflows.Script.Run` を呼び、URL またはフォーム入力テキストから Music & Video Recipe JSON を生成します。プロンプトは `go-prompt-kit` で `assets/prompts/default.md` をレンダリングし、動画の世界観を注入します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。 |
-| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、`AudioReference`、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。保存済み `keyframe_reference` がある場合はキーフレームを再生成しません。 |
+| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、`AudioReference`、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 
 ### MusicRecipe / Audio GCS Inputs
