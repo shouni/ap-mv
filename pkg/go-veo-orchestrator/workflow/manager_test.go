@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	characterkit "github.com/shouni/go-character-kit/character"
@@ -34,15 +35,9 @@ func TestNewBuildsWorkflows(t *testing.T) {
 }
 
 func testManagerArgs() ManagerArgs {
-	chars, err := characterkit.ParseCharacters([]byte(`[
-		{
-			"id": "main",
-			"name": "Main",
-			"visual_cues": ["blue jacket"],
-			"reference_url": "gs://bucket/main.png",
-			"is_default": true
-		}
-	]`))
+	chars, err := newTestCharacters([]characterkit.Character{
+		{ID: "main", Name: "Main", VisualCues: []string{"blue jacket"}, ReferenceURL: "gs://bucket/main.png", IsDefault: true},
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -62,6 +57,23 @@ func testManagerArgs() ManagerArgs {
 			KeyframePrompt: fakeKeyframePrompt{},
 		},
 	}
+}
+
+func newTestCharacters(list []characterkit.Character) (*characterkit.Characters, error) {
+	chars := &characterkit.Characters{
+		List: list,
+		ByID: make(map[string]*characterkit.Character, len(list)*2),
+	}
+	if err := chars.Validate(); err != nil {
+		return nil, err
+	}
+
+	for i := range chars.List {
+		char := &chars.List[i]
+		chars.ByID[char.ID] = char
+		chars.ByID[strings.ToLower(char.ID)] = char
+	}
+	return chars, nil
 }
 
 type fakeGenerativeModel struct{}

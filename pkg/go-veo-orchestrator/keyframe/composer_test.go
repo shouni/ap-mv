@@ -2,7 +2,7 @@ package keyframe
 
 import (
 	"context"
-	"encoding/json"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -40,19 +40,20 @@ func (m *mockBackend) IsVertexAI() bool { return m.isVertex }
 func mustNewCharacters(t *testing.T, list []characterkit.Character) *characterkit.Characters {
 	t.Helper()
 
-	data, err := json.Marshal(list)
-	if err != nil {
-		t.Fatalf("Marshal characters failed: %v", err)
+	chars := &characterkit.Characters{
+		List: list,
+		ByID: make(map[string]*characterkit.Character, len(list)*2),
 	}
-	chars, err := characterkit.ParseCharacters(data)
-	if err != nil {
-		t.Fatalf("ParseCharacters failed: %v", err)
+	if err := chars.Validate(); err != nil {
+		t.Fatalf("Validate characters failed: %v", err)
+	}
+
+	for i := range chars.List {
+		char := &chars.List[i]
+		chars.ByID[char.ID] = char
+		chars.ByID[strings.ToLower(char.ID)] = char
 	}
 	return chars
-}
-
-func int64Ptr(v int64) *int64 {
-	return &v
 }
 
 // --- Tests ---

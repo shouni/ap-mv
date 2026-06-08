@@ -47,7 +47,6 @@ func (c *Config) ApplyDefaults() {
 // WithModels は、指定されたモデル名で上書きした Config のコピーを返します。
 // 空文字は「変更なし」として扱い、返却前にデフォルト値を適用します。
 func (c Config) WithModels(geminiModel, imageModel string) Config {
-	c.ApplyDefaults()
 	if geminiModel = strings.TrimSpace(geminiModel); geminiModel != "" {
 		c.GeminiModel = geminiModel
 	}

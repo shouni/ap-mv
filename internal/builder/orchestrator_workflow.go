@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -85,7 +84,8 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 
 func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 	referenceURL := defaultCharacterReferenceURL(cfg)
-	data, err := json.Marshal([]characterkit.Character{
+	seed := int64(10001)
+	return newCharacters([]characterkit.Character{
 		{
 			ID:           "default",
 			Name:         "Main character",
@@ -95,18 +95,27 @@ func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 				"expressive anime-style face",
 				"clear silhouette",
 			},
-			Seed:      int64Ptr(10001),
+			Seed:      &seed,
 			IsDefault: true,
 		},
 	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal default characters: %w", err)
-	}
-	return characterkit.ParseCharacters(data)
 }
 
-func int64Ptr(v int64) *int64 {
-	return &v
+func newCharacters(list []characterkit.Character) (*characterkit.Characters, error) {
+	chars := &characterkit.Characters{
+		List: list,
+		ByID: make(map[string]*characterkit.Character, len(list)*2),
+	}
+	if err := chars.Validate(); err != nil {
+		return nil, err
+	}
+
+	for i := range chars.List {
+		char := &chars.List[i]
+		chars.ByID[char.ID] = char
+		chars.ByID[strings.ToLower(char.ID)] = char
+	}
+	return chars, nil
 }
 
 func defaultCharacterReferenceURL(cfg *config.Config) string {
