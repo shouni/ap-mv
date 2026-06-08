@@ -21,6 +21,7 @@ type TaskCommand string
 
 const (
 	CommandCompose            TaskCommand = "compose"
+	CommandComposeToKeyframe  TaskCommand = "compose_to_keyframe"
 	CommandGenerateFromRecipe TaskCommand = "generate_from_recipe"
 )
 
@@ -71,7 +72,7 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandCompose:
+	case CommandCompose, CommandComposeToKeyframe:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("compose task requires source_url, text, or image_url")
 		}

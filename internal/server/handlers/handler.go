@@ -71,9 +71,10 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	command := composeCommandFromRunMode(r.FormValue("run_mode"))
 	task := &domain.Task{
 		JobID:     jobID,
-		Command:   domain.CommandCompose,
+		Command:   command,
 		SourceURL: strings.TrimSpace(r.FormValue("url")),
 		Text:      strings.TrimSpace(r.FormValue("text")),
 		ImageURL:  strings.TrimSpace(r.FormValue("image_url")),
@@ -81,6 +82,15 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
+}
+
+func composeCommandFromRunMode(runMode string) domain.TaskCommand {
+	switch strings.TrimSpace(runMode) {
+	case "keyframe":
+		return domain.CommandComposeToKeyframe
+	default:
+		return domain.CommandCompose
+	}
 }
 
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {

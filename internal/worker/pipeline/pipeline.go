@@ -74,13 +74,19 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) []filter.Filter {
 	filters := []filter.Filter{}
-	if command == domain.CommandCompose {
+	switch command {
+	case domain.CommandCompose, domain.CommandComposeToKeyframe:
 		filters = append(filters, filter.ScriptingFilter{})
-	} else {
+	default:
 		filters = append(filters, filter.RecipeLoadFilter{})
 	}
 	filters = append(filters,
 		filter.CutKeyframeFilter{},
+	)
+	if command == domain.CommandComposeToKeyframe {
+		return filters
+	}
+	filters = append(filters,
 		filter.VideoGenerationFilter{Runner: videoRunner},
 		filter.PublishingFilter{},
 	)
