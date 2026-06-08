@@ -64,3 +64,15 @@ func TestTaskValidateAcceptsGCSRecipeAndAudioURL(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+func TestTaskValidateAcceptsComposeToKeyframe(t *testing.T) {
+	task := Task{
+		JobID:   "job-1",
+		Command: CommandComposeToKeyframe,
+		Text:    "source",
+	}
+
+	if err := task.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}

@@ -7,6 +7,11 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+const (
+	defaultGeminiModel = "gemini-3.5-flash"
+	defaultImageModel  = "gemini-3-pro-image-preview"
+)
+
 // Config はアプリ設定です。
 type Config struct {
 	ServiceURL            string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
@@ -19,8 +24,10 @@ type Config struct {
 	GCSBucket             string        `env:"GCS_MUSIC_BUCKET"`
 	SlackWebhookURL       string        `env:"SLACK_WEBHOOK_URL"`
 	GeminiAPIKey          string        `env:"GEMINI_API_KEY"`
-	GeminiModel           string        `env:"GEMINI_MODEL" envDefault:"gemini-3.5-flash"`
-	ImageModel            string        `env:"IMAGE_MODEL" envDefault:"gemini-3-pro-image-preview"`
+	GeminiModel           string        `env:"GEMINI_MODEL"`
+	ImageModel            string        `env:"IMAGE_MODEL"`
+	GeminiModels          []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash,gemini-3.1-pro-preview"`
+	ImageModels           []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image,gemini-3-pro-image"`
 	CharacterReferenceURL string        `env:"CHARACTER_REFERENCE_URL"`
 	VeoModel              string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
 	VeoOutputPrefix       string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
@@ -50,6 +57,14 @@ func (c *Config) normalize() {
 	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
 	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
 	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
+	c.NormalizeModels()
+}
+
+func (c *Config) NormalizeModels() {
+	c.GeminiModels = normalizeModelList(c.GeminiModels, c.GeminiModel, defaultGeminiModel)
+	c.ImageModels = normalizeModelList(c.ImageModels, c.ImageModel, defaultImageModel)
+	c.GeminiModel = normalizeDefaultModel(c.GeminiModel, c.GeminiModels, defaultGeminiModel)
+	c.ImageModel = normalizeDefaultModel(c.ImageModel, c.ImageModels, defaultImageModel)
 }
 
 // LoadConfig は環境変数から設定を読み込みます。
@@ -76,4 +91,37 @@ func normalizeStringSlice(values []string) []string {
 		}
 	}
 	return normalized
+}
+
+func normalizeModelList(values []string, preferred, fallback string) []string {
+	normalized := normalizeStringSlice(values)
+	preferred = strings.TrimSpace(preferred)
+	if preferred != "" {
+		normalized = prependUnique(normalized, preferred)
+	}
+	if len(normalized) == 0 {
+		normalized = []string{fallback}
+	}
+	return normalized
+}
+
+func normalizeDefaultModel(value string, models []string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	if len(models) > 0 {
+		return models[0]
+	}
+	return fallback
+}
+
+func prependUnique(values []string, preferred string) []string {
+	result := []string{preferred}
+	for _, value := range values {
+		if value != preferred {
+			result = append(result, value)
+		}
+	}
+	return result
 }

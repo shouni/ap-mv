@@ -8,5 +8,28 @@
     <input name="image_url" placeholder="https://example.com/reference.png">
     <label>Music Audio GCS URL</label>
     <input name="audio_url" placeholder="gs://bucket/path/music.mp3">
+    <label>Gemini Model</label>
+    <select name="text_model">
+        {{range .GeminiModels}}
+        <option value="{{.}}" {{if eq . $.SelectedGeminiModel}}selected{{end}}>{{.}}</option>
+        {{end}}
+    </select>
+    <label>Image Model</label>
+    <select name="image_model">
+        {{range .ImageModels}}
+        <option value="{{.}}" {{if eq . $.SelectedImageModel}}selected{{end}}>{{.}}</option>
+        {{end}}
+    </select>
+    <fieldset>
+        <legend>Run Mode</legend>
+        <label>
+            <input type="radio" name="run_mode" value="compose" checked>
+            Full compose: Scripting -> Keyframe -> Video -> Publishing
+        </label>
+        <label>
+            <input type="radio" name="run_mode" value="keyframe">
+            Keyframe only: Scripting -> Keyframe
+        </label>
+    </fieldset>
     <button type="submit">Queue Compose</button>
 </form>

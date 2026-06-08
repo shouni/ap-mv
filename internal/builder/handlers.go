@@ -40,7 +40,12 @@ func BuildHandlers(assets fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	webHandler, err := handlers.NewHandler(assets, appCtx.TaskQueue)
+	webHandler, err := handlers.NewHandler(assets, appCtx.TaskQueue, handlers.ModelOptions{
+		GeminiModels:       appCtx.Config.GeminiModels,
+		ImageModels:        appCtx.Config.ImageModels,
+		DefaultGeminiModel: appCtx.Config.GeminiModel,
+		DefaultImageModel:  appCtx.Config.ImageModel,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
