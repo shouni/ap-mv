@@ -1,8 +1,6 @@
 package workflow
 
 import (
-	"fmt"
-
 	"github.com/shouni/go-veo-orchestrator/keyframe"
 	"github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/runner"
@@ -10,26 +8,21 @@ import (
 
 // buildAllRunners は、ワークフローの実行に必要なすべてのランナーを構築して返します。
 func (m *manager) buildAllRunners() (*ports.Workflows, error) {
-	dr, err := m.buildDesignRunner()
-	if err != nil {
-		return nil, fmt.Errorf("DesignRunner のビルドに失敗しました: %w", err)
-	}
 	sr, err := m.buildScriptRunner()
 	if err != nil {
-		return nil, fmt.Errorf("ScriptRunner のビルドに失敗しました: %w", err)
+		return nil, err
 	}
 	keyframeR, err := m.buildKeyframeRunner()
 	if err != nil {
-		return nil, fmt.Errorf("KeyframeRunner のビルドに失敗しました: %w", err)
+		return nil, err
 	}
 	pubR, err := m.buildPublishRunner()
 	if err != nil {
-		return nil, fmt.Errorf("PublishRunner のビルドに失敗しました: %w", err)
+		return nil, err
 	}
 	videoR := m.buildVideoTimelineRunner(keyframeR, pubR)
 
 	return &ports.Workflows{
-		Design:      dr,
 		Script:      sr,
 		CutKeyframe: keyframeR,
 		Video:       videoR,
@@ -40,17 +33,6 @@ func (m *manager) buildAllRunners() (*ports.Workflows, error) {
 // buildScriptRunner は、台本生成を担当する Runner を作成します。
 func (m *manager) buildScriptRunner() (*runner.VideoScriptRunner, error) {
 	return runner.NewVideoScriptRunner(m.promptDeps.ScriptPrompt, m.aiClient, m.reader, m.cfg.GeminiModel), nil
-}
-
-// buildDesignRunner は、キャラクターデザインを担当する Runner を作成します。
-func (m *manager) buildDesignRunner() (*runner.DesignRunner, error) {
-	return runner.NewDesignRunner(
-		m.generationUnit.recipeComposer,
-		m.generationUnit.imageGenerator,
-		m.writer,
-		m.generationUnit.model,
-		m.cfg.StyleSuffix,
-	), nil
 }
 
 // buildKeyframeRunner は、カットのキーフレーム画像生成を担当する Runner を作成します。

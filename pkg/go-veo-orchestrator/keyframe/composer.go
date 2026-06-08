@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	imagePorts "github.com/shouni/gemini-image-kit/ports"
+	characterkit "github.com/shouni/go-character-kit/character"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 
@@ -15,7 +16,7 @@ import (
 type VideoComposer struct {
 	AssetManager    imagePorts.AssetManager
 	BackendProvider imagePorts.Backend
-	Characters      *ports.Characters
+	Characters      *characterkit.Characters
 	resourceMap     resourceMap
 	mu              sync.RWMutex
 	uploadGroup     singleflight.Group
@@ -29,7 +30,7 @@ type resourceMap struct {
 func NewVideoComposer(
 	assetMgr imagePorts.AssetManager,
 	backend imagePorts.Backend,
-	cm *ports.Characters,
+	cm *characterkit.Characters,
 ) (*VideoComposer, error) {
 	if assetMgr == nil {
 		return nil, fmt.Errorf("assetMgr is required")

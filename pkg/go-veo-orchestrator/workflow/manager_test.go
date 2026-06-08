@@ -4,8 +4,10 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-veo-orchestrator/ports"
@@ -18,9 +20,6 @@ func TestNewBuildsWorkflows(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	if workflows.Design == nil {
-		t.Fatal("Design runner is nil")
-	}
 	if workflows.Script == nil {
 		t.Fatal("Script runner is nil")
 	}
@@ -36,7 +35,7 @@ func TestNewBuildsWorkflows(t *testing.T) {
 }
 
 func testManagerArgs() ManagerArgs {
-	chars, err := ports.NewCharacters([]ports.Character{
+	chars, err := newTestCharacters([]characterkit.Character{
 		{ID: "main", Name: "Main", VisualCues: []string{"blue jacket"}, ReferenceURL: "gs://bucket/main.png", IsDefault: true},
 	})
 	if err != nil {
@@ -58,6 +57,23 @@ func testManagerArgs() ManagerArgs {
 			KeyframePrompt: fakeKeyframePrompt{},
 		},
 	}
+}
+
+func newTestCharacters(list []characterkit.Character) (*characterkit.Characters, error) {
+	chars := &characterkit.Characters{
+		List: list,
+		ByID: make(map[string]*characterkit.Character, len(list)*2),
+	}
+	if err := chars.Validate(); err != nil {
+		return nil, err
+	}
+
+	for i := range chars.List {
+		char := &chars.List[i]
+		chars.ByID[char.ID] = char
+		chars.ByID[strings.ToLower(char.ID)] = char
+	}
+	return chars, nil
 }
 
 type fakeGenerativeModel struct{}
@@ -156,6 +172,6 @@ func (fakeScriptPrompt) Build(string, *ports.TemplateData) (string, error) {
 
 type fakeKeyframePrompt struct{}
 
-func (fakeKeyframePrompt) BuildCut(ports.Cut, *ports.Character) (string, string) {
+func (fakeKeyframePrompt) BuildCut(ports.Cut, *characterkit.Character) (string, string) {
 	return "user", "system"
 }

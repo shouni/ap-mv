@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/shouni/gemini-image-kit/generator"
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 
 	"github.com/shouni/go-veo-orchestrator/keyframe"
-	"github.com/shouni/go-veo-orchestrator/ports"
 )
 
 // buildGenerationUnit は、特定の AI クライアントとモデル設定に基づき、 core, composer, generator をひとまとめにした LLM 構造体を構築します。
@@ -54,7 +54,7 @@ func (m *manager) buildCore(aiClient gemini.GenerativeModel) (*generator.GeminiI
 // buildComposer は提供された構成と依存関係を使用して VideoComposerインスタンスを初期化し、返します。
 func (m *manager) buildComposer(
 	core *generator.GeminiImageCore,
-	chars *ports.Characters,
+	chars *characterkit.Characters,
 ) (*keyframe.VideoComposer, error) {
 	composer, err := keyframe.NewVideoComposer(
 		core,

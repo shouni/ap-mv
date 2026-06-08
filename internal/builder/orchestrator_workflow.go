@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -23,9 +24,21 @@ func buildWorkflow(
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 ) (*orchestrator.Workflows, error) {
+	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner)
+}
+
+func buildWorkflowWithConfig(
+	ctx context.Context,
+	cfg *config.Config,
+	orchCfg orchestrator.Config,
+	rio *app.RemoteIO,
+	httpClient httpkit.HTTPClient,
+	videoRunner ports.VideoRunner,
+) (*orchestrator.Workflows, error) {
 	if cfg == nil || rio == nil || rio.Reader == nil || rio.Writer == nil || httpClient == nil {
 		return nil, nil
 	}
+	orchCfg.ApplyDefaults()
 
 	aiClient, err := gemini.NewClient(ctx, geminiConfig(cfg))
 	if err != nil {
@@ -41,7 +54,7 @@ func buildWorkflow(
 	}
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
-		Config:      buildOrchestratorConfig(cfg),
+		Config:      orchCfg,
 		HTTPClient:  httpClient,
 		Reader:      workflowReader{delegate: rio.Reader},
 		Writer:      rio.Writer,
@@ -50,7 +63,7 @@ func buildWorkflow(
 		PromptDeps: &workflow.PromptDeps{
 			Characters:     characters,
 			ScriptPrompt:   scriptPrompt,
-			KeyframePrompt: keyframePrompt{styleSuffix: buildOrchestratorConfig(cfg).StyleSuffix},
+			KeyframePrompt: keyframePrompt{styleSuffix: orchCfg.StyleSuffix},
 		},
 	})
 	if err != nil {
@@ -69,9 +82,10 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 	}
 }
 
-func buildCharacters(cfg *config.Config) (*orchestrator.Characters, error) {
+func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 	referenceURL := defaultCharacterReferenceURL(cfg)
-	return orchestrator.NewCharacters([]orchestrator.Character{
+	seed := int64(10001)
+	return newCharacters([]characterkit.Character{
 		{
 			ID:           "default",
 			Name:         "Main character",
@@ -81,10 +95,27 @@ func buildCharacters(cfg *config.Config) (*orchestrator.Characters, error) {
 				"expressive anime-style face",
 				"clear silhouette",
 			},
-			Seed:      10001,
+			Seed:      &seed,
 			IsDefault: true,
 		},
 	})
+}
+
+func newCharacters(list []characterkit.Character) (*characterkit.Characters, error) {
+	chars := &characterkit.Characters{
+		List: list,
+		ByID: make(map[string]*characterkit.Character, len(list)*2),
+	}
+	if err := chars.Validate(); err != nil {
+		return nil, err
+	}
+
+	for i := range chars.List {
+		char := &chars.List[i]
+		chars.ByID[char.ID] = char
+		chars.ByID[strings.ToLower(char.ID)] = char
+	}
+	return chars, nil
 }
 
 func defaultCharacterReferenceURL(cfg *config.Config) string {

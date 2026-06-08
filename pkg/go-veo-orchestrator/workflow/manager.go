@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	imagePorts "github.com/shouni/gemini-image-kit/ports"
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio"
@@ -13,7 +14,7 @@ import (
 
 // PromptDeps はプロンプト関連の依存関係をまとめた構造体です。
 type PromptDeps struct {
-	Characters     *ports.Characters
+	Characters     *characterkit.Characters
 	ScriptPrompt   ports.ScriptPrompt
 	KeyframePrompt ports.KeyframePrompt
 }

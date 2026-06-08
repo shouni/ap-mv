@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -89,7 +90,7 @@ type keyframePrompt struct {
 	styleSuffix string
 }
 
-func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *orchestrator.Character) (string, string) {
+func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
 	character := "the main character"
 	if char != nil {
 		character = char.Name

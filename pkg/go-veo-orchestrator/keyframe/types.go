@@ -6,8 +6,6 @@ import (
 )
 
 const (
-	// DesignAspectRatio はキャラクターデザインシートの推奨アスペクト比です。
-	DesignAspectRatio = "16:9"
 	// CutAspectRatio は単体カットのキーフレーム推奨アスペクト比です。
 	CutAspectRatio = "16:9"
 

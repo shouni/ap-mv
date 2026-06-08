@@ -6,6 +6,7 @@ import (
 	"time"
 
 	imagePorts "github.com/shouni/gemini-image-kit/ports"
+	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-veo-orchestrator/ports"
 )
 
@@ -30,7 +31,7 @@ func (m *mockKeyframeImageGenerator) GenerateSingleImage(ctx context.Context, re
 
 type mockImagePrompt struct{}
 
-func (m *mockImagePrompt) BuildCut(keyframe ports.Cut, char *ports.Character) (string, string) {
+func (m *mockImagePrompt) BuildCut(keyframe ports.Cut, char *characterkit.Character) (string, string) {
 	return keyframe.VisualAnchor, "system"
 }
 
@@ -44,19 +45,21 @@ func TestKeyframeGenerator_Execute(t *testing.T) {
 	backend := &mockBackend{isVertex: false}
 
 	// 異なる Seed 値を持つキャラクターを用意
-	cm := mustNewCharacters(t, []ports.Character{
+	zundamonSeed := int64(10001)
+	metanSeed := int64(20002)
+	cm := mustNewCharacters(t, []characterkit.Character{
 		{
 			ID:           "zundamon",
 			Name:         "ずんだもん",
 			VisualCues:   []string{"green hair"},
-			Seed:         10001,
+			Seed:         &zundamonSeed,
 			ReferenceURL: "gs://bucket/zunda.png",
 		},
 		{
 			ID:           "metan",
 			Name:         "めたん",
 			VisualCues:   []string{"purple hair"},
-			Seed:         20002,
+			Seed:         &metanSeed,
 			ReferenceURL: "gs://bucket/metan.png",
 			IsDefault:    true, // 指定なしの場合のデフォルト
 		},

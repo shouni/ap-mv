@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	characterDesignDir   = "character"
 	defaultImageDir      = "images"
 	defaultKeyframeName  = "keyframe.png"
 	defaultVideoMetaJSON = "video_music_meta.json"

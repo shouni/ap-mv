@@ -4,6 +4,7 @@ import (
 	"context"
 
 	imagePorts "github.com/shouni/gemini-image-kit/ports"
+	characterkit "github.com/shouni/go-character-kit/character"
 )
 
 // TemplateData はスクリプト生成プロンプトのテンプレートに渡すデータ構造です。
@@ -18,7 +19,7 @@ type ScriptPrompt interface {
 
 // KeyframePrompt は、カットのキーフレーム画像生成AI向けのプロンプトを構築する契約です。
 type KeyframePrompt interface {
-	BuildCut(cut Cut, char *Character) (userPrompt string, systemPrompt string)
+	BuildCut(cut Cut, char *characterkit.Character) (userPrompt string, systemPrompt string)
 }
 
 // CutImageGenerator は、一連のカットのキーフレーム画像レスポンスを生成します。
