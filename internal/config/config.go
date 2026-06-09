@@ -19,6 +19,7 @@ type Config struct {
 	ProjectID           string        `env:"GCP_PROJECT_ID"`
 	LocationID          string        `env:"GCP_LOCATION_ID"`
 	QueueID             string        `env:"CLOUD_TASKS_QUEUE_ID"`
+	WorkerURL           string        `env:"WORKER_URL"`
 	TaskAudienceURL     string        `env:"TASK_AUDIENCE_URL"`
 	ServiceAccountEmail string        `env:"SERVICE_ACCOUNT_EMAIL"`
 	GCSBucket           string        `env:"GCS_MUSIC_BUCKET"`
@@ -50,6 +51,7 @@ type Config struct {
 }
 
 func (c *Config) normalize() {
+	c.WorkerURL = normalizeWorkerURL(c.ServiceURL, c.WorkerURL)
 	if c.TaskAudienceURL == "" {
 		c.TaskAudienceURL = c.ServiceURL
 	}

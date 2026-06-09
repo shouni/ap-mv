@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/shouni/go-remote-io/remoteio"
@@ -13,16 +14,40 @@ func (c *Config) IsSecureServiceURL() bool {
 	return securenet.IsSecureServiceURL(c.ServiceURL)
 }
 
+// IsSecureWorkerURL は、Cloud Tasks の配送先URLが安全なスキームを使用しているか確認します。
+func (c *Config) IsSecureWorkerURL() bool {
+	return securenet.IsSecureServiceURL(c.WorkerURL)
+}
+
 func normalizeGCSBucket(bucket string) string {
 	bucket = strings.TrimSpace(bucket)
 	bucket = strings.TrimPrefix(bucket, "gs://")
 	return strings.Trim(bucket, "/")
 }
 
+func normalizeWorkerURL(serviceURL, workerURL string) string {
+	workerURL = strings.TrimSpace(workerURL)
+	if workerURL != "" {
+		return workerURL
+	}
+	serviceURL = strings.TrimSpace(serviceURL)
+	if serviceURL == "" {
+		return "/tasks/generate"
+	}
+	joined, err := url.JoinPath(serviceURL, "/tasks/generate")
+	if err != nil {
+		return strings.TrimRight(serviceURL, "/") + "/tasks/generate"
+	}
+	return joined
+}
+
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
 func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
 		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.ServiceURL)
+	}
+	if !c.IsSecureWorkerURL() {
+		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.WorkerURL)
 	}
 
 	if c.GoogleClientID == "" || c.GoogleClientSecret == "" || c.SessionSecret == "" {
