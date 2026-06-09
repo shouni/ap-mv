@@ -42,7 +42,7 @@ steps:
       - 'push'
       - '${_IMAGE_BASE}/${PROJECT_ID}/${_REPO_PATH}:${_TAG}'
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloudsdk'
+  - name: 'gcr.io/cloud-builders/gcloud'
     id: 'Deploy to Cloud Run'
     entrypoint: 'gcloud'
     args:
