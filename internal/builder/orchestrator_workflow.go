@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	characterassets "github.com/shouni/go-character-kit/assets"
 	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
@@ -85,7 +86,7 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 	referenceURL := defaultCharacterReferenceURL(cfg)
 	seed := int64(10001)
-	return newCharacters([]characterkit.Character{
+	list := []characterkit.Character{
 		{
 			ID:           "default",
 			Name:         "Main character",
@@ -98,24 +99,19 @@ func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
 			Seed:      &seed,
 			IsDefault: true,
 		},
-	})
-}
-
-func newCharacters(list []characterkit.Character) (*characterkit.Characters, error) {
-	chars := &characterkit.Characters{
-		List: list,
-		ByID: make(map[string]*characterkit.Character, len(list)*2),
 	}
-	if err := chars.Validate(); err != nil {
-		return nil, err
+	bundled, err := characterassets.LoadCharacters()
+	if err != nil {
+		return nil, fmt.Errorf("load bundled characters: %w", err)
 	}
-
-	for i := range chars.List {
-		char := &chars.List[i]
-		chars.ByID[char.ID] = char
-		chars.ByID[strings.ToLower(char.ID)] = char
+	for _, char := range bundled.List {
+		if strings.EqualFold(char.ID, "default") {
+			continue
+		}
+		char.IsDefault = false
+		list = append(list, char)
 	}
-	return chars, nil
+	return characterkit.NewCharacters(list)
 }
 
 func defaultCharacterReferenceURL(cfg *config.Config) string {

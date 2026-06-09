@@ -29,13 +29,15 @@ type Task struct {
 	JobID   string      `json:"job_id"`
 	Command TaskCommand `json:"command"`
 	AIModels
-	SourceURL string       `json:"source_url,omitempty"`
-	Text      string       `json:"text,omitempty"`
-	ImageURL  string       `json:"image_url,omitempty"`
-	RecipeURL string       `json:"recipe_url,omitempty"`
-	AudioURL  string       `json:"audio_url,omitempty"`
-	Recipe    *MusicRecipe `json:"recipe,omitempty"`
-	CreatedAt time.Time    `json:"created_at"`
+	SourceURL string `json:"source_url,omitempty"`
+	Text      string `json:"text,omitempty"`
+	ImageURL  string `json:"image_url,omitempty"`
+	// CharacterID はキーフレーム生成で使うキャラクターIDです。
+	CharacterID string       `json:"character_id,omitempty"`
+	RecipeURL   string       `json:"recipe_url,omitempty"`
+	AudioURL    string       `json:"audio_url,omitempty"`
+	Recipe      *MusicRecipe `json:"recipe,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
 }
 
 var jobIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)

@@ -17,9 +17,10 @@ import (
 )
 
 type Handler struct {
-	Queue        ports.TaskQueue
-	Templates    map[string]*template.Template
-	ModelOptions ModelOptions
+	Queue            ports.TaskQueue
+	Templates        map[string]*template.Template
+	ModelOptions     ModelOptions
+	CharacterOptions CharacterOptions
 }
 
 type ModelOptions struct {
@@ -29,11 +30,47 @@ type ModelOptions struct {
 	DefaultImageModel  string
 }
 
+type CharacterOption struct {
+	ID        string
+	Name      string
+	IsDefault bool
+}
+
+type CharacterOptions struct {
+	Characters         []CharacterOption
+	DefaultCharacterID string
+}
+
 func (o *ModelOptions) normalize() {
 	o.GeminiModels = normalizeModelOptions(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
 	o.ImageModels = normalizeModelOptions(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
 	o.DefaultGeminiModel = normalizeSelectedModel(o.DefaultGeminiModel, o.GeminiModels)
 	o.DefaultImageModel = normalizeSelectedModel(o.DefaultImageModel, o.ImageModels)
+}
+
+func (o *CharacterOptions) normalize() {
+	seen := make(map[string]bool, len(o.Characters))
+	normalized := make([]CharacterOption, 0, len(o.Characters))
+	for _, char := range o.Characters {
+		char.ID = strings.TrimSpace(char.ID)
+		char.Name = strings.TrimSpace(char.Name)
+		if char.ID == "" || seen[strings.ToLower(char.ID)] {
+			continue
+		}
+		if char.Name == "" {
+			char.Name = char.ID
+		}
+		if char.IsDefault && strings.TrimSpace(o.DefaultCharacterID) == "" {
+			o.DefaultCharacterID = char.ID
+		}
+		seen[strings.ToLower(char.ID)] = true
+		normalized = append(normalized, char)
+	}
+	o.Characters = normalized
+	o.DefaultCharacterID = strings.TrimSpace(o.DefaultCharacterID)
+	if o.DefaultCharacterID == "" && len(o.Characters) > 0 {
+		o.DefaultCharacterID = o.Characters[0].ID
+	}
 }
 
 func normalizeModelOptions(values []string, preferred, fallback string) []string {
@@ -76,11 +113,17 @@ type PageData struct {
 	JS                  []string
 	GeminiModels        []string
 	ImageModels         []string
+	Characters          []CharacterOption
 	SelectedGeminiModel string
 	SelectedImageModel  string
+	SelectedCharacterID string
 }
 
 func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOptions) (*Handler, error) {
+	return NewHandlerWithOptions(assets, queue, firstModelOptions(modelOptions), CharacterOptions{})
+}
+
+func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions ModelOptions, characterOptions CharacterOptions) (*Handler, error) {
 	templates := make(map[string]*template.Template)
 	for _, name := range []string{
 		"index.html",
@@ -98,12 +141,17 @@ func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOption
 		}
 		templates[name] = tmpl
 	}
-	options := ModelOptions{}
-	if len(modelOptions) > 0 {
-		options = modelOptions[0]
-	}
+	options := modelOptions
 	options.normalize()
-	return &Handler{Queue: queue, Templates: templates, ModelOptions: options}, nil
+	characterOptions.normalize()
+	return &Handler{Queue: queue, Templates: templates, ModelOptions: options, CharacterOptions: characterOptions}, nil
+}
+
+func firstModelOptions(options []ModelOptions) ModelOptions {
+	if len(options) == 0 {
+		return ModelOptions{}
+	}
+	return options[0]
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
@@ -133,14 +181,15 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	}
 	command := composeCommandFromRunMode(r.FormValue("run_mode"))
 	task := &domain.Task{
-		JobID:     jobID,
-		Command:   command,
-		AIModels:  h.aiModelsFromForm(r),
-		SourceURL: strings.TrimSpace(r.FormValue("url")),
-		Text:      strings.TrimSpace(r.FormValue("text")),
-		ImageURL:  strings.TrimSpace(r.FormValue("image_url")),
-		AudioURL:  strings.TrimSpace(r.FormValue("audio_url")),
-		CreatedAt: time.Now().UTC(),
+		JobID:       jobID,
+		Command:     command,
+		AIModels:    h.aiModelsFromForm(r),
+		SourceURL:   strings.TrimSpace(r.FormValue("url")),
+		Text:        strings.TrimSpace(r.FormValue("text")),
+		ImageURL:    strings.TrimSpace(r.FormValue("image_url")),
+		CharacterID: h.characterIDFromForm(r),
+		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
+		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }
@@ -161,6 +210,10 @@ func (h *Handler) withModelOptions(data PageData) PageData {
 	data.ImageModels = options.ImageModels
 	data.SelectedGeminiModel = options.DefaultGeminiModel
 	data.SelectedImageModel = options.DefaultImageModel
+	characters := h.CharacterOptions
+	characters.normalize()
+	data.Characters = characters.Characters
+	data.SelectedCharacterID = characters.DefaultCharacterID
 	return data
 }
 
@@ -181,8 +234,18 @@ func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
 	}
 }
 
+func (h *Handler) characterIDFromForm(r *http.Request) string {
+	value := strings.TrimSpace(r.FormValue("character_id"))
+	options := h.CharacterOptions
+	options.normalize()
+	if value == "" {
+		return options.DefaultCharacterID
+	}
+	return value
+}
+
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}, "recipe.html")
+	h.renderPage(w, h.withModelOptions(PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}), "recipe.html")
 }
 
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
@@ -214,12 +277,13 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	task := &domain.Task{
-		JobID:     jobID,
-		Command:   domain.CommandGenerateFromRecipe,
-		RecipeURL: strings.TrimSpace(r.FormValue("recipe_url")),
-		AudioURL:  strings.TrimSpace(r.FormValue("audio_url")),
-		Recipe:    recipe,
-		CreatedAt: time.Now().UTC(),
+		JobID:       jobID,
+		Command:     domain.CommandGenerateFromRecipe,
+		RecipeURL:   strings.TrimSpace(r.FormValue("recipe_url")),
+		CharacterID: h.characterIDFromForm(r),
+		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
+		Recipe:      recipe,
+		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }

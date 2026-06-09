@@ -41,12 +41,17 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	webHandler, err := handlers.NewHandler(templates, appCtx.TaskQueue, handlers.ModelOptions{
+	characterOptions, err := buildCharacterOptions(appCtx.Config)
+	if err != nil {
+		return nil, fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
+	}
+
+	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
 		GeminiModels:       appCtx.Config.GeminiModels,
 		ImageModels:        appCtx.Config.ImageModels,
 		DefaultGeminiModel: appCtx.Config.GeminiModel,
 		DefaultImageModel:  appCtx.Config.ImageModel,
-	})
+	}, characterOptions)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
@@ -59,6 +64,27 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		Worker:      workerHandler,
 		StaticFiles: staticFiles,
 	}, nil
+}
+
+func buildCharacterOptions(cfg *config.Config) (handlers.CharacterOptions, error) {
+	chars, err := buildCharacters(cfg)
+	if err != nil {
+		return handlers.CharacterOptions{}, err
+	}
+	options := handlers.CharacterOptions{
+		Characters: make([]handlers.CharacterOption, 0, len(chars.List)),
+	}
+	if defaultChar := chars.GetDefault(); defaultChar != nil {
+		options.DefaultCharacterID = defaultChar.ID
+	}
+	for _, char := range chars.List {
+		options.Characters = append(options.Characters, handlers.CharacterOption{
+			ID:        char.ID,
+			Name:      char.Name,
+			IsDefault: char.IsDefault,
+		})
+	}
+	return options, nil
 }
 
 // createAuthHandler は、認証ハンドラーを初期化して返します。

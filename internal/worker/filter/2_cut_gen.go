@@ -24,6 +24,7 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 		fc.VideoRecipe = recipe
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 	if fc.VideoRecipe == nil {
 		return fmt.Errorf("cut keyframe generation requires recipe")
 	}
