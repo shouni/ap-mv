@@ -45,7 +45,7 @@ func buildWorkflowWithConfig(
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
 	}
-	characters, err := buildCharacters(cfg)
+	characters, err := buildCharacters()
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 	}
 }
 
-func buildCharacters(*config.Config) (*character.Characters, error) {
+func buildCharacters() (*character.Characters, error) {
 	chars, err := characterassets.LoadCharacters()
 	if err != nil {
 		return nil, fmt.Errorf("load bundled characters: %w", err)

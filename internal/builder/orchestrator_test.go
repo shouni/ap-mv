@@ -23,7 +23,7 @@ func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 }
 
 func TestBuildCharactersUsesBundledCharactersByDefault(t *testing.T) {
-	chars, err := buildCharacters(&config.Config{})
+	chars, err := buildCharacters()
 	if err != nil {
 		t.Fatalf("buildCharacters() error = %v", err)
 	}
