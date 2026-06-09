@@ -12,7 +12,7 @@ require (
 	github.com/shouni/go-http-kit v1.4.2
 	github.com/shouni/go-prompt-kit v1.0.4
 	github.com/shouni/go-remote-io v1.5.3
-	github.com/shouni/go-veo-orchestrator v1.0.5
+	github.com/shouni/go-veo-orchestrator v1.1.0
 	github.com/shouni/netarmor v1.0.3
 	golang.org/x/oauth2 v0.36.0
 )
@@ -85,5 +85,3 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/shouni/go-veo-orchestrator => ./pkg/go-veo-orchestrator
