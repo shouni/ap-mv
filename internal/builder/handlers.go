@@ -41,7 +41,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
-	characterOptions, err := buildCharacterOptions(appCtx.Config)
+	characterOptions, err := buildCharacterOptions()
 	if err != nil {
 		return nil, fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
 	}
@@ -66,8 +66,8 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	}, nil
 }
 
-func buildCharacterOptions(cfg *config.Config) (handlers.CharacterOptions, error) {
-	chars, err := buildCharacters(cfg)
+func buildCharacterOptions() (handlers.CharacterOptions, error) {
+	chars, err := buildCharacters()
 	if err != nil {
 		return handlers.CharacterOptions{}, err
 	}
