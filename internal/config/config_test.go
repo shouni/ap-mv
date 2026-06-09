@@ -12,6 +12,7 @@ var configEnvKeys = []string{
 	"GCP_PROJECT_ID",
 	"GCP_LOCATION_ID",
 	"CLOUD_TASKS_QUEUE_ID",
+	"WORKER_URL",
 	"TASK_AUDIENCE_URL",
 	"SERVICE_ACCOUNT_EMAIL",
 	"GCS_MUSIC_BUCKET",
@@ -84,6 +85,9 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.TaskAudienceURL != cfg.ServiceURL {
 		t.Fatalf("TaskAudienceURL = %q, want ServiceURL %q", cfg.TaskAudienceURL, cfg.ServiceURL)
 	}
+	if cfg.WorkerURL != "http://localhost:8080/tasks/generate" {
+		t.Fatalf("WorkerURL = %q, want localhost worker URL", cfg.WorkerURL)
+	}
 	if cfg.VeoPollInterval != 10*time.Second {
 		t.Fatalf("VeoPollInterval = %s, want 10s", cfg.VeoPollInterval)
 	}
@@ -104,6 +108,7 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("SERVICE_URL", "https://example.com")
+	t.Setenv("WORKER_URL", "https://worker.example.com/tasks/generate")
 	t.Setenv("TASK_AUDIENCE_URL", "https://tasks.example.com")
 	t.Setenv("GCS_MUSIC_BUCKET", "gs://music-bucket/output/")
 	t.Setenv("GEMINI_MODEL", "gemini-selected")
@@ -123,6 +128,9 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 
 	if cfg.TaskAudienceURL != "https://tasks.example.com" {
 		t.Fatalf("TaskAudienceURL = %q", cfg.TaskAudienceURL)
+	}
+	if cfg.WorkerURL != "https://worker.example.com/tasks/generate" {
+		t.Fatalf("WorkerURL = %q", cfg.WorkerURL)
 	}
 	if cfg.GCSBucket != "music-bucket/output" {
 		t.Fatalf("GCSBucket = %q", cfg.GCSBucket)

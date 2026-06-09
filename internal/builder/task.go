@@ -3,7 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"strings"
 
 	"github.com/shouni/gcp-kit/tasks"
 
@@ -13,9 +13,9 @@ import (
 
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer[domain.Task], error) {
-	workerURL, err := url.JoinPath(cfg.ServiceURL, "/tasks/generate")
-	if err != nil {
-		return nil, fmt.Errorf("failed to build worker URL: %w", err)
+	workerURL := strings.TrimSpace(cfg.WorkerURL)
+	if workerURL == "" {
+		workerURL = strings.TrimRight(strings.TrimSpace(cfg.ServiceURL), "/") + "/tasks/generate"
 	}
 
 	taskCfg := tasks.Config{
