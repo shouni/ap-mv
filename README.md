@@ -1,5 +1,10 @@
 # 🎬 AP MV (AP Music Video Orchestrator)
 
+[![Status](https://img.shields.io/badge/Status-In%20Development-yellow)](#)
+[![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
+[![Platform](https://img.shields.io/badge/Platform-Cloud%20Run-blue?logo=google-cloud)](https://cloud.google.com/run)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ## 🚀 概要 (Overview) - 楽曲同期型・連鎖動画オーケストレーター
 
 **AP MV (AP Music Video Orchestrator)** は、**Music Recipe（音楽レシピ / 楽曲構成書）** から時間軸のタイムラインを自動補完・構造化し、Google の動画生成 AI **Veo (Vertex AI)** と Gemini 系モデルによる台本生成・キーフレーム生成をつなぐ、Cloud Run / Cloud Tasks 前提の非同期オーケストレーターです。
