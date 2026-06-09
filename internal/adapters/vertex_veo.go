@@ -45,7 +45,9 @@ func (r *VertexVeoRunner) Close() error {
 	if r == nil || r.videoCopier == nil {
 		return nil
 	}
-	if closer, ok := r.videoCopier.(interface{ Close() error }); ok {
+	copier := r.videoCopier
+	r.videoCopier = nil
+	if closer, ok := copier.(interface{ Close() error }); ok {
 		return closer.Close()
 	}
 	return nil
@@ -83,7 +85,7 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 
 	return &VertexVeoRunner{
 		client:           oauth2.NewClient(ctxWithClient, ts),
-		videoCopier:      gcsVideoCopier{client: storageClient},
+		videoCopier:      &gcsVideoCopier{client: storageClient},
 		projectID:        strings.TrimSpace(cfg.ProjectID),
 		locationID:       strings.TrimSpace(cfg.LocationID),
 		model:            model,
@@ -320,15 +322,17 @@ type gcsVideoCopier struct {
 	client *storage.Client
 }
 
-func (c gcsVideoCopier) Close() error {
-	if c.client == nil {
+func (c *gcsVideoCopier) Close() error {
+	if c == nil || c.client == nil {
 		return nil
 	}
-	return c.client.Close()
+	client := c.client
+	c.client = nil
+	return client.Close()
 }
 
-func (c gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) error {
-	if c.client == nil {
+func (c *gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) error {
+	if c == nil || c.client == nil {
 		return fmt.Errorf("GCS client is not configured")
 	}
 	sourceBucket, sourceObject, err := remoteio.ParseRemoteURI(sourceURI)
