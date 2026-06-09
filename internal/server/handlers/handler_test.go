@@ -23,22 +23,28 @@ func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 
 func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	queue := &recordingQueue{}
-	h, err := NewHandler(assets.Templates, queue, ModelOptions{
+	h, err := NewHandlerWithOptions(assets.Templates, queue, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
 		ImageModels:        []string{"image-default", "image-alt"},
 		DefaultGeminiModel: "gemini-default",
 		DefaultImageModel:  "image-default",
+	}, CharacterOptions{
+		Characters: []CharacterOption{
+			{ID: "zundamon", Name: "Zundamon"},
+			{ID: "tsumugi", Name: "Tsumugi", IsDefault: true},
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
 	form := url.Values{
-		"csrf_token":  {"token"},
-		"text":        {"source text"},
-		"run_mode":    {"keyframe"},
-		"text_model":  {"gemini-alt"},
-		"image_model": {"image-alt"},
+		"csrf_token":   {"token"},
+		"text":         {"source text"},
+		"run_mode":     {"keyframe"},
+		"text_model":   {"gemini-alt"},
+		"image_model":  {"image-alt"},
+		"character_id": {"zundamon"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -61,6 +67,9 @@ func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	}
 	if queue.task.ImageModel != "image-alt" {
 		t.Fatalf("queued image model = %q, want image-alt", queue.task.ImageModel)
+	}
+	if queue.task.CharacterID != "zundamon" {
+		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
 	}
 }
 
@@ -94,11 +103,16 @@ func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 }
 
 func TestComposeFormRendersModelSelects(t *testing.T) {
-	h, err := NewHandler(assets.Templates, nil, ModelOptions{
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
 		ImageModels:        []string{"image-default", "image-alt"},
 		DefaultGeminiModel: "gemini-default",
 		DefaultImageModel:  "image-default",
+	}, CharacterOptions{
+		Characters: []CharacterOption{
+			{ID: "zundamon", Name: "Zundamon"},
+			{ID: "tsumugi", Name: "Tsumugi", IsDefault: true},
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
@@ -121,6 +135,9 @@ func TestComposeFormRendersModelSelects(t *testing.T) {
 		`name="image_model"`,
 		`value="image-default" selected`,
 		`value="image-alt"`,
+		`name="character_id"`,
+		`value="zundamon"`,
+		`value="tsumugi" selected`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("ComposeForm body missing %q: %s", want, body)

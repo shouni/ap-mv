@@ -27,6 +27,7 @@ func (ScriptingFilter) Execute(ctx context.Context, fc *Context) error {
 			return err
 		}
 		applyTaskAudioURLToVideoRecipe(fc.Task, recipe)
+		applyTaskCharacterIDToVideoRecipe(fc.Task, recipe)
 		fc.VideoRecipe = recipe
 		return nil
 	}
@@ -42,6 +43,7 @@ func (ScriptingFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, recipe)
+	applyTaskCharacterIDToVideoRecipe(fc.Task, recipe)
 	fc.VideoRecipe = recipe
 	domainRecipe, err := toDomainRecipe(recipe)
 	if err != nil {

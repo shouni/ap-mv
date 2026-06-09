@@ -14,6 +14,16 @@
                         <label class="form-label fw-semibold">Music Audio GCS URL</label>
                         <input class="form-control" name="audio_url" placeholder="gs://bucket/path/music.mp3">
                     </div>
+                    {{if .Characters}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Character Override</label>
+                        <select class="form-select" name="character_id">
+                            {{range .Characters}}
+                            <option value="{{.ID}}" {{if eq .ID $.SelectedCharacterID}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    {{end}}
                     <div class="mb-3">
                         <label class="form-label fw-semibold">MusicRecipe JSON</label>
                         <textarea class="form-control" name="recipe_json" rows="12" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>

@@ -37,6 +37,35 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	}
 }
 
+func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
+	fc := &Context{
+		Task: &domain.Task{
+			JobID:       "job-1",
+			Command:     domain.CommandGenerateFromRecipe,
+			CharacterID: "zundamon",
+		},
+		Recipe: &domain.MusicRecipe{
+			Title: "recipe",
+			Sections: []domain.MusicSection{
+				{Name: "intro", Duration: 8, Prompt: "blue light"},
+			},
+		},
+	}
+
+	if err := (CutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fc.VideoRecipe == nil || len(fc.VideoRecipe.Cuts) == 0 {
+		t.Fatal("video recipe cuts were not built")
+	}
+	if got := fc.VideoRecipe.Cuts[0].CharacterID; got != "zundamon" {
+		t.Fatalf("CharacterID = %q, want zundamon", got)
+	}
+	if got := fc.Recipe.Cuts[0].ImageRefName; got != "zundamon" {
+		t.Fatalf("ImageRefName = %q, want zundamon", got)
+	}
+}
+
 type staticReader struct {
 	content string
 }

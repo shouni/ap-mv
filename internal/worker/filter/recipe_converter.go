@@ -87,6 +87,20 @@ func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *orchestrator.Vide
 	}
 }
 
+func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.VideoRecipe) {
+	if task == nil || recipe == nil {
+		return
+	}
+	characterID := strings.TrimSpace(task.CharacterID)
+	if characterID == "" {
+		return
+	}
+	recipe.Normalize()
+	for i := range recipe.Cuts {
+		recipe.Cuts[i].CharacterID = characterID
+	}
+}
+
 func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, error) {
 	if recipe == nil {
 		return nil, nil
