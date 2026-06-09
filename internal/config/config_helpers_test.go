@@ -60,9 +60,19 @@ func TestNormalizeWorkerURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeWorkerURL(tt.service, tt.worker); got != tt.want {
+			got, err := normalizeWorkerURL(tt.service, tt.worker)
+			if err != nil {
+				t.Fatalf("normalizeWorkerURL(%q, %q) error = %v", tt.service, tt.worker, err)
+			}
+			if got != tt.want {
 				t.Fatalf("normalizeWorkerURL(%q, %q) = %q, want %q", tt.service, tt.worker, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeWorkerURLRejectsInvalidServiceURL(t *testing.T) {
+	if _, err := normalizeWorkerURL("http://[::1", ""); err == nil {
+		t.Fatal("normalizeWorkerURL() error = nil, want invalid service URL error")
 	}
 }
