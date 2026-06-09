@@ -23,7 +23,7 @@ func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 		"## Video Worldview",
 		"compose",
 		"青い光の中で走る主人公",
-		`"character_id": "default"`,
+		`"character_id": ""`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt does not contain %q:\n%s", want, got)

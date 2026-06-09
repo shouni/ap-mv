@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	characterassets "github.com/shouni/go-character-kit/assets"
-	characterkit "github.com/shouni/go-character-kit/character"
+	"github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -83,47 +83,12 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 	}
 }
 
-func buildCharacters(cfg *config.Config) (*characterkit.Characters, error) {
-	referenceURL := defaultCharacterReferenceURL(cfg)
-	seed := int64(10001)
-	list := []characterkit.Character{
-		{
-			ID:           "default",
-			Name:         "Main character",
-			ReferenceURL: referenceURL,
-			VisualCues: []string{
-				"consistent protagonist design",
-				"expressive anime-style face",
-				"clear silhouette",
-			},
-			Seed:      &seed,
-			IsDefault: true,
-		},
-	}
-	bundled, err := characterassets.LoadCharacters()
+func buildCharacters(*config.Config) (*character.Characters, error) {
+	chars, err := characterassets.LoadCharacters()
 	if err != nil {
 		return nil, fmt.Errorf("load bundled characters: %w", err)
 	}
-	for _, char := range bundled.List {
-		if strings.EqualFold(char.ID, "default") {
-			continue
-		}
-		char.IsDefault = false
-		list = append(list, char)
-	}
-	return characterkit.NewCharacters(list)
-}
-
-func defaultCharacterReferenceURL(cfg *config.Config) string {
-	if cfg != nil {
-		if ref := strings.TrimSpace(cfg.CharacterReferenceURL); ref != "" {
-			return ref
-		}
-	}
-	if cfg == nil || strings.TrimSpace(cfg.GCSBucket) == "" {
-		return "gs://example-bucket/ap-mv/characters/default.png"
-	}
-	return cfg.GetGCSObjectURL(path.Join("ap-mv", "characters", "default.png"))
+	return chars, nil
 }
 
 func workflowOutputBaseURI(cfg *config.Config) string {

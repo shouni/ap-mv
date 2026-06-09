@@ -45,7 +45,7 @@ Every cut must be specific enough for both keyframe image generation and Veo vid
       "audio_cue": "musical timing cue",
       "audio_reference": "optional gs:// audio segment or full music file",
       "visual_anchor": "visual scene prompt for keyframe and video",
-      "character_id": "default"
+      "character_id": ""
     }
   ]
 }
@@ -54,7 +54,7 @@ Every cut must be specific enough for both keyframe image generation and Veo vid
 
 - Create 2 to 5 cuts unless the source strongly requires a different count.
 - Use duration_sec values suitable for Veo.
-- Set every character_id to "default" unless the source clearly names another available character.
+- Leave character_id empty unless the source clearly names an available character; the default character will be selected by the character definition.
 - Use audio_reference only when the source explicitly provides a GCS audio URI.
 - Make visual_anchor concrete enough for image generation and video generation.
 - Keep the response parseable as JSON.

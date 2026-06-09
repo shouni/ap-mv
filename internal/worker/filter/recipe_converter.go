@@ -58,7 +58,7 @@ func toVideoRecipe(recipe *domain.MusicRecipe) (*orchestrator.VideoRecipe, error
 			AudioCue:          nonEmpty(cut.AudioCue, cut.Prompt),
 			AudioReference:    cut.AudioURI,
 			VisualAnchor:      nonEmpty(cut.Prompt, cut.SectionName),
-			CharacterID:       nonEmpty(cut.ImageRefName, "default"),
+			CharacterID:       strings.TrimSpace(cut.ImageRefName),
 			KeyframeReference: cut.KeyframeURI,
 			VideoURL:          cut.VideoURL,
 			VideoID:           cut.VideoID,
