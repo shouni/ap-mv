@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
+	"github.com/shouni/go-remote-io/remoteio"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
@@ -27,6 +30,7 @@ const maxVeoPollConsecutiveErrors = 10
 // VertexVeoRunner calls the Vertex AI Veo long-running video generation API.
 type VertexVeoRunner struct {
 	client           *http.Client
+	videoCopier      videoCopier
 	projectID        string
 	locationID       string
 	model            string
@@ -35,6 +39,18 @@ type VertexVeoRunner struct {
 	generateAudio    bool
 	pollInterval     time.Duration
 	operationTimeout time.Duration
+}
+
+func (r *VertexVeoRunner) Close() error {
+	if r == nil || r.videoCopier == nil {
+		return nil
+	}
+	copier := r.videoCopier
+	r.videoCopier = nil
+	if closer, ok := copier.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunner, error) {
@@ -54,6 +70,10 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	if err != nil {
 		return nil, fmt.Errorf("create Google ADC token source: %w", err)
 	}
+	storageClient, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create GCS client: %w", err)
+	}
 
 	pollInterval := cfg.VeoPollInterval
 	operationTimeout := cfg.VeoOperationTimeout
@@ -65,6 +85,7 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 
 	return &VertexVeoRunner{
 		client:           oauth2.NewClient(ctxWithClient, ts),
+		videoCopier:      &gcsVideoCopier{client: storageClient},
 		projectID:        strings.TrimSpace(cfg.ProjectID),
 		locationID:       strings.TrimSpace(cfg.LocationID),
 		model:            model,
@@ -95,6 +116,10 @@ func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequ
 	if err != nil {
 		return nil, err
 	}
+	video, err = r.canonicalizeGeneratedVideo(runCtx, req, video)
+	if err != nil {
+		return nil, err
+	}
 	videoID := video.GCSURI
 	if videoID == "" {
 		videoID = op.Name
@@ -115,7 +140,7 @@ func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequ
 
 func (r *VertexVeoRunner) startOperation(ctx context.Context, req ports.VideoGenerationRequest) (*vertexOperation, error) {
 	var op vertexOperation
-	if err := r.postJSON(ctx, r.modelURL("predictLongRunning"), r.buildGenerateBody(req), &op); err != nil {
+	if err := r.postJSON(ctx, r.modelURL("predictLongRunning"), r.buildGenerateBody(ctx, req), &op); err != nil {
 		return nil, fmt.Errorf("start Veo operation: %w", err)
 	}
 	if strings.TrimSpace(op.Name) == "" {
@@ -155,7 +180,7 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 	}
 }
 
-func (r *VertexVeoRunner) buildGenerateBody(req ports.VideoGenerationRequest) map[string]any {
+func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.VideoGenerationRequest) map[string]any {
 	instance := map[string]any{
 		"prompt": strings.TrimSpace(req.Prompt),
 	}
@@ -169,7 +194,7 @@ func (r *VertexVeoRunner) buildGenerateBody(req ports.VideoGenerationRequest) ma
 	}
 
 	parameters := map[string]any{
-		"storageUri":      r.outputStorageURI,
+		"storageUri":      r.outputStorageURIFor(ctx, req),
 		"sampleCount":     1,
 		"durationSeconds": int(math.Round(req.DurationSec)),
 		"generateAudio":   r.generateAudio,
@@ -241,6 +266,100 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 func buildVeoOutputStorageURI(bucket, prefix string) string {
 	cleanPrefix := strings.Trim(path.Clean("/"+strings.TrimSpace(prefix)), "/")
 	return fmt.Sprintf("gs://%s/%s/", strings.TrimSpace(bucket), cleanPrefix)
+}
+
+func (r *VertexVeoRunner) outputStorageURIFor(ctx context.Context, req ports.VideoGenerationRequest) string {
+	if r == nil {
+		return ""
+	}
+	if baseURI, ok := ports.VideoOutputBaseURIFromContext(ctx); ok {
+		return buildVeoTemporaryCutOutputStorageURI(baseURI, req.CutIndex)
+	}
+	return r.outputStorageURI
+}
+
+func buildVeoTemporaryCutOutputStorageURI(baseURI string, cutIndex int) string {
+	baseURI = strings.TrimRight(strings.TrimSpace(baseURI), "/")
+	if baseURI == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/tmp/videos/cut_%02d/", baseURI, cutIndex)
+}
+
+func buildVeoCanonicalVideoURI(baseURI string, cutIndex int) string {
+	baseURI = strings.TrimRight(strings.TrimSpace(baseURI), "/")
+	if baseURI == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/videos/cut_%02d.mp4", baseURI, cutIndex)
+}
+
+func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req ports.VideoGenerationRequest, video vertexVideo) (vertexVideo, error) {
+	if r == nil || r.videoCopier == nil || strings.TrimSpace(video.GCSURI) == "" {
+		return video, nil
+	}
+	baseURI, ok := ports.VideoOutputBaseURIFromContext(ctx)
+	if !ok {
+		return video, nil
+	}
+	targetURI := buildVeoCanonicalVideoURI(baseURI, req.CutIndex)
+	if targetURI == "" || targetURI == video.GCSURI {
+		return video, nil
+	}
+	if err := r.videoCopier.Copy(ctx, video.GCSURI, targetURI); err != nil {
+		return vertexVideo{}, fmt.Errorf("copy generated video to canonical path: %w", err)
+	}
+	video.GCSURI = targetURI
+	video.URI = targetURI
+	return video, nil
+}
+
+type videoCopier interface {
+	Copy(ctx context.Context, sourceURI, targetURI string) error
+}
+
+type gcsVideoCopier struct {
+	client *storage.Client
+}
+
+func (c *gcsVideoCopier) Close() error {
+	if c == nil || c.client == nil {
+		return nil
+	}
+	client := c.client
+	c.client = nil
+	return client.Close()
+}
+
+func (c *gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) error {
+	if c == nil || c.client == nil {
+		return fmt.Errorf("GCS client is not configured")
+	}
+	sourceBucket, sourceObject, err := remoteio.ParseRemoteURI(sourceURI)
+	if err != nil {
+		return err
+	}
+	targetBucket, targetObject, err := remoteio.ParseRemoteURI(targetURI)
+	if err != nil {
+		return err
+	}
+	if sourceObject == "" || targetObject == "" {
+		return fmt.Errorf("GCS object path is required")
+	}
+	_, err = c.client.Bucket(targetBucket).Object(targetObject).
+		CopierFrom(c.client.Bucket(sourceBucket).Object(sourceObject)).
+		Run(ctx)
+	if err != nil {
+		return err
+	}
+	if err := c.client.Bucket(sourceBucket).Object(sourceObject).Delete(ctx); err != nil {
+		slog.WarnContext(ctx, "failed to delete temporary Veo video after canonical copy",
+			"source_uri", sourceURI,
+			"target_uri", targetURI,
+			"error", err,
+		)
+	}
+	return nil
 }
 
 func imageMedia(req ports.VideoGenerationRequest) map[string]any {

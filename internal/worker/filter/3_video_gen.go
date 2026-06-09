@@ -20,6 +20,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil || fc.Task == nil {
 		return fmt.Errorf("video generation requires task and recipe")
 	}
+	ctx = videoOutputContext(ctx, fc)
 	if fc.Workflows != nil && fc.Workflows.Video != nil {
 		if fc.VideoRecipe == nil {
 			if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
@@ -98,6 +99,13 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		}
 	}
 	return nil
+}
+
+func videoOutputContext(ctx context.Context, fc *Context) context.Context {
+	if fc == nil {
+		return ctx
+	}
+	return ports.WithVideoOutputBaseURI(ctx, fc.OutputPath)
 }
 
 func hasPendingCuts(recipe *domain.MusicRecipe) bool {

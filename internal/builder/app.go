@@ -30,6 +30,9 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize video runner: %w", err)
 	}
+	// resources is only for cleanup while BuildContainer is still assembling dependencies.
+	// On success, app.Container.Close owns the runtime lifecycle.
+	resources = append(resources, videoRunner)
 
 	storage, err := gcs.New(ctx)
 	if err != nil {

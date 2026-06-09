@@ -1,6 +1,7 @@
 package app
 
 import (
+	"io"
 	"log/slog"
 
 	"github.com/shouni/gcp-kit/tasks"
@@ -57,6 +58,13 @@ func (c *Container) Close() {
 	if c.TaskEnqueuer != nil {
 		if err := c.TaskEnqueuer.Close(); err != nil {
 			slog.Error("failed to close task enqueuer", "error", err)
+		}
+	}
+	if c.Pipeline != nil {
+		if closer, ok := c.Pipeline.VideoRunner.(io.Closer); ok {
+			if err := closer.Close(); err != nil {
+				slog.Error("failed to close video runner", "error", err)
+			}
 		}
 	}
 }

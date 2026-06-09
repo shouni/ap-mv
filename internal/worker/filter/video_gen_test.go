@@ -50,9 +50,50 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	}
 }
 
+func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
+	recipe := &domain.MusicRecipe{
+		Title: "test",
+		Cuts: []domain.VideoCut{
+			{Index: 0, DurationSec: 8, Prompt: "first"},
+		},
+	}
+	task := &domain.Task{
+		JobID:   "job-1",
+		Command: domain.CommandGenerateFromRecipe,
+		Recipe:  recipe,
+	}
+	runner := &contextCaptureRunner{}
+	flt := VideoGenerationFilter{Runner: runner}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:       task,
+		Recipe:     recipe,
+		OutputPath: "gs://bucket/ap-mv/veo/jobs/job-1/",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if runner.baseURI != "gs://bucket/ap-mv/veo/jobs/job-1/" {
+		t.Fatalf("video output base URI = %q", runner.baseURI)
+	}
+}
+
 type sequenceRunner struct{}
 
 func (sequenceRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
+	return &ports.VideoResponse{
+		CloudURL: "gs://bucket/cut.mp4",
+		VideoID:  "video-id",
+		CutIndex: req.CutIndex,
+	}, nil
+}
+
+type contextCaptureRunner struct {
+	baseURI string
+}
+
+func (r *contextCaptureRunner) Run(ctx context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
+	r.baseURI, _ = ports.VideoOutputBaseURIFromContext(ctx)
 	return &ports.VideoResponse{
 		CloudURL: "gs://bucket/cut.mp4",
 		VideoID:  "video-id",
