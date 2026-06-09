@@ -125,6 +125,8 @@ github.com/shouni/go-remote-io v1.5.3 h1:mLJ2yXK61ezRKWpDF/XQErqDNdwPHPhgAY15OIP
 github.com/shouni/go-remote-io v1.5.3/go.mod h1:ZlXxrOzIKGZVICy6nqHKom409PZos9drODyT9hWHfxI=
 github.com/shouni/go-utils v1.0.20 h1:gdjQfqJdY+uJI02FPNSE7B9GTIihGQ4DMjN36+0pd9M=
 github.com/shouni/go-utils v1.0.20/go.mod h1:IGMDiCaF1QlkT/roB0YTrNCUTcfcMhtnOUjG0e3AR8w=
+github.com/shouni/go-veo-orchestrator v1.1.0 h1:qgn7AG9vx//lFzXUXxd6OFlI/uGXo+04JroVN/rkqPs=
+github.com/shouni/go-veo-orchestrator v1.1.0/go.mod h1:DcF9iPEAQtSHfB3KoZxzKm1iX30AA+KMps8anN2+bmg=
 github.com/shouni/netarmor v1.0.3 h1:mrepC5JLcCLhQPn3Qy7YE/BEgHkzbBlGTF84DdWlHc0=
 github.com/shouni/netarmor v1.0.3/go.mod h1:SOrb359QPM599FUJQ2GsRcUFOvJTaQ+L98Wo9Vr7xMk=
 github.com/spiffe/go-spiffe/v2 v2.6.0 h1:l+DolpxNWYgruGQVV0xsfeya3CsC7m8iBzDnMpsbLuo=
