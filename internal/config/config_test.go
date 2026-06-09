@@ -169,3 +169,12 @@ func TestLoadConfigFromEnvRejectsBareDurationNumber(t *testing.T) {
 		t.Fatal("LoadConfigFromEnv() error = nil, want duration parse error")
 	}
 }
+
+func TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("SERVICE_URL", "http://[::1")
+
+	if _, err := LoadConfigFromEnv(); err == nil {
+		t.Fatal("LoadConfigFromEnv() error = nil, want invalid service URL error")
+	}
+}

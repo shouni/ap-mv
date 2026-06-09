@@ -10,6 +10,7 @@ import (
 const (
 	defaultGeminiModel = "gemini-3.5-flash"
 	defaultImageModel  = "gemini-3-pro-image-preview"
+	taskGeneratePath   = "/tasks/generate"
 )
 
 // Config はアプリ設定です。
@@ -50,8 +51,12 @@ type Config struct {
 	AllowedDomains []string `env:"ALLOWED_DOMAINS"`
 }
 
-func (c *Config) normalize() {
-	c.WorkerURL = normalizeWorkerURL(c.ServiceURL, c.WorkerURL)
+func (c *Config) normalize() error {
+	workerURL, err := normalizeWorkerURL(c.ServiceURL, c.WorkerURL)
+	if err != nil {
+		return err
+	}
+	c.WorkerURL = workerURL
 	if c.TaskAudienceURL == "" {
 		c.TaskAudienceURL = c.ServiceURL
 	}
@@ -59,6 +64,7 @@ func (c *Config) normalize() {
 	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
 	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
 	c.NormalizeModels()
+	return nil
 }
 
 func (c *Config) NormalizeModels() {
@@ -79,7 +85,9 @@ func LoadConfigFromEnv() (*Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return nil, err
 	}
-	cfg.normalize()
+	if err := cfg.normalize(); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }
 

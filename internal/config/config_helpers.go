@@ -25,20 +25,24 @@ func normalizeGCSBucket(bucket string) string {
 	return strings.Trim(bucket, "/")
 }
 
-func normalizeWorkerURL(serviceURL, workerURL string) string {
+func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
 	workerURL = strings.TrimSpace(workerURL)
 	if workerURL != "" {
-		return workerURL
+		return workerURL, nil
 	}
+	return joinWorkerPath(serviceURL)
+}
+
+func joinWorkerPath(serviceURL string) (string, error) {
 	serviceURL = strings.TrimSpace(serviceURL)
 	if serviceURL == "" {
-		return "/tasks/generate"
+		return taskGeneratePath, nil
 	}
-	joined, err := url.JoinPath(serviceURL, "/tasks/generate")
+	joined, err := url.JoinPath(serviceURL, taskGeneratePath)
 	if err != nil {
-		return strings.TrimRight(serviceURL, "/") + "/tasks/generate"
+		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
 	}
-	return joined
+	return joined, nil
 }
 
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
