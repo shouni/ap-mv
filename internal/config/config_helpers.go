@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/shouni/go-remote-io/remoteio"
@@ -29,11 +30,15 @@ func normalizeWorkerURL(serviceURL, workerURL string) string {
 	if workerURL != "" {
 		return workerURL
 	}
-	serviceURL = strings.TrimRight(strings.TrimSpace(serviceURL), "/")
+	serviceURL = strings.TrimSpace(serviceURL)
 	if serviceURL == "" {
 		return "/tasks/generate"
 	}
-	return serviceURL + "/tasks/generate"
+	joined, err := url.JoinPath(serviceURL, "/tasks/generate")
+	if err != nil {
+		return strings.TrimRight(serviceURL, "/") + "/tasks/generate"
+	}
+	return joined
 }
 
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
