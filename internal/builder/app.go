@@ -30,6 +30,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize video runner: %w", err)
 	}
+	resources = append(resources, videoRunner)
 
 	storage, err := gcs.New(ctx)
 	if err != nil {
