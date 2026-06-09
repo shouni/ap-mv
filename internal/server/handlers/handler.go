@@ -72,7 +72,6 @@ type PageData struct {
 	CSRFToken           string
 	JobID               string
 	Message             string
-	Body                template.HTML
 	CSS                 []string
 	JS                  []string
 	GeminiModels        []string
