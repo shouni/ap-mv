@@ -13,7 +13,7 @@ import (
 	"ap-mv/internal/worker/filter"
 )
 
-// Runner は domain.Task を Music Recipe 生成、キーフレーム生成、動画生成、公開の
+// Runner は domain.Task を MusicRecipe 生成、キーフレーム生成、動画生成、公開の
 // 各フィルターへ順番に流す worker パイプラインです。
 type Runner struct {
 	VideoRunner        ports.VideoRunner
@@ -40,6 +40,7 @@ func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
 // Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。
 //
 // worker は MusicRecipe の戻り値を使わないため、Run の結果から error だけを返します。
+// task は TaskExecutor のシグネチャに合わせて値で受け取り、Run へ渡す時点でポインタ化します。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	_, err := r.Run(ctx, &task)
 	return err
