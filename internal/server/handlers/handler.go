@@ -41,6 +41,7 @@ type CharacterOptions struct {
 	DefaultCharacterID string
 }
 
+// normalize normalizes the provided values.
 func (o *ModelOptions) normalize() {
 	o.GeminiModels = normalizeModelOptions(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
 	o.ImageModels = normalizeModelOptions(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
@@ -48,6 +49,7 @@ func (o *ModelOptions) normalize() {
 	o.DefaultImageModel = normalizeSelectedModel(o.DefaultImageModel, o.ImageModels)
 }
 
+// normalize normalizes the provided values.
 func (o *CharacterOptions) normalize() {
 	seen := make(map[string]bool, len(o.Characters))
 	normalized := make([]CharacterOption, 0, len(o.Characters))
@@ -73,6 +75,7 @@ func (o *CharacterOptions) normalize() {
 	}
 }
 
+// normalizeModelOptions normalizes available model options.
 func normalizeModelOptions(values []string, preferred, fallback string) []string {
 	seen := make(map[string]bool, len(values)+1)
 	result := make([]string, 0, len(values)+1)
@@ -93,6 +96,7 @@ func normalizeModelOptions(values []string, preferred, fallback string) []string
 	return result
 }
 
+// normalizeSelectedModel normalizes the selected model value.
 func normalizeSelectedModel(value string, values []string) string {
 	value = strings.TrimSpace(value)
 	if value != "" {
@@ -119,10 +123,12 @@ type PageData struct {
 	SelectedCharacterID string
 }
 
+// NewHandler constructs a handler with default character options.
 func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOptions) (*Handler, error) {
 	return NewHandlerWithOptions(assets, queue, firstModelOptions(modelOptions), CharacterOptions{})
 }
 
+// NewHandlerWithOptions constructs a handler with explicit model and character options.
 func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions ModelOptions, characterOptions CharacterOptions) (*Handler, error) {
 	templates := make(map[string]*template.Template)
 	for _, name := range []string{
@@ -147,6 +153,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	return &Handler{Queue: queue, Templates: templates, ModelOptions: options, CharacterOptions: characterOptions}, nil
 }
 
+// firstModelOptions returns the first matching model options.
 func firstModelOptions(options []ModelOptions) ModelOptions {
 	if len(options) == 0 {
 		return ModelOptions{}
@@ -154,10 +161,12 @@ func firstModelOptions(options []ModelOptions) ModelOptions {
 	return options[0]
 }
 
+// Home renders the home page.
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, PageData{Title: "Home"}, "index.html")
 }
 
+// ComposeForm renders the compose form.
 func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, h.withModelOptions(PageData{
 		Title:     "Compose",
@@ -165,6 +174,7 @@ func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
 	}), "compose.html")
 }
 
+// PostCompose handles compose form submissions.
 func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -194,6 +204,7 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
+// composeCommandFromRunMode returns the task command for a compose run mode.
 func composeCommandFromRunMode(runMode string) domain.TaskCommand {
 	switch strings.TrimSpace(runMode) {
 	case "keyframe":
@@ -203,6 +214,7 @@ func composeCommandFromRunMode(runMode string) domain.TaskCommand {
 	}
 }
 
+// withModelOptions adds model and character selections to page data.
 func (h *Handler) withModelOptions(data PageData) PageData {
 	options := h.ModelOptions
 	options.normalize()
@@ -217,6 +229,7 @@ func (h *Handler) withModelOptions(data PageData) PageData {
 	return data
 }
 
+// aiModelsFromForm reads AI model selections from a request form.
 func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
 	options := h.ModelOptions
 	options.normalize()
@@ -234,6 +247,7 @@ func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
 	}
 }
 
+// characterIDFromForm reads the character selection from a request form.
 func (h *Handler) characterIDFromForm(r *http.Request) string {
 	value := strings.TrimSpace(r.FormValue("character_id"))
 	options := h.CharacterOptions
@@ -244,10 +258,12 @@ func (h *Handler) characterIDFromForm(r *http.Request) string {
 	return value
 }
 
+// RecipeForm renders the recipe form.
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, h.withModelOptions(PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}), "recipe.html")
 }
 
+// PostRecipe handles recipe form submissions.
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -288,10 +304,12 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
+// History renders the history page.
 func (h *Handler) History(w http.ResponseWriter, _ *http.Request) {
 	h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
 }
 
+// DeleteHistory handles history deletion requests.
 func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
@@ -301,6 +319,7 @@ func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "delete adapter is not configured yet"})
 }
 
+// enqueue validates and submits a task to the configured queue.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -315,6 +334,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
+// renderPage renders a named HTML template.
 func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl, ok := h.Templates[templateName]
@@ -327,6 +347,7 @@ func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName 
 	}
 }
 
+// validCSRFToken reports whether the request contains a valid CSRF token.
 func validCSRFToken(r *http.Request) bool {
 	expected := csrfTokenFromContext(r.Context())
 	submitted := strings.TrimSpace(r.FormValue("csrf_token"))
@@ -339,6 +360,7 @@ func validCSRFToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(expected), []byte(submitted)) == 1
 }
 
+// writeJSON writes a JSON response with the given status.
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

@@ -21,6 +21,7 @@ func NewRouter(h *builder.AppHandlers) http.Handler {
 	return r
 }
 
+// setupCommonMiddleware configures common middleware.
 func setupCommonMiddleware(r *chi.Mux) {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -29,6 +30,7 @@ func setupCommonMiddleware(r *chi.Mux) {
 	r.Use(middleware.CleanPath)
 }
 
+// setupRoutes configures routes.
 func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -77,6 +79,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	})
 }
 
+// registerStaticRoutes registers static routes.
 func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -86,6 +89,7 @@ func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(subFS))))
 }
 
+// registerWebRoutes registers web routes.
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Get("/", h.Home)
 	r.Route("/web", func(r chi.Router) {
@@ -98,6 +102,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	})
 }
 
+// csrfContextMiddleware returns middleware that stores CSRF tokens on the request context.
 func csrfContextMiddleware(authHandler *auth.Handler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

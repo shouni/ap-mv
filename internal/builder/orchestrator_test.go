@@ -6,6 +6,7 @@ import (
 	"ap-mv/internal/config"
 )
 
+// TestBuildOrchestratorConfigMapsModels verifies that configured model names map into orchestrator config.
 func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	cfg := &config.Config{
 		GeminiModel: "gemini-text",
@@ -22,6 +23,7 @@ func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	}
 }
 
+// TestBuildCharactersUsesBundledCharactersByDefault verifies that bundled characters load by default.
 func TestBuildCharactersUsesBundledCharactersByDefault(t *testing.T) {
 	chars, err := buildCharacters()
 	if err != nil {

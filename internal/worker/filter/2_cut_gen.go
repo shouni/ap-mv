@@ -7,8 +7,10 @@ import (
 
 type CutKeyframeFilter struct{}
 
+// Name returns the receiver name.
 func (CutKeyframeFilter) Name() string { return "cut_keyframe_gen" }
 
+// Execute runs the receiver processing step.
 func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil {
 		return fmt.Errorf("cut keyframe generation requires recipe")

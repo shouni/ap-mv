@@ -18,6 +18,7 @@ import (
 	"ap-mv/internal/ports"
 )
 
+// buildWorkflow builds orchestrator workflows from application config.
 func buildWorkflow(
 	ctx context.Context,
 	cfg *config.Config,
@@ -28,6 +29,7 @@ func buildWorkflow(
 	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner)
 }
 
+// buildWorkflowWithConfig builds orchestrator workflows from an explicit orchestrator config.
 func buildWorkflowWithConfig(
 	ctx context.Context,
 	cfg *config.Config,
@@ -73,6 +75,7 @@ func buildWorkflowWithConfig(
 	return workflows, nil
 }
 
+// geminiConfig returns the Gemini client configuration.
 func geminiConfig(cfg *config.Config) gemini.Config {
 	if apiKey := strings.TrimSpace(cfg.GeminiAPIKey); apiKey != "" {
 		return gemini.Config{APIKey: apiKey}
@@ -83,6 +86,7 @@ func geminiConfig(cfg *config.Config) gemini.Config {
 	}
 }
 
+// buildCharacters builds characters.
 func buildCharacters() (*character.Characters, error) {
 	chars, err := characterassets.LoadCharacters()
 	if err != nil {
@@ -91,6 +95,7 @@ func buildCharacters() (*character.Characters, error) {
 	return chars, nil
 }
 
+// workflowOutputBaseURI returns the GCS base URI for workflow outputs.
 func workflowOutputBaseURI(cfg *config.Config) string {
 	if cfg == nil || strings.TrimSpace(cfg.GCSBucket) == "" {
 		return ""

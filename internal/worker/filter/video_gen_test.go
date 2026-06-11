@@ -9,6 +9,7 @@ import (
 	"ap-mv/internal/ports"
 )
 
+// TestVideoGenerationFilterEnqueuesContinuationAfterOneCut verifies continuation task enqueueing after one cut.
 func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	recipe := &domain.MusicRecipe{
 		Title: "test",
@@ -50,6 +51,7 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	}
 }
 
+// TestVideoGenerationFilterAddsOutputPathToContext verifies that video generation receives the output path through context.
 func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	recipe := &domain.MusicRecipe{
 		Title: "test",
@@ -80,6 +82,7 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 
 type sequenceRunner struct{}
 
+// Run starts the receiver workflow.
 func (sequenceRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	return &ports.VideoResponse{
 		CloudURL: "gs://bucket/cut.mp4",
@@ -92,6 +95,7 @@ type contextCaptureRunner struct {
 	baseURI string
 }
 
+// Run starts the receiver workflow.
 func (r *contextCaptureRunner) Run(ctx context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	r.baseURI, _ = ports.VideoOutputBaseURIFromContext(ctx)
 	return &ports.VideoResponse{
@@ -105,6 +109,7 @@ type captureQueue struct {
 	tasks []*domain.Task
 }
 
+// Enqueue adds a task to the queue.
 func (q *captureQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	copied := *task
 	q.tasks = append(q.tasks, &copied)

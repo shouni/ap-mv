@@ -16,11 +16,13 @@ type recordingQueue struct {
 	task *domain.Task
 }
 
+// Enqueue adds a task to the queue.
 func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	q.task = task
 	return nil
 }
 
+// TestPostComposeSupportsKeyframeRunMode verifies that compose submissions support keyframe-only mode.
 func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	queue := &recordingQueue{}
 	h, err := NewHandlerWithOptions(assets.Templates, queue, ModelOptions{
@@ -73,6 +75,7 @@ func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	}
 }
 
+// TestPostComposeDefaultsToFullCompose verifies that compose submissions default to the full pipeline.
 func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 	queue := &recordingQueue{}
 	h, err := NewHandler(assets.Templates, queue)
@@ -102,6 +105,7 @@ func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 	}
 }
 
+// TestComposeFormRendersModelSelects verifies that the compose form renders model selects.
 func TestComposeFormRendersModelSelects(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},

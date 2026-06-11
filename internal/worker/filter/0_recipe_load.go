@@ -14,8 +14,10 @@ const maxRecipeJSONSize = 5 * 1024 * 1024
 
 type RecipeLoadFilter struct{}
 
+// Name returns the receiver name.
 func (RecipeLoadFilter) Name() string { return "recipe_load" }
 
+// Execute runs the receiver processing step.
 func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil || fc.Task == nil {
 		return fmt.Errorf("recipe load requires task")
@@ -36,6 +38,7 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 	return applyTaskAudioURL(fc.Task, fc.Recipe)
 }
 
+// readRecipe reads and validates a music recipe from remote storage.
 func readRecipe(ctx context.Context, reader interface {
 	Open(context.Context, string) (io.ReadCloser, error)
 }, uri string) (*domain.MusicRecipe, error) {
@@ -55,6 +58,7 @@ func readRecipe(ctx context.Context, reader interface {
 	return &recipe, nil
 }
 
+// applyTaskAudioURL applies a task audio URL to a recipe.
 func applyTaskAudioURL(task *domain.Task, recipe *domain.MusicRecipe) error {
 	if task == nil || recipe == nil {
 		return nil

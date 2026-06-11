@@ -68,6 +68,7 @@ func NewHTTPServer(cfg *config.Config, handler http.Handler) *http.Server {
 	}
 }
 
+// gracefulShutdown shuts down an HTTP server within the configured timeout.
 func gracefulShutdown(srv *http.Server, cfgTimeout time.Duration) error {
 	timeout := cfgTimeout
 	if timeout == 0 {
@@ -89,6 +90,7 @@ func gracefulShutdown(srv *http.Server, cfgTimeout time.Duration) error {
 	return nil
 }
 
+// writeTimeout returns the server write timeout.
 func writeTimeout(cfg *config.Config) time.Duration {
 	if cfg == nil || cfg.VeoOperationTimeout <= 0 {
 		return 21 * time.Minute

@@ -12,6 +12,7 @@ import (
 	"ap-mv/internal/server"
 )
 
+// main starts the application.
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)

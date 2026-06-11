@@ -15,6 +15,7 @@ type workflowReader struct {
 	delegate remoteio.InputReader
 }
 
+// Open opens the requested resource.
 func (r workflowReader) Open(ctx context.Context, uri string) (io.ReadCloser, error) {
 	if strings.HasPrefix(uri, "data:") {
 		return openDataURI(uri)
@@ -25,6 +26,7 @@ func (r workflowReader) Open(ctx context.Context, uri string) (io.ReadCloser, er
 	return r.delegate.Open(ctx, uri)
 }
 
+// openDataURI opens a data URI as a reader.
 func openDataURI(raw string) (io.ReadCloser, error) {
 	header, payload, ok := strings.Cut(raw, ",")
 	if !ok {

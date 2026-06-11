@@ -27,6 +27,7 @@ type taskQueueAdapter struct {
 	enqueuer *tasks.Enqueuer[domain.Task]
 }
 
+// Enqueue adds a task to the queue.
 func (q taskQueueAdapter) Enqueue(ctx context.Context, task *domain.Task) error {
 	if task == nil {
 		return fmt.Errorf("task is nil")

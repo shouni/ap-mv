@@ -19,12 +19,14 @@ func (c *Config) IsSecureWorkerURL() bool {
 	return securenet.IsSecureServiceURL(c.WorkerURL)
 }
 
+// normalizeGCSBucket normalizes a GCS bucket name.
 func normalizeGCSBucket(bucket string) string {
 	bucket = strings.TrimSpace(bucket)
 	bucket = strings.TrimPrefix(bucket, "gs://")
 	return strings.Trim(bucket, "/")
 }
 
+// normalizeWorkerURL normalizes the worker URL or derives it from the service URL.
 func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
 	workerURL = strings.TrimSpace(workerURL)
 	if workerURL != "" {
@@ -33,6 +35,7 @@ func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
 	return joinWorkerPath(serviceURL)
 }
 
+// joinWorkerPath returns the default worker endpoint for a service URL.
 func joinWorkerPath(serviceURL string) (string, error) {
 	serviceURL = strings.TrimSpace(serviceURL)
 	if serviceURL == "" {

@@ -2,6 +2,7 @@ package config
 
 import "testing"
 
+// TestNormalizeGCSBucket verifies GCS bucket normalization.
 func TestNormalizeGCSBucket(t *testing.T) {
 	tests := map[string]string{
 		"my-bucket":          "my-bucket",
@@ -18,6 +19,7 @@ func TestNormalizeGCSBucket(t *testing.T) {
 	}
 }
 
+// TestNormalizeWorkerURL verifies worker URL normalization.
 func TestNormalizeWorkerURL(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -71,6 +73,7 @@ func TestNormalizeWorkerURL(t *testing.T) {
 	}
 }
 
+// TestNormalizeWorkerURLRejectsInvalidServiceURL verifies invalid service URLs are rejected.
 func TestNormalizeWorkerURLRejectsInvalidServiceURL(t *testing.T) {
 	if _, err := normalizeWorkerURL("http://[::1", ""); err == nil {
 		t.Fatal("normalizeWorkerURL() error = nil, want invalid service URL error")

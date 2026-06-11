@@ -6,6 +6,7 @@ import (
 	"ap-mv/internal/config"
 )
 
+// buildOrchestratorConfig builds orchestrator config.
 func buildOrchestratorConfig(cfg *config.Config) orchestrator.Config {
 	orchCfg := orchestrator.Config{}
 	if cfg == nil {

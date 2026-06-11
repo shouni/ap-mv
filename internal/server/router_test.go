@@ -19,6 +19,7 @@ import (
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
+// TestComposePostRequiresSessionCSRFToken verifies that compose POST requests require a session CSRF token.
 func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
 	router, loginCookies := newAuthenticatedTestRouter(t)
 
@@ -61,6 +62,7 @@ func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
 	}
 }
 
+// TestProtectedRoutesRedirectWhenUnauthenticated verifies protected routes redirect unauthenticated users.
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	router, _ := newAuthenticatedTestRouter(t)
 
@@ -75,6 +77,7 @@ func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	}
 }
 
+// TestStaticRoutesServeOnlyStaticSubtree verifies static routing only serves the static subtree.
 func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
 	router, _ := newAuthenticatedTestRouter(t)
 
@@ -96,6 +99,7 @@ func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
 	}
 }
 
+// newAuthenticatedTestRouter creates a router and authenticated session cookies for tests.
 func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 	t.Helper()
 
@@ -129,6 +133,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
 }
 
+// authenticatedSessionCookies creates signed session cookies for an authenticated test user.
 func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encryptKey []byte, userEmail string) []*http.Cookie {
 	t.Helper()
 
@@ -153,6 +158,7 @@ func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encr
 	return rec.Result().Cookies()
 }
 
+// mergeCookies merges cookies by name with overrides taking precedence.
 func mergeCookies(base, overrides []*http.Cookie) []*http.Cookie {
 	cookiesByName := make(map[string]*http.Cookie, len(base)+len(overrides))
 	for _, cookie := range base {
@@ -169,6 +175,7 @@ func mergeCookies(base, overrides []*http.Cookie) []*http.Cookie {
 	return merged
 }
 
+// newComposePostRequest creates a compose POST request for tests.
 func newComposePostRequest(csrfToken string) *http.Request {
 	form := url.Values{
 		"text": {"test compose input"},

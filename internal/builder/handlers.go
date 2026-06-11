@@ -66,6 +66,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	}, nil
 }
 
+// buildCharacterOptions builds character options.
 func buildCharacterOptions() (handlers.CharacterOptions, error) {
 	chars, err := buildCharacters()
 	if err != nil {
