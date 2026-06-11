@@ -8,6 +8,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
+// TestScriptPromptBuildUsesDefaultPromptAsset verifies that script prompts use the bundled default template.
 func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 	prompt, err := newScriptPrompt()
 	if err != nil {
@@ -31,6 +32,7 @@ func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 	}
 }
 
+// TestScriptPromptBuildUsesModeTemplateWhenAvailable verifies that mode-specific templates take precedence.
 func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 	templates, err := loadPromptTemplates(fstest.MapFS{
 		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}}")},
@@ -53,6 +55,7 @@ func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 	}
 }
 
+// TestScriptPromptBuildFallsBackToDefaultTemplate verifies that missing mode templates fall back to the default template.
 func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 	templates, err := loadPromptTemplates(fstest.MapFS{
 		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}}")},

@@ -6,6 +6,7 @@ import (
 	"ap-mv/internal/config"
 )
 
+// TestBuildPipelinePassesOrchestratorConfig verifies that pipeline construction forwards orchestrator config.
 func TestBuildPipelinePassesOrchestratorConfig(t *testing.T) {
 	cfg := &config.Config{
 		GeminiModel: "gemini-text",

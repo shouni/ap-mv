@@ -44,6 +44,7 @@ var jobIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 
 const gcsURIPrefix = "gs://"
 
+// NewJobID constructs a valid job ID with the given prefix.
 func NewJobID(prefix string) (string, error) {
 	prefix = strings.Trim(strings.ToLower(prefix), "_- ")
 	if prefix == "" {
@@ -60,6 +61,7 @@ func NewJobID(prefix string) (string, error) {
 	return id, nil
 }
 
+// ValidateJobID validates a job ID string.
 func ValidateJobID(jobID string) error {
 	if !jobIDPattern.MatchString(jobID) {
 		return fmt.Errorf("invalid job id: %q", jobID)
@@ -67,6 +69,7 @@ func ValidateJobID(jobID string) error {
 	return nil
 }
 
+// Validate checks the receiver for invalid state.
 func (t *Task) Validate() error {
 	if t == nil {
 		return fmt.Errorf("task is nil")
@@ -101,6 +104,7 @@ func (t *Task) Validate() error {
 	return nil
 }
 
+// validateOptionalGCSURI validates an optional GCS URI field.
 func validateOptionalGCSURI(fieldName, value string) error {
 	value = strings.TrimSpace(value)
 	if value == "" {

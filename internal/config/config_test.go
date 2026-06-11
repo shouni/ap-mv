@@ -37,6 +37,7 @@ var configEnvKeys = []string{
 	"ALLOWED_DOMAINS",
 }
 
+// clearConfigEnv clears config-related environment variables for a test.
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 
@@ -68,6 +69,7 @@ func clearConfigEnv(t *testing.T) {
 	})
 }
 
+// TestLoadConfigFromEnvDefaults verifies default config values loaded from the environment.
 func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	clearConfigEnv(t)
 
@@ -105,6 +107,7 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadConfigFromEnvOverrides verifies environment variable overrides.
 func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("SERVICE_URL", "https://example.com")
@@ -161,6 +164,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	}
 }
 
+// TestLoadConfigFromEnvRejectsBareDurationNumber verifies bare duration numbers are rejected.
 func TestLoadConfigFromEnvRejectsBareDurationNumber(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("VEO_POLL_INTERVAL", "7")
@@ -170,6 +174,7 @@ func TestLoadConfigFromEnvRejectsBareDurationNumber(t *testing.T) {
 	}
 }
 
+// TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault verifies invalid service URLs fail worker URL derivation.
 func TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("SERVICE_URL", "http://[::1")

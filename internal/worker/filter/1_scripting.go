@@ -9,8 +9,10 @@ import (
 
 type ScriptingFilter struct{}
 
+// Name returns the receiver name.
 func (ScriptingFilter) Name() string { return "scripting" }
 
+// Execute runs the receiver processing step.
 func (ScriptingFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil || fc.Task == nil {
 		return fmt.Errorf("scripting context requires task")
@@ -53,6 +55,7 @@ func (ScriptingFilter) Execute(ctx context.Context, fc *Context) error {
 	return nil
 }
 
+// scriptSource returns the best source value for script generation.
 func scriptSource(sourceURL, text, imageURL string) string {
 	if sourceURL = strings.TrimSpace(sourceURL); sourceURL != "" {
 		return sourceURL

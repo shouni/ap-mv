@@ -7,6 +7,7 @@ import (
 	"ap-mv/internal/ports"
 )
 
+// TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference verifies that audio references are included in Veo request bodies.
 func TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference(t *testing.T) {
 	runner := &VertexVeoRunner{outputStorageURI: "gs://bucket/out/"}
 	body := runner.buildGenerateBody(context.Background(), ports.VideoGenerationRequest{
@@ -27,6 +28,7 @@ func TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference(t *testing.T) {
 	}
 }
 
+// TestVertexVeoRunnerBuildGenerateBodyUsesJobScopedCutStorageURI verifies that job-scoped GCS output is used for cut generation.
 func TestVertexVeoRunnerBuildGenerateBodyUsesJobScopedCutStorageURI(t *testing.T) {
 	runner := &VertexVeoRunner{outputStorageURI: "gs://bucket/ap-mv/veo/"}
 	ctx := ports.WithVideoOutputBaseURI(context.Background(), "gs://bucket/ap-mv/veo/jobs/job-1/")
@@ -43,6 +45,7 @@ func TestVertexVeoRunnerBuildGenerateBodyUsesJobScopedCutStorageURI(t *testing.T
 	}
 }
 
+// TestVertexVeoRunnerBuildGenerateBodyFallsBackToDefaultStorageURI verifies that Veo output falls back to the runner default GCS URI.
 func TestVertexVeoRunnerBuildGenerateBodyFallsBackToDefaultStorageURI(t *testing.T) {
 	runner := &VertexVeoRunner{outputStorageURI: "gs://bucket/ap-mv/veo/"}
 
@@ -58,6 +61,7 @@ func TestVertexVeoRunnerBuildGenerateBodyFallsBackToDefaultStorageURI(t *testing
 	}
 }
 
+// TestVertexVeoRunnerCanonicalizeGeneratedVideoCopiesToCutFile verifies that generated videos are copied to canonical cut files.
 func TestVertexVeoRunnerCanonicalizeGeneratedVideoCopiesToCutFile(t *testing.T) {
 	copier := &captureVideoCopier{}
 	runner := &VertexVeoRunner{videoCopier: copier}
@@ -90,6 +94,7 @@ type captureVideoCopier struct {
 	targetURI string
 }
 
+// Copy copies a generated video object.
 func (c *captureVideoCopier) Copy(_ context.Context, sourceURI, targetURI string) error {
 	c.sourceURI = sourceURI
 	c.targetURI = targetURI

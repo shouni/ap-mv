@@ -9,6 +9,7 @@ import (
 	"ap-mv/internal/domain"
 )
 
+// TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL verifies recipe loading and task audio URL application.
 func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	reader := staticReader{content: `{
 		"title": "recipe from gcs",
@@ -37,6 +38,7 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	}
 }
 
+// TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	fc := &Context{
 		Task: &domain.Task{
@@ -70,6 +72,7 @@ type staticReader struct {
 	content string
 }
 
+// Open opens the requested resource.
 func (r staticReader) Open(context.Context, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(r.content)), nil
 }

@@ -7,8 +7,10 @@ import (
 
 type PublishingFilter struct{}
 
+// Name returns the receiver name.
 func (PublishingFilter) Name() string { return "publishing" }
 
+// Execute runs the receiver processing step.
 func (PublishingFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil {
 		return fmt.Errorf("publishing requires recipe")

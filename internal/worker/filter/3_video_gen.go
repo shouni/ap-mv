@@ -14,8 +14,10 @@ type VideoGenerationFilter struct {
 	Runner ports.VideoRunner
 }
 
+// Name returns the receiver name.
 func (VideoGenerationFilter) Name() string { return "video_gen" }
 
+// Execute runs the receiver processing step.
 func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil || fc.Task == nil {
 		return fmt.Errorf("video generation requires task and recipe")
@@ -101,6 +103,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	return nil
 }
 
+// videoOutputContext adds the output base URI to the context when available.
 func videoOutputContext(ctx context.Context, fc *Context) context.Context {
 	if fc == nil {
 		return ctx
@@ -108,6 +111,7 @@ func videoOutputContext(ctx context.Context, fc *Context) context.Context {
 	return ports.WithVideoOutputBaseURI(ctx, fc.OutputPath)
 }
 
+// hasPendingCuts reports whether a recipe has cuts awaiting video generation.
 func hasPendingCuts(recipe *domain.MusicRecipe) bool {
 	if recipe == nil {
 		return false
@@ -120,6 +124,7 @@ func hasPendingCuts(recipe *domain.MusicRecipe) bool {
 	return false
 }
 
+// videoPrompt builds the prompt used for video generation.
 func videoPrompt(cut domain.VideoCut) string {
 	parts := []string{
 		strings.TrimSpace(cut.Prompt),

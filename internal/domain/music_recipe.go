@@ -56,6 +56,7 @@ type VideoCut struct {
 
 const CutStatusGenerated = "generated"
 
+// Validate checks the receiver for invalid state.
 func (r *MusicRecipe) Validate() error {
 	if r == nil {
 		return fmt.Errorf("music recipe is nil")

@@ -16,6 +16,7 @@ type InlineTaskQueue struct {
 	Handler func(context.Context, *domain.Task) error
 }
 
+// Enqueue adds a task to the queue.
 func (q InlineTaskQueue) Enqueue(ctx context.Context, task *domain.Task) error {
 	if q.Handler == nil {
 		return nil

@@ -25,6 +25,7 @@ type scriptPromptData struct {
 	InputText string
 }
 
+// newScriptPrompt creates a script prompt from bundled prompt assets.
 func newScriptPrompt() (*scriptPrompt, error) {
 	templates, err := loadPromptTemplates(assets.Prompts, assets.PromptDir)
 	if err != nil {
@@ -33,6 +34,7 @@ func newScriptPrompt() (*scriptPrompt, error) {
 	return newScriptPromptFromTemplates(templates)
 }
 
+// newScriptPromptFromTemplates creates a script prompt from parsed templates.
 func newScriptPromptFromTemplates(templates map[string]string) (*scriptPrompt, error) {
 	builder, err := promptkit.NewBuilder(templates)
 	if err != nil {
@@ -44,6 +46,7 @@ func newScriptPromptFromTemplates(templates map[string]string) (*scriptPrompt, e
 	return &scriptPrompt{builder: builder, templates: templates}, nil
 }
 
+// Build renders the script prompt for the requested mode.
 func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
 	if data == nil || strings.TrimSpace(data.InputText) == "" {
 		return "", fmt.Errorf("input text is required")
@@ -65,6 +68,7 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	})
 }
 
+// loadPromptTemplates loads prompt templates.
 func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, error) {
 	entries, err := fs.ReadDir(fileSystem, rootDir)
 	if err != nil {
@@ -90,6 +94,7 @@ type keyframePrompt struct {
 	styleSuffix string
 }
 
+// BuildCut builds prompts for a single keyframe cut.
 func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
 	character := "the main character"
 	if char != nil {
@@ -111,6 +116,7 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 	return userPrompt, systemPrompt
 }
 
+// nonEmptyStrings returns the non-empty values in order.
 func nonEmptyStrings(values ...string) []string {
 	nonEmpty := make([]string, 0, len(values))
 	for _, value := range values {

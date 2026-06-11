@@ -9,6 +9,7 @@ import (
 	"ap-mv/internal/domain"
 )
 
+// toVideoRecipe converts a domain music recipe to an orchestrator video recipe.
 func toVideoRecipe(recipe *domain.MusicRecipe) (*orchestrator.VideoRecipe, error) {
 	if recipe == nil {
 		return nil, nil
@@ -71,6 +72,7 @@ func toVideoRecipe(recipe *domain.MusicRecipe) (*orchestrator.VideoRecipe, error
 	return videoRecipe, nil
 }
 
+// applyTaskAudioURLToVideoRecipe applies a task audio URL to an orchestrator recipe.
 func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *orchestrator.VideoRecipe) {
 	if task == nil || recipe == nil {
 		return
@@ -87,6 +89,7 @@ func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *orchestrator.Vide
 	}
 }
 
+// applyTaskCharacterIDToVideoRecipe applies a task character ID to an orchestrator recipe.
 func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.VideoRecipe) {
 	if task == nil || recipe == nil {
 		return
@@ -101,6 +104,7 @@ func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.V
 	}
 }
 
+// toDomainRecipe converts an orchestrator video recipe to a domain music recipe.
 func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, error) {
 	if recipe == nil {
 		return nil, nil
@@ -170,6 +174,7 @@ func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, erro
 	return domainRecipe, domainRecipe.Normalize()
 }
 
+// toOrchestratorStatus converts values to orchestrator status.
 func toOrchestratorStatus(status string) orchestrator.CutStatus {
 	switch status {
 	case domain.CutStatusGenerated:
@@ -181,6 +186,7 @@ func toOrchestratorStatus(status string) orchestrator.CutStatus {
 	}
 }
 
+// toDomainStatus converts values to domain status.
 func toDomainStatus(status orchestrator.CutStatus) string {
 	if status == orchestrator.CutStatusGenerated {
 		return domain.CutStatusGenerated
@@ -188,6 +194,7 @@ func toDomainStatus(status orchestrator.CutStatus) string {
 	return string(status)
 }
 
+// seedValue returns zero for nil seeds or the seed value otherwise.
 func seedValue(seed *int64) int64 {
 	if seed == nil {
 		return 0
@@ -195,6 +202,7 @@ func seedValue(seed *int64) int64 {
 	return *seed
 }
 
+// seedPtr returns nil for zero seeds or a pointer to the seed otherwise.
 func seedPtr(seed int64) *int64 {
 	if seed == 0 {
 		return nil
@@ -202,6 +210,7 @@ func seedPtr(seed int64) *int64 {
 	return &seed
 }
 
+// firstPositiveInt returns the first matching positive int.
 func firstPositiveInt(values ...int) int {
 	for _, value := range values {
 		if value > 0 {
@@ -211,6 +220,7 @@ func firstPositiveInt(values ...int) int {
 	return 0
 }
 
+// nonEmpty returns the first non-empty string.
 func nonEmpty(values ...string) string {
 	for _, value := range values {
 		if value != "" {

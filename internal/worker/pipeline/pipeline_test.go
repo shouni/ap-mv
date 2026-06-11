@@ -12,10 +12,13 @@ import (
 
 type noopFilter struct{}
 
+// Name returns the receiver name.
 func (noopFilter) Name() string { return "noop" }
 
+// Execute runs the receiver processing step.
 func (noopFilter) Execute(context.Context, *filter.Context) error { return nil }
 
+// TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe verifies the keyframe-only default filter chain.
 func TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe(t *testing.T) {
 	filters := defaultFilters(domain.CommandComposeToKeyframe, nil)
 
@@ -34,6 +37,7 @@ func TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe(t *testing.T) {
 	}
 }
 
+// TestDefaultFiltersForComposeStillRunsFullPipeline verifies the full compose default filter chain.
 func TestDefaultFiltersForComposeStillRunsFullPipeline(t *testing.T) {
 	filters := defaultFilters(domain.CommandCompose, nil)
 
@@ -52,6 +56,7 @@ func TestDefaultFiltersForComposeStillRunsFullPipeline(t *testing.T) {
 	}
 }
 
+// TestRunUsesWorkflowFactoryForSelectedModels verifies workflow creation for custom selected models.
 func TestRunUsesWorkflowFactoryForSelectedModels(t *testing.T) {
 	calls := 0
 	runner := &Runner{
@@ -80,6 +85,7 @@ func TestRunUsesWorkflowFactoryForSelectedModels(t *testing.T) {
 	}
 }
 
+// TestRunSkipsWorkflowFactoryForDefaultModels verifies default models reuse the runner workflows.
 func TestRunSkipsWorkflowFactoryForDefaultModels(t *testing.T) {
 	calls := 0
 	runner := &Runner{

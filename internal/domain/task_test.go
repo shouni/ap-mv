@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestTaskValidateRequiresGCSURIForRecipeAndAudio verifies that recipe and audio URLs must be GCS URIs.
 func TestTaskValidateRequiresGCSURIForRecipeAndAudio(t *testing.T) {
 	tests := []struct {
 		name string
@@ -52,6 +53,7 @@ func TestTaskValidateRequiresGCSURIForRecipeAndAudio(t *testing.T) {
 	}
 }
 
+// TestTaskValidateAcceptsGCSRecipeAndAudioURL verifies that GCS recipe and audio URLs are accepted.
 func TestTaskValidateAcceptsGCSRecipeAndAudioURL(t *testing.T) {
 	task := Task{
 		JobID:     "job-1",
@@ -65,6 +67,7 @@ func TestTaskValidateAcceptsGCSRecipeAndAudioURL(t *testing.T) {
 	}
 }
 
+// TestTaskValidateAcceptsComposeToKeyframe verifies that compose-to-keyframe tasks validate successfully.
 func TestTaskValidateAcceptsComposeToKeyframe(t *testing.T) {
 	task := Task{
 		JobID:   "job-1",

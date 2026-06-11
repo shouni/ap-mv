@@ -51,6 +51,7 @@ type Config struct {
 	AllowedDomains []string `env:"ALLOWED_DOMAINS"`
 }
 
+// normalize normalizes the provided values.
 func (c *Config) normalize() error {
 	workerURL, err := normalizeWorkerURL(c.ServiceURL, c.WorkerURL)
 	if err != nil {
@@ -67,6 +68,7 @@ func (c *Config) normalize() error {
 	return nil
 }
 
+// NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
 	c.GeminiModels = normalizeModelList(c.GeminiModels, c.GeminiModel, defaultGeminiModel)
 	c.ImageModels = normalizeModelList(c.ImageModels, c.ImageModel, defaultImageModel)
@@ -91,6 +93,7 @@ func LoadConfigFromEnv() (*Config, error) {
 	return &cfg, nil
 }
 
+// normalizeStringSlice trims strings and removes empty values.
 func normalizeStringSlice(values []string) []string {
 	normalized := make([]string, 0, len(values))
 	for _, value := range values {
@@ -102,6 +105,7 @@ func normalizeStringSlice(values []string) []string {
 	return normalized
 }
 
+// normalizeModelList normalizes available model names with preferred and fallback values.
 func normalizeModelList(values []string, preferred, fallback string) []string {
 	normalized := normalizeStringSlice(values)
 	preferred = strings.TrimSpace(preferred)
@@ -114,6 +118,7 @@ func normalizeModelList(values []string, preferred, fallback string) []string {
 	return normalized
 }
 
+// normalizeDefaultModel selects a valid default model.
 func normalizeDefaultModel(value string, models []string, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value != "" {
@@ -125,6 +130,7 @@ func normalizeDefaultModel(value string, models []string, fallback string) strin
 	return fallback
 }
 
+// prependUnique prepends a value while preserving uniqueness.
 func prependUnique(values []string, preferred string) []string {
 	result := []string{preferred}
 	for _, value := range values {
