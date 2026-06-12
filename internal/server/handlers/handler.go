@@ -23,91 +23,6 @@ type Handler struct {
 	CharacterOptions CharacterOptions
 }
 
-type ModelOptions struct {
-	GeminiModels       []string
-	ImageModels        []string
-	DefaultGeminiModel string
-	DefaultImageModel  string
-}
-
-type CharacterOption struct {
-	ID        string
-	Name      string
-	IsDefault bool
-}
-
-type CharacterOptions struct {
-	Characters         []CharacterOption
-	DefaultCharacterID string
-}
-
-// normalize normalizes the provided values.
-func (o *ModelOptions) normalize() {
-	o.GeminiModels = normalizeModelOptions(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
-	o.ImageModels = normalizeModelOptions(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
-	o.DefaultGeminiModel = normalizeSelectedModel(o.DefaultGeminiModel, o.GeminiModels)
-	o.DefaultImageModel = normalizeSelectedModel(o.DefaultImageModel, o.ImageModels)
-}
-
-// normalize normalizes the provided values.
-func (o *CharacterOptions) normalize() {
-	seen := make(map[string]bool, len(o.Characters))
-	normalized := make([]CharacterOption, 0, len(o.Characters))
-	for _, char := range o.Characters {
-		char.ID = strings.TrimSpace(char.ID)
-		char.Name = strings.TrimSpace(char.Name)
-		if char.ID == "" || seen[strings.ToLower(char.ID)] {
-			continue
-		}
-		if char.Name == "" {
-			char.Name = char.ID
-		}
-		if char.IsDefault && strings.TrimSpace(o.DefaultCharacterID) == "" {
-			o.DefaultCharacterID = char.ID
-		}
-		seen[strings.ToLower(char.ID)] = true
-		normalized = append(normalized, char)
-	}
-	o.Characters = normalized
-	o.DefaultCharacterID = strings.TrimSpace(o.DefaultCharacterID)
-	if o.DefaultCharacterID == "" && len(o.Characters) > 0 {
-		o.DefaultCharacterID = o.Characters[0].ID
-	}
-}
-
-// normalizeModelOptions normalizes available model options.
-func normalizeModelOptions(values []string, preferred, fallback string) []string {
-	seen := make(map[string]bool, len(values)+1)
-	result := make([]string, 0, len(values)+1)
-	if preferred = strings.TrimSpace(preferred); preferred != "" {
-		result = append(result, preferred)
-		seen[preferred] = true
-	}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" && !seen[value] {
-			result = append(result, value)
-			seen[value] = true
-		}
-	}
-	if len(result) == 0 {
-		result = append(result, fallback)
-	}
-	return result
-}
-
-// normalizeSelectedModel normalizes the selected model value.
-func normalizeSelectedModel(value string, values []string) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	if len(values) > 0 {
-		return values[0]
-	}
-	return ""
-}
-
 type PageData struct {
 	Title               string
 	CSRFToken           string
@@ -151,14 +66,6 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	options.normalize()
 	characterOptions.normalize()
 	return &Handler{Queue: queue, Templates: templates, ModelOptions: options, CharacterOptions: characterOptions}, nil
-}
-
-// firstModelOptions returns the first matching model options.
-func firstModelOptions(options []ModelOptions) ModelOptions {
-	if len(options) == 0 {
-		return ModelOptions{}
-	}
-	return options[0]
 }
 
 // Home renders the home page.
@@ -216,46 +123,8 @@ func composeCommandFromRunMode(runMode string) domain.TaskCommand {
 
 // withModelOptions adds model and character selections to page data.
 func (h *Handler) withModelOptions(data PageData) PageData {
-	options := h.ModelOptions
-	options.normalize()
-	data.GeminiModels = options.GeminiModels
-	data.ImageModels = options.ImageModels
-	data.SelectedGeminiModel = options.DefaultGeminiModel
-	data.SelectedImageModel = options.DefaultImageModel
-	characters := h.CharacterOptions
-	characters.normalize()
-	data.Characters = characters.Characters
-	data.SelectedCharacterID = characters.DefaultCharacterID
-	return data
-}
-
-// aiModelsFromForm reads AI model selections from a request form.
-func (h *Handler) aiModelsFromForm(r *http.Request) domain.AIModels {
-	options := h.ModelOptions
-	options.normalize()
-	textModel := strings.TrimSpace(r.FormValue("text_model"))
-	if textModel == "" {
-		textModel = options.DefaultGeminiModel
-	}
-	imageModel := strings.TrimSpace(r.FormValue("image_model"))
-	if imageModel == "" {
-		imageModel = options.DefaultImageModel
-	}
-	return domain.AIModels{
-		TextModel:  textModel,
-		ImageModel: imageModel,
-	}
-}
-
-// characterIDFromForm reads the character selection from a request form.
-func (h *Handler) characterIDFromForm(r *http.Request) string {
-	value := strings.TrimSpace(r.FormValue("character_id"))
-	options := h.CharacterOptions
-	options.normalize()
-	if value == "" {
-		return options.DefaultCharacterID
-	}
-	return value
+	data = h.ModelOptions.applyToPageData(data)
+	return h.CharacterOptions.applyToPageData(data)
 }
 
 // RecipeForm renders the recipe form.
