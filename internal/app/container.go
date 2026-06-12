@@ -1,7 +1,6 @@
 package app
 
 import (
-	"io"
 	"log/slog"
 
 	"github.com/shouni/gcp-kit/tasks"
@@ -11,7 +10,6 @@ import (
 	"ap-mv/internal/config"
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
-	"ap-mv/internal/worker/pipeline"
 )
 
 // Container はアプリケーションの依存関係（DIコンテナ）を保持します。
@@ -29,7 +27,7 @@ type Container struct {
 	TaskQueue    ports.TaskQueue
 
 	// Worker pipeline
-	Pipeline *pipeline.Runner
+	Pipeline ports.Pipeline
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。
@@ -61,10 +59,8 @@ func (c *Container) Close() {
 		}
 	}
 	if c.Pipeline != nil {
-		if closer, ok := c.Pipeline.VideoRunner.(io.Closer); ok {
-			if err := closer.Close(); err != nil {
-				slog.Error("failed to close video runner", "error", err)
-			}
+		if err := c.Pipeline.Close(); err != nil {
+			slog.Error("failed to close pipeline", "error", err)
 		}
 	}
 }

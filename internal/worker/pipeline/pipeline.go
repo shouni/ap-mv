@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -44,6 +45,17 @@ func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	_, err := r.Run(ctx, &task)
 	return err
+}
+
+// Close は Runner が保持する実行時リソースを解放します。
+func (r *Runner) Close() error {
+	if r == nil || r.VideoRunner == nil {
+		return nil
+	}
+	if closer, ok := r.VideoRunner.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 // Run はタスク内容に応じたフィルター列を実行し、処理後の MusicRecipe を返します。
