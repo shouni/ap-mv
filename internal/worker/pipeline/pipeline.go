@@ -73,6 +73,7 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 	fc := &filter.Context{
 		Task:        task,
 		Recipe:      task.Recipe,
+		VideoRecipe: task.VideoRecipe,
 		VideoRunner: r.VideoRunner,
 		TaskQueue:   r.TaskQueue,
 		Workflows:   workflows,

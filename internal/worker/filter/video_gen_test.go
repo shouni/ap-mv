@@ -5,39 +5,41 @@ import (
 	"errors"
 	"testing"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
 )
 
 // TestVideoGenerationFilterEnqueuesContinuationAfterOneCut verifies continuation task enqueueing after one cut.
 func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
-	recipe := &domain.MusicRecipe{
+	recipe := &orchestrator.VideoRecipe{
 		Title: "test",
-		Cuts: []domain.VideoCut{
-			{Index: 0, DurationSec: 8, Prompt: "first"},
-			{Index: 1, DurationSec: 8, Prompt: "second"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
+			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
 		},
 	}
 	task := &domain.Task{
-		JobID:   "job-1",
-		Command: domain.CommandGenerateFromRecipe,
-		Recipe:  recipe,
+		JobID:       "job-1",
+		Command:     domain.CommandGenerateFromRecipe,
+		VideoRecipe: recipe,
 	}
 	queue := &captureQueue{}
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:      task,
-		Recipe:    recipe,
-		TaskQueue: queue,
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
 	}
-	if recipe.Cuts[0].Status != domain.CutStatusGenerated {
-		t.Fatalf("first cut status = %q, want %q", recipe.Cuts[0].Status, domain.CutStatusGenerated)
+	if recipe.Cuts[0].Status != orchestrator.CutStatusGenerated {
+		t.Fatalf("first cut status = %q, want %q", recipe.Cuts[0].Status, orchestrator.CutStatusGenerated)
 	}
-	if recipe.Cuts[1].Status == domain.CutStatusGenerated {
+	if recipe.Cuts[1].Status == orchestrator.CutStatusGenerated {
 		t.Fatalf("second cut should not be generated in the same invocation")
 	}
 	if len(queue.tasks) != 1 {
@@ -46,31 +48,31 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	if queue.tasks[0].Command != domain.CommandGenerateFromRecipe {
 		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandGenerateFromRecipe)
 	}
-	if queue.tasks[0].Recipe.Cuts[0].VideoID == "" {
+	if queue.tasks[0].VideoRecipe.Cuts[0].VideoID == "" {
 		t.Fatalf("continuation task did not include generated cut state")
 	}
 }
 
 // TestVideoGenerationFilterAddsOutputPathToContext verifies that video generation receives the output path through context.
 func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
-	recipe := &domain.MusicRecipe{
+	recipe := &orchestrator.VideoRecipe{
 		Title: "test",
-		Cuts: []domain.VideoCut{
-			{Index: 0, DurationSec: 8, Prompt: "first"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
 		},
 	}
 	task := &domain.Task{
-		JobID:   "job-1",
-		Command: domain.CommandGenerateFromRecipe,
-		Recipe:  recipe,
+		JobID:       "job-1",
+		Command:     domain.CommandGenerateFromRecipe,
+		VideoRecipe: recipe,
 	}
 	runner := &contextCaptureRunner{}
 	flt := VideoGenerationFilter{Runner: runner}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:       task,
-		Recipe:     recipe,
-		OutputPath: "gs://bucket/ap-mv/veo/jobs/job-1/",
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
