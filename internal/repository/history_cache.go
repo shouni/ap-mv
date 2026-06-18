@@ -18,7 +18,18 @@ func NewHistoryCache() *ttlcache.Cache[string, domain.VideoHistory] {
 	)
 }
 
+// NewVideoRecipeCache creates a cache for generated MV recipe metadata.
+func NewVideoRecipeCache() *ttlcache.Cache[string, domain.VideoRecipe] {
+	return ttlcache.New[string, domain.VideoRecipe](
+		ttlcache.WithTTL[string, domain.VideoRecipe](defaultHistoryCacheTTL),
+		ttlcache.WithDisableTouchOnHit[string, domain.VideoRecipe](),
+	)
+}
+
 func (r *VideoHistoryRepository) getCachedHistory(jobID string) (domain.VideoHistory, bool) {
+	if r == nil || r.historyCache == nil {
+		return domain.VideoHistory{}, false
+	}
 	item := r.historyCache.Get(jobID)
 	if item == nil {
 		return domain.VideoHistory{}, false
@@ -27,9 +38,40 @@ func (r *VideoHistoryRepository) getCachedHistory(jobID string) (domain.VideoHis
 }
 
 func (r *VideoHistoryRepository) setCachedHistory(jobID string, history domain.VideoHistory) {
+	if r == nil || r.historyCache == nil {
+		return
+	}
 	r.historyCache.Set(jobID, history, ttlcache.DefaultTTL)
 }
 
 func (r *VideoHistoryRepository) deleteCachedHistory(jobID string) {
+	if r == nil || r.historyCache == nil {
+		return
+	}
 	r.historyCache.Delete(jobID)
+}
+
+func (r *VideoHistoryRepository) getCachedVideoRecipe(jobID string) (domain.VideoRecipe, bool) {
+	if r == nil || r.recipeCache == nil {
+		return domain.VideoRecipe{}, false
+	}
+	item := r.recipeCache.Get(jobID)
+	if item == nil {
+		return domain.VideoRecipe{}, false
+	}
+	return item.Value(), true
+}
+
+func (r *VideoHistoryRepository) setCachedVideoRecipe(jobID string, recipe domain.VideoRecipe) {
+	if r == nil || r.recipeCache == nil {
+		return
+	}
+	r.recipeCache.Set(jobID, recipe, ttlcache.DefaultTTL)
+}
+
+func (r *VideoHistoryRepository) deleteCachedVideoRecipe(jobID string) {
+	if r == nil || r.recipeCache == nil {
+		return
+	}
+	r.recipeCache.Delete(jobID)
 }

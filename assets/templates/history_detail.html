@@ -1,0 +1,109 @@
+{{define "content"}}
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <h1 class="h3 fw-bold mb-0">{{.HistoryDetail.Title}}</h1>
+                    {{if .HistoryDetail.Generated}}
+                    <span class="badge text-bg-success">generated</span>
+                    {{else}}
+                    <span class="badge text-bg-secondary">keyframes</span>
+                    {{end}}
+                </div>
+                {{if .Message}}
+                <p class="text-muted mb-0">{{.Message}}</p>
+                {{else}}
+                <div class="text-muted small">
+                    <code>{{.HistoryDetail.JobID}}</code>
+                    {{if .HistoryDetail.CreatedAt}}<span class="ms-2">{{.HistoryDetail.CreatedAt}}</span>{{end}}
+                </div>
+                {{end}}
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                {{if .HistoryDetail.SignedURL}}
+                <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
+                {{end}}
+                <a class="btn btn-outline-secondary" href="/web/history">Back</a>
+            </div>
+        </div>
+
+        {{if not .Message}}
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="text-muted small">Cuts</div>
+                <div class="fs-5 fw-semibold">{{.HistoryDetail.CutCount}}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small">Mood</div>
+                <div class="fs-5 fw-semibold">{{if .HistoryDetail.Mood}}{{.HistoryDetail.Mood}}{{else}}-{{end}}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small">Tempo</div>
+                <div class="fs-5 fw-semibold">{{if .HistoryDetail.Tempo}}{{.HistoryDetail.Tempo}}{{else}}-{{end}}</div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small">Visual Mode</div>
+                <div class="fs-5 fw-semibold">{{if .HistoryDetail.VisualMode}}{{.HistoryDetail.VisualMode}}{{else}}-{{end}}</div>
+            </div>
+        </div>
+
+        {{if .HistoryDetail.Cuts}}
+        <div class="row g-4">
+            {{range .HistoryDetail.Cuts}}
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100 history-cut-card">
+                    {{if .KeyframeURL}}
+                    <img src="{{.KeyframeURL}}" class="card-img-top history-keyframe" alt="Cut {{.CutIndex}} keyframe" loading="lazy">
+                    {{else}}
+                    <div class="history-keyframe history-keyframe-empty d-flex align-items-center justify-content-center text-muted">
+                        No keyframe
+                    </div>
+                    {{end}}
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                            <h2 class="h6 fw-bold mb-0">Cut {{.CutIndex}}</h2>
+                            {{if .Status}}<span class="badge text-bg-light border">{{.Status}}</span>{{end}}
+                        </div>
+                        {{if .VisualAnchor}}<p class="mb-2">{{.VisualAnchor}}</p>{{end}}
+                        {{if .Dialogue}}<p class="small text-muted mb-2">{{.Dialogue}}</p>{{end}}
+                        <dl class="row small mb-0">
+                            {{if .DurationSec}}
+                            <dt class="col-5 text-muted fw-normal">Duration</dt>
+                            <dd class="col-7 mb-1">{{printf "%.1f" .DurationSec}} sec</dd>
+                            {{end}}
+                            {{if .CharacterID}}
+                            <dt class="col-5 text-muted fw-normal">Character</dt>
+                            <dd class="col-7 mb-1">{{.CharacterID}}</dd>
+                            {{end}}
+                            {{if .AudioCue}}
+                            <dt class="col-5 text-muted fw-normal">Audio Cue</dt>
+                            <dd class="col-7 mb-1">{{.AudioCue}}</dd>
+                            {{end}}
+                            {{if .KeyframeReference}}
+                            <dt class="col-5 text-muted fw-normal">Keyframe</dt>
+                            <dd class="col-7 mb-1 text-break">
+                                {{if .KeyframeURL}}
+                                <a href="{{.KeyframeURL}}" target="_blank" rel="noopener">Open image</a>
+                                {{else}}
+                                <code>{{.KeyframeReference}}</code>
+                                {{end}}
+                            </dd>
+                            {{end}}
+                            {{if .VideoURL}}
+                            <dt class="col-5 text-muted fw-normal">Video</dt>
+                            <dd class="col-7 mb-1 text-break"><a href="{{.VideoURL}}" target="_blank" rel="noopener">Open video</a></dd>
+                            {{end}}
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{else}}
+        <p class="text-muted mb-0">No cuts in this history.</p>
+        {{end}}
+        {{end}}
+    </div>
+</div>
+{{end}}

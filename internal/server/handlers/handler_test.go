@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"ap-mv/assets"
 	"ap-mv/internal/domain"
 )
@@ -19,6 +21,22 @@ type recordingQueue struct {
 // Enqueue adds a task to the queue.
 func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	q.task = task
+	return nil
+}
+
+type fakeHistoryRepository struct {
+	detail domain.VideoHistoryDetail
+}
+
+func (r fakeHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {
+	return domain.VideoHistoryPage{}, nil
+}
+
+func (r fakeHistoryRepository) GetHistory(context.Context, string) (domain.VideoHistoryDetail, error) {
+	return r.detail, nil
+}
+
+func (r fakeHistoryRepository) DeleteHistory(context.Context, string) error {
 	return nil
 }
 
@@ -217,6 +235,55 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 	if queue.task.VideoRecipe == nil || len(queue.task.VideoRecipe.Cuts) != 1 {
 		t.Fatalf("queued video recipe = %#v", queue.task.VideoRecipe)
+	}
+}
+
+// TestHistoryDetailRendersKeyframeImage verifies history detail shows cut keyframes.
+func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:    "video-recipe-20260618-081931-abc",
+				Title:    "軌跡のアーキテクト",
+				CutCount: 1,
+			},
+			Cuts: []domain.VideoHistoryCut{
+				{
+					CutIndex:          1,
+					VisualAnchor:      "blue stage",
+					KeyframeReference: "gs://bucket/keyframe.png",
+					KeyframeURL:       "https://signed.example/keyframe.png",
+					Status:            "pending",
+				},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"軌跡のアーキテクト",
+		`src="https://signed.example/keyframe.png"`,
+		"blue stage",
+		"Cut 1",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
+		}
 	}
 }
 
