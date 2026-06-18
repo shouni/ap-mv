@@ -102,6 +102,27 @@ func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	}
 }
 
+// TestVideoRecipeCreateDoesNotApplyTaskAudioURL verifies audio input is reserved for MV generation.
+func TestVideoRecipeCreateDoesNotApplyTaskAudioURL(t *testing.T) {
+	recipe := &domain.VideoRecipe{
+		Title: "recipe",
+		Cuts: []domain.VideoCut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "blue light"},
+		},
+	}
+	task := &domain.Task{
+		JobID:    "job-1",
+		Command:  domain.CommandVideoRecipeCreate,
+		AudioURL: "gs://bucket/music.mp3",
+	}
+
+	applyTaskAudioURLToVideoRecipe(task, recipe)
+
+	if got := recipe.Cuts[0].AudioReference; got != "" {
+		t.Fatalf("AudioReference = %q, want empty for video recipe create", got)
+	}
+}
+
 type staticReader struct {
 	content string
 }

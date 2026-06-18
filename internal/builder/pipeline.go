@@ -32,11 +32,18 @@ func buildPipeline(
 		if task != nil {
 			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
 		}
-		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner)
+		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner, taskVisualMode(task))
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
 	}
 	runner.OutputBaseURI = workflowOutputBaseURI(cfg)
 	return runner, nil
+}
+
+func taskVisualMode(task *domain.Task) string {
+	if task == nil {
+		return ""
+	}
+	return task.VisualMode
 }

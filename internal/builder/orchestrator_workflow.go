@@ -13,6 +13,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
+	"ap-mv/assets"
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
 	"ap-mv/internal/ports"
@@ -26,7 +27,7 @@ func buildWorkflow(
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 ) (*orchestrator.Workflows, error) {
-	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner)
+	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner, "")
 }
 
 // buildWorkflowWithConfig builds orchestrator workflows from an explicit orchestrator config.
@@ -37,6 +38,7 @@ func buildWorkflowWithConfig(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
+	visualMode string,
 ) (*orchestrator.Workflows, error) {
 	if cfg == nil || rio == nil || rio.Reader == nil || rio.Writer == nil || httpClient == nil {
 		return nil, nil
@@ -55,6 +57,11 @@ func buildWorkflowWithConfig(
 	if err != nil {
 		return nil, err
 	}
+	scriptPrompt.visualMode = visualMode
+	visualTemplates, err := assets.LoadVisualModeFiles()
+	if err != nil {
+		return nil, err
+	}
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
 		Config:      orchCfg,
@@ -64,9 +71,13 @@ func buildWorkflowWithConfig(
 		AIClient:    aiClient,
 		VideoRunner: videoRunner,
 		PromptDeps: &workflow.PromptDeps{
-			Characters:     characters,
-			ScriptPrompt:   scriptPrompt,
-			KeyframePrompt: keyframePrompt{styleSuffix: orchCfg.StyleSuffix},
+			Characters:   characters,
+			ScriptPrompt: scriptPrompt,
+			KeyframePrompt: keyframePrompt{
+				styleSuffix:     orchCfg.StyleSuffix,
+				visualMode:      visualMode,
+				visualTemplates: visualTemplates,
+			},
 		},
 	})
 	if err != nil {

@@ -1,9 +1,14 @@
 package assets
 
-import "embed"
+import (
+	"embed"
+
+	"github.com/shouni/go-prompt-kit/resource"
+)
 
 const (
-	PromptDir = "prompts"
+	VideoRecipePromptDir = "prompts/video_recipe"
+	visualModePromptDir  = "prompts/visual_modes"
 )
 
 var (
@@ -15,7 +20,19 @@ var (
 	//go:embed static
 	StaticFiles embed.FS
 
-	// Prompts は、AI生成用のプロンプトテンプレートを保持します。
-	//go:embed prompts/*.md
-	Prompts embed.FS
+	// VideoRecipePrompts は、VideoRecipe 作成用のプロンプトテンプレートを保持します。
+	//go:embed prompts/video_recipe/*.md
+	VideoRecipePrompts embed.FS
+
+	// visualModeFiles は映像スタイル用プロンプトテンプレートです。
+	//go:embed prompts/visual_modes/*.md
+	visualModeFiles embed.FS
+
+	// DefaultVisualMode represents the default visual mode template key.
+	DefaultVisualMode = "default"
 )
+
+// LoadVisualModeFiles は埋め込まれた映像スタイル用プロンプトファイルを読み込みます。
+func LoadVisualModeFiles() (map[string]string, error) {
+	return resource.Load(visualModeFiles, visualModePromptDir, "")
+}

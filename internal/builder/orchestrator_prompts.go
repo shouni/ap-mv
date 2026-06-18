@@ -16,26 +16,33 @@ import (
 const defaultPromptMode = "default"
 
 type scriptPrompt struct {
-	builder   *promptkit.Builder
-	templates map[string]string
+	builder         *promptkit.Builder
+	templates       map[string]string
+	visualTemplates map[string]string
+	visualMode      string
 }
 
 type scriptPromptData struct {
-	Mode      string
-	InputText string
+	Mode         string
+	InputText    string
+	VisualPrompt string
 }
 
 // newScriptPrompt creates a script prompt from bundled prompt assets.
 func newScriptPrompt() (*scriptPrompt, error) {
-	templates, err := loadPromptTemplates(assets.Prompts, assets.PromptDir)
+	templates, err := loadPromptTemplates(assets.VideoRecipePrompts, assets.VideoRecipePromptDir)
 	if err != nil {
 		return nil, err
 	}
-	return newScriptPromptFromTemplates(templates)
+	visualTemplates, err := assets.LoadVisualModeFiles()
+	if err != nil {
+		return nil, err
+	}
+	return newScriptPromptFromTemplates(templates, visualTemplates)
 }
 
 // newScriptPromptFromTemplates creates a script prompt from parsed templates.
-func newScriptPromptFromTemplates(templates map[string]string) (*scriptPrompt, error) {
+func newScriptPromptFromTemplates(templates map[string]string, visualTemplates ...map[string]string) (*scriptPrompt, error) {
 	builder, err := promptkit.NewBuilder(templates)
 	if err != nil {
 		return nil, err
@@ -43,7 +50,11 @@ func newScriptPromptFromTemplates(templates map[string]string) (*scriptPrompt, e
 	if _, ok := templates[defaultPromptMode]; !ok {
 		return nil, fmt.Errorf("default script prompt is required")
 	}
-	return &scriptPrompt{builder: builder, templates: templates}, nil
+	selectedVisualTemplates := map[string]string{}
+	if len(visualTemplates) > 0 && visualTemplates[0] != nil {
+		selectedVisualTemplates = visualTemplates[0]
+	}
+	return &scriptPrompt{builder: builder, templates: templates, visualTemplates: selectedVisualTemplates}, nil
 }
 
 // Build renders the script prompt for the requested mode.
@@ -63,9 +74,27 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 		templateMode = defaultPromptMode
 	}
 	return p.builder.Build(templateMode, scriptPromptData{
-		Mode:      mode,
-		InputText: strings.TrimSpace(data.InputText),
+		Mode:         mode,
+		InputText:    strings.TrimSpace(data.InputText),
+		VisualPrompt: p.visualPrompt(mode),
 	})
+}
+
+func (p *scriptPrompt) visualPrompt(mode string) string {
+	if p == nil || len(p.visualTemplates) == 0 {
+		return ""
+	}
+	if p.visualMode != "" {
+		mode = p.visualMode
+	}
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = defaultPromptMode
+	}
+	if prompt := strings.TrimSpace(p.visualTemplates[mode]); prompt != "" {
+		return prompt
+	}
+	return strings.TrimSpace(p.visualTemplates[defaultPromptMode])
 }
 
 // loadPromptTemplates loads prompt templates.
@@ -91,7 +120,9 @@ func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, e
 }
 
 type keyframePrompt struct {
-	styleSuffix string
+	styleSuffix     string
+	visualMode      string
+	visualTemplates map[string]string
 }
 
 // BuildCut builds prompts for a single keyframe cut.
@@ -110,10 +141,22 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 		"Character visual cues: "+cues,
 		"Scene: "+strings.TrimSpace(cut.VisualAnchor),
 		"Music timing: "+strings.TrimSpace(cut.AudioCue),
+		p.visualPrompt(),
 		strings.TrimSpace(p.styleSuffix),
 	), "\n")
 	systemPrompt := "Generate a single cinematic keyframe. No text, captions, speech bubbles, logos, or watermarks."
 	return userPrompt, systemPrompt
+}
+
+func (p keyframePrompt) visualPrompt() string {
+	mode := strings.TrimSpace(p.visualMode)
+	if mode == "" {
+		mode = defaultPromptMode
+	}
+	if prompt := strings.TrimSpace(p.visualTemplates[mode]); prompt != "" {
+		return prompt
+	}
+	return strings.TrimSpace(p.visualTemplates[defaultPromptMode])
 }
 
 // nonEmptyStrings returns the non-empty values in order.

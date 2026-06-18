@@ -76,3 +76,29 @@ func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 		t.Fatalf("Build() = %q, want default fallback with original mode", got)
 	}
 }
+
+// TestScriptPromptBuildUsesConfiguredVisualMode verifies that the selected visual mode is rendered into the script prompt.
+func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
+	templates, err := loadPromptTemplates(fstest.MapFS{
+		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}} {{.VisualPrompt}}")},
+	}, "prompts")
+	if err != nil {
+		t.Fatalf("loadPromptTemplates() error = %v", err)
+	}
+	prompt, err := newScriptPromptFromTemplates(templates, map[string]string{
+		"default":      "default visual",
+		"sparkle_rock": "sparkle visual",
+	})
+	if err != nil {
+		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
+	}
+	prompt.visualMode = "sparkle_rock"
+
+	got, err := prompt.Build("video_recipe_create", &orchestrator.TemplateData{InputText: "source"})
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if !strings.Contains(got, "sparkle visual") {
+		t.Fatalf("Build() = %q, want selected visual prompt", got)
+	}
+}

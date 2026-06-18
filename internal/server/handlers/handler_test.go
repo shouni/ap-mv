@@ -41,11 +41,12 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 
 	form := url.Values{
-		"csrf_token":   {"token"},
-		"text":         {"source text"},
-		"text_model":   {"gemini-alt"},
-		"image_model":  {"image-alt"},
-		"character_id": {"zundamon"},
+		"csrf_token":       {"token"},
+		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+		"text_model":       {"gemini-alt"},
+		"image_model":      {"image-alt"},
+		"character_id":     {"zundamon"},
+		"audio_url":        {"gs://bucket/music.mp3"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -71,6 +72,52 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 	if queue.task.CharacterID != "zundamon" {
 		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
+	}
+	if queue.task.SourceURL != "gs://bucket/music_recipe.json" {
+		t.Fatalf("queued source URL = %q, want music recipe URL", queue.task.SourceURL)
+	}
+	if queue.task.VisualMode != "default" {
+		t.Fatalf("queued visual mode = %q, want default", queue.task.VisualMode)
+	}
+	if queue.task.AudioURL != "" {
+		t.Fatalf("queued audio URL = %q, want empty for video recipe create", queue.task.AudioURL)
+	}
+}
+
+// TestPostVideoRecipeCreateQueuesVisualMode verifies that visual mode submissions are preserved.
+func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandlerWithOptions(assets.Templates, queue, ModelOptions{}, CharacterOptions{}, VisualModeOptions{
+		Modes: []VisualModeOption{
+			{ID: "default", Name: "Default", IsDefault: true},
+			{ID: "sparkle_rock", Name: "Sparkle Rock"},
+		},
+		DefaultModeID: "default",
+	})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	form := url.Values{
+		"csrf_token":       {"token"},
+		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+		"visual_mode":      {"sparkle_rock"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostVideoRecipeCreate(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil {
+		t.Fatal("queued task is nil")
+	}
+	if queue.task.VisualMode != "sparkle_rock" {
+		t.Fatalf("queued visual mode = %q, want sparkle_rock", queue.task.VisualMode)
 	}
 }
 
@@ -170,6 +217,7 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
+		`name="music_recipe_url"`,
 		`name="text_model"`,
 		`value="gemini-default" selected`,
 		`value="gemini-alt"`,
@@ -183,5 +231,8 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("VideoRecipeCreateForm body missing %q: %s", want, body)
 		}
+	}
+	if strings.Contains(body, `name="audio_url"`) {
+		t.Fatalf("VideoRecipeCreateForm should not render audio_url input: %s", body)
 	}
 }

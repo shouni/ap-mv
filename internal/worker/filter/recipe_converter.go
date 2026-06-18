@@ -61,6 +61,9 @@ func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *orchestrator.Vide
 	if task == nil || recipe == nil {
 		return
 	}
+	if task.Command == domain.CommandVideoRecipeCreate {
+		return
+	}
 	audioURL := strings.TrimSpace(task.AudioURL)
 	if audioURL == "" {
 		return

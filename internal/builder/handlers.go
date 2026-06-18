@@ -8,6 +8,7 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
 
+	"ap-mv/assets"
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
 	"ap-mv/internal/domain"
@@ -45,13 +46,17 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	if err != nil {
 		return nil, fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
 	}
+	visualOptions, err := buildVisualModeOptions()
+	if err != nil {
+		return nil, fmt.Errorf("Visual Mode選択肢の初期化に失敗しました: %w", err)
+	}
 
 	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
 		GeminiModels:       appCtx.Config.GeminiModels,
 		ImageModels:        appCtx.Config.ImageModels,
 		DefaultGeminiModel: appCtx.Config.GeminiModel,
 		DefaultImageModel:  appCtx.Config.ImageModel,
-	}, characterOptions)
+	}, characterOptions, visualOptions)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
@@ -64,6 +69,40 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		Worker:      workerHandler,
 		StaticFiles: staticFiles,
 	}, nil
+}
+
+func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
+	templates, err := assets.LoadVisualModeFiles()
+	if err != nil {
+		return handlers.VisualModeOptions{}, err
+	}
+	options := handlers.VisualModeOptions{
+		Modes: make([]handlers.VisualModeOption, 0, len(templates)),
+	}
+	for mode := range templates {
+		options.Modes = append(options.Modes, handlers.VisualModeOption{
+			ID:        mode,
+			Name:      visualModeDisplayName(mode),
+			IsDefault: mode == assets.DefaultVisualMode,
+		})
+	}
+	options.DefaultModeID = assets.DefaultVisualMode
+	return options, nil
+}
+
+func visualModeDisplayName(mode string) string {
+	switch mode {
+	case "default":
+		return "Default"
+	case "girls_metal":
+		return "Girls Metal"
+	case "sparkle_rock":
+		return "Sparkle Rock"
+	case "techno_melancholic":
+		return "Techno Melancholic"
+	default:
+		return mode
+	}
 }
 
 // buildCharacterOptions builds character options.
