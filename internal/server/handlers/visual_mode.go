@@ -94,7 +94,8 @@ func displayVisualModeName(id string) string {
 		if parts[i] == "" {
 			continue
 		}
-		parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		runes := []rune(parts[i])
+		parts[i] = strings.ToUpper(string(runes[0])) + string(runes[1:])
 	}
 	return strings.Join(parts, " ")
 }

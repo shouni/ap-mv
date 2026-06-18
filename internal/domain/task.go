@@ -85,19 +85,14 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandVideoRecipeCreate:
+	case CommandCompose, CommandVideoRecipeCreate, CommandComposeToKeyframe:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
 		}
-		if err := validateOptionalGCSURI("source_url", t.SourceURL); err != nil {
-			return err
-		}
-		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
-			return err
-		}
-	case CommandCompose, CommandComposeToKeyframe:
-		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
-			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
+		if t.Command == CommandVideoRecipeCreate {
+			if err := validateOptionalGCSURI("source_url", t.SourceURL); err != nil {
+				return err
+			}
 		}
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
