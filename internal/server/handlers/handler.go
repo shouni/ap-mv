@@ -21,6 +21,7 @@ type Handler struct {
 	Templates        map[string]*template.Template
 	ModelOptions     ModelOptions
 	CharacterOptions CharacterOptions
+	VisualOptions    VisualModeOptions
 }
 
 type PageData struct {
@@ -33,9 +34,11 @@ type PageData struct {
 	GeminiModels        []string
 	ImageModels         []string
 	Characters          []CharacterOption
+	VisualModes         []VisualModeOption
 	SelectedGeminiModel string
 	SelectedImageModel  string
 	SelectedCharacterID string
+	SelectedVisualMode  string
 }
 
 // NewHandler constructs a handler with default character options.
@@ -44,7 +47,7 @@ func NewHandler(assets fs.FS, queue ports.TaskQueue, modelOptions ...ModelOption
 }
 
 // NewHandlerWithOptions constructs a handler with explicit model and character options.
-func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions ModelOptions, characterOptions CharacterOptions) (*Handler, error) {
+func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions ModelOptions, characterOptions CharacterOptions, visualOptions ...VisualModeOptions) (*Handler, error) {
 	templates := make(map[string]*template.Template)
 	for _, name := range []string{
 		"index.html",
@@ -65,7 +68,15 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	options := modelOptions
 	options.normalize()
 	characterOptions.normalize()
-	return &Handler{Queue: queue, Templates: templates, ModelOptions: options, CharacterOptions: characterOptions}, nil
+	selectedVisualOptions := firstVisualModeOptions(visualOptions)
+	selectedVisualOptions.normalize()
+	return &Handler{
+		Queue:            queue,
+		Templates:        templates,
+		ModelOptions:     options,
+		CharacterOptions: characterOptions,
+		VisualOptions:    selectedVisualOptions,
+	}, nil
 }
 
 // Home renders the home page.
@@ -104,6 +115,7 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		Text:        strings.TrimSpace(r.FormValue("text")),
 		ImageURL:    strings.TrimSpace(r.FormValue("image_url")),
 		CharacterID: h.characterIDFromForm(r),
+		VisualMode:  h.visualModeFromForm(r),
 		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
@@ -121,7 +133,8 @@ func firstNonEmptyFormValue(r *http.Request, names ...string) string {
 // withModelOptions adds model and character selections to page data.
 func (h *Handler) withModelOptions(data PageData) PageData {
 	data = h.ModelOptions.applyToPageData(data)
-	return h.CharacterOptions.applyToPageData(data)
+	data = h.CharacterOptions.applyToPageData(data)
+	return h.VisualOptions.applyToPageData(data)
 }
 
 // RecipeForm renders the recipe form.

@@ -76,8 +76,48 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if queue.task.SourceURL != "gs://bucket/music_recipe.json" {
 		t.Fatalf("queued source URL = %q, want music recipe URL", queue.task.SourceURL)
 	}
+	if queue.task.VisualMode != "default" {
+		t.Fatalf("queued visual mode = %q, want default", queue.task.VisualMode)
+	}
 	if queue.task.AudioURL != "" {
 		t.Fatalf("queued audio URL = %q, want empty for video recipe create", queue.task.AudioURL)
+	}
+}
+
+// TestPostVideoRecipeCreateQueuesVisualMode verifies that visual mode submissions are preserved.
+func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandlerWithOptions(assets.Templates, queue, ModelOptions{}, CharacterOptions{}, VisualModeOptions{
+		Modes: []VisualModeOption{
+			{ID: "default", Name: "Default", IsDefault: true},
+			{ID: "sparkle_rock", Name: "Sparkle Rock"},
+		},
+		DefaultModeID: "default",
+	})
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	form := url.Values{
+		"csrf_token":       {"token"},
+		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+		"visual_mode":      {"sparkle_rock"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostVideoRecipeCreate(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil {
+		t.Fatal("queued task is nil")
+	}
+	if queue.task.VisualMode != "sparkle_rock" {
+		t.Fatalf("queued visual mode = %q, want sparkle_rock", queue.task.VisualMode)
 	}
 }
 

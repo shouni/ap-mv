@@ -11,6 +11,8 @@ Return only valid JSON. Do not wrap it in Markdown.
 
 ## Video Worldview
 
+{{.VisualPrompt}}
+
 Create a vivid Japanese anime music video with a consistent protagonist, cinematic camera language, and music-synchronized emotional escalation.
 The visual world should feel polished, luminous, and coherent across all cuts:
 

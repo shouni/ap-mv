@@ -11,14 +11,16 @@
                         <label class="form-label fw-semibold">MusicRecipe GCS URL</label>
                         <input class="form-control" name="music_recipe_url" placeholder="gs://bucket/path/music_recipe.json">
                     </div>
+                    {{if .VisualModes}}
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">MusicRecipe JSON / Visual Prompt</label>
-                        <textarea class="form-control" name="text" rows="8" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
+                        <label class="form-label fw-semibold">Visual Mode</label>
+                        <select class="form-select" name="visual_mode">
+                            {{range .VisualModes}}
+                            <option value="{{.ID}}" {{if eq .ID $.SelectedVisualMode}}selected{{end}}>{{.Name}}</option>
+                            {{end}}
+                        </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Image URL</label>
-                        <input class="form-control" name="image_url" placeholder="https://example.com/reference.png">
-                    </div>
+                    {{end}}
                     {{if .Characters}}
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Character</label>
