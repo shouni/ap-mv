@@ -9,9 +9,11 @@
 
 **AP MV (AP Music Video Orchestrator)** は、**Music Recipe（音楽レシピ / 楽曲構成書）** から時間軸のタイムラインを自動補完・構造化し、Google の動画生成 AI **Veo (Vertex AI)** と Gemini 系モデルによる台本生成・キーフレーム生成をつなぐ、Cloud Run / Cloud Tasks 前提の非同期オーケストレーターです。
 
-Web UI からの非同期受付、Cloud Tasks による worker 起動、`go-veo-orchestrator/workflow` による Script / Keyframe / Video / Publish の実処理、そして **Video-to-Video（動画ID連鎖）** による文脈維持をひとつのアプリケーションとして構成します。`pkg/go-veo-orchestrator` は将来別リポジトリに分離する前提で、現時点では nested module + root `replace` で参照しています。
+Web UI からの非同期受付、Cloud Tasks による worker 起動、外部モジュール `github.com/shouni/go-veo-orchestrator` の workflow による Script / Keyframe / Video / Publish の実処理、そして **Video-to-Video（動画ID連鎖）** による文脈維持をひとつのアプリケーションとして構成します。
 
 「時間軸のタイムライン制御（Timeline Logic）」へと進化させ、映像指示、BGMの拍子・感情・盛り上がり（Audio Cue）がミリ秒単位で完全にシンクロした商業クオリティの映像パイプラインを提供します。
+
+生成済みジョブは `/web/history` から確認できます。GCS 上の `video_music_meta.json` をページング一覧し、詳細画面 `/web/history/{jobID}` では各 cut の `keyframe_reference` を署名付き URL に変換してキーフレーム画像を表示します。
 
 ---
 
@@ -37,6 +39,8 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、`go-veo-
 ### ⛓ Cloud Tasks Worker Execution
 
 Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks/generate` が OIDC 検証後に pipeline を実行します。現在の実処理は `go-veo-orchestrator/workflow` に集約しており、Script / Cut Keyframe / Video / Publish の各 runner を worker 実行内で順に呼び出します。`status=generated` のカットは `VideoTimelineRunner` 側でスキップされ、保持済みの `video_id` を次カットの `PreviousVideoID` として引き継ぎます。
+
+完了通知では `SERVICE_URL` が設定されている場合、Slack メッセージに History Detail へのリンクも含めます。
 
 ### ⏳ Audio-Driven Timeline Logic (柔軟なタイムライン展開)
 
@@ -94,22 +98,34 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 * 前カットの `VideoID` が `gs://...mp4` の場合は `video.gcsUri` として投入し、Video-to-Video 連鎖を維持
 * 生成結果の `gcsUri` を `VideoResponse.CloudURL` と `VideoResponse.VideoID` に返し、次カットへ引き継ぐ
 
-### Veo Environment Variables
+### Runtime Environment Variables
 
 | 変数 | デフォルト | 用途 |
 | --- | --- | --- |
-| `GEMINI_MODEL` | `gemini-3.5-flash` | 台本生成などのテキスト生成モデル |
-| `IMAGE_MODEL` | `gemini-3-pro-image-preview` | 標準キーフレーム生成モデル |
+| `PORT` | `8080` | HTTP server の listen port |
+| `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う公開URL |
+| `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
+| `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
+| `GCS_MUSIC_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
+| `GEMINI_API_KEY` | なし | 設定時は Gemini API key client を使います。未設定時は `GCP_PROJECT_ID` / `GCP_LOCATION_ID` による Vertex 経路を使います |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | 台本生成などのテキスト生成モデル。未設定時は `GEMINI_MODELS` の先頭を使います |
+| `GEMINI_MODELS` | `gemini-3.5-flash,gemini-3.1-pro-preview` | Web UI の Gemini Model 選択肢 |
+| `IMAGE_MODEL` | `gemini-3.1-flash-image` | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |
+| `IMAGE_MODELS` | `gemini-3.1-flash-image,gemini-3-pro-image` | Web UI の Image Model 選択肢 |
 | `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience |
+| `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
+| `SERVICE_ACCOUNT_EMAIL` | なし | Cloud Tasks OIDC token を発行する service account |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID |
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
 | `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16` |
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
+| `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
+| `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
-Cloud Run 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_MUSIC_BUCKET` も必須です。`GCS_MUSIC_BUCKET` は `my-bucket` または `gs://my-bucket` のどちらでも受け付け、設定ロード時に `gs://` プレフィックスを取り除いて正規化します。実行サービスアカウントには Vertex AI の実行権限と、`GCS_MUSIC_BUCKET` への読み書き権限が必要です。
+Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントには Vertex AI の実行権限、Cloud Tasks 利用権限、`GCS_MUSIC_BUCKET` への読み書き権限が必要です。
 
 ### Web Security Environment Variables
 
@@ -119,8 +135,16 @@ Cloud Run 実行には、既存の `GCP_PROJECT_ID`、`GCP_LOCATION_ID`、`GCS_M
 | `SESSION_ENCRYPT_KEY` | OAuth セッション暗号化キー。productionでは必須。16 / 24 / 32 bytes のいずれか。 |
 | `GOOGLE_CLIENT_ID` | Google OAuth クライアントID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
+| `ALLOWED_EMAILS` | ログインを許可するメールアドレスのリスト |
+| `ALLOWED_DOMAINS` | ログインを許可するドメインのリスト |
 
-`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。Cloud Run では `SESSION_SECRET`、`SESSION_ENCRYPT_KEY`、OAuth 設定、Cloud Tasks 設定、GCS/Veo 設定が未設定だと起動エラーになります。
+`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。Cloud Run では `SESSION_SECRET`、`SESSION_ENCRYPT_KEY`、OAuth 設定、認可リスト、Cloud Tasks 設定、GCS/Veo 設定が未設定だと起動エラーになります。
+
+### History Storage
+
+生成履歴は `GCS_MUSIC_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<GCS_MUSIC_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下を参照します。ジョブごとの `video_music_meta.json` を一覧対象とし、詳細画面では同じ JSON の `cuts[]` から keyframe / video / status などを表示します。
+
+metadata JSON と一覧表示用メタデータは短時間 TTL cache に保持し、履歴一覧と詳細画面を行き来したときの GCS I/O を抑えます。署名付き URL は表示ごとに生成し、期限付き URL 自体は cache しません。
 
 ---
 
@@ -133,8 +157,8 @@ ap-mv/
 ├── main.go                 # エントリーポイント
 ├── Dockerfile              # Cloud Run 向け FROM scratch コンテナ定義
 ├── assets/                 # embed.FS で配布する静的・プロンプト資産
-│   ├── prompts/            # 作詞・作曲・カバーアート・Veo動画用プロンプトテンプレート
-│   └── templates/          # Web UI テンプレート（Zunda Greenを基調としたショーケースUI）
+│   ├── prompts/            # VideoRecipe 生成・Visual Mode 用プロンプトテンプレート
+│   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
 └── internal/
     ├── adapters/           # Vertex AI Veo adapter
     ├── app/                # DI container と RemoteIO 依存
@@ -142,6 +166,7 @@ ap-mv/
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
     ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias
+    ├── repository/         # GCS 上の video_music_meta.json を一覧・詳細取得・削除する履歴 repository
     ├── server/
     │   ├── handlers/       # Web UI / task handler / CSRF context
     │   ├── router.go       # chi ルーティング、OAuth、CSRF、Cloud Tasks OIDC
@@ -195,7 +220,7 @@ sequenceDiagram
     Worker->>Pipeline: Execute(ctx, task)
 
     rect rgb(240, 255, 240)
-        Note over Pipeline, F1: [command == video_recipe_create / compose のみ実行]
+        Note over Pipeline, F1: [command == video_recipe_create / compose / compose_to_keyframe のみ実行]
         Pipeline->>F1: Execute(task)
         F1->>WF: Script.Run(source, mode)
         WF-->>F1: *ports.VideoRecipe
@@ -209,7 +234,7 @@ sequenceDiagram
 
     alt command == video_recipe_create
         Pipeline-->>Worker: nil (VideoRecipe saved)
-    else command == mv_from_keyframe_video_recipe / compose
+    else command == mv_from_keyframe_video_recipe / generate_from_recipe / compose
         Pipeline->>F3: Execute(recipe, keyframes)
         F3->>WF: Video.Run(recipe)
         WF->>WF: BuildVideoRequest(lastVideoID, keyframe_reference, audio_cue)
@@ -229,7 +254,7 @@ sequenceDiagram
 ### 1. videoレシピ作成
 
 1. Google OAuthで安全にログインします。
-2. `/web/video-recipe-create` から `music_recipe_url`、`text`、`image_url` のいずれかを入力し送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。
+2. `/web/video-recipe-create` から `MusicRecipe GCS URL`、Visual Mode、Character、利用モデルを選んで送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。POST handler は互換入力として `text` / `image_url` も受け付けますが、現在のフォームに表示される主入力は `music_recipe_url` です。
 3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`video_recipe_create` では `Scripting -> CutKeyframe` の順に進み、セクション単位の keyframe を含む VideoRecipe を `gs://<GCS_MUSIC_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。
 
 ### 2. Keyframe VideoRecipe からの MV 作成 / レジューム
@@ -240,7 +265,22 @@ sequenceDiagram
 
 ### 3. 履歴画面
 
-`/web/history` と `DELETE /web/history/{jobID}` のルートは用意済みですが、現時点では storage adapter 連携は未実装のプレースホルダーです。GCS 上の `video_music_meta.json` を一覧・削除する実装は次の拡張ポイントです。
+1. `/web/history` で生成済み job の一覧を確認します。GCS 上の `video_music_meta.json` を job 単位で列挙し、タイトル、作成時刻、cut 数、生成状態をページング表示します。
+2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。
+3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
+4. `DELETE /web/history/{jobID}` で job 配下の GCS object を削除できます。削除後は履歴 metadata cache と recipe cache も破棄します。
+
+### Web Routes
+
+| ルート | 用途 |
+| --- | --- |
+| `GET /healthz` | ヘルスチェック |
+| `GET /static/*` | embed.FS の静的ファイル配信 |
+| `GET /auth/login`, `GET /auth/callback` | Google OAuth |
+| `GET /`, `GET /web/video-recipe-create`, `POST /web/video-recipe-create` | VideoRecipe 作成。`GET/POST /web/compose` は同じ handler への alias |
+| `GET /web/mv-from-keyframe-video-recipe`, `POST /web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成。`GET/POST /web/generate-from-recipe` は同じ handler への alias |
+| `GET /web/history`, `GET /web/history/{jobID}`, `DELETE /web/history/{jobID}` | 履歴一覧、詳細、削除 |
+| `POST /tasks/generate` | Cloud Tasks worker endpoint |
 
 ---
 
