@@ -18,6 +18,7 @@ const (
 	slackCompleteTitle      = "✅ AP MV 処理が完了しました"
 	slackErrorTitle         = "❌ AP MV 処理中にエラーが発生しました"
 	slackErrorContentHeader = "*エラー内容:*\n"
+	slackNotAvailable       = "N/A"
 )
 
 // SlackAdapter posts asynchronous pipeline notifications through Slack Incoming Webhook.
@@ -48,7 +49,7 @@ func NewSlackAdapter(httpClient httpkit.Requester, webhookURL, serviceURL string
 
 // NotifyTaskComplete posts a completion notification.
 func (s *SlackAdapter) NotifyTaskComplete(ctx context.Context, req domain.NotificationRequest) error {
-	if s == nil || s.webhookURL == "" || s.slackClient == nil {
+	if s.webhookURL == "" || s.slackClient == nil {
 		slog.InfoContext(ctx, "Slack notification skipped", "job_id", req.JobID)
 		return nil
 	}
@@ -61,7 +62,7 @@ func (s *SlackAdapter) NotifyTaskComplete(ctx context.Context, req domain.Notifi
 
 // NotifyTaskError posts an error notification.
 func (s *SlackAdapter) NotifyTaskError(ctx context.Context, errDetail error, req domain.NotificationRequest) error {
-	if s == nil || s.webhookURL == "" || s.slackClient == nil {
+	if s.webhookURL == "" || s.slackClient == nil {
 		slog.InfoContext(ctx, "Slack error notification skipped", "job_id", req.JobID, "error", errDetail)
 		return nil
 	}
@@ -76,7 +77,7 @@ func (s *SlackAdapter) NotifyTaskError(ctx context.Context, errDetail error, req
 	if errDetail != nil {
 		sb.WriteString(errDetail.Error())
 	} else {
-		sb.WriteString(domain.NotAvailable)
+		sb.WriteString(slackNotAvailable)
 	}
 	if err := s.slackClient.SendTextWithHeader(ctx, slackErrorTitle, sb.String()); err != nil {
 		return fmt.Errorf("post Slack error notification: %w", err)
@@ -89,63 +90,63 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) stri
 	var sb strings.Builder
 	writeSlackRequestSummary(&sb, req)
 	if historyURL := s.historyDetailURL(req.JobID); historyURL != "" {
-		sb.WriteString(fmt.Sprintf("*History Detail:* <%s|%s>\n", historyURL, req.JobID))
+		fmt.Fprintf(&sb, "*History Detail:* <%s|%s>\n", historyURL, req.JobID)
 	}
 	writeSlackRequestGenerationMetadata(&sb, req)
 	if req.CutCount > 0 {
-		sb.WriteString(fmt.Sprintf("*Cuts:* `%d`\n", req.CutCount))
+		fmt.Fprintf(&sb, "*Cuts:* `%d`\n", req.CutCount)
 	}
 	if req.OutputURI != "" {
-		sb.WriteString(fmt.Sprintf("*Output:* %s\n", req.OutputURI))
+		fmt.Fprintf(&sb, "*Output:* %s\n", req.OutputURI)
 	}
 	writeSlackRequestSource(&sb, req)
 	if sb.Len() == 0 {
-		sb.WriteString(domain.NotAvailable)
+		sb.WriteString(slackNotAvailable)
 	}
 	return sb.String()
 }
 
 func writeSlackRequestSummary(sb *strings.Builder, req domain.NotificationRequest) {
 	if req.JobID != "" {
-		sb.WriteString(fmt.Sprintf("*Job ID:* `%s`\n", req.JobID))
+		fmt.Fprintf(sb, "*Job ID:* `%s`\n", req.JobID)
 	}
 	if req.Command != "" {
-		sb.WriteString(fmt.Sprintf("*Command:* `%s`\n", req.Command))
+		fmt.Fprintf(sb, "*Command:* `%s`\n", req.Command)
 	}
 	if req.Title != "" {
-		sb.WriteString(fmt.Sprintf("*Title:* %s\n", req.Title))
+		fmt.Fprintf(sb, "*Title:* %s\n", req.Title)
 	}
 }
 
 func writeSlackRequestGenerationMetadata(sb *strings.Builder, req domain.NotificationRequest) {
 	if req.TextModel != "" {
-		sb.WriteString(fmt.Sprintf("*Text Model:* `%s`\n", req.TextModel))
+		fmt.Fprintf(sb, "*Text Model:* `%s`\n", req.TextModel)
 	}
 	if req.ImageModel != "" {
-		sb.WriteString(fmt.Sprintf("*Image Model:* `%s`\n", req.ImageModel))
+		fmt.Fprintf(sb, "*Image Model:* `%s`\n", req.ImageModel)
 	}
 	if req.VisualMode != "" {
-		sb.WriteString(fmt.Sprintf("*Visual Mode:* `%s`\n", req.VisualMode))
+		fmt.Fprintf(sb, "*Visual Mode:* `%s`\n", req.VisualMode)
 	}
 	if req.CharacterID != "" {
-		sb.WriteString(fmt.Sprintf("*Character:* `%s`\n", req.CharacterID))
+		fmt.Fprintf(sb, "*Character:* `%s`\n", req.CharacterID)
 	}
 }
 
 func writeSlackRequestSource(sb *strings.Builder, req domain.NotificationRequest) {
 	if req.SourceURL != "" {
-		sb.WriteString(fmt.Sprintf("*Source:* %s\n", req.SourceURL))
+		fmt.Fprintf(sb, "*Source:* %s\n", req.SourceURL)
 	}
 	if req.RecipeURL != "" {
-		sb.WriteString(fmt.Sprintf("*Recipe:* %s\n", req.RecipeURL))
+		fmt.Fprintf(sb, "*Recipe:* %s\n", req.RecipeURL)
 	}
 	if req.AudioURL != "" {
-		sb.WriteString(fmt.Sprintf("*Audio:* %s\n", req.AudioURL))
+		fmt.Fprintf(sb, "*Audio:* %s\n", req.AudioURL)
 	}
 }
 
 func (s *SlackAdapter) historyDetailURL(jobID string) string {
-	if s == nil || s.serviceURL == "" || jobID == "" {
+	if s.serviceURL == "" || jobID == "" {
 		return ""
 	}
 	historyURL, err := url.JoinPath(s.serviceURL, "/web/history", jobID)

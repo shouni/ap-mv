@@ -225,7 +225,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 }
 
 func wantsJSON(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/json")
+	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
 }
 
 // renderPage renders a named HTML template.

@@ -2,8 +2,6 @@ package domain
 
 import "time"
 
-const NotAvailable = "N/A"
-
 // NotificationRequest contains task metadata used by completion/error notifiers.
 type NotificationRequest struct {
 	JobID       string
