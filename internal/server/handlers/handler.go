@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,11 +18,12 @@ import (
 )
 
 type Handler struct {
-	Queue            ports.TaskQueue
-	Templates        map[string]*template.Template
-	ModelOptions     ModelOptions
-	CharacterOptions CharacterOptions
-	VisualOptions    VisualModeOptions
+	Queue             ports.TaskQueue
+	HistoryRepository ports.HistoryRepository
+	Templates         map[string]*template.Template
+	ModelOptions      ModelOptions
+	CharacterOptions  CharacterOptions
+	VisualOptions     VisualModeOptions
 }
 
 type PageData struct {
@@ -40,6 +42,8 @@ type PageData struct {
 	SelectedImageModel  string
 	SelectedCharacterID string
 	SelectedVisualMode  string
+	HistoryItems        []domain.VideoHistory
+	PageMeta            domain.PageMeta
 }
 
 // NewHandler constructs a handler with default character options.
@@ -185,8 +189,21 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 }
 
 // History renders the history page.
-func (h *Handler) History(w http.ResponseWriter, _ *http.Request) {
-	h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
+func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
+	if h.HistoryRepository == nil {
+		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
+		return
+	}
+	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.renderPage(w, PageData{
+		Title:        "History",
+		HistoryItems: page.Items,
+		PageMeta:     page.PageMeta,
+	}, "history.html")
 }
 
 // DeleteHistory handles history deletion requests.
@@ -196,7 +213,21 @@ func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "delete adapter is not configured yet"})
+	if h.HistoryRepository != nil {
+		if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
+}
+
+func pageFromQuery(r *http.Request) int {
+	page, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get("page")))
+	if err != nil || page < 1 {
+		return 1
+	}
+	return page
 }
 
 // enqueue validates and submits a task to the configured queue.

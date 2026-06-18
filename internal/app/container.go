@@ -28,6 +28,9 @@ type Container struct {
 
 	// Worker pipeline
 	Pipeline ports.Pipeline
+
+	// Data Access
+	HistoryRepository ports.HistoryRepository
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。

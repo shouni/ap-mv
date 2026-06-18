@@ -1,9 +1,79 @@
 {{define "content"}}
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
-        <h1 class="h3 fw-bold">History</h1>
-        <p class="text-muted mb-4">{{.Message}}</p>
-        <a class="btn btn-primary" href="/">Back Home</a>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <div>
+                <h1 class="h3 fw-bold mb-1">History</h1>
+                {{if .Message}}
+                <p class="text-muted mb-0">{{.Message}}</p>
+                {{else}}
+                <p class="text-muted mb-0">{{.PageMeta.Total}} jobs</p>
+                {{end}}
+            </div>
+            <a class="btn btn-outline-secondary" href="/">Back Home</a>
+        </div>
+
+        {{if .HistoryItems}}
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                <tr>
+                    <th>Job</th>
+                    <th>Title</th>
+                    <th>Created</th>
+                    <th>Cuts</th>
+                    <th>Status</th>
+                    <th class="text-end">Metadata</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{range .HistoryItems}}
+                <tr>
+                    <td><code>{{.JobID}}</code></td>
+                    <td>
+                        <div class="fw-semibold">{{.Title}}</div>
+                        {{if .Mood}}<div class="small text-muted">{{.Mood}}</div>{{end}}
+                    </td>
+                    <td>{{.CreatedAt}}</td>
+                    <td>{{.CutCount}}</td>
+                    <td>
+                        {{if .Generated}}
+                        <span class="badge text-bg-success">generated</span>
+                        {{else}}
+                        <span class="badge text-bg-secondary">keyframes</span>
+                        {{end}}
+                    </td>
+                    <td class="text-end">
+                        {{if .SignedURL}}
+                        <a class="btn btn-sm btn-outline-primary" href="{{.SignedURL}}" target="_blank" rel="noopener">Open</a>
+                        {{else}}
+                        <code class="small">{{.StorageURI}}</code>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else if not .Message}}
+        <p class="text-muted mb-0">No history yet.</p>
+        {{end}}
+
+        {{if .PageMeta.TotalPages}}
+        <nav class="mt-4">
+            <ul class="pagination mb-0">
+                <li class="page-item {{if not .PageMeta.HasPrev}}disabled{{end}}">
+                    <a class="page-link" href="/web/history?page={{.PageMeta.PrevPage}}">Prev</a>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link">{{.PageMeta.Page}} / {{.PageMeta.TotalPages}}</span>
+                </li>
+                <li class="page-item {{if not .PageMeta.HasNext}}disabled{{end}}">
+                    <a class="page-link" href="/web/history?page={{.PageMeta.NextPage}}">Next</a>
+                </li>
+            </ul>
+        </nav>
+        {{end}}
     </div>
 </div>
 {{end}}
