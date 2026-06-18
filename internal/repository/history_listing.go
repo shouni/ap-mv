@@ -114,24 +114,11 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 }
 
 func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string) (domain.VideoHistory, error) {
-	if history, ok := r.getCachedHistory(jobID); ok {
-		return history, nil
-	}
 	recipe, err := r.loadVideoRecipe(ctx, jobID)
 	if err != nil {
 		return domain.VideoHistory{}, err
 	}
-	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
-	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
-		history.SignedURL = signedURL
-	} else {
-		slog.WarnContext(ctx, "failed to generate metadata signed URL",
-			"uri", history.StorageURI,
-			"error", err,
-		)
-	}
-	r.setCachedHistory(jobID, history)
-	return history, nil
+	return r.buildHistoryFromRecipe(ctx, jobID, recipe), nil
 }
 
 // GetHistory loads generated MV job metadata and cut keyframe references.
@@ -146,10 +133,7 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 	if err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
-	history, err := r.buildHistory(ctx, jobID)
-	if err != nil {
-		return domain.VideoHistoryDetail{}, err
-	}
+	history := r.buildHistoryFromRecipe(ctx, jobID, recipe)
 	detail := domain.VideoHistoryDetail{
 		VideoHistory: history,
 		Cuts:         make([]domain.VideoHistoryCut, 0, len(recipe.Cuts)),
@@ -170,10 +154,30 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 			EndSec:            cut.EndSec,
 		})
 	}
-	if err := r.signHistoryCutURLs(ctx, detail.Cuts); err != nil {
+	signedCuts, err := r.signHistoryCutURLs(ctx, detail.Cuts)
+	if err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
+	detail.Cuts = signedCuts
 	return detail, nil
+}
+
+func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
+	history, ok := r.getCachedHistory(jobID)
+	if !ok {
+		history = videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+		r.setCachedHistory(jobID, history)
+	}
+	history.SignedURL = ""
+	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
+		history.SignedURL = signedURL
+	} else {
+		slog.WarnContext(ctx, "failed to generate metadata signed URL",
+			"uri", history.StorageURI,
+			"error", err,
+		)
+	}
+	return history
 }
 
 func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
@@ -195,13 +199,13 @@ func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID stri
 	return recipe, nil
 }
 
-func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []domain.VideoHistoryCut) error {
+func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []domain.VideoHistoryCut) ([]domain.VideoHistoryCut, error) {
+	signedCuts := append([]domain.VideoHistoryCut(nil), cuts...)
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
-	for i := range cuts {
-		i := i
+	for i := range signedCuts {
 		eg.Go(func() error {
-			ref := cuts[i].KeyframeReference
+			ref := signedCuts[i].KeyframeReference
 			if strings.TrimSpace(ref) == "" {
 				return nil
 			}
@@ -213,11 +217,14 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 				)
 				return nil
 			}
-			cuts[i].KeyframeURL = signedURL
+			signedCuts[i].KeyframeURL = signedURL
 			return nil
 		})
 	}
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	return signedCuts, nil
 }
 
 func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {

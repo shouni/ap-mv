@@ -69,6 +69,27 @@ func (s fakeHistorySigner) GenerateSignedURL(_ context.Context, uri string, _ st
 	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
 }
 
+type countingHistorySigner struct {
+	mu    sync.Mutex
+	count map[string]int
+}
+
+func (s *countingHistorySigner) GenerateSignedURL(_ context.Context, uri string, _ string, _ time.Duration) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.count == nil {
+		s.count = map[string]int{}
+	}
+	s.count[uri]++
+	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
+}
+
+func (s *countingHistorySigner) Count(uri string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.count[uri]
+}
+
 func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -178,6 +199,38 @@ func TestGetHistoryReusesRecipeLoadedByHistoryList(t *testing.T) {
 	}
 	if _, err := repo.GetHistory(context.Background(), jobID); err != nil {
 		t.Fatalf("GetHistory() error = %v", err)
+	}
+	if got := reader.OpenCount(metadataURI); got != 1 {
+		t.Fatalf("metadata open count = %d, want 1", got)
+	}
+}
+
+func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
+	t.Parallel()
+
+	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
+	reader := &fakeHistoryReader{
+		paths: []string{metadataURI},
+		files: map[string]string{
+			metadataURI: `{
+				"title": "軌跡のアーキテクト",
+				"cuts": [
+					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage"}
+				]
+			}`,
+		},
+	}
+	signer := &countingHistorySigner{}
+	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, signer, NewHistoryCache())
+
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+		t.Fatalf("first ListHistoryPage() error = %v", err)
+	}
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+		t.Fatalf("second ListHistoryPage() error = %v", err)
+	}
+	if got := signer.Count(metadataURI); got != 2 {
+		t.Fatalf("metadata signed URL count = %d, want 2", got)
 	}
 	if got := reader.OpenCount(metadataURI); got != 1 {
 		t.Fatalf("metadata open count = %d, want 1", got)

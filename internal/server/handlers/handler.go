@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -221,7 +222,11 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "failed to get history detail",
+			"job_id", jobID,
+			"error", err,
+		)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	h.renderPage(w, PageData{
