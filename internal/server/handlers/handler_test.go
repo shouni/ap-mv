@@ -22,8 +22,8 @@ func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	return nil
 }
 
-// TestPostComposeSupportsKeyframeRunMode verifies that compose submissions support keyframe-only mode.
-func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
+// TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.
+func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
 	h, err := NewHandlerWithOptions(assets.Templates, queue, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
@@ -43,26 +43,25 @@ func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	form := url.Values{
 		"csrf_token":   {"token"},
 		"text":         {"source text"},
-		"run_mode":     {"keyframe"},
 		"text_model":   {"gemini-alt"},
 		"image_model":  {"image-alt"},
 		"character_id": {"zundamon"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/compose", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostCompose(rec, req)
+	h.PostVideoRecipeCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostCompose status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
 	}
-	if queue.task.Command != domain.CommandComposeToKeyframe {
-		t.Fatalf("queued command = %q, want %q", queue.task.Command, domain.CommandComposeToKeyframe)
+	if queue.task.Command != domain.CommandVideoRecipeCreate {
+		t.Fatalf("queued command = %q, want %q", queue.task.Command, domain.CommandVideoRecipeCreate)
 	}
 	if queue.task.TextModel != "gemini-alt" {
 		t.Fatalf("queued text model = %q, want gemini-alt", queue.task.TextModel)
@@ -75,8 +74,8 @@ func TestPostComposeSupportsKeyframeRunMode(t *testing.T) {
 	}
 }
 
-// TestPostComposeDefaultsToFullCompose verifies that compose submissions default to the full pipeline.
-func TestPostComposeDefaultsToFullCompose(t *testing.T) {
+// TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate verifies that submissions use the video recipe creation command.
+func TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
 	h, err := NewHandler(assets.Templates, queue)
 	if err != nil {
@@ -87,26 +86,64 @@ func TestPostComposeDefaultsToFullCompose(t *testing.T) {
 		"csrf_token": {"token"},
 		"text":       {"source text"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/compose", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostCompose(rec, req)
+	h.PostVideoRecipeCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostCompose status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
 	}
-	if queue.task.Command != domain.CommandCompose {
-		t.Fatalf("queued command = %q, want %q", queue.task.Command, domain.CommandCompose)
+	if queue.task.Command != domain.CommandVideoRecipeCreate {
+		t.Fatalf("queued command = %q, want %q", queue.task.Command, domain.CommandVideoRecipeCreate)
 	}
 }
 
-// TestComposeFormRendersModelSelects verifies that the compose form renders model selects.
-func TestComposeFormRendersModelSelects(t *testing.T) {
+// TestPostRecipeAcceptsKeyframeVideoRecipeJSON verifies that MV generation accepts VideoRecipe JSON.
+func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	form := url.Values{
+		"csrf_token": {"token"},
+		"recipe_json": {`{
+			"title": "mv",
+			"cuts": [
+				{"cut_index": 1, "duration_sec": 8, "visual_anchor": "blue stage", "keyframe_reference": "gs://bucket/keyframe.png"}
+			]
+		}`},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/mv-from-keyframe-video-recipe", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostRecipe(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostRecipe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil {
+		t.Fatal("queued task is nil")
+	}
+	if queue.task.Command != domain.CommandMVFromKeyframeVideoRecipe {
+		t.Fatalf("queued command = %q, want %q", queue.task.Command, domain.CommandMVFromKeyframeVideoRecipe)
+	}
+	if queue.task.VideoRecipe == nil || len(queue.task.VideoRecipe.Cuts) != 1 {
+		t.Fatalf("queued video recipe = %#v", queue.task.VideoRecipe)
+	}
+}
+
+// TestVideoRecipeCreateFormRendersModelSelects verifies that the video recipe form renders model selects.
+func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
 		GeminiModels:       []string{"gemini-default", "gemini-alt"},
 		ImageModels:        []string{"image-default", "image-alt"},
@@ -122,14 +159,14 @@ func TestComposeFormRendersModelSelects(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/compose", nil)
+	req := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
 	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.ComposeForm(rec, req)
+	h.VideoRecipeCreateForm(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("ComposeForm status = %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("VideoRecipeCreateForm status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -144,7 +181,7 @@ func TestComposeFormRendersModelSelects(t *testing.T) {
 		`value="tsumugi" selected`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("ComposeForm body missing %q: %s", want, body)
+			t.Fatalf("VideoRecipeCreateForm body missing %q: %s", want, body)
 		}
 	}
 }

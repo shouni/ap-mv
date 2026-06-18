@@ -93,10 +93,14 @@ func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Get("/", h.Home)
 	r.Route("/web", func(r chi.Router) {
-		r.Get("/compose", h.ComposeForm)
-		r.Post("/compose", h.PostCompose)
+		r.Get("/compose", h.VideoRecipeCreateForm)
+		r.Post("/compose", h.PostVideoRecipeCreate)
+		r.Get("/video-recipe-create", h.VideoRecipeCreateForm)
+		r.Post("/video-recipe-create", h.PostVideoRecipeCreate)
 		r.Get("/generate-from-recipe", h.RecipeForm)
 		r.Post("/generate-from-recipe", h.PostRecipe)
+		r.Get("/mv-from-keyframe-video-recipe", h.RecipeForm)
+		r.Post("/mv-from-keyframe-video-recipe", h.PostRecipe)
 		r.Get("/history", h.History)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 	})

@@ -100,7 +100,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 			}
 			fc.Recipe = domainRecipe
 			nextTask := *fc.Task
-			nextTask.Command = domain.CommandGenerateFromRecipe
+			nextTask.Command = domain.CommandMVFromKeyframeVideoRecipe
 			nextTask.Recipe = fc.Recipe
 			nextTask.VideoRecipe = fc.VideoRecipe
 			nextTask.CreatedAt = time.Now().UTC()

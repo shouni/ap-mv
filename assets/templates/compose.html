@@ -3,8 +3,8 @@
     <div class="col-12 col-lg-9">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4 p-md-5">
-                <h1 class="h3 fw-bold mb-4">Compose</h1>
-                <form method="post" action="/web/compose">
+                <h1 class="h3 fw-bold mb-4">Video Recipe Create</h1>
+                <form method="post" action="/web/video-recipe-create">
                     <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
                     <div class="mb-3">
@@ -53,19 +53,7 @@
                         </div>
                     </div>
 
-                    <fieldset class="mt-4">
-                        <legend class="h6 fw-bold">Run Mode</legend>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" id="run_mode_compose" name="run_mode" value="compose" checked>
-                            <label class="form-check-label" for="run_mode_compose">Full compose: Scripting -> Keyframe -> Video -> Publishing</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" id="run_mode_keyframe" name="run_mode" value="keyframe">
-                            <label class="form-check-label" for="run_mode_keyframe">Keyframe only: Scripting -> Keyframe</label>
-                        </div>
-                    </fieldset>
-
-                    <button class="btn btn-primary mt-4" type="submit">Queue Compose</button>
+                    <button class="btn btn-primary mt-4" type="submit">Queue Video Recipe Create</button>
                 </form>
             </div>
         </div>

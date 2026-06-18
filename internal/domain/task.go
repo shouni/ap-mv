@@ -20,7 +20,11 @@ type AIModels struct {
 type TaskCommand string
 
 const (
-	CommandCompose            TaskCommand = "compose"
+	CommandCompose                   TaskCommand = "compose"
+	CommandVideoRecipeCreate         TaskCommand = "video_recipe_create"
+	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
+
+	// Legacy task command names kept for existing queued tasks and clients.
 	CommandComposeToKeyframe  TaskCommand = "compose_to_keyframe"
 	CommandGenerateFromRecipe TaskCommand = "generate_from_recipe"
 )
@@ -79,16 +83,16 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandCompose, CommandComposeToKeyframe:
+	case CommandCompose, CommandVideoRecipeCreate, CommandComposeToKeyframe:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
-			return fmt.Errorf("compose task requires source_url, text, or image_url")
+			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
 		}
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
-	case CommandGenerateFromRecipe:
+	case CommandMVFromKeyframeVideoRecipe, CommandGenerateFromRecipe:
 		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("generate_from_recipe task requires recipe, video_recipe, or recipe_url")
+			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
 		}
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err

@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -25,6 +27,93 @@ type VideoCut = orchestrator.Cut
 
 const CutStatusGenerated = string(orchestrator.CutStatusGenerated)
 
+// UnmarshalRecipeOrVideoRecipe parses either a MusicRecipe JSON or a VideoRecipe JSON.
+func UnmarshalRecipeOrVideoRecipe(raw []byte) (*MusicRecipe, *VideoRecipe, error) {
+	if looksLikeVideoRecipeJSON(raw) {
+		var recipe VideoRecipe
+		if err := json.Unmarshal(raw, &recipe); err != nil {
+			return nil, nil, fmt.Errorf("decode video recipe json: %w", err)
+		}
+		recipe.Normalize()
+		if err := ValidateVideoRecipe(&recipe); err != nil {
+			return nil, nil, err
+		}
+		return nil, &recipe, nil
+	}
+
+	var recipe MusicRecipe
+	if err := json.Unmarshal(raw, &recipe); err != nil {
+		return nil, nil, fmt.Errorf("decode recipe json: %w", err)
+	}
+	if err := NormalizeMusicRecipe(&recipe); err != nil {
+		return nil, nil, err
+	}
+	return &recipe, nil, nil
+}
+
+func looksLikeVideoRecipeJSON(raw []byte) bool {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil {
+		return false
+	}
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '{' {
+		return false
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		key, ok := token.(string)
+		if !ok {
+			return false
+		}
+		if key == "cuts" || key == "project_title" || key == "music_recipe" {
+			return true
+		}
+		if err := skipJSONValue(decoder); err != nil {
+			return false
+		}
+	}
+	return false
+}
+
+func skipJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		for decoder.More() {
+			if _, err := decoder.Token(); err != nil {
+				return err
+			}
+			if err := skipJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	case '[':
+		for decoder.More() {
+			if err := skipJSONValue(decoder); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q", delim)
+	}
+}
+
 // ValidateMusicRecipe checks the receiver for invalid state.
 func ValidateMusicRecipe(r *MusicRecipe) error {
 	if r == nil {
@@ -40,6 +129,20 @@ func ValidateMusicRecipe(r *MusicRecipe) error {
 		if section.Duration <= 0 && section.EndSeconds <= section.StartSeconds {
 			return fmt.Errorf("section %d duration_seconds must be positive", i)
 		}
+	}
+	return nil
+}
+
+// ValidateVideoRecipe checks the receiver for invalid state.
+func ValidateVideoRecipe(r *VideoRecipe) error {
+	if r == nil {
+		return fmt.Errorf("video recipe is nil")
+	}
+	if strings.TrimSpace(r.Title) == "" {
+		return fmt.Errorf("video recipe title is required")
+	}
+	if len(r.Cuts) == 0 {
+		return fmt.Errorf("video recipe requires cuts")
 	}
 	return nil
 }

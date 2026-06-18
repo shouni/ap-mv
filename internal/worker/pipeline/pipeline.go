@@ -133,12 +133,12 @@ func (r *Runner) outputPath(task *domain.Task) string {
 
 // defaultFilters はタスクコマンドに応じた標準フィルター列を返します。
 //
-// compose 系はスクリプト生成から始め、recipe 入力系は既存 MusicRecipe の読み込みから始めます。
-// compose-to-keyframe はキーフレーム生成までで停止し、動画生成と公開は実行しません。
+// compose/video_recipe_create 系はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
+// video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) []filter.Filter {
 	filters := []filter.Filter{}
 	switch command {
-	case domain.CommandCompose, domain.CommandComposeToKeyframe:
+	case domain.CommandCompose, domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
 		filters = append(filters, filter.ScriptingFilter{})
 	default:
 		filters = append(filters, filter.RecipeLoadFilter{})
@@ -146,7 +146,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 	filters = append(filters,
 		filter.CutKeyframeFilter{},
 	)
-	if command == domain.CommandComposeToKeyframe {
+	if command == domain.CommandVideoRecipeCreate || command == domain.CommandComposeToKeyframe {
 		return filters
 	}
 	filters = append(filters,

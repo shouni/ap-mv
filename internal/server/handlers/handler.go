@@ -73,16 +73,16 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, PageData{Title: "Home"}, "index.html")
 }
 
-// ComposeForm renders the compose form.
-func (h *Handler) ComposeForm(w http.ResponseWriter, r *http.Request) {
+// VideoRecipeCreateForm renders the video recipe creation form.
+func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) {
 	h.renderPage(w, h.withModelOptions(PageData{
-		Title:     "Compose",
+		Title:     "Video Recipe Create",
 		CSRFToken: csrfTokenFromContext(r.Context()),
 	}), "compose.html")
 }
 
-// PostCompose handles compose form submissions.
-func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
+// PostVideoRecipeCreate handles video recipe creation form submissions.
+func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -91,15 +91,14 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid csrf token", http.StatusForbidden)
 		return
 	}
-	jobID, err := domain.NewJobID("compose")
+	jobID, err := domain.NewJobID("video-recipe")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	command := composeCommandFromRunMode(r.FormValue("run_mode"))
 	task := &domain.Task{
 		JobID:       jobID,
-		Command:     command,
+		Command:     domain.CommandVideoRecipeCreate,
 		AIModels:    h.aiModelsFromForm(r),
 		SourceURL:   strings.TrimSpace(r.FormValue("url")),
 		Text:        strings.TrimSpace(r.FormValue("text")),
@@ -111,16 +110,6 @@ func (h *Handler) PostCompose(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// composeCommandFromRunMode returns the task command for a compose run mode.
-func composeCommandFromRunMode(runMode string) domain.TaskCommand {
-	switch strings.TrimSpace(runMode) {
-	case "keyframe":
-		return domain.CommandComposeToKeyframe
-	default:
-		return domain.CommandCompose
-	}
-}
-
 // withModelOptions adds model and character selections to page data.
 func (h *Handler) withModelOptions(data PageData) PageData {
 	data = h.ModelOptions.applyToPageData(data)
@@ -129,7 +118,7 @@ func (h *Handler) withModelOptions(data PageData) PageData {
 
 // RecipeForm renders the recipe form.
 func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, h.withModelOptions(PageData{Title: "Generate From Recipe", CSRFToken: csrfTokenFromContext(r.Context())}), "recipe.html")
+	h.renderPage(w, h.withModelOptions(PageData{Title: "MV From Keyframe Video Recipe", CSRFToken: csrfTokenFromContext(r.Context())}), "recipe.html")
 }
 
 // PostRecipe handles recipe form submissions.
@@ -143,18 +132,16 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var recipe *domain.MusicRecipe
+	var videoRecipe *domain.VideoRecipe
 	recipeJSON := strings.TrimSpace(r.FormValue("recipe_json"))
 	if recipeJSON != "" {
-		var parsed domain.MusicRecipe
-		if err := json.Unmarshal([]byte(recipeJSON), &parsed); err != nil {
+		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
+		if err != nil {
 			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := domain.NormalizeMusicRecipe(&parsed); err != nil {
-			http.Error(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		recipe = &parsed
+		recipe = parsedRecipe
+		videoRecipe = parsedVideoRecipe
 	}
 	jobID, err := domain.NewJobID("recipe")
 	if err != nil {
@@ -163,11 +150,12 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	task := &domain.Task{
 		JobID:       jobID,
-		Command:     domain.CommandGenerateFromRecipe,
+		Command:     domain.CommandMVFromKeyframeVideoRecipe,
 		RecipeURL:   strings.TrimSpace(r.FormValue("recipe_url")),
 		CharacterID: h.characterIDFromForm(r),
 		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
 		Recipe:      recipe,
+		VideoRecipe: videoRecipe,
 		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
