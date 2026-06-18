@@ -37,6 +37,7 @@ type Task struct {
 	RecipeURL   string       `json:"recipe_url,omitempty"`
 	AudioURL    string       `json:"audio_url,omitempty"`
 	Recipe      *MusicRecipe `json:"recipe,omitempty"`
+	VideoRecipe *VideoRecipe `json:"video_recipe,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 }
 
@@ -86,8 +87,8 @@ func (t *Task) Validate() error {
 			return err
 		}
 	case CommandGenerateFromRecipe:
-		if t.Recipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("generate_from_recipe task requires recipe or recipe_url")
+		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("generate_from_recipe task requires recipe, video_recipe, or recipe_url")
 		}
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err
@@ -96,7 +97,7 @@ func (t *Task) Validate() error {
 			return err
 		}
 		if t.Recipe != nil {
-			return t.Recipe.Validate()
+			return ValidateMusicRecipe(t.Recipe)
 		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)

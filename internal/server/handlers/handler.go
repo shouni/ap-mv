@@ -150,7 +150,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err := parsed.Normalize(); err != nil {
+		if err := domain.NormalizeMusicRecipe(&parsed); err != nil {
 			http.Error(w, "invalid recipe: "+err.Error(), http.StatusBadRequest)
 			return
 		}

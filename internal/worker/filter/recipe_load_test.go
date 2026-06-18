@@ -33,8 +33,11 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	if fc.Recipe == nil {
 		t.Fatal("recipe was not loaded")
 	}
-	if got := fc.Recipe.Cuts[0].AudioURI; got != "gs://bucket/music.mp3" {
-		t.Fatalf("AudioURI = %q, want audio URL", got)
+	if fc.VideoRecipe == nil || len(fc.VideoRecipe.Cuts) == 0 {
+		t.Fatal("video recipe cuts were not built")
+	}
+	if got := fc.VideoRecipe.Cuts[0].AudioReference; got != "gs://bucket/music.mp3" {
+		t.Fatalf("AudioReference = %q, want audio URL", got)
 	}
 }
 
@@ -63,8 +66,8 @@ func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	if got := fc.VideoRecipe.Cuts[0].CharacterID; got != "zundamon" {
 		t.Fatalf("CharacterID = %q, want zundamon", got)
 	}
-	if got := fc.Recipe.Cuts[0].ImageRefName; got != "zundamon" {
-		t.Fatalf("ImageRefName = %q, want zundamon", got)
+	if fc.Recipe == nil || len(fc.Recipe.Sections) == 0 {
+		t.Fatal("music recipe sections were not retained")
 	}
 }
 

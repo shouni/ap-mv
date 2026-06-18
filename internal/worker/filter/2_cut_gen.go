@@ -16,9 +16,6 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 		return fmt.Errorf("cut keyframe generation requires recipe")
 	}
 	if fc.VideoRecipe == nil {
-		if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
-			return err
-		}
 		recipe, err := toVideoRecipe(fc.Recipe)
 		if err != nil {
 			return err

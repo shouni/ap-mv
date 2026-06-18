@@ -3,6 +3,8 @@ package filter
 import (
 	"context"
 	"fmt"
+
+	"ap-mv/internal/domain"
 )
 
 type PublishingFilter struct{}
@@ -16,9 +18,6 @@ func (PublishingFilter) Execute(ctx context.Context, fc *Context) error {
 		return fmt.Errorf("publishing requires recipe")
 	}
 	if fc.VideoRecipe == nil {
-		if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
-			return err
-		}
 		recipe, err := toVideoRecipe(fc.Recipe)
 		if err != nil {
 			return err
@@ -42,5 +41,5 @@ func (PublishingFilter) Execute(ctx context.Context, fc *Context) error {
 	if err != nil {
 		return err
 	}
-	return fc.Recipe.Normalize()
+	return domain.NormalizeMusicRecipe(fc.Recipe)
 }

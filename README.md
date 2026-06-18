@@ -40,7 +40,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 ### ⏳ Audio-Driven Timeline Logic (柔軟なタイムライン展開)
 
-原稿から抽出された `MusicRecipe` JSON が `sections` ベース（長尺セクション単位）で届いた場合でも、システム内の正規化機構（`Normalize()`）によって、各セクションの `duration_seconds` から独立した `cuts` 列（秒数、開始・終了時間）を自動計算・展開。テンポ（`tempo_bpm`）や雰囲気（`style`）に完全に同期したタイムラインを動的に組み立てます。
+原稿から抽出された `MusicRecipe` JSON が `sections` ベース（長尺セクション単位）で届いた場合でも、`go-gemini-client/lyria.MusicRecipe` の `duration_seconds` から `go-veo-orchestrator/ports.VideoRecipe` の `cuts` 列（秒数、開始・終了時間）を自動計算・展開。テンポ（`tempo`）や雰囲気（`mood`）に同期したタイムラインを動的に組み立てます。
 
 ### 🛡 エンタープライズ・コンカレンシー & 防壁 (Security Layer)
 
@@ -53,14 +53,14 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 ## 🎨 ワークフローと4つの生成フィルター (Workflows)
 
-`internal/worker/filter/` 配下の各フィルターは、ap-mv の `domain.MusicRecipe` と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。
+`internal/worker/filter/` 配下の各フィルターは、`domain.MusicRecipe`（`go-gemini-client/lyria.MusicRecipe` alias）と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。動画生成の `cuts`、`video_id`、`keyframe_reference` などの状態は `VideoRecipe` 側で保持します。
 
 | フィルター工程 | 担当モジュール | 役割・内容 |
 | --- | --- | --- |
 | **0. Recipe Load** | `0_recipe_load.go` | `/web/generate-from-recipe` のフォームで入力された `MusicRecipe GCS URL`（`gs://.../music_recipe.json`）または `MusicRecipe JSON` を読み込み、Music Recipe JSON を pipeline 内の Recipe として正規化します。この経路では `Scripting` をスキップし、後段で Video Recipe JSON（`video_music_meta.json`）を成果物として生成・更新します。 |
 | **1. Scripting** | `1_scripting.go` | `/web/compose` の通常生成フローで `Workflows.Script.Run` を呼び、URL またはフォーム入力テキストから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。 |
-| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `cuts[].audio_uri` / `audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
+| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 
 ### MusicRecipe / Audio GCS Inputs
@@ -69,8 +69,8 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | --- | --- | --- | --- |
 | MusicRecipe JSON | `/web/generate-from-recipe` の `MusicRecipe JSON` | `Task.Recipe` | JSON を直接貼り付けて `Scripting` をスキップします。 |
 | MusicRecipe GCS URL | `/web/generate-from-recipe` の `MusicRecipe GCS URL` | `Task.RecipeURL` | `gs://.../music_recipe.json` を worker の `RecipeLoadFilter` が読み込みます。 |
-| Music Audio GCS URL | `/web/compose` と `/web/generate-from-recipe` の `Music Audio GCS URL` | `Task.AudioURL` | 全 cut の空の `audio_uri` / `audio_reference` に補完され、`VertexVeoRunner` の `audio.gcsUri` として送られます。 |
-| Cut別 Audio URI | MusicRecipe JSON の `cuts[].audio_uri` | `domain.VideoCut.AudioURI` | cut ごとに異なる音源セグメントを指定したい場合に使います。`Task.AudioURL` より優先されます。 |
+| Music Audio GCS URL | `/web/compose` と `/web/generate-from-recipe` の `Music Audio GCS URL` | `Task.AudioURL` | 全 cut の空の `audio_reference` に補完され、`VertexVeoRunner` の `audio.gcsUri` として送られます。 |
+| Cut別 Audio URI | VideoRecipe JSON の `cuts[].audio_reference` | `Task.VideoRecipe.Cuts[].AudioReference` | cut ごとに異なる音源セグメントを指定したい場合に使います。`Task.AudioURL` より優先されます。 |
 
 ---
 
@@ -137,7 +137,7 @@ ap-mv/
     ├── app/                # DI container と RemoteIO 依存
     ├── builder/            # config から container / handlers / workflow / pipeline / prompt builder を構築
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
-    ├── domain/             # 外部依存のない純粋なドメインモデル（music_recipe, cut, job_id検証）
+    ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
     ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias
     ├── server/
     │   ├── handlers/       # Web UI / task handler / CSRF context
@@ -147,7 +147,7 @@ ap-mv/
         ├── pipeline/       # Task command から filter chain を実行
         └── filter/         # go-veo-orchestrator/workflow runner を呼ぶ各処理フィルター
             ├── filter.go   # 各フィルターが満たすべき共通インターフェースの定義
-            ├── recipe_converter.go # domain.MusicRecipe と VideoRecipe の相互変換
+            ├── recipe_converter.go # lyria.MusicRecipe と VideoRecipe の相互変換
             ├── 0_recipe_load.go  # Music Recipe JSON / GCS URI から Recipe を読み込み
             ├── 1_scripting.go    # compose 入力から Video Recipe を生成
             ├── 2_cut_gen.go      # 各カットの静止画キーフレームを高精度生成
@@ -196,7 +196,7 @@ sequenceDiagram
         Pipeline->>F1: Execute(task)
         F1->>WF: Script.Run(source, mode)
         WF-->>F1: *ports.VideoRecipe
-        F1-->>Pipeline: VideoRecipe + domain.MusicRecipe
+        F1-->>Pipeline: VideoRecipe + lyria.MusicRecipe
     end
 
     Pipeline->>F2: Execute(recipe)

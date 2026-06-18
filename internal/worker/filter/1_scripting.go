@@ -21,9 +21,6 @@ func (ScriptingFilter) Execute(ctx context.Context, fc *Context) error {
 		return nil
 	}
 	if fc.Recipe != nil {
-		if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
-			return err
-		}
 		recipe, err := toVideoRecipe(fc.Recipe)
 		if err != nil {
 			return err

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"ap-mv/internal/domain"
 	"ap-mv/internal/ports"
 )
@@ -25,9 +27,6 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	ctx = videoOutputContext(ctx, fc)
 	if fc.Workflows != nil && fc.Workflows.Video != nil {
 		if fc.VideoRecipe == nil {
-			if err := applyTaskAudioURL(fc.Task, fc.Recipe); err != nil {
-				return err
-			}
 			recipe, err := toVideoRecipe(fc.Recipe)
 			if err != nil {
 				return err
@@ -46,12 +45,21 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	if fc.Recipe == nil {
-		return fmt.Errorf("video generation requires recipe")
+		if fc.VideoRecipe == nil {
+			return fmt.Errorf("video generation requires recipe")
+		}
 	}
 
-	if err := fc.Recipe.Normalize(); err != nil {
-		return err
+	if fc.VideoRecipe == nil {
+		recipe, err := toVideoRecipe(fc.Recipe)
+		if err != nil {
+			return err
+		}
+		fc.VideoRecipe = recipe
 	}
+	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
+	fc.VideoRecipe.Normalize()
 	runner := f.Runner
 	if runner == nil {
 		runner = fc.VideoRunner
@@ -61,45 +69,52 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 
 	lastVideoID := ""
-	for i := range fc.Recipe.Cuts {
-		cut := &fc.Recipe.Cuts[i]
-		if cut.Status == domain.CutStatusGenerated {
+	for i := range fc.VideoRecipe.Cuts {
+		cut := &fc.VideoRecipe.Cuts[i]
+		if cut.IsGenerated() {
 			if cut.VideoID != "" {
 				lastVideoID = cut.VideoID
 			}
 			continue
 		}
-		seed := int64(0)
-		if fc.Recipe.Seed != nil {
-			seed = *fc.Recipe.Seed
-		}
 		res, err := runner.Run(ctx, ports.VideoGenerationRequest{
-			CutIndex:        cut.Index,
+			CutIndex:        cut.CutIndex,
 			Prompt:          videoPrompt(*cut),
-			DurationSec:     float64(cut.DurationSec),
-			Seed:            seed,
+			DurationSec:     cut.DurationSec,
+			Seed:            fc.VideoRecipe.Seed,
 			PreviousVideoID: lastVideoID,
-			ImageReference:  cut.KeyframeURI,
-			AudioReference:  cut.AudioURI,
+			ImageReference:  cut.KeyframeReference,
+			AudioReference:  cut.AudioReference,
 		})
 		if err != nil {
-			return fmt.Errorf("generate cut %d: %w", cut.Index, err)
+			return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
 		}
-		cut.Status = domain.CutStatusGenerated
+		cut.Status = orchestrator.CutStatusGenerated
 		cut.VideoID = res.VideoID
 		cut.VideoURL = res.CloudURL
 		lastVideoID = res.VideoID
-		if hasPendingCuts(fc.Recipe) && fc.TaskQueue != nil {
+		if hasPendingCuts(fc.VideoRecipe) && fc.TaskQueue != nil {
+			domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
+			if err != nil {
+				return err
+			}
+			fc.Recipe = domainRecipe
 			nextTask := *fc.Task
 			nextTask.Command = domain.CommandGenerateFromRecipe
 			nextTask.Recipe = fc.Recipe
+			nextTask.VideoRecipe = fc.VideoRecipe
 			nextTask.CreatedAt = time.Now().UTC()
 			if err := fc.TaskQueue.Enqueue(ctx, &nextTask); err != nil {
-				return fmt.Errorf("enqueue continuation after cut %d: %w", cut.Index, err)
+				return fmt.Errorf("enqueue continuation after cut %d: %w", cut.CutIndex, err)
 			}
 			return ErrPipelineDeferred
 		}
 	}
+	domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
+	if err != nil {
+		return err
+	}
+	fc.Recipe = domainRecipe
 	return nil
 }
 
@@ -112,12 +127,12 @@ func videoOutputContext(ctx context.Context, fc *Context) context.Context {
 }
 
 // hasPendingCuts reports whether a recipe has cuts awaiting video generation.
-func hasPendingCuts(recipe *domain.MusicRecipe) bool {
+func hasPendingCuts(recipe *orchestrator.VideoRecipe) bool {
 	if recipe == nil {
 		return false
 	}
 	for i := range recipe.Cuts {
-		if recipe.Cuts[i].Status != domain.CutStatusGenerated {
+		if !recipe.Cuts[i].IsGenerated() {
 			return true
 		}
 	}
@@ -125,15 +140,12 @@ func hasPendingCuts(recipe *domain.MusicRecipe) bool {
 }
 
 // videoPrompt builds the prompt used for video generation.
-func videoPrompt(cut domain.VideoCut) string {
+func videoPrompt(cut orchestrator.Cut) string {
 	parts := []string{
-		strings.TrimSpace(cut.Prompt),
+		strings.TrimSpace(cut.VisualAnchor),
 	}
 	if cue := strings.TrimSpace(cut.AudioCue); cue != "" {
 		parts = append(parts, "Synchronize motion and camera timing with audio cue: "+cue)
-	}
-	if section := strings.TrimSpace(cut.SectionName); section != "" {
-		parts = append(parts, "Section: "+section)
 	}
 
 	nonEmpty := parts[:0]
