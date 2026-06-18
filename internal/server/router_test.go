@@ -19,46 +19,46 @@ import (
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
-// TestComposePostRequiresSessionCSRFToken verifies that compose POST requests require a session CSRF token.
-func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
+// TestVideoRecipeCreatePostRequiresSessionCSRFToken verifies that video recipe creation POST requests require a session CSRF token.
+func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	router, loginCookies := newAuthenticatedTestRouter(t)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/web/compose", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
 	for _, cookie := range loginCookies {
 		getReq.AddCookie(cookie)
 	}
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
-		t.Fatalf("GET /web/compose status = %d, want %d", getRec.Code, http.StatusOK)
+		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
 	}
 	matches := csrfInputPattern.FindStringSubmatch(getRec.Body.String())
 	if len(matches) != 2 {
-		t.Fatalf("GET /web/compose did not render csrf token")
+		t.Fatalf("GET /web/video-recipe-create did not render csrf token")
 	}
 	cookies := mergeCookies(loginCookies, getRec.Result().Cookies())
 	if len(getRec.Result().Cookies()) == 0 {
-		t.Fatalf("GET /web/compose did not set csrf session cookie")
+		t.Fatalf("GET /web/video-recipe-create did not set csrf session cookie")
 	}
 
-	forbiddenReq := newComposePostRequest("")
+	forbiddenReq := newVideoRecipeCreatePostRequest("")
 	for _, cookie := range cookies {
 		forbiddenReq.AddCookie(cookie)
 	}
 	forbiddenRec := httptest.NewRecorder()
 	router.ServeHTTP(forbiddenRec, forbiddenReq)
 	if forbiddenRec.Code != http.StatusForbidden {
-		t.Fatalf("POST /web/compose without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
+		t.Fatalf("POST /web/video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
 	}
 
-	acceptedReq := newComposePostRequest(matches[1])
+	acceptedReq := newVideoRecipeCreatePostRequest(matches[1])
 	for _, cookie := range cookies {
 		acceptedReq.AddCookie(cookie)
 	}
 	acceptedRec := httptest.NewRecorder()
 	router.ServeHTTP(acceptedRec, acceptedReq)
 	if acceptedRec.Code != http.StatusAccepted {
-		t.Fatalf("POST /web/compose with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
+		t.Fatalf("POST /web/video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
 	}
 }
 
@@ -66,11 +66,11 @@ func TestComposePostRequiresSessionCSRFToken(t *testing.T) {
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	router, _ := newAuthenticatedTestRouter(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/web/compose", nil)
+	req := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
-		t.Fatalf("GET /web/compose status = %d, want %d", rec.Code, http.StatusFound)
+		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
 	}
 	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/auth/login") {
 		t.Fatalf("redirect location = %q, want /auth/login", location)
@@ -175,15 +175,15 @@ func mergeCookies(base, overrides []*http.Cookie) []*http.Cookie {
 	return merged
 }
 
-// newComposePostRequest creates a compose POST request for tests.
-func newComposePostRequest(csrfToken string) *http.Request {
+// newVideoRecipeCreatePostRequest creates a video recipe creation POST request for tests.
+func newVideoRecipeCreatePostRequest(csrfToken string) *http.Request {
 	form := url.Values{
-		"text": {"test compose input"},
+		"text": {"test video recipe input"},
 	}
 	if csrfToken != "" {
 		form.Set("csrf_token", csrfToken)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/compose", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
 }

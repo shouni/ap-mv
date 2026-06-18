@@ -57,19 +57,21 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 | フィルター工程 | 担当モジュール | 役割・内容 |
 | --- | --- | --- |
-| **0. Recipe Load** | `0_recipe_load.go` | `/web/generate-from-recipe` のフォームで入力された `MusicRecipe GCS URL`（`gs://.../music_recipe.json`）または `MusicRecipe JSON` を読み込み、Music Recipe JSON を pipeline 内の Recipe として正規化します。この経路では `Scripting` をスキップし、後段で Video Recipe JSON（`video_music_meta.json`）を成果物として生成・更新します。 |
-| **1. Scripting** | `1_scripting.go` | `/web/compose` の通常生成フローで `Workflows.Script.Run` を呼び、URL またはフォーム入力テキストから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
+| **0. Recipe Load** | `0_recipe_load.go` | `/web/mv-from-keyframe-video-recipe` のフォームで入力された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
+| **1. Scripting** | `1_scripting.go` | `/web/video-recipe-create` の videoレシピ作成フローで `Workflows.Script.Run` を呼び、Character、Music Recipe JSON、Visual Mode 的プロンプトから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。 |
 | **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 
-### MusicRecipe / Audio GCS Inputs
+### Recipe / Audio GCS Inputs
 
 | 入力 | 場所 | 内部フィールド | 用途 |
 | --- | --- | --- | --- |
-| MusicRecipe JSON | `/web/generate-from-recipe` の `MusicRecipe JSON` | `Task.Recipe` | JSON を直接貼り付けて `Scripting` をスキップします。 |
-| MusicRecipe GCS URL | `/web/generate-from-recipe` の `MusicRecipe GCS URL` | `Task.RecipeURL` | `gs://.../music_recipe.json` を worker の `RecipeLoadFilter` が読み込みます。 |
-| Music Audio GCS URL | `/web/compose` と `/web/generate-from-recipe` の `Music Audio GCS URL` | `Task.AudioURL` | 全 cut の空の `audio_reference` に補完され、`VertexVeoRunner` の `audio.gcsUri` として送られます。 |
+| Keyframe VideoRecipe JSON | `/web/mv-from-keyframe-video-recipe` の `Keyframe VideoRecipe JSON` | `Task.VideoRecipe` | keyframe_reference を含む VideoRecipe から MV 生成を開始します。 |
+| Keyframe VideoRecipe GCS URL | `/web/mv-from-keyframe-video-recipe` の `Keyframe VideoRecipe GCS URL` | `Task.RecipeURL` | `gs://.../video_music_meta.json` を worker の `RecipeLoadFilter` が読み込みます。 |
+| MusicRecipe JSON | `/web/mv-from-keyframe-video-recipe` の JSON 入力 | `Task.Recipe` | 互換入力です。VideoRecipe に変換して `Scripting` をスキップします。 |
+| MusicRecipe GCS URL | `/web/mv-from-keyframe-video-recipe` の GCS URL | `Task.RecipeURL` | 互換入力です。`gs://.../music_recipe.json` を worker の `RecipeLoadFilter` が読み込みます。 |
+| Music Audio GCS URL | `/web/video-recipe-create` と `/web/mv-from-keyframe-video-recipe` の `Music Audio GCS URL` | `Task.AudioURL` | 全 cut の空の `audio_reference` に補完され、`VertexVeoRunner` の `audio.gcsUri` として送られます。 |
 | Cut別 Audio URI | VideoRecipe JSON の `cuts[].audio_reference` | `Task.VideoRecipe.Cuts[].AudioReference` | cut ごとに異なる音源セグメントを指定したい場合に使います。`Task.AudioURL` より優先されます。 |
 
 ---
@@ -148,8 +150,8 @@ ap-mv/
         └── filter/         # go-veo-orchestrator/workflow runner を呼ぶ各処理フィルター
             ├── filter.go   # 各フィルターが満たすべき共通インターフェースの定義
             ├── recipe_converter.go # lyria.MusicRecipe と VideoRecipe の相互変換
-            ├── 0_recipe_load.go  # Music Recipe JSON / GCS URI から Recipe を読み込み
-            ├── 1_scripting.go    # compose 入力から Video Recipe を生成
+            ├── 0_recipe_load.go  # VideoRecipe / MusicRecipe JSON・GCS URI から Recipe を読み込み
+            ├── 1_scripting.go    # video_recipe_create 入力から VideoRecipe を生成
             ├── 2_cut_gen.go      # 各カットの静止画キーフレームを高精度生成
             ├── 3_video_gen.go    # Veo APIへの数珠繋ぎ（Video-to-VideoID連鎖）動画生成
             └── 4_publishing.go   # video_music_meta.json のGCS保存
@@ -181,9 +183,9 @@ sequenceDiagram
     Web-->>Browser: OAuth リダイレクト・セッション確立
 
     %% リクエスト受付フェーズ
-    User->>Browser: 通常Composeフォーム入力
-    Browser->>Web: POST /web/compose (csrf_token)
-    Web->>Web: Handler.PostCompose -> Task{command: compose}
+    User->>Browser: Video Recipe Createフォーム入力
+    Browser->>Web: POST /web/video-recipe-create (csrf_token)
+    Web->>Web: Handler.PostVideoRecipeCreate -> Task{command: video_recipe_create}
     Web->>Queue: 型安全タスク投入 (gcp-kit/worker)
     Web-->>Browser: 202 Accepted / queued(job_id)
 
@@ -192,7 +194,7 @@ sequenceDiagram
     Worker->>Pipeline: Execute(ctx, task)
 
     rect rgb(240, 255, 240)
-        Note over Pipeline, F1: [command == compose のみ実行]
+        Note over Pipeline, F1: [command == video_recipe_create / compose のみ実行]
         Pipeline->>F1: Execute(task)
         F1->>WF: Script.Run(source, mode)
         WF-->>F1: *ports.VideoRecipe
@@ -204,32 +206,36 @@ sequenceDiagram
     WF->>GCS: images/keyframe_N.png + video_music_meta.json
     WF-->>F2: recipe with keyframe_reference
 
-    Pipeline->>F3: Execute(recipe, keyframes)
-    F3->>WF: Video.Run(recipe)
-    WF->>WF: BuildVideoRequest(lastVideoID, keyframe_reference, audio_cue)
-    WF-->>F3: recipe with video_id / video_url / status
+    alt command == video_recipe_create
+        Pipeline-->>Worker: nil (VideoRecipe saved)
+    else command == mv_from_keyframe_video_recipe / compose
+        Pipeline->>F3: Execute(recipe, keyframes)
+        F3->>WF: Video.Run(recipe)
+        WF->>WF: BuildVideoRequest(lastVideoID, keyframe_reference, audio_cue)
+        WF-->>F3: recipe with video_id / video_url / status
 
-    Pipeline->>F4: Execute(recipe)
-    F4->>WF: Publish.Run(recipe, outputPath)
-    WF->>GCS: final video_music_meta.json
-    Pipeline-->>Worker: nil (Task Success)
+        Pipeline->>F4: Execute(recipe)
+        F4->>WF: Publish.Run(recipe, outputPath)
+        WF->>GCS: final video_music_meta.json
+        Pipeline-->>Worker: nil (Task Success)
+    end
 ```
 
 ---
 
 ## 🚀 使い方 (Usage)
 
-### 1. Web経由の通常生成フロー（Compose）
+### 1. videoレシピ作成
 
 1. Google OAuthで安全にログインします。
-2. `/web/compose` から `url`、`text`、`image_url` のいずれかを入力し送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。
-3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`compose` では `Scripting -> CutKeyframe -> Video -> Publishing` の順に進み、成果物メタデータは `gs://<GCS_MUSIC_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存されます。
+2. `/web/video-recipe-create` から `url`、`text`、`image_url` のいずれかを入力し送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。
+3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`video_recipe_create` では `Scripting -> CutKeyframe` の順に進み、セクション単位の keyframe を含む VideoRecipe を `gs://<GCS_MUSIC_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。
 
-### 2. 確定済み MusicRecipe JSON からのダイレクト動画再生成 / レジューム
+### 2. Keyframe VideoRecipe からの MV 作成 / レジューム
 
-1. `/web/generate-from-recipe` 画面を開きます。
-2. 構造化済みの `MusicRecipe` JSON データをフォームに直接貼り付けるか、`MusicRecipe GCS URL` に `gs://.../music_recipe.json` を指定して送信します。必要に応じて `Music Audio GCS URL` に `gs://.../music.mp3` を指定します。
-3. Web handler または worker の `RecipeLoadFilter` が Music Recipe JSON を読み込み、`Filter 1 (Scripting)` をスキップして **`Filter 2 (CutKeyframe)`** から実行します。成果物の Video Recipe JSON は `video_music_meta.json` として保存されます。既に `status=generated`、`video_id`、`video_url` を持つカットは `VideoTimelineRunner` 側でスキップされます。
+1. `/web/mv-from-keyframe-video-recipe` 画面を開きます。
+2. `keyframe_reference` を含む `VideoRecipe` JSON データをフォームに直接貼り付けるか、Keyframe VideoRecipe GCS URL に `gs://.../video_music_meta.json` を指定して送信します。必要に応じて `Music Audio GCS URL` に `gs://.../music.mp3` を指定します。
+3. Web handler または worker の `RecipeLoadFilter` が VideoRecipe JSON を読み込み、`Filter 1 (Scripting)` をスキップして MV 生成を実行します。従来の `MusicRecipe` JSON / GCS URL も互換入力として受け付け、VideoRecipe に変換してから処理します。既に `status=generated`、`video_id`、`video_url` を持つカットは `VideoTimelineRunner` 側でスキップされます。
 
 ### 3. 履歴画面
 

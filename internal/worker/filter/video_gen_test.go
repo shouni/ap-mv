@@ -22,7 +22,7 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	}
 	task := &domain.Task{
 		JobID:       "job-1",
-		Command:     domain.CommandGenerateFromRecipe,
+		Command:     domain.CommandMVFromKeyframeVideoRecipe,
 		VideoRecipe: recipe,
 	}
 	queue := &captureQueue{}
@@ -45,8 +45,8 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	if len(queue.tasks) != 1 {
 		t.Fatalf("enqueued tasks = %d, want 1", len(queue.tasks))
 	}
-	if queue.tasks[0].Command != domain.CommandGenerateFromRecipe {
-		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandGenerateFromRecipe)
+	if queue.tasks[0].Command != domain.CommandMVFromKeyframeVideoRecipe {
+		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandMVFromKeyframeVideoRecipe)
 	}
 	if queue.tasks[0].VideoRecipe.Cuts[0].VideoID == "" {
 		t.Fatalf("continuation task did not include generated cut state")
@@ -63,7 +63,7 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	}
 	task := &domain.Task{
 		JobID:       "job-1",
-		Command:     domain.CommandGenerateFromRecipe,
+		Command:     domain.CommandMVFromKeyframeVideoRecipe,
 		VideoRecipe: recipe,
 	}
 	runner := &contextCaptureRunner{}

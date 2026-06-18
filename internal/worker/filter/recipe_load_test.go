@@ -20,7 +20,7 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	fc := &Context{
 		Task: &domain.Task{
 			JobID:     "job-1",
-			Command:   domain.CommandGenerateFromRecipe,
+			Command:   domain.CommandMVFromKeyframeVideoRecipe,
 			RecipeURL: "gs://bucket/recipe.json",
 			AudioURL:  "gs://bucket/music.mp3",
 		},
@@ -41,12 +41,43 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 	}
 }
 
+// TestRecipeLoadFilterLoadsVideoRecipeURL verifies keyframe VideoRecipe loading from GCS.
+func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
+	reader := staticReader{content: `{
+		"title": "video recipe from gcs",
+		"cuts": [
+			{"cut_index": 1, "duration_sec": 8, "visual_anchor": "blue light", "keyframe_reference": "gs://bucket/keyframe.png"}
+		]
+	}`}
+	fc := &Context{
+		Task: &domain.Task{
+			JobID:     "job-1",
+			Command:   domain.CommandMVFromKeyframeVideoRecipe,
+			RecipeURL: "gs://bucket/video_music_meta.json",
+		},
+		Reader: reader,
+	}
+
+	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if fc.VideoRecipe == nil || len(fc.VideoRecipe.Cuts) != 1 {
+		t.Fatalf("video recipe was not loaded: %#v", fc.VideoRecipe)
+	}
+	if got := fc.VideoRecipe.Cuts[0].KeyframeReference; got != "gs://bucket/keyframe.png" {
+		t.Fatalf("KeyframeReference = %q", got)
+	}
+	if fc.Recipe == nil {
+		t.Fatal("domain recipe was not derived")
+	}
+}
+
 // TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	fc := &Context{
 		Task: &domain.Task{
 			JobID:       "job-1",
-			Command:     domain.CommandGenerateFromRecipe,
+			Command:     domain.CommandMVFromKeyframeVideoRecipe,
 			CharacterID: "zundamon",
 		},
 		Recipe: &domain.MusicRecipe{

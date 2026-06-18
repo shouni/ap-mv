@@ -18,9 +18,9 @@ func (noopFilter) Name() string { return "noop" }
 // Execute runs the receiver processing step.
 func (noopFilter) Execute(context.Context, *filter.Context) error { return nil }
 
-// TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe verifies the keyframe-only default filter chain.
-func TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe(t *testing.T) {
-	filters := defaultFilters(domain.CommandComposeToKeyframe, nil)
+// TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
+func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
+	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
@@ -37,8 +37,8 @@ func TestDefaultFiltersForComposeToKeyframeStopsAfterCutKeyframe(t *testing.T) {
 	}
 }
 
-// TestDefaultFiltersForComposeStillRunsFullPipeline verifies the full compose default filter chain.
-func TestDefaultFiltersForComposeStillRunsFullPipeline(t *testing.T) {
+// TestDefaultFiltersForLegacyComposeStillRunsFullPipeline verifies the legacy compose default filter chain.
+func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
 	filters := defaultFilters(domain.CommandCompose, nil)
 
 	got := make([]string, 0, len(filters))

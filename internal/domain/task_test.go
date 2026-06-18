@@ -13,19 +13,19 @@ func TestTaskValidateRequiresGCSURIForRecipeAndAudio(t *testing.T) {
 		want string
 	}{
 		{
-			name: "generate_from_recipe rejects http recipe url",
+			name: "mv_from_keyframe_video_recipe rejects http recipe url",
 			task: Task{
 				JobID:     "job-1",
-				Command:   CommandGenerateFromRecipe,
+				Command:   CommandMVFromKeyframeVideoRecipe,
 				RecipeURL: "https://example.com/recipe.json",
 			},
 			want: "recipe_url must be a valid GCS URI",
 		},
 		{
-			name: "generate_from_recipe rejects local audio url",
+			name: "mv_from_keyframe_video_recipe rejects local audio url",
 			task: Task{
 				JobID:     "job-1",
-				Command:   CommandGenerateFromRecipe,
+				Command:   CommandMVFromKeyframeVideoRecipe,
 				RecipeURL: "gs://bucket/recipe.json",
 				AudioURL:  "/tmp/music.mp3",
 			},
@@ -57,7 +57,7 @@ func TestTaskValidateRequiresGCSURIForRecipeAndAudio(t *testing.T) {
 func TestTaskValidateAcceptsGCSRecipeAndAudioURL(t *testing.T) {
 	task := Task{
 		JobID:     "job-1",
-		Command:   CommandGenerateFromRecipe,
+		Command:   CommandMVFromKeyframeVideoRecipe,
 		RecipeURL: "gs://bucket/recipe.json",
 		AudioURL:  "gs://bucket/music.mp3",
 	}
@@ -67,11 +67,11 @@ func TestTaskValidateAcceptsGCSRecipeAndAudioURL(t *testing.T) {
 	}
 }
 
-// TestTaskValidateAcceptsComposeToKeyframe verifies that compose-to-keyframe tasks validate successfully.
-func TestTaskValidateAcceptsComposeToKeyframe(t *testing.T) {
+// TestTaskValidateAcceptsVideoRecipeCreate verifies that video recipe creation tasks validate successfully.
+func TestTaskValidateAcceptsVideoRecipeCreate(t *testing.T) {
 	task := Task{
 		JobID:   "job-1",
-		Command: CommandComposeToKeyframe,
+		Command: CommandVideoRecipeCreate,
 		Text:    "source",
 	}
 
