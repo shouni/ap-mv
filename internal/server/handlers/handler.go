@@ -135,7 +135,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	var videoRecipe *domain.VideoRecipe
 	recipeJSON := strings.TrimSpace(r.FormValue("recipe_json"))
 	if recipeJSON != "" {
-		parsedRecipe, parsedVideoRecipe, err := parseRecipeFormJSON([]byte(recipeJSON))
+		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
 		if err != nil {
 			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
 			return
@@ -159,45 +159,6 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
-}
-
-// parseRecipeFormJSON accepts either a MusicRecipe JSON or a keyframe VideoRecipe JSON.
-func parseRecipeFormJSON(raw []byte) (*domain.MusicRecipe, *domain.VideoRecipe, error) {
-	if looksLikeVideoRecipeJSON(raw) {
-		var parsed domain.VideoRecipe
-		if err := json.Unmarshal(raw, &parsed); err != nil {
-			return nil, nil, err
-		}
-		parsed.Normalize()
-		if strings.TrimSpace(parsed.Title) == "" {
-			return nil, nil, fmt.Errorf("video recipe title is required")
-		}
-		if len(parsed.Cuts) == 0 {
-			return nil, nil, fmt.Errorf("video recipe requires cuts")
-		}
-		return nil, &parsed, nil
-	}
-	var parsed domain.MusicRecipe
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, nil, err
-	}
-	if err := domain.NormalizeMusicRecipe(&parsed); err != nil {
-		return nil, nil, err
-	}
-	return &parsed, nil, nil
-}
-
-func looksLikeVideoRecipeJSON(raw []byte) bool {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return false
-	}
-	for _, key := range []string{"cuts", "project_title", "music_recipe"} {
-		if _, ok := fields[key]; ok {
-			return true
-		}
-	}
-	return false
 }
 
 // History renders the history page.

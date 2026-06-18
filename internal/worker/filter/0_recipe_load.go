@@ -2,7 +2,6 @@ package filter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -90,39 +89,5 @@ func readRecipeInput(ctx context.Context, reader interface {
 	if err != nil {
 		return nil, nil, fmt.Errorf("read recipe json: %w", err)
 	}
-	if looksLikeVideoRecipeJSON(raw) {
-		var recipe domain.VideoRecipe
-		if err := json.Unmarshal(raw, &recipe); err != nil {
-			return nil, nil, fmt.Errorf("decode video recipe json: %w", err)
-		}
-		recipe.Normalize()
-		if strings.TrimSpace(recipe.Title) == "" {
-			return nil, nil, fmt.Errorf("video recipe title is required")
-		}
-		if len(recipe.Cuts) == 0 {
-			return nil, nil, fmt.Errorf("video recipe requires cuts")
-		}
-		return nil, &recipe, nil
-	}
-	var recipe domain.MusicRecipe
-	if err := json.Unmarshal(raw, &recipe); err != nil {
-		return nil, nil, fmt.Errorf("decode recipe json: %w", err)
-	}
-	if err := domain.NormalizeMusicRecipe(&recipe); err != nil {
-		return nil, nil, err
-	}
-	return &recipe, nil, nil
-}
-
-func looksLikeVideoRecipeJSON(raw []byte) bool {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return false
-	}
-	for _, key := range []string{"cuts", "project_title", "music_recipe"} {
-		if _, ok := fields[key]; ok {
-			return true
-		}
-	}
-	return false
+	return domain.UnmarshalRecipeOrVideoRecipe(raw)
 }
