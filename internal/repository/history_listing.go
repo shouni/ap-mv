@@ -114,9 +114,6 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 }
 
 func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string) (domain.VideoHistory, error) {
-	if history, ok := r.getCachedHistory(jobID); ok {
-		return history, nil
-	}
 	recipe, err := r.loadVideoRecipe(ctx, jobID)
 	if err != nil {
 		return domain.VideoHistory{}, err
@@ -166,10 +163,12 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 }
 
 func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
-	if history, ok := r.getCachedHistory(jobID); ok {
-		return history
+	history, ok := r.getCachedHistory(jobID)
+	if !ok {
+		history = videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+		r.setCachedHistory(jobID, history)
 	}
-	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+	history.SignedURL = ""
 	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
 		history.SignedURL = signedURL
 	} else {
@@ -178,7 +177,6 @@ func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, job
 			"error", err,
 		)
 	}
-	r.setCachedHistory(jobID, history)
 	return history
 }
 
@@ -206,7 +204,6 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(10)
 	for i := range signedCuts {
-		i := i
 		eg.Go(func() error {
 			ref := signedCuts[i].KeyframeReference
 			if strings.TrimSpace(ref) == "" {
