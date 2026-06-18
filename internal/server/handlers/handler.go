@@ -28,6 +28,7 @@ type PageData struct {
 	Title               string
 	CSRFToken           string
 	JobID               string
+	Status              string
 	Message             string
 	CSS                 []string
 	JS                  []string
@@ -54,6 +55,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"compose.html",
 		"recipe.html",
 		"history.html",
+		"queued.html",
 	} {
 		tmpl, err := template.ParseFS(
 			assets,
@@ -209,7 +211,21 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 			return
 		}
 	}
+	if !wantsJSON(r) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusAccepted)
+		h.renderPage(w, PageData{
+			Title:  "Queued",
+			JobID:  task.JobID,
+			Status: "queued",
+		}, "queued.html")
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
+}
+
+func wantsJSON(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
 }
 
 // renderPage renders a named HTML template.

@@ -56,6 +56,11 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
 	}
+	notifier, err := adapters.NewSlackAdapter(httpClient, cfg.SlackWebhookURL, cfg.ServiceURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
+	}
+	pipe.Notifier = notifier
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	pipe.TaskQueue = queue
 

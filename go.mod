@@ -11,6 +11,7 @@ require (
 	github.com/shouni/go-character-kit v1.0.2
 	github.com/shouni/go-gemini-client v1.6.0
 	github.com/shouni/go-http-kit v1.4.2
+	github.com/shouni/go-notifier v1.2.6
 	github.com/shouni/go-prompt-kit v1.0.4
 	github.com/shouni/go-remote-io v1.5.3
 	github.com/shouni/go-veo-orchestrator v1.1.1
@@ -47,6 +48,7 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/forPelevin/gomoji v1.4.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -60,11 +62,17 @@ require (
 	github.com/ikawaha/kagome-dict v1.1.7 // indirect
 	github.com/ikawaha/kagome-dict/ipa v1.2.6 // indirect
 	github.com/ikawaha/kagome/v2 v2.11.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.0 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shouni/audio v1.0.19 // indirect
+	github.com/shouni/clibase v1.0.3 // indirect
 	github.com/shouni/gemini-image-kit v1.7.4 // indirect
 	github.com/shouni/go-utils v1.0.20 // indirect
+	github.com/slack-go/slack v0.26.0 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.42.0 // indirect
