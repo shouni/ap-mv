@@ -41,11 +41,12 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 
 	form := url.Values{
-		"csrf_token":   {"token"},
-		"text":         {"source text"},
-		"text_model":   {"gemini-alt"},
-		"image_model":  {"image-alt"},
-		"character_id": {"zundamon"},
+		"csrf_token":       {"token"},
+		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+		"text_model":       {"gemini-alt"},
+		"image_model":      {"image-alt"},
+		"character_id":     {"zundamon"},
+		"audio_url":        {"gs://bucket/music.mp3"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -71,6 +72,12 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 	if queue.task.CharacterID != "zundamon" {
 		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
+	}
+	if queue.task.SourceURL != "gs://bucket/music_recipe.json" {
+		t.Fatalf("queued source URL = %q, want music recipe URL", queue.task.SourceURL)
+	}
+	if queue.task.AudioURL != "" {
+		t.Fatalf("queued audio URL = %q, want empty for video recipe create", queue.task.AudioURL)
 	}
 }
 
@@ -170,6 +177,7 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
+		`name="music_recipe_url"`,
 		`name="text_model"`,
 		`value="gemini-default" selected`,
 		`value="gemini-alt"`,
@@ -183,5 +191,8 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("VideoRecipeCreateForm body missing %q: %s", want, body)
 		}
+	}
+	if strings.Contains(body, `name="audio_url"`) {
+		t.Fatalf("VideoRecipeCreateForm should not render audio_url input: %s", body)
 	}
 }

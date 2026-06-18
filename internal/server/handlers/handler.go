@@ -100,14 +100,22 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		JobID:       jobID,
 		Command:     domain.CommandVideoRecipeCreate,
 		AIModels:    h.aiModelsFromForm(r),
-		SourceURL:   strings.TrimSpace(r.FormValue("url")),
+		SourceURL:   firstNonEmptyFormValue(r, "music_recipe_url", "url"),
 		Text:        strings.TrimSpace(r.FormValue("text")),
 		ImageURL:    strings.TrimSpace(r.FormValue("image_url")),
 		CharacterID: h.characterIDFromForm(r),
-		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
 		CreatedAt:   time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
+}
+
+func firstNonEmptyFormValue(r *http.Request, names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(r.FormValue(name)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // withModelOptions adds model and character selections to page data.

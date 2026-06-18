@@ -8,12 +8,12 @@
                     <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">URL</label>
-                        <input class="form-control" name="url" placeholder="https://example.com/source">
+                        <label class="form-label fw-semibold">MusicRecipe GCS URL</label>
+                        <input class="form-control" name="music_recipe_url" placeholder="gs://bucket/path/music_recipe.json">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Text</label>
-                        <textarea class="form-control" name="text" rows="8" placeholder="原稿、コンセプト、歌詞の方向性など"></textarea>
+                        <label class="form-label fw-semibold">MusicRecipe JSON / Visual Prompt</label>
+                        <textarea class="form-control" name="text" rows="8" placeholder='{"title":"...","sections":[{"name":"intro","duration_seconds":8,"prompt":"..."}]}'></textarea>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Image URL</label>
@@ -29,11 +29,6 @@
                         </select>
                     </div>
                     {{end}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Music Audio GCS URL</label>
-                        <input class="form-control" name="audio_url" placeholder="gs://bucket/path/music.mp3">
-                    </div>
-
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Gemini Model</label>
