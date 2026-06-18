@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/shouni/go-remote-io/remoteio"
 )
@@ -46,6 +47,12 @@ func (w *fakeHistoryWriter) Delete(_ context.Context, path string) error {
 	defer w.mu.Unlock()
 	w.deleted = append(w.deleted, path)
 	return nil
+}
+
+type fakeHistorySigner struct{}
+
+func (s fakeHistorySigner) GenerateSignedURL(_ context.Context, uri string, _ string, _ time.Duration) (string, error) {
+	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
 }
 
 func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
@@ -91,6 +98,44 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 	}
 	if !got.Generated {
 		t.Fatal("Generated = false, want true")
+	}
+}
+
+func TestGetHistoryLoadsCutKeyframeURLs(t *testing.T) {
+	t.Parallel()
+
+	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
+	reader := &fakeHistoryReader{
+		files: map[string]string{
+			metadataURI: `{
+				"title": "軌跡のアーキテクト",
+				"cuts": [
+					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "keyframe_reference": "images/keyframe_001.png", "status": "pending"},
+					{"cut_index": 2, "duration_sec": 7.5, "visual_anchor": "sky", "keyframe_reference": "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_002.png", "status": "generated"}
+				]
+			}`,
+		},
+	}
+	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, fakeHistorySigner{}, NewHistoryCache())
+
+	history, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc")
+	if err != nil {
+		t.Fatalf("GetHistory() error = %v", err)
+	}
+	if history.Title != "軌跡のアーキテクト" {
+		t.Fatalf("Title = %q", history.Title)
+	}
+	if len(history.Cuts) != 2 {
+		t.Fatalf("len(Cuts) = %d, want 2", len(history.Cuts))
+	}
+	if history.Cuts[0].KeyframeReference != "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_001.png" {
+		t.Fatalf("first keyframe reference = %q", history.Cuts[0].KeyframeReference)
+	}
+	if history.Cuts[0].KeyframeURL == "" || !strings.HasPrefix(history.Cuts[0].KeyframeURL, "https://signed.example/") {
+		t.Fatalf("first keyframe URL = %q", history.Cuts[0].KeyframeURL)
+	}
+	if history.Cuts[1].DurationSec != 7.5 {
+		t.Fatalf("second duration = %v", history.Cuts[1].DurationSec)
 	}
 }
 

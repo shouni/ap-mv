@@ -14,6 +14,28 @@ type VideoHistory struct {
 	Generated  bool   `json:"generated,omitempty"`
 }
 
+// VideoHistoryCut is a display-ready cut entry for a generated MV history detail.
+type VideoHistoryCut struct {
+	CutIndex          int     `json:"cut_index"`
+	DurationSec       float64 `json:"duration_sec,omitempty"`
+	AudioCue          string  `json:"audio_cue,omitempty"`
+	VisualAnchor      string  `json:"visual_anchor,omitempty"`
+	CharacterID       string  `json:"character_id,omitempty"`
+	Dialogue          string  `json:"dialogue,omitempty"`
+	KeyframeReference string  `json:"keyframe_reference,omitempty"`
+	KeyframeURL       string  `json:"keyframe_url,omitempty"`
+	VideoURL          string  `json:"video_url,omitempty"`
+	Status            string  `json:"status,omitempty"`
+	StartSec          float64 `json:"start_sec,omitempty"`
+	EndSec            float64 `json:"end_sec,omitempty"`
+}
+
+// VideoHistoryDetail contains generated MV metadata and display-ready cuts.
+type VideoHistoryDetail struct {
+	VideoHistory
+	Cuts []VideoHistoryCut `json:"cuts,omitempty"`
+}
+
 // PageMeta contains pagination metadata for history list views.
 type PageMeta struct {
 	Page       int  `json:"page"`

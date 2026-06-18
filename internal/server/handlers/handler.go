@@ -43,6 +43,7 @@ type PageData struct {
 	SelectedCharacterID string
 	SelectedVisualMode  string
 	HistoryItems        []domain.VideoHistory
+	HistoryDetail       domain.VideoHistoryDetail
 	PageMeta            domain.PageMeta
 }
 
@@ -59,6 +60,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"compose.html",
 		"recipe.html",
 		"history.html",
+		"history_detail.html",
 		"queued.html",
 	} {
 		tmpl, err := template.ParseFS(
@@ -204,6 +206,28 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		HistoryItems: page.Items,
 		PageMeta:     page.PageMeta,
 	}, "history.html")
+}
+
+// HistoryDetail renders a generated MV history detail page.
+func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
+	if h.HistoryRepository == nil {
+		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
+		return
+	}
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	h.renderPage(w, PageData{
+		Title:         "History Detail",
+		HistoryDetail: history,
+	}, "history_detail.html")
 }
 
 // DeleteHistory handles history deletion requests.

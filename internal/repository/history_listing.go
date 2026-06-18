@@ -114,17 +114,78 @@ func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string)
 	if history, ok := r.getCachedHistory(jobID); ok {
 		return history, nil
 	}
-	rc, err := r.reader.Open(ctx, r.metadataURI(jobID))
+	recipe, err := r.loadVideoRecipe(ctx, jobID)
 	if err != nil {
 		return domain.VideoHistory{}, err
+	}
+	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
+		history.SignedURL = signedURL
+	}
+	r.setCachedHistory(jobID, history)
+	return history, nil
+}
+
+// GetHistory loads generated MV job metadata and cut keyframe references.
+func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error) {
+	if r == nil || r.reader == nil || r.baseURI == "" {
+		return domain.VideoHistoryDetail{}, nil
+	}
+	if err := domain.ValidateJobID(jobID); err != nil {
+		return domain.VideoHistoryDetail{}, err
+	}
+	recipe, err := r.loadVideoRecipe(ctx, jobID)
+	if err != nil {
+		return domain.VideoHistoryDetail{}, err
+	}
+	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
+		history.SignedURL = signedURL
+	}
+	detail := domain.VideoHistoryDetail{
+		VideoHistory: history,
+		Cuts:         make([]domain.VideoHistoryCut, 0, len(recipe.Cuts)),
+	}
+	for _, cut := range recipe.Cuts {
+		keyframeReference := r.resolveJobObjectURI(jobID, strings.TrimSpace(cut.KeyframeReference))
+		keyframeURL := ""
+		if signedURL, err := r.signedURL(ctx, keyframeReference); err == nil {
+			keyframeURL = signedURL
+		}
+		detail.Cuts = append(detail.Cuts, domain.VideoHistoryCut{
+			CutIndex:          cut.CutIndex,
+			DurationSec:       cut.DurationSec,
+			AudioCue:          strings.TrimSpace(cut.AudioCue),
+			VisualAnchor:      strings.TrimSpace(cut.VisualAnchor),
+			CharacterID:       strings.TrimSpace(cut.CharacterID),
+			Dialogue:          strings.TrimSpace(cut.Dialogue),
+			KeyframeReference: keyframeReference,
+			KeyframeURL:       keyframeURL,
+			VideoURL:          strings.TrimSpace(cut.VideoURL),
+			Status:            strings.TrimSpace(string(cut.Status)),
+			StartSec:          cut.StartSec,
+			EndSec:            cut.EndSec,
+		})
+	}
+	return detail, nil
+}
+
+func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
+	rc, err := r.reader.Open(ctx, r.metadataURI(jobID))
+	if err != nil {
+		return domain.VideoRecipe{}, err
 	}
 	defer rc.Close()
 
 	var recipe domain.VideoRecipe
 	if err := json.NewDecoder(rc).Decode(&recipe); err != nil {
-		return domain.VideoHistory{}, err
+		return domain.VideoRecipe{}, err
 	}
 	recipe.Normalize()
+	return recipe, nil
+}
+
+func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
 	history := domain.VideoHistory{
 		JobID:      jobID,
 		Title:      strings.TrimSpace(firstNonEmpty(recipe.Title, recipe.ProjectTitle)),
@@ -133,17 +194,20 @@ func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string)
 		CreatedAt:  formatHistoryCreatedAt(jobID),
 		VisualMode: strings.TrimSpace(recipe.ComposeMode),
 		CutCount:   len(recipe.Cuts),
-		StorageURI: r.metadataURI(jobID),
+		StorageURI: metadataURI,
 		Generated:  allCutsGenerated(recipe.Cuts),
 	}
 	if history.Title == "" {
 		history.Title = jobID
 	}
-	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
-		history.SignedURL = signedURL
+	return history
+}
+
+func (r *VideoHistoryRepository) resolveJobObjectURI(jobID string, uri string) string {
+	if uri == "" || strings.Contains(uri, "://") {
+		return uri
 	}
-	r.setCachedHistory(jobID, history)
-	return history, nil
+	return r.baseURI + "/" + jobID + "/" + strings.TrimLeft(uri, "/")
 }
 
 func (r *VideoHistoryRepository) metadataURI(jobID string) string {

@@ -102,6 +102,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/mv-from-keyframe-video-recipe", h.RecipeForm)
 		r.Post("/mv-from-keyframe-video-recipe", h.PostRecipe)
 		r.Get("/history", h.History)
+		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 	})
 }
