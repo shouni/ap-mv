@@ -11,6 +11,7 @@ import (
 	"ap-mv/internal/adapters"
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
+	"ap-mv/internal/repository"
 )
 
 // BuildContainer は外部サービスとの接続を確立し、依存関係を組み立てた app.Container を返します。
@@ -56,15 +57,28 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
 	}
+	notifier, err := adapters.NewSlackAdapter(httpClient, cfg.SlackWebhookURL, cfg.ServiceURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
+	}
+	pipe.Notifier = notifier
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	pipe.TaskQueue = queue
+	historyRepository := repository.NewVideoHistoryRepository(
+		workflowOutputBaseURI(cfg),
+		rio.Reader,
+		rio.Writer,
+		rio.Signer,
+		nil,
+	)
 
 	return &app.Container{
-		Config:       cfg,
-		RemoteIO:     rio,
-		HTTPClient:   httpClient,
-		TaskEnqueuer: enqueuer,
-		TaskQueue:    queue,
-		Pipeline:     pipe,
+		Config:            cfg,
+		RemoteIO:          rio,
+		HTTPClient:        httpClient,
+		TaskEnqueuer:      enqueuer,
+		TaskQueue:         queue,
+		Pipeline:          pipe,
+		HistoryRepository: historyRepository,
 	}, nil
 }

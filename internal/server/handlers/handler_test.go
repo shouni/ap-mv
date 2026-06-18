@@ -58,6 +58,9 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), "Queued") {
+		t.Fatalf("PostVideoRecipeCreate body missing queued page: %s", rec.Body.String())
+	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
 	}
@@ -118,6 +121,34 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 	}
 	if queue.task.VisualMode != "sparkle_rock" {
 		t.Fatalf("queued visual mode = %q, want sparkle_rock", queue.task.VisualMode)
+	}
+}
+
+// TestPostVideoRecipeCreateReturnsJSONWhenRequested verifies API clients can still request JSON.
+func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	form := url.Values{
+		"csrf_token":       {"token"},
+		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostVideoRecipeCreate(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"status":"queued"`) {
+		t.Fatalf("PostVideoRecipeCreate JSON body = %s", rec.Body.String())
 	}
 }
 

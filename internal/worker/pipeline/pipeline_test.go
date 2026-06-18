@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -17,6 +18,35 @@ func (noopFilter) Name() string { return "noop" }
 
 // Execute runs the receiver processing step.
 func (noopFilter) Execute(context.Context, *filter.Context) error { return nil }
+
+type errorFilter struct{}
+
+func (errorFilter) Name() string { return "error" }
+
+func (errorFilter) Execute(context.Context, *filter.Context) error { return errors.New("boom") }
+
+type deferredFilter struct{}
+
+func (deferredFilter) Name() string { return "deferred" }
+
+func (deferredFilter) Execute(context.Context, *filter.Context) error {
+	return filter.ErrPipelineDeferred
+}
+
+type recordingNotifier struct {
+	completed []domain.NotificationRequest
+	errors    []domain.NotificationRequest
+}
+
+func (n *recordingNotifier) NotifyTaskComplete(_ context.Context, req domain.NotificationRequest) error {
+	n.completed = append(n.completed, req)
+	return nil
+}
+
+func (n *recordingNotifier) NotifyTaskError(_ context.Context, _ error, req domain.NotificationRequest) error {
+	n.errors = append(n.errors, req)
+	return nil
+}
 
 // TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
 func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
@@ -111,5 +141,83 @@ func TestRunSkipsWorkflowFactoryForDefaultModels(t *testing.T) {
 	}
 	if calls != 0 {
 		t.Fatalf("workflow factory calls = %d, want 0", calls)
+	}
+}
+
+// TestExecuteNotifiesCompletion verifies worker execution sends a completion notification.
+func TestExecuteNotifiesCompletion(t *testing.T) {
+	notifier := &recordingNotifier{}
+	runner := &Runner{
+		Filters:       []filter.Filter{noopFilter{}},
+		Workflows:     &orchestrator.Workflows{},
+		OutputBaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Notifier:      notifier,
+	}
+
+	err := runner.Execute(context.Background(), domain.Task{
+		JobID:      "job-1",
+		Command:    domain.CommandVideoRecipeCreate,
+		SourceURL:  "gs://bucket/music_recipe.json",
+		VisualMode: "sparkle_rock",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(notifier.completed) != 1 {
+		t.Fatalf("completion notifications = %d, want 1", len(notifier.completed))
+	}
+	if notifier.completed[0].OutputURI != "gs://bucket/ap-mv/veo/jobs/job-1/" {
+		t.Fatalf("notification output URI = %q", notifier.completed[0].OutputURI)
+	}
+	if len(notifier.errors) != 0 {
+		t.Fatalf("error notifications = %d, want 0", len(notifier.errors))
+	}
+}
+
+// TestExecuteNotifiesError verifies worker execution sends an error notification.
+func TestExecuteNotifiesError(t *testing.T) {
+	notifier := &recordingNotifier{}
+	runner := &Runner{
+		Filters:  []filter.Filter{errorFilter{}},
+		Notifier: notifier,
+	}
+
+	err := runner.Execute(context.Background(), domain.Task{
+		JobID:     "job-1",
+		Command:   domain.CommandVideoRecipeCreate,
+		SourceURL: "gs://bucket/music_recipe.json",
+	})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want error")
+	}
+	if len(notifier.errors) != 1 {
+		t.Fatalf("error notifications = %d, want 1", len(notifier.errors))
+	}
+	if len(notifier.completed) != 0 {
+		t.Fatalf("completion notifications = %d, want 0", len(notifier.completed))
+	}
+}
+
+// TestExecuteSkipsCompletionNotificationWhenDeferred verifies continuation tasks do not emit completion.
+func TestExecuteSkipsCompletionNotificationWhenDeferred(t *testing.T) {
+	notifier := &recordingNotifier{}
+	runner := &Runner{
+		Filters:  []filter.Filter{deferredFilter{}},
+		Notifier: notifier,
+	}
+
+	err := runner.Execute(context.Background(), domain.Task{
+		JobID:     "job-1",
+		Command:   domain.CommandVideoRecipeCreate,
+		SourceURL: "gs://bucket/music_recipe.json",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(notifier.completed) != 0 {
+		t.Fatalf("completion notifications = %d, want 0", len(notifier.completed))
+	}
+	if len(notifier.errors) != 0 {
+		t.Fatalf("error notifications = %d, want 0", len(notifier.errors))
 	}
 }

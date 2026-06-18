@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -25,6 +26,7 @@ type Runner struct {
 	WorkflowFactory    func(context.Context, *domain.Task) (*orchestrator.Workflows, error)
 	Reader             orchestrator.ContentReader
 	OutputBaseURI      string
+	Notifier           ports.Notifier
 }
 
 // New は VideoRunner と任意の orchestrator 設定から Runner を生成します。
@@ -43,7 +45,15 @@ func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
 // worker は MusicRecipe の戻り値を使わないため、Run の結果から error だけを返します。
 // task は TaskExecutor のシグネチャに合わせて値で受け取り、Run へ渡す時点でポインタ化します。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
-	_, err := r.Run(ctx, &task)
+	result, err := r.run(ctx, &task)
+	req := notificationRequest(&task, result)
+	if err != nil {
+		r.notifyError(ctx, err, req)
+		return err
+	}
+	if result == nil || !result.deferred {
+		r.notifyComplete(ctx, req)
+	}
 	return err
 }
 
@@ -63,6 +73,21 @@ func (r *Runner) Close() error {
 // Cloud Tasks worker からは Execute 経由で呼ばれますが、Run はテストや同期実行で
 // パイプライン結果を確認したい場合の本体メソッドとして残しています。
 func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecipe, error) {
+	result, err := r.run(ctx, task)
+	if result == nil {
+		return nil, err
+	}
+	return result.recipe, err
+}
+
+type runResult struct {
+	recipe      *domain.MusicRecipe
+	videoRecipe *domain.VideoRecipe
+	outputPath  string
+	deferred    bool
+}
+
+func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error) {
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
@@ -87,12 +112,69 @@ func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecip
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
 			if errors.Is(err, filter.ErrPipelineDeferred) {
-				return fc.Recipe, nil
+				return &runResult{
+					recipe:      fc.Recipe,
+					videoRecipe: fc.VideoRecipe,
+					outputPath:  fc.OutputPath,
+					deferred:    true,
+				}, nil
 			}
 			return nil, fmt.Errorf("filter %s: %w", flt.Name(), err)
 		}
 	}
-	return fc.Recipe, nil
+	return &runResult{
+		recipe:      fc.Recipe,
+		videoRecipe: fc.VideoRecipe,
+		outputPath:  fc.OutputPath,
+	}, nil
+}
+
+func (r *Runner) notifyComplete(ctx context.Context, req domain.NotificationRequest) {
+	if r == nil || r.Notifier == nil {
+		return
+	}
+	if err := r.Notifier.NotifyTaskComplete(ctx, req); err != nil {
+		slog.ErrorContext(ctx, "failed to send completion notification", "job_id", req.JobID, "error", err)
+	}
+}
+
+func (r *Runner) notifyError(ctx context.Context, errDetail error, req domain.NotificationRequest) {
+	if r == nil || r.Notifier == nil {
+		return
+	}
+	if err := r.Notifier.NotifyTaskError(ctx, errDetail, req); err != nil {
+		slog.ErrorContext(ctx, "failed to send error notification", "job_id", req.JobID, "error", err)
+	}
+}
+
+func notificationRequest(task *domain.Task, result *runResult) domain.NotificationRequest {
+	if task == nil {
+		return domain.NotificationRequest{}
+	}
+	req := domain.NotificationRequest{
+		JobID:       task.JobID,
+		Command:     string(task.Command),
+		SourceURL:   task.SourceURL,
+		RecipeURL:   task.RecipeURL,
+		AudioURL:    task.AudioURL,
+		CharacterID: task.CharacterID,
+		VisualMode:  task.VisualMode,
+		TextModel:   task.TextModel,
+		ImageModel:  task.ImageModel,
+		CreatedAt:   task.CreatedAt,
+	}
+	if result != nil {
+		req.OutputURI = result.outputPath
+		if result.videoRecipe != nil {
+			result.videoRecipe.Normalize()
+			req.Title = result.videoRecipe.Title
+			req.CutCount = len(result.videoRecipe.Cuts)
+		}
+	}
+	if req.Title == "" && task.Recipe != nil {
+		req.Title = task.Recipe.Title
+	}
+	return req
 }
 
 // workflowsForTask はタスクで選択されたモデルに対応する Workflows を返します。
