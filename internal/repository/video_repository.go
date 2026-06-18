@@ -38,5 +38,6 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 		return err
 	}
 	r.deleteCachedHistory(jobID)
+	r.deleteCachedVideoRecipe(jobID)
 	return nil
 }
