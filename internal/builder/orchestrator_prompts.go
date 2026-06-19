@@ -89,13 +89,29 @@ func formatSourceRecipeJSON(recipe *orchestrator.VideoRecipe) (string, error) {
 	if recipe == nil {
 		return "", fmt.Errorf("source recipe is required")
 	}
-	normalized := *recipe
+	cloned, err := cloneVideoRecipe(recipe)
+	if err != nil {
+		return "", err
+	}
+	normalized := *cloned
 	normalized.Normalize()
 	data, err := json.MarshalIndent(normalized, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("format source recipe json: %w", err)
 	}
 	return string(data), nil
+}
+
+func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoRecipe, error) {
+	data, err := json.Marshal(recipe)
+	if err != nil {
+		return nil, fmt.Errorf("clone source recipe json: %w", err)
+	}
+	var cloned orchestrator.VideoRecipe
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil, fmt.Errorf("clone source recipe json: %w", err)
+	}
+	return &cloned, nil
 }
 
 func (p *scriptPrompt) visualPrompt(mode string) string {

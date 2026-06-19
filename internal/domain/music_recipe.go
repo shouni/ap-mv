@@ -52,32 +52,20 @@ func UnmarshalRecipeOrVideoRecipe(raw []byte) (*MusicRecipe, *VideoRecipe, error
 
 // DecodeVideoRecipeJSON decodes current and legacy VideoRecipe JSON shapes.
 func DecodeVideoRecipeJSON(raw []byte) (*VideoRecipe, error) {
-	var recipe VideoRecipe
-	if err := json.Unmarshal(raw, &recipe); err != nil {
+	var combined struct {
+		VideoRecipe
+		legacyVideoRecipeFields
+	}
+	if err := json.Unmarshal(raw, &combined); err != nil {
 		return nil, err
 	}
-
-	var legacy struct {
-		Title       string         `json:"title,omitempty"`
-		Theme       string         `json:"theme,omitempty"`
-		Mood        string         `json:"mood,omitempty"`
-		Tempo       int            `json:"tempo,omitempty"`
-		Instruments []string       `json:"instruments,omitempty"`
-		Sections    []MusicSection `json:"sections,omitempty"`
-		Lyrics      *LyricsDraft   `json:"lyrics,omitempty"`
-		AudioModel  string         `json:"audio_model,omitempty"`
-		ComposeMode string         `json:"compose_mode,omitempty"`
-		Seed        int64          `json:"seed,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &legacy); err != nil {
-		return nil, err
-	}
-	applyLegacyVideoRecipeFields(&recipe, legacy)
+	recipe := combined.VideoRecipe
+	applyLegacyVideoRecipeFields(&recipe, combined.legacyVideoRecipeFields)
 	recipe.Normalize()
 	return &recipe, nil
 }
 
-func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy struct {
+type legacyVideoRecipeFields struct {
 	Title       string         `json:"title,omitempty"`
 	Theme       string         `json:"theme,omitempty"`
 	Mood        string         `json:"mood,omitempty"`
@@ -87,8 +75,10 @@ func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy struct {
 	Lyrics      *LyricsDraft   `json:"lyrics,omitempty"`
 	AudioModel  string         `json:"audio_model,omitempty"`
 	ComposeMode string         `json:"compose_mode,omitempty"`
-	Seed        int64          `json:"seed,omitempty"`
-}) {
+	Seed        *int64         `json:"seed,omitempty"`
+}
+
+func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy legacyVideoRecipeFields) {
 	if recipe.MusicRecipe.Title == "" {
 		recipe.MusicRecipe.Title = legacy.Title
 	}
@@ -116,8 +106,8 @@ func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy struct {
 	if recipe.MusicRecipe.ComposeMode == "" {
 		recipe.MusicRecipe.ComposeMode = legacy.ComposeMode
 	}
-	if recipe.MusicRecipe.Seed == nil && legacy.Seed != 0 {
-		seed := legacy.Seed
+	if recipe.MusicRecipe.Seed == nil && legacy.Seed != nil {
+		seed := *legacy.Seed
 		recipe.MusicRecipe.Seed = &seed
 	}
 }

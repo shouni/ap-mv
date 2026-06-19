@@ -104,6 +104,37 @@ func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
 	}
 }
 
+// TestFormatSourceRecipeJSONDoesNotMutateSource verifies prompt formatting does not normalize the caller's recipe in place.
+func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{
+			Title: "source",
+			Sections: []orchestrator.Section{{
+				Name:     "Verse",
+				Duration: 8,
+				Prompt:   "quiet opening",
+			}},
+		},
+		Cuts: []orchestrator.Cut{{
+			DurationSec: 8,
+		}},
+	}
+
+	got, err := formatSourceRecipeJSON(recipe)
+	if err != nil {
+		t.Fatalf("formatSourceRecipeJSON() error = %v", err)
+	}
+	if !strings.Contains(got, `"cut_index": 1`) {
+		t.Fatalf("formatted recipe did not normalize cut index:\n%s", got)
+	}
+	if recipe.ProjectTitle != "" {
+		t.Fatalf("ProjectTitle mutated to %q", recipe.ProjectTitle)
+	}
+	if recipe.Cuts[0].CutIndex != 0 || recipe.Cuts[0].EndSec != 0 {
+		t.Fatalf("source cut mutated: %#v", recipe.Cuts[0])
+	}
+}
+
 func scriptPromptTestData(title string) *orchestrator.TemplateData {
 	return &orchestrator.TemplateData{
 		SourceRecipe: &orchestrator.VideoRecipe{
