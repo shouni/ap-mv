@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -14,6 +15,8 @@ import (
 	"ap-mv/internal/ports"
 	"ap-mv/internal/worker/filter"
 )
+
+const notificationTimeout = 10 * time.Second
 
 // Runner は domain.Task を MusicRecipe 生成、キーフレーム生成、動画生成、公開の
 // 各フィルターへ順番に流す worker パイプラインです。
@@ -133,7 +136,9 @@ func (r *Runner) notifyComplete(ctx context.Context, req domain.NotificationRequ
 	if r == nil || r.Notifier == nil {
 		return
 	}
-	if err := r.Notifier.NotifyTaskComplete(ctx, req); err != nil {
+	notifyCtx, cancel := notificationContext(ctx)
+	defer cancel()
+	if err := r.Notifier.NotifyTaskComplete(notifyCtx, req); err != nil {
 		slog.ErrorContext(ctx, "failed to send completion notification", "job_id", req.JobID, "error", err)
 	}
 }
@@ -142,9 +147,15 @@ func (r *Runner) notifyError(ctx context.Context, errDetail error, req domain.No
 	if r == nil || r.Notifier == nil {
 		return
 	}
-	if err := r.Notifier.NotifyTaskError(ctx, errDetail, req); err != nil {
+	notifyCtx, cancel := notificationContext(ctx)
+	defer cancel()
+	if err := r.Notifier.NotifyTaskError(notifyCtx, errDetail, req); err != nil {
 		slog.ErrorContext(ctx, "failed to send error notification", "job_id", req.JobID, "error", err)
 	}
+}
+
+func notificationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), notificationTimeout)
 }
 
 func notificationRequest(task *domain.Task, result *runResult) domain.NotificationRequest {

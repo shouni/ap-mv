@@ -48,6 +48,19 @@ func (n *recordingNotifier) NotifyTaskError(_ context.Context, _ error, req doma
 	return nil
 }
 
+type contextRecordingNotifier struct {
+	errorCtxErr error
+}
+
+func (n *contextRecordingNotifier) NotifyTaskComplete(_ context.Context, _ domain.NotificationRequest) error {
+	return nil
+}
+
+func (n *contextRecordingNotifier) NotifyTaskError(ctx context.Context, _ error, _ domain.NotificationRequest) error {
+	n.errorCtxErr = ctx.Err()
+	return nil
+}
+
 // TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
 func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
 	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil)
@@ -195,6 +208,29 @@ func TestExecuteNotifiesError(t *testing.T) {
 	}
 	if len(notifier.completed) != 0 {
 		t.Fatalf("completion notifications = %d, want 0", len(notifier.completed))
+	}
+}
+
+// TestExecuteNotifiesErrorWithDetachedContext verifies cancellation of the worker request does not cancel notification delivery.
+func TestExecuteNotifiesErrorWithDetachedContext(t *testing.T) {
+	notifier := &contextRecordingNotifier{}
+	runner := &Runner{
+		Filters:  []filter.Filter{errorFilter{}},
+		Notifier: notifier,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := runner.Execute(ctx, domain.Task{
+		JobID:     "job-1",
+		Command:   domain.CommandVideoRecipeCreate,
+		SourceURL: "gs://bucket/music_recipe.json",
+	})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want error")
+	}
+	if notifier.errorCtxErr != nil {
+		t.Fatalf("notification context error = %v, want nil", notifier.errorCtxErr)
 	}
 }
 
