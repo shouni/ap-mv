@@ -28,6 +28,8 @@ var configEnvKeys = []string{
 	"VEO_GENERATE_AUDIO",
 	"VEO_POLL_INTERVAL",
 	"VEO_OPERATION_TIMEOUT",
+	"KEYFRAME_MAX_CONCURRENCY",
+	"KEYFRAME_RATE_INTERVAL",
 	"SHUTDOWN_TIMEOUT",
 	"GOOGLE_CLIENT_ID",
 	"GOOGLE_CLIENT_SECRET",
@@ -96,6 +98,12 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.VeoOperationTimeout != 20*time.Minute {
 		t.Fatalf("VeoOperationTimeout = %s, want 20m", cfg.VeoOperationTimeout)
 	}
+	if cfg.KeyframeMaxConcurrency != 1 {
+		t.Fatalf("KeyframeMaxConcurrency = %d, want 1", cfg.KeyframeMaxConcurrency)
+	}
+	if cfg.KeyframeRateInterval != 60*time.Second {
+		t.Fatalf("KeyframeRateInterval = %s, want 60s", cfg.KeyframeRateInterval)
+	}
 	if cfg.ImageModel != "gemini-3.1-flash-image" {
 		t.Fatalf("ImageModel = %q", cfg.ImageModel)
 	}
@@ -121,6 +129,8 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	t.Setenv("VEO_GENERATE_AUDIO", "true")
 	t.Setenv("VEO_POLL_INTERVAL", "7s")
 	t.Setenv("VEO_OPERATION_TIMEOUT", "30s")
+	t.Setenv("KEYFRAME_MAX_CONCURRENCY", "3")
+	t.Setenv("KEYFRAME_RATE_INTERVAL", "10s")
 	t.Setenv("ALLOWED_EMAILS", "a@example.com, b@example.com")
 	t.Setenv("ALLOWED_DOMAINS", "example.com, example.jp")
 
@@ -155,6 +165,12 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	}
 	if cfg.VeoOperationTimeout != 30*time.Second {
 		t.Fatalf("VeoOperationTimeout = %s, want 30s", cfg.VeoOperationTimeout)
+	}
+	if cfg.KeyframeMaxConcurrency != 3 {
+		t.Fatalf("KeyframeMaxConcurrency = %d, want 3", cfg.KeyframeMaxConcurrency)
+	}
+	if cfg.KeyframeRateInterval != 10*time.Second {
+		t.Fatalf("KeyframeRateInterval = %s, want 10s", cfg.KeyframeRateInterval)
 	}
 	if len(cfg.AllowedEmails) != 2 || cfg.AllowedEmails[1] != "b@example.com" {
 		t.Fatalf("AllowedEmails = %#v", cfg.AllowedEmails)

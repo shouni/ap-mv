@@ -16,6 +16,8 @@ func buildOrchestratorConfig(cfg *config.Config) orchestrator.Config {
 
 	orchCfg.GeminiModel = cfg.GeminiModel
 	orchCfg.ImageModel = cfg.ImageModel
+	orchCfg.MaxConcurrency = cfg.KeyframeMaxConcurrency
+	orchCfg.RateInterval = cfg.KeyframeRateInterval
 	orchCfg.ApplyDefaults()
 	return orchCfg
 }

@@ -22,35 +22,7 @@ func toVideoRecipe(recipe *domain.MusicRecipe) (*orchestrator.VideoRecipe, error
 	musicRecipe.Instruments = append([]string(nil), recipe.Instruments...)
 	videoRecipe := &orchestrator.VideoRecipe{
 		ProjectTitle: recipe.Title,
-		Title:        recipe.Title,
-		Theme:        recipe.Theme,
-		Mood:         recipe.Mood,
-		Tempo:        recipe.Tempo,
-		Instruments:  append([]string(nil), recipe.Instruments...),
-		AudioModel:   recipe.TextModel,
-		Seed:         seedValue(recipe.Seed),
 		MusicRecipe:  musicRecipe,
-		Sections:     make([]orchestrator.Section, 0, len(recipe.Sections)),
-	}
-	if recipe.Lyrics != nil {
-		videoRecipe.Lyrics = &orchestrator.Lyrics{
-			Title:     recipe.Lyrics.Title,
-			Theme:     recipe.Lyrics.Theme,
-			Hook:      recipe.Lyrics.Hook,
-			Lyrics:    recipe.Lyrics.Lyrics,
-			Keywords:  append([]string(nil), recipe.Lyrics.Keywords...),
-			Mood:      recipe.Lyrics.Mood,
-			Narrative: recipe.Lyrics.Narrative,
-		}
-	}
-	for _, section := range recipe.Sections {
-		videoRecipe.Sections = append(videoRecipe.Sections, orchestrator.Section{
-			Name:         section.Name,
-			Duration:     section.Duration,
-			StartSeconds: section.StartSeconds,
-			EndSeconds:   section.EndSeconds,
-			Prompt:       section.Prompt,
-		})
 	}
 	videoRecipe.Normalize()
 	return videoRecipe, nil
@@ -99,45 +71,27 @@ func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, erro
 	recipe.Normalize()
 
 	domainRecipe := &domain.MusicRecipe{
-		Title:       nonEmpty(recipe.Title, recipe.ProjectTitle),
-		Theme:       recipe.Theme,
-		Mood:        nonEmpty(recipe.Mood, recipe.MusicRecipe.Mood),
-		Tempo:       firstPositiveInt(recipe.Tempo, recipe.MusicRecipe.Tempo),
-		Instruments: append([]string(nil), recipe.Instruments...),
-		Sections:    make([]domain.MusicSection, 0, len(recipe.Sections)),
+		Title:       nonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle),
+		Theme:       recipe.MusicRecipe.Theme,
+		Mood:        recipe.MusicRecipe.Mood,
+		Tempo:       recipe.MusicRecipe.Tempo,
+		Instruments: append([]string(nil), recipe.MusicRecipe.Instruments...),
+		Sections:    make([]domain.MusicSection, 0, len(recipe.MusicRecipe.Sections)),
 	}
 	domainRecipe.AIModels = recipe.MusicRecipe.AIModels
-	if domainRecipe.TextModel == "" {
-		domainRecipe.TextModel = recipe.AudioModel
-	}
-	if domainRecipe.Seed == nil {
-		domainRecipe.Seed = seedPtr(recipe.Seed)
-	}
-	if len(domainRecipe.Instruments) == 0 {
-		domainRecipe.Instruments = append([]string(nil), recipe.MusicRecipe.Instruments...)
-	}
-	if len(recipe.MusicRecipe.Sections) > 0 && len(recipe.Sections) == 0 {
+	if len(recipe.MusicRecipe.Sections) > 0 {
 		domainRecipe.Sections = append([]domain.MusicSection(nil), recipe.MusicRecipe.Sections...)
 	}
-	if recipe.Lyrics != nil {
+	if recipe.MusicRecipe.Lyrics != nil {
 		domainRecipe.Lyrics = &domain.LyricsDraft{
-			Title:     recipe.Lyrics.Title,
-			Theme:     recipe.Lyrics.Theme,
-			Hook:      recipe.Lyrics.Hook,
-			Lyrics:    recipe.Lyrics.Lyrics,
-			Keywords:  append([]string(nil), recipe.Lyrics.Keywords...),
-			Mood:      recipe.Lyrics.Mood,
-			Narrative: recipe.Lyrics.Narrative,
+			Title:     recipe.MusicRecipe.Lyrics.Title,
+			Theme:     recipe.MusicRecipe.Lyrics.Theme,
+			Hook:      recipe.MusicRecipe.Lyrics.Hook,
+			Lyrics:    recipe.MusicRecipe.Lyrics.Lyrics,
+			Keywords:  append([]string(nil), recipe.MusicRecipe.Lyrics.Keywords...),
+			Mood:      recipe.MusicRecipe.Lyrics.Mood,
+			Narrative: recipe.MusicRecipe.Lyrics.Narrative,
 		}
-	}
-	for _, section := range recipe.Sections {
-		domainRecipe.Sections = append(domainRecipe.Sections, domain.MusicSection{
-			Name:         section.Name,
-			Duration:     section.Duration,
-			StartSeconds: section.StartSeconds,
-			EndSeconds:   section.EndSeconds,
-			Prompt:       section.Prompt,
-		})
 	}
 	if len(domainRecipe.Sections) == 0 {
 		domainRecipe.Sections = []domain.MusicSection{{

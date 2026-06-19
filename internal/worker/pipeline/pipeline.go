@@ -167,7 +167,7 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 		req.OutputURI = result.outputPath
 		if result.videoRecipe != nil {
 			result.videoRecipe.Normalize()
-			req.Title = result.videoRecipe.Title
+			req.Title = result.videoRecipe.MusicRecipe.Title
 			req.CutCount = len(result.videoRecipe.Cuts)
 		}
 	}

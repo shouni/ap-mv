@@ -2,6 +2,7 @@ package builder
 
 import (
 	"testing"
+	"time"
 
 	"ap-mv/internal/config"
 )
@@ -9,8 +10,10 @@ import (
 // TestBuildOrchestratorConfigMapsModels verifies that configured model names map into orchestrator config.
 func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	cfg := &config.Config{
-		GeminiModel: "gemini-text",
-		ImageModel:  "gemini-image",
+		GeminiModel:            "gemini-text",
+		ImageModel:             "gemini-image",
+		KeyframeMaxConcurrency: 4,
+		KeyframeRateInterval:   10 * time.Second,
 	}
 
 	got := buildOrchestratorConfig(cfg)
@@ -20,6 +23,12 @@ func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	}
 	if got.ImageModel != "gemini-image" {
 		t.Fatalf("ImageModel = %q", got.ImageModel)
+	}
+	if got.MaxConcurrency != 4 {
+		t.Fatalf("MaxConcurrency = %d, want 4", got.MaxConcurrency)
+	}
+	if got.RateInterval != 10*time.Second {
+		t.Fatalf("RateInterval = %s, want 10s", got.RateInterval)
 	}
 }
 

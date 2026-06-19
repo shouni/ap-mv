@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"path"
@@ -23,9 +24,9 @@ type scriptPrompt struct {
 }
 
 type scriptPromptData struct {
-	Mode         string
-	InputText    string
-	VisualPrompt string
+	Mode             string
+	SourceRecipeJSON string
+	VisualPrompt     string
 }
 
 // newScriptPrompt creates a script prompt from bundled prompt assets.
@@ -59,8 +60,8 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 
 // Build renders the script prompt for the requested mode.
 func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
-	if data == nil || strings.TrimSpace(data.InputText) == "" {
-		return "", fmt.Errorf("input text is required")
+	if data == nil || data.SourceRecipe == nil {
+		return "", fmt.Errorf("source recipe is required")
 	}
 	if p == nil || p.builder == nil {
 		return "", fmt.Errorf("script prompt builder is not configured")
@@ -73,11 +74,44 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	if _, ok := p.templates[templateMode]; !ok {
 		templateMode = defaultPromptMode
 	}
+	sourceRecipeJSON, err := formatSourceRecipeJSON(data.SourceRecipe)
+	if err != nil {
+		return "", err
+	}
 	return p.builder.Build(templateMode, scriptPromptData{
-		Mode:         mode,
-		InputText:    strings.TrimSpace(data.InputText),
-		VisualPrompt: p.visualPrompt(mode),
+		Mode:             mode,
+		SourceRecipeJSON: sourceRecipeJSON,
+		VisualPrompt:     p.visualPrompt(mode),
 	})
+}
+
+func formatSourceRecipeJSON(recipe *orchestrator.VideoRecipe) (string, error) {
+	if recipe == nil {
+		return "", fmt.Errorf("source recipe is required")
+	}
+	cloned, err := cloneVideoRecipe(recipe)
+	if err != nil {
+		return "", err
+	}
+	normalized := *cloned
+	normalized.Normalize()
+	data, err := json.MarshalIndent(normalized, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("format source recipe json: %w", err)
+	}
+	return string(data), nil
+}
+
+func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoRecipe, error) {
+	data, err := json.Marshal(recipe)
+	if err != nil {
+		return nil, fmt.Errorf("clone source recipe json: %w", err)
+	}
+	var cloned orchestrator.VideoRecipe
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil, fmt.Errorf("clone source recipe json: %w", err)
+	}
+	return &cloned, nil
 }
 
 func (p *scriptPrompt) visualPrompt(mode string) string {
