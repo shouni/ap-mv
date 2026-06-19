@@ -45,7 +45,7 @@ func buildWorkflowWithConfig(
 	}
 	orchCfg.ApplyDefaults()
 
-	aiClient, err := adapters.NewGeminiAIAdapter(ctx, cfg)
+	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
 	}
@@ -53,11 +53,11 @@ func buildWorkflowWithConfig(
 	if err != nil {
 		return nil, err
 	}
-	scriptPrompt, err := newScriptPrompt()
+	scriptPromptBuilder, err := newScriptPrompt()
 	if err != nil {
 		return nil, err
 	}
-	scriptPrompt.visualMode = visualMode
+	scriptPromptBuilder.visualMode = visualMode
 	visualTemplates, err := assets.LoadVisualModeFiles()
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func buildWorkflowWithConfig(
 		VideoRunner: videoRunner,
 		PromptDeps: &workflow.PromptDeps{
 			Characters:   characters,
-			ScriptPrompt: scriptPrompt,
+			ScriptPrompt: scriptPromptBuilder,
 			KeyframePrompt: keyframePrompt{
 				styleSuffix:     orchCfg.StyleSuffix,
 				visualMode:      visualMode,
