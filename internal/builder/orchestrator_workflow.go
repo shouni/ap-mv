@@ -8,12 +8,12 @@ import (
 
 	characterassets "github.com/shouni/go-character-kit/assets"
 	"github.com/shouni/go-character-kit/character"
-	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
 	"ap-mv/assets"
+	"ap-mv/internal/adapters"
 	"ap-mv/internal/app"
 	"ap-mv/internal/config"
 	"ap-mv/internal/ports"
@@ -45,7 +45,7 @@ func buildWorkflowWithConfig(
 	}
 	orchCfg.ApplyDefaults()
 
-	aiClient, err := gemini.NewClient(ctx, geminiConfig(cfg))
+	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
 	}
@@ -84,17 +84,6 @@ func buildWorkflowWithConfig(
 		return nil, fmt.Errorf("failed to initialize workflows: %w", err)
 	}
 	return workflows, nil
-}
-
-// geminiConfig returns the Gemini client configuration.
-func geminiConfig(cfg *config.Config) gemini.Config {
-	if apiKey := strings.TrimSpace(cfg.GeminiAPIKey); apiKey != "" {
-		return gemini.Config{APIKey: apiKey}
-	}
-	return gemini.Config{
-		ProjectID:  strings.TrimSpace(cfg.ProjectID),
-		LocationID: strings.TrimSpace(cfg.LocationID),
-	}
 }
 
 // buildCharacters builds characters.
