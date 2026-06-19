@@ -2,9 +2,9 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"path"
 	"sort"
@@ -190,13 +190,16 @@ func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID stri
 	}
 	defer rc.Close()
 
-	var recipe domain.VideoRecipe
-	if err := json.NewDecoder(rc).Decode(&recipe); err != nil {
+	raw, err := io.ReadAll(rc)
+	if err != nil {
 		return domain.VideoRecipe{}, err
 	}
-	recipe.Normalize()
-	r.setCachedVideoRecipe(jobID, recipe)
-	return recipe, nil
+	recipe, err := domain.DecodeVideoRecipeJSON(raw)
+	if err != nil {
+		return domain.VideoRecipe{}, err
+	}
+	r.setCachedVideoRecipe(jobID, *recipe)
+	return *recipe, nil
 }
 
 func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []domain.VideoHistoryCut) ([]domain.VideoHistoryCut, error) {
@@ -230,11 +233,11 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
 	history := domain.VideoHistory{
 		JobID:      jobID,
-		Title:      strings.TrimSpace(firstNonEmpty(recipe.Title, recipe.ProjectTitle)),
-		Mood:       strings.TrimSpace(recipe.Mood),
-		Tempo:      recipe.Tempo,
+		Title:      strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
+		Mood:       strings.TrimSpace(recipe.MusicRecipe.Mood),
+		Tempo:      recipe.MusicRecipe.Tempo,
 		CreatedAt:  formatHistoryCreatedAt(jobID),
-		VisualMode: strings.TrimSpace(recipe.ComposeMode),
+		VisualMode: strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
 		CutCount:   len(recipe.Cuts),
 		StorageURI: metadataURI,
 		Generated:  allCutsGenerated(recipe.Cuts),

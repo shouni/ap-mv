@@ -15,7 +15,7 @@ func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 		t.Fatalf("newScriptPrompt() error = %v", err)
 	}
 
-	got, err := prompt.Build("compose", &orchestrator.TemplateData{InputText: "青い光の中で走る主人公"})
+	got, err := prompt.Build("compose", scriptPromptTestData("青い光の中で走る主人公"))
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -24,6 +24,7 @@ func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 		"## Video Worldview",
 		"compose",
 		"青い光の中で走る主人公",
+		`"music_recipe"`,
 		`"character_id": ""`,
 	} {
 		if !strings.Contains(got, want) {
@@ -35,8 +36,8 @@ func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
 // TestScriptPromptBuildUsesModeTemplateWhenAvailable verifies that mode-specific templates take precedence.
 func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 	templates, err := loadPromptTemplates(fstest.MapFS{
-		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}}")},
-		"prompts/compose.md": {Data: []byte("compose template {{.Mode}} {{.InputText}}")},
+		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.SourceRecipeJSON}}")},
+		"prompts/compose.md": {Data: []byte("compose template {{.Mode}} {{.SourceRecipeJSON}}")},
 	}, "prompts")
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
@@ -46,11 +47,11 @@ func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
 	}
 
-	got, err := prompt.Build("compose", &orchestrator.TemplateData{InputText: "source"})
+	got, err := prompt.Build("compose", scriptPromptTestData("source"))
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if !strings.Contains(got, "compose template compose source") {
+	if !strings.Contains(got, "compose template compose") || !strings.Contains(got, "source") {
 		t.Fatalf("Build() = %q, want compose template", got)
 	}
 }
@@ -58,7 +59,7 @@ func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 // TestScriptPromptBuildFallsBackToDefaultTemplate verifies that missing mode templates fall back to the default template.
 func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 	templates, err := loadPromptTemplates(fstest.MapFS{
-		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}}")},
+		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.SourceRecipeJSON}}")},
 	}, "prompts")
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
@@ -68,11 +69,11 @@ func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
 	}
 
-	got, err := prompt.Build("unknown", &orchestrator.TemplateData{InputText: "source"})
+	got, err := prompt.Build("unknown", scriptPromptTestData("source"))
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if !strings.Contains(got, "default unknown source") {
+	if !strings.Contains(got, "default unknown") || !strings.Contains(got, "source") {
 		t.Fatalf("Build() = %q, want default fallback with original mode", got)
 	}
 }
@@ -80,7 +81,7 @@ func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 // TestScriptPromptBuildUsesConfiguredVisualMode verifies that the selected visual mode is rendered into the script prompt.
 func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
 	templates, err := loadPromptTemplates(fstest.MapFS{
-		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.InputText}} {{.VisualPrompt}}")},
+		"prompts/default.md": {Data: []byte("default {{.Mode}} {{.SourceRecipeJSON}} {{.VisualPrompt}}")},
 	}, "prompts")
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
@@ -94,11 +95,26 @@ func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
 	}
 	prompt.visualMode = "sparkle_rock"
 
-	got, err := prompt.Build("video_recipe_create", &orchestrator.TemplateData{InputText: "source"})
+	got, err := prompt.Build("video_recipe_create", scriptPromptTestData("source"))
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
 	if !strings.Contains(got, "sparkle visual") {
 		t.Fatalf("Build() = %q, want selected visual prompt", got)
+	}
+}
+
+func scriptPromptTestData(title string) *orchestrator.TemplateData {
+	return &orchestrator.TemplateData{
+		SourceRecipe: &orchestrator.VideoRecipe{
+			MusicRecipe: orchestrator.MusicRecipe{
+				Title: title,
+				Sections: []orchestrator.Section{{
+					Name:     "Verse",
+					Duration: 8,
+					Prompt:   title,
+				}},
+			},
+		},
 	}
 }

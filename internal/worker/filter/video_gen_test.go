@@ -14,7 +14,7 @@ import (
 // TestVideoGenerationFilterEnqueuesContinuationAfterOneCut verifies continuation task enqueueing after one cut.
 func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
-		Title: "test",
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
 			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
 			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
@@ -56,7 +56,7 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 // TestVideoGenerationFilterAddsOutputPathToContext verifies that video generation receives the output path through context.
 func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
-		Title: "test",
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
 			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
 		},

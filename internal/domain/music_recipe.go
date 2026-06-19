@@ -30,15 +30,14 @@ const CutStatusGenerated = string(orchestrator.CutStatusGenerated)
 // UnmarshalRecipeOrVideoRecipe parses either a MusicRecipe JSON or a VideoRecipe JSON.
 func UnmarshalRecipeOrVideoRecipe(raw []byte) (*MusicRecipe, *VideoRecipe, error) {
 	if looksLikeVideoRecipeJSON(raw) {
-		var recipe VideoRecipe
-		if err := json.Unmarshal(raw, &recipe); err != nil {
+		recipe, err := DecodeVideoRecipeJSON(raw)
+		if err != nil {
 			return nil, nil, fmt.Errorf("decode video recipe json: %w", err)
 		}
-		recipe.Normalize()
-		if err := ValidateVideoRecipe(&recipe); err != nil {
+		if err := ValidateVideoRecipe(recipe); err != nil {
 			return nil, nil, err
 		}
-		return nil, &recipe, nil
+		return nil, recipe, nil
 	}
 
 	var recipe MusicRecipe
@@ -49,6 +48,78 @@ func UnmarshalRecipeOrVideoRecipe(raw []byte) (*MusicRecipe, *VideoRecipe, error
 		return nil, nil, err
 	}
 	return &recipe, nil, nil
+}
+
+// DecodeVideoRecipeJSON decodes current and legacy VideoRecipe JSON shapes.
+func DecodeVideoRecipeJSON(raw []byte) (*VideoRecipe, error) {
+	var recipe VideoRecipe
+	if err := json.Unmarshal(raw, &recipe); err != nil {
+		return nil, err
+	}
+
+	var legacy struct {
+		Title       string         `json:"title,omitempty"`
+		Theme       string         `json:"theme,omitempty"`
+		Mood        string         `json:"mood,omitempty"`
+		Tempo       int            `json:"tempo,omitempty"`
+		Instruments []string       `json:"instruments,omitempty"`
+		Sections    []MusicSection `json:"sections,omitempty"`
+		Lyrics      *LyricsDraft   `json:"lyrics,omitempty"`
+		AudioModel  string         `json:"audio_model,omitempty"`
+		ComposeMode string         `json:"compose_mode,omitempty"`
+		Seed        int64          `json:"seed,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		return nil, err
+	}
+	applyLegacyVideoRecipeFields(&recipe, legacy)
+	recipe.Normalize()
+	return &recipe, nil
+}
+
+func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy struct {
+	Title       string         `json:"title,omitempty"`
+	Theme       string         `json:"theme,omitempty"`
+	Mood        string         `json:"mood,omitempty"`
+	Tempo       int            `json:"tempo,omitempty"`
+	Instruments []string       `json:"instruments,omitempty"`
+	Sections    []MusicSection `json:"sections,omitempty"`
+	Lyrics      *LyricsDraft   `json:"lyrics,omitempty"`
+	AudioModel  string         `json:"audio_model,omitempty"`
+	ComposeMode string         `json:"compose_mode,omitempty"`
+	Seed        int64          `json:"seed,omitempty"`
+}) {
+	if recipe.MusicRecipe.Title == "" {
+		recipe.MusicRecipe.Title = legacy.Title
+	}
+	if recipe.MusicRecipe.Theme == "" {
+		recipe.MusicRecipe.Theme = legacy.Theme
+	}
+	if recipe.MusicRecipe.Mood == "" {
+		recipe.MusicRecipe.Mood = legacy.Mood
+	}
+	if recipe.MusicRecipe.Tempo == 0 {
+		recipe.MusicRecipe.Tempo = legacy.Tempo
+	}
+	if len(recipe.MusicRecipe.Instruments) == 0 {
+		recipe.MusicRecipe.Instruments = append([]string(nil), legacy.Instruments...)
+	}
+	if len(recipe.MusicRecipe.Sections) == 0 {
+		recipe.MusicRecipe.Sections = append([]MusicSection(nil), legacy.Sections...)
+	}
+	if recipe.MusicRecipe.Lyrics == nil {
+		recipe.MusicRecipe.Lyrics = legacy.Lyrics
+	}
+	if recipe.MusicRecipe.AudioModel == "" {
+		recipe.MusicRecipe.AudioModel = legacy.AudioModel
+	}
+	if recipe.MusicRecipe.ComposeMode == "" {
+		recipe.MusicRecipe.ComposeMode = legacy.ComposeMode
+	}
+	if recipe.MusicRecipe.Seed == nil && legacy.Seed != 0 {
+		seed := legacy.Seed
+		recipe.MusicRecipe.Seed = &seed
+	}
 }
 
 func looksLikeVideoRecipeJSON(raw []byte) bool {
@@ -138,13 +209,22 @@ func ValidateVideoRecipe(r *VideoRecipe) error {
 	if r == nil {
 		return fmt.Errorf("video recipe is nil")
 	}
-	if strings.TrimSpace(r.Title) == "" {
+	if strings.TrimSpace(firstNonEmpty(r.ProjectTitle, r.MusicRecipe.Title)) == "" {
 		return fmt.Errorf("video recipe title is required")
 	}
 	if len(r.Cuts) == 0 {
 		return fmt.Errorf("video recipe requires cuts")
 	}
 	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // NormalizeMusicRecipe fills section time ranges for a music recipe.

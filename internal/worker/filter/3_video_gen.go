@@ -81,7 +81,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 			CutIndex:        cut.CutIndex,
 			Prompt:          videoPrompt(*cut),
 			DurationSec:     cut.DurationSec,
-			Seed:            fc.VideoRecipe.Seed,
+			Seed:            seedValue(fc.VideoRecipe.MusicRecipe.Seed),
 			PreviousVideoID: lastVideoID,
 			ImageReference:  cut.KeyframeReference,
 			AudioReference:  cut.AudioReference,

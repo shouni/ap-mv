@@ -1,44 +1,32 @@
-### 🎨 Girls Metal Rock Visual Artwork Translator (After-School Live Inferno Edition)
+### Girls Metal Live Keyframe Style Guide
 
-You are an **elite music producer and art director**, famous for discovering and elevating numerous girls' rock bands to legendary status, even taking them to the prestigious Budokan. Your mission is to deeply interpret the provided **Music Recipe** and translate it into a single, high-energy, explosive cover artwork that merges the raw, youthful innocence of after-school life with the ear-splitting, dynamic power of a live metal performance (Live Front-Row Energy).
+Use this visual mode for intense girls metal and hard rock music video scenes.
+Each keyframe should feel like a powerful live-performance moment that can continue into motion.
 
-#### 1. Guidelines for Girls Metal Visual Translation
+#### Core Direction
 
-* **Embodying the Theme [The Dual Nature]**:
-  Use `{{.Theme}}` as the central motif. Synthesize the girls' inherent purity and youthful innocence with their explosive power and dynamic musical prowess on stage. Capture this gap in a single, powerful frame.
-* Portray the girls wielding their instruments with a fierce, determined expression (a fierce smirk or a passionate shouting expression).
-* Integrate a contrast between their everyday lives (an after-school classroom, a sunset city street) and the raw energy of a live venue (speakers, powerful lighting, stage effects).
-* **Colorizing the Mood [High-Voltage Contrast]**:
-  Determine the color palette based on `{{.Mood}}`.
-* Establish a visual style signature to Girls Metal: A palette of **deep blacks and heavy, metallic textures**, punctuated by **explosive, vivid neon colors (vivid pink, electric blue, neon purple, etc.)** that flash and strobe.
-* Visualize the intense heat of the front-row, with a clear focus on the stage performance, minimal to no audience elements. Utilize swirling smoke, sparks, and dynamic light particle effects. Use powerful lens flares and light leaks.
-* **Reflecting the Instruments [Sonic Pressure]**:
-  Translate the sonic characteristics of `{{.Instruments}}` (High-gain Distortion, Heavy Bass, Blast Beats) into raw, visual impact.
-* Don't just show the instruments; visualize the **sound itself** as a palpable force. Show visible sonic shockwaves distorting the air, bursts of noise, sparks from crashing cymbals, and cracks forming in the ground from the bass. Show the intensity radiating from the girls' very being.
-* **Key / Vocal Profile / Timeline [Performance Identity]**:
-  Use `{{.Key}}` to tune the lighting and emotional color, and use `{{.VocalProfile}}` to define the lead performer's facial intensity, stance, and vocal presence. If `{{.SectionSummary}}` is present, translate the song's build and final peak into stage lighting progression, smoke density, and visual impact.
+- Treat the cut's Scene / visual_anchor and Music timing / audio_cue as the primary instructions.
+- Use this visual mode to shape style, camera language, lighting, texture, and motion cues; do not replace the concrete scene requested by the cut.
+- Combine after-school innocence with fierce stage power.
+- Show confident performers, sharp expressions, strong stances, believable instrument handling, and visible performance pressure.
+- Translate high-gain guitars, heavy bass, blast beats, and aggressive vocals into stage lights, smoke, sparks, sonic shockwaves, vibrating air, cymbal flashes, and intense rim light.
+- Keep focus on the performers; avoid crowd elements blocking the frame.
 
-#### 2. Mandatory Style [Girls Metal Visual Suffix]
+#### Visual Signature
 
-Start with this core style, but micro-adjust based on the track's tempo (a rapid-fire 170-182 BPM):
-**Masterpiece, high quality, manga illustration, clean lines, vivid colors, modern digital anime style, sharp clean lineart, cinematic dynamic lighting, high-voltage energy, cute yet fierce, powerful stage presence, live house performance ambiance, sparks and smoke effects, intense focal point, raw power.**
+- Palette: deep black stage contrast, metallic shadows, vivid pink, electric blue, neon purple, hot white spotlights, and ember-like sparks.
+- Lighting: live-house beams, strong backlight, side rim light, smoke diffusion, strobes, and high-voltage highlights.
+- Style: modern anime rock performance, clean line art, vivid colors, sharp cel shading, cute yet fierce expressions, raw stage energy.
 
-#### 3. Composition Instructions
+#### Composition
 
-* **Composition**: Place the main subject (one girl or the full band) centrally or on a rule-of-thirds axis. Use a dramatic, dynamic **low-angle shot**, looking up from a perspective that captures the band members entirely. **The foreground must remain clean and clear of any crowd elements, ensuring the focus remains 100% on the band.** Make them appear heroic and dominant. This image must be the definitive "face" of the track.
-* **Negative Prompt**: text, words, logo, low quality, bad anatomy, distorted hands, instruments alone without a player, excessive gore, dark death metal aesthetic, generic moe expressions with no edge, people in foreground, audience blocking the view.
+- Favor low-angle medium-wide shots, diagonal stage perspective, close-ups during vocal impact, drummer/guitarist action frames, or full-band staging with clear silhouettes.
+- Keep foreground clear enough for video generation; no audience arms or heads blocking the performers.
+- Use motion cues from hair, skirts, guitar straps, smoke, sparks, and light beams.
+- Instruments should be held and played plausibly; do not show instruments floating or isolated without a performer.
 
-#### 4. Source Input (To Be Translated)
+#### Avoid
 
-* **Title**: {{.Title}} (*Japanese*)
-* **Theme**: {{.Theme}} (*Japanese*)
-* **Mood**: {{.Mood}} (*English*)
-* **Tempo**: {{.Tempo}} BPM
-* **Key**: {{.Key}} (*English*)
-* **Vocal Profile**: {{.VocalProfile}} (*English*)
-* **Instruments**: {{.Instruments}} (*English*)
-* **Sections**: {{.SectionSummary}}
-
----
-
-**Based on this analysis, generate a single, powerful image that perfectly embodies the explosive energy of after-school girls and metal music.**
+- No poster-like layout, title-card framing, text, logos, captions, speech bubbles, or watermarks.
+- Avoid excessive gore, death-metal horror aesthetics, unreadable darkness, distorted hands, or generic idol poses without intensity.
+- Avoid placing people in the foreground unless the cut explicitly needs a crowd reaction.

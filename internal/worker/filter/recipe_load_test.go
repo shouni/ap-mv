@@ -105,7 +105,7 @@ func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 // TestVideoRecipeCreateDoesNotApplyTaskAudioURL verifies audio input is reserved for MV generation.
 func TestVideoRecipeCreateDoesNotApplyTaskAudioURL(t *testing.T) {
 	recipe := &domain.VideoRecipe{
-		Title: "recipe",
+		MusicRecipe: domain.MusicRecipe{Title: "recipe"},
 		Cuts: []domain.VideoCut{
 			{CutIndex: 1, DurationSec: 8, VisualAnchor: "blue light"},
 		},
