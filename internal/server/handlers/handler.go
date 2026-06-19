@@ -181,6 +181,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	task := &domain.Task{
 		JobID:       jobID,
 		Command:     domain.CommandMVFromKeyframeVideoRecipe,
+		AIModels:    h.aiModelsFromForm(r),
 		RecipeURL:   strings.TrimSpace(r.FormValue("recipe_url")),
 		CharacterID: h.characterIDFromForm(r),
 		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),

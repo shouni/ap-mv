@@ -203,13 +203,20 @@ func TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate(t *testing.T) {
 // TestPostRecipeAcceptsKeyframeVideoRecipeJSON verifies that MV generation accepts VideoRecipe JSON.
 func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	queue := &recordingQueue{}
-	h, err := NewHandler(assets.Templates, queue)
+	h, err := NewHandler(assets.Templates, queue, ModelOptions{
+		GeminiModels:       []string{"gemini-a", "gemini-b"},
+		ImageModels:        []string{"image-a", "image-b"},
+		DefaultGeminiModel: "gemini-a",
+		DefaultImageModel:  "image-a",
+	})
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
 	form := url.Values{
-		"csrf_token": {"token"},
+		"csrf_token":  {"token"},
+		"text_model":  {"gemini-b"},
+		"image_model": {"image-b"},
 		"recipe_json": {`{
 			"title": "mv",
 			"cuts": [
@@ -235,6 +242,12 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 	if queue.task.VideoRecipe == nil || len(queue.task.VideoRecipe.Cuts) != 1 {
 		t.Fatalf("queued video recipe = %#v", queue.task.VideoRecipe)
+	}
+	if queue.task.TextModel != "gemini-b" {
+		t.Fatalf("queued text model = %q, want %q", queue.task.TextModel, "gemini-b")
+	}
+	if queue.task.ImageModel != "image-b" {
+		t.Fatalf("queued image model = %q, want %q", queue.task.ImageModel, "image-b")
 	}
 }
 

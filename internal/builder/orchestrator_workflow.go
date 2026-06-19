@@ -45,7 +45,7 @@ func buildWorkflowWithConfig(
 	}
 	orchCfg.ApplyDefaults()
 
-	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
+	aiClient, err := adapters.NewGeminiAIAdapter(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
 	}
