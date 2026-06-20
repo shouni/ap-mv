@@ -25,39 +25,31 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return fmt.Errorf("video generation requires task and recipe")
 	}
 	ctx = videoOutputContext(ctx, fc)
-	if fc.Workflows != nil && fc.Workflows.Video != nil {
-		if fc.VideoRecipe == nil {
-			recipe, err := toVideoRecipe(fc.Recipe)
-			if err != nil {
-				return err
-			}
-			fc.VideoRecipe = recipe
-		}
-		applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
-		if fc.VideoRecipe == nil {
-			return fmt.Errorf("video generation requires recipe")
-		}
-		if _, err := fc.Workflows.Video.Run(ctx, fc.VideoRecipe); err != nil {
-			return err
-		}
-		recipe, err := toDomainRecipe(fc.VideoRecipe)
-		fc.Recipe = recipe
+	if err := ensureVideoRecipe(fc); err != nil {
 		return err
 	}
-	if fc.Recipe == nil {
-		if fc.VideoRecipe == nil {
-			return fmt.Errorf("video generation requires recipe")
-		}
-	}
-
-	if fc.VideoRecipe == nil {
-		recipe, err := toVideoRecipe(fc.Recipe)
-		if err != nil {
-			return err
-		}
-		fc.VideoRecipe = recipe
-	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	if fc.Workflows != nil && fc.Workflows.Video != nil {
+		return f.runWithWorkflow(ctx, fc)
+	}
+	return f.runDirect(ctx, fc)
+}
+
+// runWithWorkflow delegates cut generation to the orchestrator workflow.
+// The workflow handles all cuts internally, so deferred continuation is not required.
+func (f VideoGenerationFilter) runWithWorkflow(ctx context.Context, fc *Context) error {
+	if _, err := fc.Workflows.Video.Run(ctx, fc.VideoRecipe); err != nil {
+		return err
+	}
+	recipe, err := toDomainRecipe(fc.VideoRecipe)
+	fc.Recipe = recipe
+	return err
+}
+
+// runDirect generates cuts one by one via VideoRunner.
+// After each cut it enqueues a continuation task and defers when cuts remain,
+// allowing Cloud Tasks to stay within its execution time limit.
+func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error {
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 	fc.VideoRecipe.Normalize()
 	runner := f.Runner
@@ -119,6 +111,22 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	fc.Recipe = domainRecipe
+	return nil
+}
+
+// ensureVideoRecipe converts fc.Recipe to fc.VideoRecipe when it is not already set.
+func ensureVideoRecipe(fc *Context) error {
+	if fc.VideoRecipe != nil {
+		return nil
+	}
+	if fc.Recipe == nil {
+		return fmt.Errorf("video generation requires recipe")
+	}
+	recipe, err := toVideoRecipe(fc.Recipe)
+	if err != nil {
+		return err
+	}
+	fc.VideoRecipe = recipe
 	return nil
 }
 
