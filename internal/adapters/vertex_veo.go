@@ -20,16 +20,17 @@ const veoHTTPTimeout = 30 * time.Second
 
 // VertexVeoRunner は Vertex AI Veo の長時間実行動画生成 API を呼び出す Runner です。
 type VertexVeoRunner struct {
-	client           *http.Client
-	videoCopier      videoCopier
-	projectID        string
-	locationID       string
-	model            string
-	outputStorageURI string
-	aspectRatio      string
-	generateAudio    bool
-	pollInterval     time.Duration
-	operationTimeout time.Duration
+	client                   *http.Client
+	videoCopier              videoCopier
+	projectID                string
+	locationID               string
+	model                    string
+	outputStorageURI         string
+	aspectRatio              string
+	generateAudio            bool
+	pollInterval             time.Duration
+	operationTimeout         time.Duration
+	maxPollConsecutiveErrors int
 }
 
 // Close は正規動画パスへのコピーに使う GCS クライアントを解放します。
@@ -79,17 +80,22 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	baseClient := &http.Client{Timeout: veoHTTPTimeout}
 	ctxWithClient := context.WithValue(ctx, oauth2.HTTPClient, baseClient)
 
+	maxPollConsecutiveErrors := cfg.VeoPollMaxErrors
+	if maxPollConsecutiveErrors <= 0 {
+		maxPollConsecutiveErrors = 10
+	}
 	return &VertexVeoRunner{
-		client:           oauth2.NewClient(ctxWithClient, ts),
-		videoCopier:      &gcsVideoCopier{client: storageClient},
-		projectID:        strings.TrimSpace(cfg.ProjectID),
-		locationID:       strings.TrimSpace(cfg.LocationID),
-		model:            model,
-		outputStorageURI: buildVeoOutputStorageURI(cfg.GCSBucket, cfg.VeoOutputPrefix),
-		aspectRatio:      aspectRatio,
-		generateAudio:    cfg.VeoGenerateAudio,
-		pollInterval:     pollInterval,
-		operationTimeout: operationTimeout,
+		client:                   oauth2.NewClient(ctxWithClient, ts),
+		videoCopier:              &gcsVideoCopier{client: storageClient},
+		projectID:                strings.TrimSpace(cfg.ProjectID),
+		locationID:               strings.TrimSpace(cfg.LocationID),
+		model:                    model,
+		outputStorageURI:         buildVeoOutputStorageURI(cfg.GCSBucket, cfg.VeoOutputPrefix),
+		aspectRatio:              aspectRatio,
+		generateAudio:            cfg.VeoGenerateAudio,
+		pollInterval:             pollInterval,
+		operationTimeout:         operationTimeout,
+		maxPollConsecutiveErrors: maxPollConsecutiveErrors,
 	}, nil
 }
 

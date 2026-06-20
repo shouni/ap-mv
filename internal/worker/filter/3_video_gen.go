@@ -93,6 +93,9 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		cut.VideoID = res.VideoID
 		cut.VideoURL = res.CloudURL
 		lastVideoID = res.VideoID
+		// 継続タスクのエンキューに失敗した場合、Cloud Tasks は元のタスクを再試行する。
+		// 再試行時には直前の続きタスクのペイロード（このカットはまだ pending）から再開するため、
+		// カットが再生成される可能性があるが、状態の整合性は保たれる。
 		if hasPendingCuts(fc.VideoRecipe) && fc.TaskQueue != nil {
 			domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
 			if err != nil {
@@ -141,18 +144,14 @@ func hasPendingCuts(recipe *orchestrator.VideoRecipe) bool {
 
 // videoPrompt builds the prompt used for video generation.
 func videoPrompt(cut orchestrator.Cut) string {
-	parts := []string{
-		strings.TrimSpace(cut.VisualAnchor),
+	anchor := strings.TrimSpace(cut.VisualAnchor)
+	cue := strings.TrimSpace(cut.AudioCue)
+	if cue == "" {
+		return anchor
 	}
-	if cue := strings.TrimSpace(cut.AudioCue); cue != "" {
-		parts = append(parts, "Synchronize motion and camera timing with audio cue: "+cue)
+	sync := "Synchronize motion and camera timing with audio cue: " + cue
+	if anchor == "" {
+		return sync
 	}
-
-	nonEmpty := parts[:0]
-	for _, part := range parts {
-		if part != "" {
-			nonEmpty = append(nonEmpty, part)
-		}
-	}
-	return strings.Join(nonEmpty, "\n")
+	return anchor + "\n" + sync
 }

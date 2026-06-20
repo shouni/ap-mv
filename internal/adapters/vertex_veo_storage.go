@@ -64,16 +64,25 @@ func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req po
 	if targetURI == "" || targetURI == video.GCSURI {
 		return video, nil
 	}
-	if err := r.videoCopier.Copy(ctx, video.GCSURI, targetURI); err != nil {
+	sourceURI := video.GCSURI
+	if err := r.videoCopier.Copy(ctx, sourceURI, targetURI); err != nil {
 		return vertexVideo{}, fmt.Errorf("copy generated video to canonical path: %w", err)
 	}
 	video.GCSURI = targetURI
 	video.URI = targetURI
+	if err := r.videoCopier.Delete(ctx, sourceURI); err != nil {
+		slog.WarnContext(ctx, "failed to delete temporary Veo video after canonical copy",
+			"source_uri", sourceURI,
+			"target_uri", targetURI,
+			"error", err,
+		)
+	}
 	return video, nil
 }
 
 type videoCopier interface {
 	Copy(ctx context.Context, sourceURI, targetURI string) error
+	Delete(ctx context.Context, uri string) error
 }
 
 type gcsVideoCopier struct {
@@ -90,7 +99,7 @@ func (c *gcsVideoCopier) Close() error {
 	return client.Close()
 }
 
-// Copy は GCS オブジェクトを指定 URI へコピーし、一時ソースをベストエフォートで削除します。
+// Copy は GCS オブジェクトを指定 URI へコピーします。
 func (c *gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) error {
 	if c == nil || c.client == nil {
 		return fmt.Errorf("GCS client is not configured")
@@ -109,15 +118,20 @@ func (c *gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) 
 	_, err = c.client.Bucket(targetBucket).Object(targetObject).
 		CopierFrom(c.client.Bucket(sourceBucket).Object(sourceObject)).
 		Run(ctx)
+	return err
+}
+
+// Delete は GCS オブジェクトを削除します。
+func (c *gcsVideoCopier) Delete(ctx context.Context, uri string) error {
+	if c == nil || c.client == nil {
+		return fmt.Errorf("GCS client is not configured")
+	}
+	bucket, object, err := remoteio.ParseRemoteURI(uri)
 	if err != nil {
 		return err
 	}
-	if err := c.client.Bucket(sourceBucket).Object(sourceObject).Delete(ctx); err != nil {
-		slog.WarnContext(ctx, "failed to delete temporary Veo video after canonical copy",
-			"source_uri", sourceURI,
-			"target_uri", targetURI,
-			"error", err,
-		)
+	if object == "" {
+		return fmt.Errorf("GCS object path is required")
 	}
-	return nil
+	return c.client.Bucket(bucket).Object(object).Delete(ctx)
 }
