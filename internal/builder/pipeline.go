@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -27,6 +28,11 @@ func buildPipeline(
 		return nil, err
 	}
 	runner.Workflows = workflows
+	characters, err := buildCharacters()
+	if err != nil {
+		return nil, fmt.Errorf("load characters for pipeline: %w", err)
+	}
+	runner.Characters = characters
 	runner.WorkflowFactory = func(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 		orchCfg := runner.OrchestratorConfig
 		if task != nil {

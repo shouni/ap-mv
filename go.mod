@@ -15,7 +15,7 @@ require (
 	github.com/shouni/go-notifier v1.2.6
 	github.com/shouni/go-prompt-kit v1.0.4
 	github.com/shouni/go-remote-io v1.5.3
-	github.com/shouni/go-veo-orchestrator v1.1.5
+	github.com/shouni/go-veo-orchestrator v1.1.6
 	github.com/shouni/netarmor v1.0.3
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.21.0

@@ -16,8 +16,13 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 	instance := map[string]any{
 		"prompt": strings.TrimSpace(req.Prompt),
 	}
-	if media := previousVideoMedia(req.PreviousVideoID); media != nil {
-		instance["video"] = media
+	if r.usePreviousVideo {
+		if media := previousVideoMedia(req.PreviousVideoID); media != nil {
+			instance["video"] = media
+		}
+	}
+	if refs := referenceImagesMedia(req); refs != nil {
+		instance["referenceImages"] = refs
 	} else if media := imageMedia(req); media != nil {
 		instance["image"] = media
 	}
@@ -59,6 +64,31 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 		return fmt.Errorf("seed must be between 0 and %d", math.MaxUint32)
 	}
 	return nil
+}
+
+// referenceImagesMedia は ReferenceImages から Veo の referenceImages payload を組み立てます。
+// URI が空のものは除外し、結果が0件の場合は nil を返します。
+func referenceImagesMedia(req ports.VideoGenerationRequest) []map[string]any {
+	if len(req.ReferenceImages) == 0 {
+		return nil
+	}
+	var result []map[string]any
+	for _, uri := range req.ReferenceImages {
+		if uri = strings.TrimSpace(uri); uri == "" {
+			continue
+		}
+		result = append(result, map[string]any{
+			"image": map[string]any{
+				"gcsUri":   uri,
+				"mimeType": mimeTypeFromURI(uri, "image/png"),
+			},
+			"referenceType": "asset",
+		})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 // imageMedia は GCS 画像参照またはインライン画像バイト列から Veo の画像入力 payload を組み立てます。

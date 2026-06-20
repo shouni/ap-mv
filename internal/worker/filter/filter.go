@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/domain"
@@ -20,6 +21,7 @@ type Context struct {
 	Reader      orchestrator.ContentReader
 	VideoRunner ports.VideoRunner
 	TaskQueue   ports.TaskQueue
+	Characters  *characterkit.Characters
 	OutputPath  string
 }
 

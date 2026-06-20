@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/domain"
@@ -30,6 +31,7 @@ type Runner struct {
 	Reader             orchestrator.ContentReader
 	OutputBaseURI      string
 	Notifier           ports.Notifier
+	Characters         *characterkit.Characters
 }
 
 // New は VideoRunner と任意の orchestrator 設定から Runner を生成します。
@@ -106,6 +108,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 		TaskQueue:   r.TaskQueue,
 		Workflows:   workflows,
 		Reader:      r.Reader,
+		Characters:  r.Characters,
 		OutputPath:  r.outputPath(task),
 	}
 	filters := r.Filters

@@ -84,6 +84,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 			Seed:            seedValue(fc.VideoRecipe.MusicRecipe.Seed),
 			PreviousVideoID: lastVideoID,
 			ImageReference:  cut.KeyframeReference,
+			ReferenceImages: buildReferenceImages(fc, *cut),
 			AudioReference:  cut.AudioReference,
 		})
 		if err != nil {
@@ -119,6 +120,22 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 	fc.Recipe = domainRecipe
 	return nil
+}
+
+// buildReferenceImages はキャラクター立ち絵とキーフレームから referenceImages 用 URI リストを組み立てます。
+func buildReferenceImages(fc *Context, cut orchestrator.Cut) []string {
+	var refs []string
+	if fc.Characters != nil {
+		if char := fc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil {
+			if ref := strings.TrimSpace(char.ReferenceURL); ref != "" {
+				refs = append(refs, ref)
+			}
+		}
+	}
+	if ref := strings.TrimSpace(cut.KeyframeReference); ref != "" {
+		refs = append(refs, ref)
+	}
+	return refs
 }
 
 // videoOutputContext adds the output base URI to the context when available.
