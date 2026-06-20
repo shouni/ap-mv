@@ -31,6 +31,7 @@ type VertexVeoRunner struct {
 	pollInterval             time.Duration
 	operationTimeout         time.Duration
 	maxPollConsecutiveErrors int
+	usePreviousVideo         bool
 }
 
 // Close は正規動画パスへのコピーに使う GCS クライアントを解放します。
@@ -96,6 +97,7 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		pollInterval:             pollInterval,
 		operationTimeout:         operationTimeout,
 		maxPollConsecutiveErrors: maxPollConsecutiveErrors,
+		usePreviousVideo:         cfg.VeoUsePreviousVideo,
 	}, nil
 }
 
