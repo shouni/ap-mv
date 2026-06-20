@@ -9,7 +9,7 @@ substitutions:
   _GEMINI_MODELS: 'gemini-3.5-flash,gemini-3.1-pro-preview'
   _IMAGE_MODELS: 'gemini-3.1-flash-image,gemini-3-pro-image'
   _VEO_MODEL: 'veo-3.1-generate-001'
-  _VEO_OUTPUT_PREFIX: 'ap-mv/veo'
+  _VEO_OUTPUT_PREFIX: 'veo'
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
