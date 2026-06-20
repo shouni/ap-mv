@@ -13,8 +13,6 @@ import (
 	"ap-mv/internal/ports"
 )
 
-const maxVeoPollConsecutiveErrors = 10
-
 // startOperation は Vertex AI に predictLongRunning リクエストを送信し、操作ハンドルを返します。
 func (r *VertexVeoRunner) startOperation(ctx context.Context, req ports.VideoGenerationRequest) (*vertexOperation, error) {
 	var op vertexOperation
@@ -38,7 +36,7 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 		body := map[string]string{"operationName": operationName}
 		if err := r.postJSON(ctx, r.modelURL("fetchPredictOperation"), body, &op); err != nil {
 			consecutiveErrors++
-			if consecutiveErrors >= maxVeoPollConsecutiveErrors {
+			if consecutiveErrors >= r.maxPollConsecutiveErrors {
 				return nil, fmt.Errorf("fetch Veo operation failed consecutively %d times: %w", consecutiveErrors, err)
 			}
 		} else {

@@ -87,16 +87,24 @@ func TestVertexVeoRunnerCanonicalizeGeneratedVideoCopiesToCutFile(t *testing.T) 
 	if video.URI != "gs://bucket/ap-mv/veo/jobs/job-1/videos/cut_02.mp4" {
 		t.Fatalf("video URI = %q", video.URI)
 	}
+	if copier.deletedURI != "gs://bucket/ap-mv/veo/jobs/job-1/tmp/videos/cut_02/sample_0.mp4" {
+		t.Fatalf("deletedURI = %q", copier.deletedURI)
+	}
 }
 
 type captureVideoCopier struct {
-	sourceURI string
-	targetURI string
+	sourceURI  string
+	targetURI  string
+	deletedURI string
 }
 
-// Copy copies a generated video object.
 func (c *captureVideoCopier) Copy(_ context.Context, sourceURI, targetURI string) error {
 	c.sourceURI = sourceURI
 	c.targetURI = targetURI
+	return nil
+}
+
+func (c *captureVideoCopier) Delete(_ context.Context, uri string) error {
+	c.deletedURI = uri
 	return nil
 }

@@ -20,17 +20,17 @@ type vertexError struct {
 
 // message は Vertex AI オペレーションエラーを短い診断文字列に整形します。
 func (e vertexError) message() string {
-	parts := []string{e.Status, e.Message}
+	var parts []string
 	if e.Code != 0 {
-		parts = append([]string{fmt.Sprintf("code=%d", e.Code)}, parts...)
+		parts = append(parts, fmt.Sprintf("code=%d", e.Code))
 	}
-	nonEmpty := parts[:0]
-	for _, part := range parts {
-		if strings.TrimSpace(part) != "" {
-			nonEmpty = append(nonEmpty, part)
-		}
+	if s := strings.TrimSpace(e.Status); s != "" {
+		parts = append(parts, s)
 	}
-	return strings.Join(nonEmpty, ": ")
+	if s := strings.TrimSpace(e.Message); s != "" {
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, ": ")
 }
 
 type vertexVeoResult struct {
