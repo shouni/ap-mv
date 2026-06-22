@@ -24,6 +24,30 @@ The image should feel like a vivid frame from an opening sequence, ready to move
 - Leave clear background depth so the shot can become a moving camera moment.
 - Use motion cues such as drifting hair, cloth, clouds, sparks, and light trails without cluttering the subject.
 
+#### For Script Generation (cuts / visual_anchor)
+
+{{template "recipe_output" .}}
+
+Use the source recipe fields to drive every cut decision:
+
+- Map cuts to `music_recipe.sections`: one cut per section as the default; short consecutive sections with the same energy level can share a location but must change the character's action or camera angle.
+- Use `music_recipe.tempo` to calibrate physical energy — fast tempo favors running, jumping, wide sky shots with motion blur; moderate tempo allows walking-in-motion or wind-swept stills; slow tempo calls for near-static framing with subtle particle drift.
+- Translate `music_recipe.instruments` into environmental details: piano → light reflection, puddles, rooftop edge; guitar → wind, sparks, open horizon; strings → flowing fabric, leaf scatter, golden-hour rim light; drums → footstep impact, fast cuts, hard directional light.
+- Use `music_recipe.mood` to set the base color temperature — bright optimistic mood pushes toward clear sky blue and amber backlight; bittersweet mood uses softer diffuse light and cooler midtones.
+- Use `music_recipe.lyrics.hook` to identify the cut that deserves the widest, most energetic framing — this is the emotional peak and should use the strongest backlight and most visible motion cues.
+- Use `music_recipe.lyrics.keywords` to choose specific locations and background elements; weave them into `visual_anchor` as concrete setting details rather than abstract symbols.
+
+Section-level camera direction:
+
+- **Intro / first section**: Wide environmental shot — rooftop, school gate, open sky; the character arriving or pausing; soft warm or early-morning light that sets the world before motion begins.
+- **Verse sections**: Medium shots with bittersweet emotional texture; character in quiet motion (walking, looking out a window, corridor); background details drawn from `lyrics.keywords` reinforce the lyric mood.
+- **Pre-chorus sections**: Rising physical energy — character starting to run, turning toward the camera; wind picking up; framing tightening and light becoming more directional.
+- **Chorus / hook sections**: Wide or low-angle shot at the emotional peak; running against the sky, arms out, hair and clothes in wind; bright backlight, lens flare, sparkling particles; the `lyrics.hook` moment.
+- **Bridge**: Contrasting introspective cut; character still or alone in a different setting from the verse; quieter light, intimate framing; a vulnerable expression before the final push.
+- **Final chorus / Outro**: The most energetic or the most emotionally resolved cut; triumphant wide framing or a slow drift pulling back as the scene breathes.
+
+Let `audio_cue` name the exact section from `music_recipe.sections` and the lyric phrase or musical moment that drives the cut.
+
 #### Avoid
 
 - No poster-like layout, title-card framing, text, logos, captions, speech bubbles, or watermarks.
