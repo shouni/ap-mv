@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"archive/zip"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -235,6 +237,62 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:     csrfTokenFromContext(r.Context()),
 		HistoryDetail: history,
 	}, "history_detail.html")
+}
+
+// DownloadKeyframes streams a zip archive of all valid keyframes for a job.
+func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	// GetHistory はキャッシュを利用するため、キーフレームの有無を事前確認してもコスト低。
+	// ヘッダー送信前に 404 を返せるようにするため先に確認する。
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	hasKeyframes := false
+	for _, cut := range history.Cuts {
+		if strings.TrimSpace(cut.KeyframeReference) != "" {
+			hasKeyframes = true
+			break
+		}
+	}
+	if !hasKeyframes {
+		http.Error(w, "no keyframes available", http.StatusNotFound)
+		return
+	}
+	// ヘッダーを先に送信してから ResponseWriter に直接ストリーミングする。
+	// ヘッダー送信後のエラーは HTTP ステータスで通知できないが、
+	// 接続切断によりクライアントが不完全なファイルとして検知できる (Web 標準の挙動)。
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
+	zw := zip.NewWriter(w)
+	if err := h.HistoryRepository.DownloadKeyframes(r.Context(), jobID, func(name string, reader io.Reader) error {
+		fw, err := zw.Create(name)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to create zip entry", "job_id", jobID, "file", name, "error", err)
+			return err
+		}
+		if _, err := io.Copy(fw, reader); err != nil {
+			slog.ErrorContext(r.Context(), "failed to write zip entry", "job_id", jobID, "file", name, "error", err)
+			return err
+		}
+		return nil
+	}); err != nil {
+		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
+		return
+	}
+	if err := zw.Close(); err != nil {
+		slog.ErrorContext(r.Context(), "failed to finalize zip", "job_id", jobID, "error", err)
+	}
 }
 
 // PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.

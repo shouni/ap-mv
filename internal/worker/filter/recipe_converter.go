@@ -2,8 +2,10 @@ package filter
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
+	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/domain"
@@ -62,6 +64,25 @@ func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.V
 	for i := range recipe.Cuts {
 		recipe.Cuts[i].CharacterID = characterID
 	}
+}
+
+// originalJobOutputPath は RecipeURL（例: gs://bucket/jobs/{jobID}/video_music_meta.json）から
+// ジョブルートパス（例: gs://bucket/jobs/{jobID}/）を導出します。
+// path.Dir は gs:// の // を潰すため remoteio でスキームを分解してから操作します。
+func originalJobOutputPath(recipeURL string) string {
+	recipeURL = strings.TrimSpace(recipeURL)
+	if recipeURL == "" {
+		return ""
+	}
+	bucket, objPath, err := remoteio.ParseRemoteURI(recipeURL)
+	if err != nil {
+		return ""
+	}
+	dir := path.Dir(objPath)
+	if dir == "." || dir == "" || dir == "/" {
+		return ""
+	}
+	return remoteio.BuildGCSURI(bucket, dir) + "/"
 }
 
 // findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。

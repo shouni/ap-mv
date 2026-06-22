@@ -288,6 +288,7 @@ sequenceDiagram
 | `GET` | `/web/history` | 履歴一覧 |
 | `GET` | `/web/history/{jobID}` | 履歴詳細 |
 | `DELETE` | `/web/history/{jobID}` | 履歴削除 |
+| `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
 | `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成 |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
