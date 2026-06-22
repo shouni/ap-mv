@@ -26,15 +26,9 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 
 	cutIndex := *fc.Task.CutIndex
-	targetIdx := -1
-	for i := range fc.VideoRecipe.Cuts {
-		if fc.VideoRecipe.Cuts[i].CutIndex == cutIndex {
-			targetIdx = i
-			break
-		}
-	}
-	if targetIdx == -1 {
-		return fmt.Errorf("cut index %d not found in recipe", cutIndex)
+	targetIdx, err := findCutByIndex(fc.VideoRecipe.Cuts, cutIndex)
+	if err != nil {
+		return err
 	}
 
 	targetCut := fc.VideoRecipe.Cuts[targetIdx]
