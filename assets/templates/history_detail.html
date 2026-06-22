@@ -25,6 +25,7 @@
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
                 <a class="btn btn-outline-success" href="/web/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
+                <button class="btn btn-outline-danger" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
                 <a class="btn btn-outline-secondary" href="/web/history">Back</a>
             </div>
         </div>
@@ -117,4 +118,18 @@
         {{end}}
     </div>
 </div>
+<script>
+async function deleteHistory(jobID, csrfToken) {
+    if (!confirm('Delete job ' + jobID + '?')) return;
+    const resp = await fetch('/web/history/' + jobID, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrfToken }
+    });
+    if (resp.ok) {
+        window.location.href = '/web/history';
+    } else {
+        alert('Delete failed: ' + resp.statusText);
+    }
+}
+</script>
 {{end}}

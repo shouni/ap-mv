@@ -71,6 +71,9 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
 			return nil
 		}
+		if strings.HasPrefix(jobID, "regen-keyframe-") {
+			return nil
+		}
 		if err := domain.ValidateJobID(jobID); err != nil {
 			return nil
 		}

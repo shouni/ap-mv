@@ -33,6 +33,7 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	if err != nil {
 		return err
 	}
+	applyLyricsToVideoRecipeCuts(recipe)
 	fc.VideoRecipe = recipe
 	fc.Recipe, err = toDomainRecipe(recipe)
 	return err
