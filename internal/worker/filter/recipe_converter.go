@@ -85,84 +85,9 @@ func originalJobOutputPath(recipeURL string) string {
 	return remoteio.BuildGCSURI(bucket, dir) + "/"
 }
 
-// applyLyricsToVideoRecipeCuts は music_recipe の歌詞テキストをセクション単位に分解し、
-// 各カットの StartSec が属するセクションの歌詞行を cut.Dialogue に書き込みます。
-// すでに Dialogue が設定済みのカットはスキップします。
+// applyLyricsToVideoRecipeCuts は domain.ApplyLyricsToVideoRecipeCuts の filter 内ラッパーです。
 func applyLyricsToVideoRecipeCuts(recipe *orchestrator.VideoRecipe) {
-	if recipe == nil || recipe.MusicRecipe.Lyrics == nil {
-		return
-	}
-	lyricsText := strings.TrimSpace(recipe.MusicRecipe.Lyrics.Lyrics)
-	if lyricsText == "" {
-		return
-	}
-	sectionLines := parseLyricsSections(lyricsText)
-
-	// 事前にセクション名→カットスライスインデックスのマップを構築して O(N) にする
-	secCutsMap := make(map[string][]int)
-	for i, cut := range recipe.Cuts {
-		for _, sec := range recipe.MusicRecipe.Sections {
-			sStart := float64(sec.StartSeconds)
-			sEnd := float64(sec.EndSeconds)
-			if sEnd <= sStart && sec.Duration > 0 {
-				sEnd = sStart + float64(sec.Duration)
-			}
-			if cut.StartSec >= sStart && cut.StartSec < sEnd {
-				secCutsMap[sec.Name] = append(secCutsMap[sec.Name], i)
-				break
-			}
-		}
-	}
-
-	for secName, cutIndices := range secCutsMap {
-		lines, ok := sectionLines[secName]
-		if !ok || len(lines) == 0 {
-			continue
-		}
-		for pos, idx := range cutIndices {
-			if strings.TrimSpace(recipe.Cuts[idx].Dialogue) == "" {
-				recipe.Cuts[idx].Dialogue = assignLinesForCut(lines, pos, len(cutIndices))
-			}
-		}
-	}
-}
-
-// parseLyricsSections は "[Section Name]\nline...\n\n[Next]..." 形式の歌詞テキストを
-// セクション名→歌詞行スライスのマップに変換します。
-// セクションヘッダーより前の行は "Default" セクションとして扱います。
-func parseLyricsSections(lyricsText string) map[string][]string {
-	result := make(map[string][]string)
-	current := "Default"
-	for _, line := range strings.Split(lyricsText, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			current = line[1 : len(line)-1]
-			continue
-		}
-		if line != "" {
-			result[current] = append(result[current], line)
-		}
-	}
-	return result
-}
-
-// assignLinesForCut はセクション内の歌詞行をカット数で均等分割し、
-// pos 番目のカットに割り当てる行を改行結合した文字列で返します。
-// (pos*N)/totalCuts 方式で余りを均等に分散させます。
-func assignLinesForCut(lines []string, pos, totalCuts int) string {
-	if totalCuts <= 1 {
-		return strings.Join(lines, "\n")
-	}
-	n := len(lines)
-	start := (pos * n) / totalCuts
-	end := ((pos + 1) * n) / totalCuts
-	if start >= n {
-		return ""
-	}
-	if end > n {
-		end = n
-	}
-	return strings.Join(lines[start:end], "\n")
+	domain.ApplyLyricsToVideoRecipeCuts(recipe)
 }
 
 // findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。

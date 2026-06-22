@@ -25,6 +25,10 @@ func (r *VideoHistoryRepository) DownloadKeyframes(ctx context.Context, jobID st
 	if err != nil {
 		return err
 	}
+	// 保存済みレシピに dialogue が入っていない場合（旧ジョブ含む）に備えて
+	// ダウンロード時にも歌詞割り当てを実行する。
+	domain.ApplyLyricsToVideoRecipeCuts(&recipe)
+
 	for _, cut := range recipe.Cuts {
 		ref := strings.TrimSpace(cut.KeyframeReference)
 		if ref == "" {
