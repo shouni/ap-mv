@@ -98,55 +98,48 @@ func applyLyricsToVideoRecipeCuts(recipe *orchestrator.VideoRecipe) {
 	}
 	sectionLines := parseLyricsSections(lyricsText)
 
+	// 事前にセクション名→カットスライスインデックスのマップを構築して O(N) にする
+	secCutsMap := make(map[string][]int)
 	for i, cut := range recipe.Cuts {
-		if strings.TrimSpace(cut.Dialogue) != "" {
-			continue
-		}
 		for _, sec := range recipe.MusicRecipe.Sections {
 			sStart := float64(sec.StartSeconds)
 			sEnd := float64(sec.EndSeconds)
 			if sEnd <= sStart && sec.Duration > 0 {
 				sEnd = sStart + float64(sec.Duration)
 			}
-			if cut.StartSec < sStart || cut.StartSec >= sEnd {
-				continue
-			}
-			lines, ok := sectionLines[sec.Name]
-			if !ok || len(lines) == 0 {
+			if cut.StartSec >= sStart && cut.StartSec < sEnd {
+				secCutsMap[sec.Name] = append(secCutsMap[sec.Name], i)
 				break
 			}
-			// このセクションに属するカットを集め、その中での位置を割り出す
-			var secCuts []int // recipe.Cuts のスライスインデックス
-			for j, c := range recipe.Cuts {
-				if c.StartSec >= sStart && c.StartSec < sEnd {
-					secCuts = append(secCuts, j)
-				}
+		}
+	}
+
+	for secName, cutIndices := range secCutsMap {
+		lines, ok := sectionLines[secName]
+		if !ok || len(lines) == 0 {
+			continue
+		}
+		for pos, idx := range cutIndices {
+			if strings.TrimSpace(recipe.Cuts[idx].Dialogue) == "" {
+				recipe.Cuts[idx].Dialogue = assignLinesForCut(lines, pos, len(cutIndices))
 			}
-			pos := 0
-			for p, idx := range secCuts {
-				if idx == i {
-					pos = p
-					break
-				}
-			}
-			recipe.Cuts[i].Dialogue = assignLinesForCut(lines, pos, len(secCuts))
-			break
 		}
 	}
 }
 
 // parseLyricsSections は "[Section Name]\nline...\n\n[Next]..." 形式の歌詞テキストを
 // セクション名→歌詞行スライスのマップに変換します。
+// セクションヘッダーより前の行は "Default" セクションとして扱います。
 func parseLyricsSections(lyricsText string) map[string][]string {
 	result := make(map[string][]string)
-	current := ""
+	current := "Default"
 	for _, line := range strings.Split(lyricsText, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			current = line[1 : len(line)-1]
 			continue
 		}
-		if line != "" && current != "" {
+		if line != "" {
 			result[current] = append(result[current], line)
 		}
 	}
@@ -155,24 +148,19 @@ func parseLyricsSections(lyricsText string) map[string][]string {
 
 // assignLinesForCut はセクション内の歌詞行をカット数で均等分割し、
 // pos 番目のカットに割り当てる行を改行結合した文字列で返します。
+// (pos*N)/totalCuts 方式で余りを均等に分散させます。
 func assignLinesForCut(lines []string, pos, totalCuts int) string {
 	if totalCuts <= 1 {
 		return strings.Join(lines, "\n")
 	}
-	base := len(lines) / totalCuts
-	if base == 0 {
-		base = 1
-	}
-	start := pos * base
-	end := start + base
-	if pos == totalCuts-1 {
-		end = len(lines)
-	}
-	if start >= len(lines) {
+	n := len(lines)
+	start := (pos * n) / totalCuts
+	end := ((pos + 1) * n) / totalCuts
+	if start >= n {
 		return ""
 	}
-	if end > len(lines) {
-		end = len(lines)
+	if end > n {
+		end = n
 	}
 	return strings.Join(lines[start:end], "\n")
 }
