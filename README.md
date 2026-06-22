@@ -9,7 +9,7 @@
 
 **AP MV (AP Music Video Orchestrator)** は、**Music Recipe（音楽レシピ / 楽曲構成書）** から時間軸のタイムラインを自動補完・構造化し、Google の動画生成 AI **Veo (Vertex AI)** と Gemini 系モデルによる台本生成・キーフレーム生成をつなぐ、Cloud Run / Cloud Tasks 前提の非同期オーケストレーターです。
 
-Web UI からの非同期受付、Cloud Tasks による worker 起動、外部モジュール `github.com/shouni/go-veo-orchestrator` の workflow による Script / Keyframe / Video / Publish の実処理、そして **Video-to-Video（動画ID連鎖）** による文脈維持をひとつのアプリケーションとして構成します。
+Web UI からの非同期受付、Cloud Tasks による worker 起動、外部モジュール `github.com/shouni/go-veo-orchestrator` の workflow による Script / Keyframe / Video / Publish の実処理、そして **Image-to-Video（キーフレーム＋キャラ立ち絵を起点とした動画生成）** と **Video-to-Video（動画ID連鎖）** による文脈維持をひとつのアプリケーションとして構成します。
 
 「時間軸のタイムライン制御（Timeline Logic）」へと進化させ、映像指示、BGMの拍子・感情・盛り上がり（Audio Cue）がミリ秒単位で完全にシンクロした商業クオリティの映像パイプラインを提供します。
 
@@ -28,7 +28,7 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 動画AI（Veo）における最大の課題である「カットごとの容姿・文脈の破綻」を防ぐため、以下の4大要素を同期させて1つのリクエストを決定論的に構築します。
 
 * **Seed-Based Determinism**: キャラクター固有 Seed 値の完全管理による再現性の担保。
-* **Keyframe Anchor**: `gemini-image-kit` を応用。キャラクター Seed と参照画像から、ブレのない静止画キーフレームを高精度生成してベースに指定。
+* **Keyframe Anchor (Image-to-Video)**: `gemini-image-kit` を応用。キャラクター Seed と参照画像から、ブレのない静止画キーフレームを高精度生成し、Veo へ Image-to-Video 入力として渡します。キャラ立ち絵は `referenceImages`（優先）、キーフレームは `image` としてそれぞれ Veo API にセットされます。
 * **Audio-Driven Prompting**: Music Recipe の `audio_cue`（例: `synchronized with the heavy bass drop at 0:10`）を Veo 用プロンプトへ自動インジェクション。
 * **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoID` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。
 
@@ -272,18 +272,24 @@ sequenceDiagram
 4. 各カードの **Regenerate** ボタンから、そのカットのキーフレームのみ再生成できます。「上書き」チェックボックス（デフォルト ON）が ON の場合、再生成後に recipe の `keyframe_reference` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
 5. `DELETE /web/history/{jobID}` で job 配下の GCS object を削除できます。削除後は履歴 metadata cache と recipe cache も破棄します。
 
-### Web Routes
+### 6. HTTP エンドポイント
 
-| ルート | 用途 |
-| --- | --- |
-| `GET /healthz` | ヘルスチェック |
-| `GET /static/*` | embed.FS の静的ファイル配信 |
-| `GET /auth/login`, `GET /auth/callback` | Google OAuth |
-| `GET /`, `GET /web/video-recipe-create`, `POST /web/video-recipe-create` | VideoRecipe 作成。`GET/POST /web/compose` は同じ handler への alias |
-| `GET /web/mv-from-keyframe-video-recipe`, `POST /web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成。`GET/POST /web/generate-from-recipe` は同じ handler への alias |
-| `GET /web/history`, `GET /web/history/{jobID}`, `DELETE /web/history/{jobID}` | 履歴一覧、詳細、削除 |
-| `POST /web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成 |
-| `POST /tasks/generate` | Cloud Tasks worker endpoint |
+| メソッド | パス | 用途 |
+| --- | --- | --- |
+| `GET` | `/healthz` | ヘルスチェック |
+| `GET` | `/static/*` | embed.FS の静的ファイル配信 |
+| `GET` | `/auth/login` | Google OAuth ログイン開始 |
+| `GET` | `/auth/callback` | OAuth コールバック |
+| `GET` | `/` | ホーム |
+| `GET` | `/web/video-recipe-create` | VideoRecipe 作成フォーム（`/web/compose` も同じ handler） |
+| `POST` | `/web/video-recipe-create` | VideoRecipe 作成サブミット（`/web/compose` も同じ handler） |
+| `GET` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成フォーム（`/web/generate-from-recipe` も同じ handler） |
+| `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成サブミット（`/web/generate-from-recipe` も同じ handler） |
+| `GET` | `/web/history` | 履歴一覧 |
+| `GET` | `/web/history/{jobID}` | 履歴詳細 |
+| `DELETE` | `/web/history/{jobID}` | 履歴削除 |
+| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成 |
+| `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
 ---
 
