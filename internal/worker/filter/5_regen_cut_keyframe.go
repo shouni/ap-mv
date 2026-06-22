@@ -46,6 +46,9 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 	}
 
 	if fc.Task.OverwriteKeyframe {
+		if updatedTemp == nil || len(updatedTemp.Cuts) == 0 {
+			return fmt.Errorf("regenerated keyframe not found for cut %d", cutIndex)
+		}
 		fc.VideoRecipe.Cuts[targetIdx].KeyframeReference = updatedTemp.Cuts[0].KeyframeReference
 		if fc.Workflows.Publish != nil {
 			if _, err := fc.Workflows.Publish.Run(ctx, fc.VideoRecipe, fc.OutputPath); err != nil {
