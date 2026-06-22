@@ -19,10 +19,11 @@ import (
 const defaultPromptMode = "default"
 
 type scriptPrompt struct {
-	builder         *promptkit.Builder
-	templates       map[string]string
-	visualTemplates map[string]string
-	visualMode      string
+	builder          *promptkit.Builder
+	templates        map[string]string
+	visualTemplates  map[string]string
+	visualMode       string
+	sharedVisualTmpl *template.Template
 }
 
 type scriptPromptData struct {
@@ -47,6 +48,9 @@ type visualModeData struct {
 }
 
 func newVisualModeData(recipe *orchestrator.VideoRecipe) visualModeData {
+	if recipe == nil {
+		return visualModeData{}
+	}
 	d := visualModeData{
 		Title:       recipe.MusicRecipe.Title,
 		Theme:       recipe.MusicRecipe.Theme,
@@ -91,7 +95,28 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 	if len(visualTemplates) > 0 && visualTemplates[0] != nil {
 		selectedVisualTemplates = visualTemplates[0]
 	}
-	return &scriptPrompt{builder: builder, templates: templates, visualTemplates: selectedVisualTemplates}, nil
+	sharedTmpl, err := buildSharedVisualTemplate(selectedVisualTemplates)
+	if err != nil {
+		return nil, err
+	}
+	return &scriptPrompt{
+		builder:          builder,
+		templates:        templates,
+		visualTemplates:  selectedVisualTemplates,
+		sharedVisualTmpl: sharedTmpl,
+	}, nil
+}
+
+func buildSharedVisualTemplate(visualTemplates map[string]string) (*template.Template, error) {
+	tmpl := template.New("").Funcs(template.FuncMap{"join": strings.Join})
+	for name, content := range visualTemplates {
+		if strings.HasPrefix(name, "_") {
+			if _, err := tmpl.New(name).Parse(content); err != nil {
+				return nil, fmt.Errorf("parse shared visual template %q: %w", name, err)
+			}
+		}
+	}
+	return tmpl, nil
 }
 
 // Build renders the script prompt for the requested mode.
@@ -175,19 +200,15 @@ func (p *scriptPrompt) visualPrompt(mode string, data *orchestrator.TemplateData
 	if raw == "" || data == nil || data.SourceRecipe == nil {
 		return raw, nil
 	}
-	tmpl := template.New("main").Funcs(template.FuncMap{"join": strings.Join})
-	for name, content := range p.visualTemplates {
-		if strings.HasPrefix(name, "_") {
-			if _, err := tmpl.Parse(content); err != nil {
-				return "", fmt.Errorf("parse shared visual template %q: %w", name, err)
-			}
-		}
+	tmpl, err := p.sharedVisualTmpl.Clone()
+	if err != nil {
+		return "", fmt.Errorf("clone shared visual templates: %w", err)
 	}
-	if _, err := tmpl.Parse(raw); err != nil {
+	if _, err := tmpl.New("main").Parse(raw); err != nil {
 		return "", fmt.Errorf("parse visual mode template %q: %w", mode, err)
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, newVisualModeData(data.SourceRecipe)); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "main", newVisualModeData(data.SourceRecipe)); err != nil {
 		return "", fmt.Errorf("render visual mode template %q: %w", mode, err)
 	}
 	return buf.String(), nil
