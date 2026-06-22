@@ -217,6 +217,80 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// ApplyLyricsToVideoRecipeCuts は music_recipe の歌詞テキストをセクション単位に分解し、
+// 各カットの StartSec が属するセクションの歌詞行を cut.Dialogue に書き込みます。
+// すでに Dialogue が設定済みのカットはスキップします。
+// DownloadKeyframes など、保存済みレシピを読んで処理する経路でも呼び出せます。
+func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
+	if recipe == nil || recipe.MusicRecipe.Lyrics == nil {
+		return
+	}
+	lyricsText := strings.TrimSpace(recipe.MusicRecipe.Lyrics.Lyrics)
+	if lyricsText == "" {
+		return
+	}
+	sectionLines := parseLyricsSections(lyricsText)
+
+	secCutsMap := make(map[string][]int)
+	for i, cut := range recipe.Cuts {
+		for _, sec := range recipe.MusicRecipe.Sections {
+			sStart := float64(sec.StartSeconds)
+			sEnd := float64(sec.EndSeconds)
+			if sEnd <= sStart && sec.Duration > 0 {
+				sEnd = sStart + float64(sec.Duration)
+			}
+			if cut.StartSec >= sStart && cut.StartSec < sEnd {
+				secCutsMap[sec.Name] = append(secCutsMap[sec.Name], i)
+				break
+			}
+		}
+	}
+
+	for secName, cutIndices := range secCutsMap {
+		lines, ok := sectionLines[secName]
+		if !ok || len(lines) == 0 {
+			continue
+		}
+		for pos, idx := range cutIndices {
+			if strings.TrimSpace(recipe.Cuts[idx].Dialogue) == "" {
+				recipe.Cuts[idx].Dialogue = assignLinesForCut(lines, pos, len(cutIndices))
+			}
+		}
+	}
+}
+
+func parseLyricsSections(lyricsText string) map[string][]string {
+	result := make(map[string][]string)
+	current := "Default"
+	for _, line := range strings.Split(lyricsText, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			current = line[1 : len(line)-1]
+			continue
+		}
+		if line != "" {
+			result[current] = append(result[current], line)
+		}
+	}
+	return result
+}
+
+func assignLinesForCut(lines []string, pos, totalCuts int) string {
+	if totalCuts <= 1 {
+		return strings.Join(lines, "\n")
+	}
+	n := len(lines)
+	start := (pos * n) / totalCuts
+	end := ((pos + 1) * n) / totalCuts
+	if start >= n {
+		return ""
+	}
+	if end > n {
+		end = n
+	}
+	return strings.Join(lines[start:end], "\n")
+}
+
 // NormalizeMusicRecipe fills section time ranges for a music recipe.
 func NormalizeMusicRecipe(r *MusicRecipe) error {
 	if err := ValidateMusicRecipe(r); err != nil {
