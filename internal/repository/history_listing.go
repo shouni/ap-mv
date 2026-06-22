@@ -19,7 +19,10 @@ import (
 	"ap-mv/internal/domain"
 )
 
-const videoMetadataFile = "video_music_meta.json"
+const (
+	videoMetadataFile   = "video_music_meta.json"
+	regenKeyframePrefix = "regen-keyframe-"
+)
 
 // VideoHistoryRepository lists generated MV metadata from the workflow output directory.
 type VideoHistoryRepository struct {
@@ -69,6 +72,9 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		}
 		jobID := path.Base(path.Dir(gcsPath))
 		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
+			return nil
+		}
+		if strings.HasPrefix(jobID, regenKeyframePrefix) {
 			return nil
 		}
 		if err := domain.ValidateJobID(jobID); err != nil {

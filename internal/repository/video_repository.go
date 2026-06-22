@@ -111,14 +111,25 @@ func buildASSSubtitles(cuts []domain.VideoCut, bpm int) string {
 		if dialogue == "" {
 			continue
 		}
-		startSec := cut.StartSec
-		endSec := cut.EndSec
-		if endSec <= startSec {
-			endSec = startSec + cut.DurationSec
+		cutStart := cut.StartSec
+		cutEnd := cut.EndSec
+		if cutEnd <= cutStart {
+			cutEnd = cutStart + cut.DurationSec
 		}
-		text := buildKaraokeLine(dialogue, cut.DurationSec, bpm)
-		fmt.Fprintf(&sb, "Dialogue: 0,%s,%s,Karaoke,,0,0,0,,%s\n",
-			formatASSTime(startSec), formatASSTime(endSec), text)
+		// Dialogue が複数行の場合は行ごとにエントリを分割して時間を均等配分する
+		lines := strings.Split(dialogue, "\n")
+		secPerLine := (cutEnd - cutStart) / float64(len(lines))
+		for i, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			start := cutStart + float64(i)*secPerLine
+			end := start + secPerLine
+			text := buildKaraokeLine(line, secPerLine, bpm)
+			fmt.Fprintf(&sb, "Dialogue: 0,%s,%s,Karaoke,,0,0,0,,%s\n",
+				formatASSTime(start), formatASSTime(end), text)
+		}
 	}
 	return sb.String()
 }
