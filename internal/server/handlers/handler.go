@@ -232,8 +232,55 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.renderPage(w, PageData{
 		Title:         "History Detail",
+		CSRFToken:     csrfTokenFromContext(r.Context()),
 		HistoryDetail: history,
 	}, "history_detail.html")
+}
+
+// PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
+func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
+	if !validCSRFToken(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
+		return
+	}
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
+	cutIndex, err := strconv.Atoi(cutIndexStr)
+	if err != nil || cutIndex < 1 {
+		http.Error(w, "invalid cut_index", http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(history.StorageURI) == "" {
+		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+		return
+	}
+	newJobID, err := domain.NewJobID("regen-keyframe")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	task := &domain.Task{
+		JobID:             newJobID,
+		Command:           domain.CommandRegenerateCutKeyframe,
+		RecipeURL:         history.StorageURI,
+		CutIndex:          &cutIndex,
+		OverwriteKeyframe: r.FormValue("overwrite") == "on",
+		CreatedAt:         time.Now().UTC(),
+	}
+	h.enqueue(w, r, task)
 }
 
 // DeleteHistory handles history deletion requests.
