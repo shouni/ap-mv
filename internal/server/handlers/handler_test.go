@@ -12,6 +12,7 @@ import (
 
 	"ap-mv/assets"
 	"ap-mv/internal/domain"
+	"ap-mv/internal/ports"
 )
 
 type recordingQueue struct {
@@ -40,8 +41,8 @@ func (r fakeHistoryRepository) DeleteHistory(context.Context, string) error {
 	return nil
 }
 
-func (r fakeHistoryRepository) DownloadKeyframes(context.Context, string) ([]domain.KeyframeFile, error) {
-	return nil, nil
+func (r fakeHistoryRepository) DownloadKeyframes(context.Context, string, ports.KeyframeSink) error {
+	return nil
 }
 
 // TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.

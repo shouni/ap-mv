@@ -51,7 +51,10 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 		}
 		fc.VideoRecipe.Cuts[targetIdx].KeyframeReference = updatedTemp.Cuts[0].KeyframeReference
 		if fc.Workflows.Publish != nil {
-			if _, err := fc.Workflows.Publish.Run(ctx, fc.VideoRecipe, fc.OutputPath); err != nil {
+			// 元ジョブの recipe を上書きする。fc.OutputPath は新規ジョブのパスのため、
+			// RecipeURL のディレクトリから元のジョブルートパスを導出する。
+			originalOutputPath := originalJobOutputPath(fc.Task.RecipeURL)
+			if _, err := fc.Workflows.Publish.Run(ctx, fc.VideoRecipe, originalOutputPath); err != nil {
 				return fmt.Errorf("save updated recipe after regen cut %d: %w", cutIndex, err)
 			}
 		}

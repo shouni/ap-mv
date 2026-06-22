@@ -36,13 +36,6 @@ type VideoHistoryDetail struct {
 	Cuts []VideoHistoryCut `json:"cuts,omitempty"`
 }
 
-// KeyframeFile holds the binary content of a single cut keyframe for download.
-type KeyframeFile struct {
-	Name     string
-	Data     []byte
-	MimeType string
-}
-
 // PageMeta contains pagination metadata for history list views.
 type PageMeta struct {
 	Page       int  `json:"page"`

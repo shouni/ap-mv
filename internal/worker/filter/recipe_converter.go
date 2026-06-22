@@ -2,6 +2,7 @@ package filter
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -62,6 +63,20 @@ func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.V
 	for i := range recipe.Cuts {
 		recipe.Cuts[i].CharacterID = characterID
 	}
+}
+
+// originalJobOutputPath は RecipeURL（例: gs://bucket/jobs/{jobID}/video_music_meta.json）から
+// ジョブルートパス（例: gs://bucket/jobs/{jobID}/）を導出します。
+func originalJobOutputPath(recipeURL string) string {
+	recipeURL = strings.TrimSpace(recipeURL)
+	if recipeURL == "" {
+		return ""
+	}
+	dir := path.Dir(recipeURL)
+	if dir == "." || dir == "" {
+		return ""
+	}
+	return dir + "/"
 }
 
 // findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。
