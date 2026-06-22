@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"archive/zip"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -235,6 +236,42 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		CSRFToken:     csrfTokenFromContext(r.Context()),
 		HistoryDetail: history,
 	}, "history_detail.html")
+}
+
+// DownloadKeyframes streams a zip archive of all valid keyframes for a job.
+func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	files, err := h.HistoryRepository.DownloadKeyframes(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to download keyframes", "job_id", jobID, "error", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if len(files) == 0 {
+		http.Error(w, "no keyframes available", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
+	zw := zip.NewWriter(w)
+	for _, f := range files {
+		fw, err := zw.Create(f.Name)
+		if err != nil {
+			return
+		}
+		if _, err := fw.Write(f.Data); err != nil {
+			return
+		}
+	}
+	_ = zw.Close()
 }
 
 // PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.

@@ -40,6 +40,10 @@ func (r fakeHistoryRepository) DeleteHistory(context.Context, string) error {
 	return nil
 }
 
+func (r fakeHistoryRepository) DownloadKeyframes(context.Context, string) ([]domain.KeyframeFile, error) {
+	return nil, nil
+}
+
 // TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.
 func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
