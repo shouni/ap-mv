@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"fmt"
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -61,6 +62,16 @@ func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *orchestrator.V
 	for i := range recipe.Cuts {
 		recipe.Cuts[i].CharacterID = characterID
 	}
+}
+
+// findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。
+func findCutByIndex(cuts []orchestrator.Cut, cutIndex int) (int, error) {
+	for i := range cuts {
+		if cuts[i].CutIndex == cutIndex {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("cut index %d not found in recipe", cutIndex)
 }
 
 // toDomainRecipe converts an orchestrator video recipe to a domain music recipe.

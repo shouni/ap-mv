@@ -104,6 +104,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history", h.History)
 		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
+		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
 	})
 }
 

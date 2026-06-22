@@ -55,7 +55,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 ---
 
-## 🎨 ワークフローと4つの生成フィルター (Workflows)
+## 🎨 ワークフローと生成フィルター (Workflows)
 
 `internal/worker/filter/` 配下の各フィルターは、`domain.MusicRecipe`（`go-gemini-client/lyria.MusicRecipe` alias）と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。動画生成の `cuts`、`video_id`、`keyframe_reference` などの状態は `VideoRecipe` 側で保持します。
 
@@ -66,6 +66,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。 |
 | **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
+| **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成します。対象カットを 1 枚の一時 recipe に切り出して `CutKeyframe.RunAndSave` を実行し、`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference` を更新して `Publish.Run` で metadata を上書き保存します。 |
 
 ### Recipe / Audio GCS Inputs
 
@@ -268,7 +269,8 @@ sequenceDiagram
 1. `/web/history` で生成済み job の一覧を確認します。GCS 上の `video_music_meta.json` を job 単位で列挙し、タイトル、作成時刻、cut 数、生成状態をページング表示します。
 2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。
 3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
-4. `DELETE /web/history/{jobID}` で job 配下の GCS object を削除できます。削除後は履歴 metadata cache と recipe cache も破棄します。
+4. 各カードの **Regenerate** ボタンから、そのカットのキーフレームのみ再生成できます。「上書き」チェックボックス（デフォルト ON）が ON の場合、再生成後に recipe の `keyframe_reference` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
+5. `DELETE /web/history/{jobID}` で job 配下の GCS object を削除できます。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### Web Routes
 
@@ -280,6 +282,7 @@ sequenceDiagram
 | `GET /`, `GET /web/video-recipe-create`, `POST /web/video-recipe-create` | VideoRecipe 作成。`GET/POST /web/compose` は同じ handler への alias |
 | `GET /web/mv-from-keyframe-video-recipe`, `POST /web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成。`GET/POST /web/generate-from-recipe` は同じ handler への alias |
 | `GET /web/history`, `GET /web/history/{jobID}`, `DELETE /web/history/{jobID}` | 履歴一覧、詳細、削除 |
+| `POST /web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成 |
 | `POST /tasks/generate` | Cloud Tasks worker endpoint |
 
 ---

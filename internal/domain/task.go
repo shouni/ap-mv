@@ -23,6 +23,7 @@ const (
 	CommandCompose                   TaskCommand = "compose"
 	CommandVideoRecipeCreate         TaskCommand = "video_recipe_create"
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
+	CommandRegenerateCutKeyframe     TaskCommand = "regenerate_cut_keyframe"
 
 	// Legacy task command names kept for existing queued tasks and clients.
 	CommandComposeToKeyframe  TaskCommand = "compose_to_keyframe"
@@ -39,12 +40,16 @@ type Task struct {
 	// VisualMode は visual_modes プロンプト群から選ぶ映像スタイルです。
 	VisualMode string `json:"visual_mode,omitempty"`
 	// CharacterID はキーフレーム生成で使うキャラクターIDです。
-	CharacterID string       `json:"character_id,omitempty"`
-	RecipeURL   string       `json:"recipe_url,omitempty"`
-	AudioURL    string       `json:"audio_url,omitempty"`
-	Recipe      *MusicRecipe `json:"recipe,omitempty"`
-	VideoRecipe *VideoRecipe `json:"video_recipe,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
+	CharacterID string `json:"character_id,omitempty"`
+	// CutIndex は再生成対象のカットインデックスです（regenerate_cut_keyframe コマンド専用）。
+	CutIndex *int `json:"cut_index,omitempty"`
+	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
+	OverwriteKeyframe bool         `json:"overwrite_keyframe,omitempty"`
+	RecipeURL         string       `json:"recipe_url,omitempty"`
+	AudioURL          string       `json:"audio_url,omitempty"`
+	Recipe            *MusicRecipe `json:"recipe,omitempty"`
+	VideoRecipe       *VideoRecipe `json:"video_recipe,omitempty"`
+	CreatedAt         time.Time    `json:"created_at"`
 }
 
 var jobIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
@@ -109,6 +114,16 @@ func (t *Task) Validate() error {
 		}
 		if t.Recipe != nil {
 			return ValidateMusicRecipe(t.Recipe)
+		}
+	case CommandRegenerateCutKeyframe:
+		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+		}
+		if t.CutIndex == nil {
+			return fmt.Errorf("%s task requires cut_index", t.Command)
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)

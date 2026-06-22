@@ -15,18 +15,11 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil {
 		return fmt.Errorf("cut keyframe generation requires recipe")
 	}
-	if fc.VideoRecipe == nil {
-		recipe, err := toVideoRecipe(fc.Recipe)
-		if err != nil {
-			return err
-		}
-		fc.VideoRecipe = recipe
+	if err := ensureVideoRecipe(fc); err != nil {
+		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
-	if fc.VideoRecipe == nil {
-		return fmt.Errorf("cut keyframe generation requires recipe")
-	}
 	if fc.Workflows == nil || fc.Workflows.CutKeyframe == nil {
 		recipe, err := toDomainRecipe(fc.VideoRecipe)
 		fc.Recipe = recipe
