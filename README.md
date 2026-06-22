@@ -51,7 +51,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 * **Token-Bucket & Bounded Concurrency**: `golang.org/x/time/rate` と `errgroup.SetLimit` によるキーフレーム生成の流量制御と同時実行数制御を行い、生成系 API のレートリミットを避けます。
 * **Network Safety**: 外部HTTP取得には `go-http-kit` 系の安全な HTTP client を注入し、GCS 入出力は `go-remote-io` の GCS adapter に集約します。`SERVICE_URL` は `netarmor` による安全スキーム判定を通し、本番では HTTPS を必須化します。
 * **Singleflight Protection**: 大容量の動画・音声アセットの重複フェッチや二重アップロードをインメモリで完全に抑制。
-* **Session-backed CSRF**: WebフォームのCSRFトークンは `gorilla/sessions` のCookieセッションに保存し、POST時に定数時間比較で検証します。Cookie署名キーには起動時ランダム値ではなく `SESSION_SECRET` を使うため、Cloud Run の再起動や複数インスタンス間でも検証が安定します。
+* **Session-backed CSRF**: WebフォームのCSRFトークンは `gorilla/sessions` のCookieセッションに保存し、POST / DELETE 時に定数時間比較で検証します。フォーム送信は `csrf_token` フィールド、JS からの fetch（DELETE など）は `X-CSRF-Token` ヘッダーで渡します。Cookie署名キーには起動時ランダム値ではなく `SESSION_SECRET` を使うため、Cloud Run の再起動や複数インスタンス間でも検証が安定します。
 
 ---
 
@@ -63,7 +63,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | --- | --- | --- |
 | **0. Recipe Load** | `0_recipe_load.go` | `/web/mv-from-keyframe-video-recipe` のフォームで入力された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
 | **1. Scripting** | `1_scripting.go` | `/web/video-recipe-create` の videoレシピ作成フローで `Workflows.Script.Run` を呼び、Character、MusicRecipe GCS URL / JSON、Visual Mode 的プロンプトから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
-| **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。 |
+| **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。保存後に `applyLyricsToVideoRecipeCuts` を実行し、`music_recipe.lyrics.lyrics` をセクション単位で分解して各カットの `dialogue` フィールドへ割り当てます。 |
 | **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 | **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成します。対象カットを 1 枚の一時 recipe に切り出して `CutKeyframe.RunAndSave` を実行し、`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference` を更新して `Publish.Run` で metadata を上書き保存します。 |
@@ -179,9 +179,10 @@ ap-mv/
             ├── recipe_converter.go # lyria.MusicRecipe と VideoRecipe の相互変換
             ├── 0_recipe_load.go  # VideoRecipe / MusicRecipe JSON・GCS URI から Recipe を読み込み
             ├── 1_scripting.go    # video_recipe_create 入力から VideoRecipe を生成
-            ├── 2_cut_gen.go      # 各カットの静止画キーフレームを高精度生成
+            ├── 2_cut_gen.go      # 各カットの静止画キーフレームを高精度生成・歌詞割り当て
             ├── 3_video_gen.go    # Veo APIへの数珠繋ぎ（Video-to-VideoID連鎖）動画生成
-            └── 4_publishing.go   # video_music_meta.json のGCS保存
+            ├── 4_publishing.go   # video_music_meta.json のGCS保存
+            └── 5_regen_cut_keyframe.go # 指定カットのキーフレームのみ再生成・上書き保存
 
 ```
 
@@ -266,11 +267,12 @@ sequenceDiagram
 
 ### 3. 履歴画面
 
-1. `/web/history` で生成済み job の一覧を確認します。GCS 上の `video_music_meta.json` を job 単位で列挙し、タイトル、作成時刻、cut 数、生成状態をページング表示します。
-2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。
+1. `/web/history` で生成済み job の一覧を確認します。GCS 上の `video_music_meta.json` を job 単位で列挙し、タイトル、作成時刻、cut 数、生成状態をページング表示します。`regen-keyframe-` プレフィックスで始まる再生成用の内部ジョブは一覧に表示しません。
+2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON への署名付き URL）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
 3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
-4. 各カードの **Regenerate** ボタンから、そのカットのキーフレームのみ再生成できます。「上書き」チェックボックス（デフォルト ON）が ON の場合、再生成後に recipe の `keyframe_reference` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-5. `DELETE /web/history/{jobID}` で job 配下の GCS object を削除できます。削除後は履歴 metadata cache と recipe cache も破棄します。
+4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
+5. 各カードの **Regenerate** ボタンから、そのカットのキーフレームのみ再生成できます。「上書き」チェックボックス（デフォルト ON）が ON の場合、再生成後に recipe の `keyframe_reference` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
+6. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### 6. HTTP エンドポイント
 
