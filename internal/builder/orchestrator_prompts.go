@@ -1,11 +1,13 @@
 package builder
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"path"
 	"strings"
+	"text/template"
 
 	characterkit "github.com/shouni/go-character-kit/character"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
@@ -17,16 +19,54 @@ import (
 const defaultPromptMode = "default"
 
 type scriptPrompt struct {
-	builder         *promptkit.Builder
-	templates       map[string]string
-	visualTemplates map[string]string
-	visualMode      string
+	builder          *promptkit.Builder
+	templates        map[string]string
+	visualTemplates  map[string]string
+	visualMode       string
+	sharedVisualTmpl *template.Template
 }
 
 type scriptPromptData struct {
 	Mode             string
 	SourceRecipeJSON string
 	VisualPrompt     string
+}
+
+// visualModeData はビジュアルモードテンプレートに渡すレシピ情報のフラット表現です。
+type visualModeData struct {
+	Title       string
+	Theme       string
+	Mood        string
+	Tempo       int
+	Key         string
+	Instruments []string
+	Sections    []orchestrator.Section
+	Hook        string
+	LyricText   string
+	Keywords    []string
+	Narrative   string
+}
+
+func newVisualModeData(recipe *orchestrator.VideoRecipe) visualModeData {
+	if recipe == nil {
+		return visualModeData{}
+	}
+	d := visualModeData{
+		Title:       recipe.MusicRecipe.Title,
+		Theme:       recipe.MusicRecipe.Theme,
+		Mood:        recipe.MusicRecipe.Mood,
+		Tempo:       recipe.MusicRecipe.Tempo,
+		Key:         recipe.MusicRecipe.Key,
+		Instruments: recipe.MusicRecipe.Instruments,
+		Sections:    recipe.MusicRecipe.Sections,
+	}
+	if recipe.MusicRecipe.Lyrics != nil {
+		d.Hook = recipe.MusicRecipe.Lyrics.Hook
+		d.LyricText = recipe.MusicRecipe.Lyrics.Lyrics
+		d.Keywords = recipe.MusicRecipe.Lyrics.Keywords
+		d.Narrative = recipe.MusicRecipe.Lyrics.Narrative
+	}
+	return d
 }
 
 // newScriptPrompt creates a script prompt from bundled prompt assets.
@@ -55,7 +95,28 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 	if len(visualTemplates) > 0 && visualTemplates[0] != nil {
 		selectedVisualTemplates = visualTemplates[0]
 	}
-	return &scriptPrompt{builder: builder, templates: templates, visualTemplates: selectedVisualTemplates}, nil
+	sharedTmpl, err := buildSharedVisualTemplate(selectedVisualTemplates)
+	if err != nil {
+		return nil, err
+	}
+	return &scriptPrompt{
+		builder:          builder,
+		templates:        templates,
+		visualTemplates:  selectedVisualTemplates,
+		sharedVisualTmpl: sharedTmpl,
+	}, nil
+}
+
+func buildSharedVisualTemplate(visualTemplates map[string]string) (*template.Template, error) {
+	tmpl := template.New("").Funcs(template.FuncMap{"join": strings.Join})
+	for name, content := range visualTemplates {
+		if strings.HasPrefix(name, "_") {
+			if _, err := tmpl.New(name).Parse(content); err != nil {
+				return nil, fmt.Errorf("parse shared visual template %q: %w", name, err)
+			}
+		}
+	}
+	return tmpl, nil
 }
 
 // Build renders the script prompt for the requested mode.
@@ -78,10 +139,14 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	if err != nil {
 		return "", err
 	}
+	visualPrompt, err := p.visualPrompt(mode, data)
+	if err != nil {
+		return "", err
+	}
 	return p.builder.Build(templateMode, scriptPromptData{
 		Mode:             mode,
 		SourceRecipeJSON: sourceRecipeJSON,
-		VisualPrompt:     p.visualPrompt(mode),
+		VisualPrompt:     visualPrompt,
 	})
 }
 
@@ -114,9 +179,9 @@ func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoReci
 	return &cloned, nil
 }
 
-func (p *scriptPrompt) visualPrompt(mode string) string {
+func (p *scriptPrompt) visualPrompt(mode string, data *orchestrator.TemplateData) (string, error) {
 	if p == nil || len(p.visualTemplates) == 0 {
-		return ""
+		return "", nil
 	}
 	if p.visualMode != "" {
 		mode = p.visualMode
@@ -125,10 +190,28 @@ func (p *scriptPrompt) visualPrompt(mode string) string {
 	if mode == "" {
 		mode = defaultPromptMode
 	}
-	if prompt := strings.TrimSpace(p.visualTemplates[mode]); prompt != "" {
-		return prompt
+	raw := ""
+	if !strings.HasPrefix(mode, "_") {
+		raw = strings.TrimSpace(p.visualTemplates[mode])
 	}
-	return strings.TrimSpace(p.visualTemplates[defaultPromptMode])
+	if raw == "" {
+		raw = strings.TrimSpace(p.visualTemplates[defaultPromptMode])
+	}
+	if raw == "" || data == nil || data.SourceRecipe == nil {
+		return raw, nil
+	}
+	tmpl, err := p.sharedVisualTmpl.Clone()
+	if err != nil {
+		return "", fmt.Errorf("clone shared visual templates: %w", err)
+	}
+	if _, err := tmpl.New("main").Parse(raw); err != nil {
+		return "", fmt.Errorf("parse visual mode template %q: %w", mode, err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "main", newVisualModeData(data.SourceRecipe)); err != nil {
+		return "", fmt.Errorf("render visual mode template %q: %w", mode, err)
+	}
+	return buf.String(), nil
 }
 
 // loadPromptTemplates loads prompt templates.

@@ -135,6 +135,48 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 	}
 }
 
+// TestAllBundledVisualModesRender verifies that every bundled visual mode template renders without error
+// when given a fully populated recipe, catching field-name mismatches at test time rather than runtime.
+func TestAllBundledVisualModesRender(t *testing.T) {
+	prompt, err := newScriptPrompt()
+	if err != nil {
+		t.Fatalf("newScriptPrompt() error = %v", err)
+	}
+	data := &orchestrator.TemplateData{
+		SourceRecipe: &orchestrator.VideoRecipe{
+			MusicRecipe: orchestrator.MusicRecipe{
+				Title:       "Test Song",
+				Theme:       "journey",
+				Mood:        "energetic",
+				Tempo:       160,
+				Key:         "A minor",
+				Instruments: []string{"electric guitar", "drums", "bass"},
+				Sections: []orchestrator.Section{
+					{Name: "Verse", Duration: 8, StartSeconds: 0, EndSeconds: 8, Prompt: "quiet opening"},
+					{Name: "Chorus", Duration: 16, StartSeconds: 8, EndSeconds: 24, Prompt: "full power"},
+				},
+				Lyrics: &orchestrator.Lyrics{
+					Hook:      "夜を駆け抜けろ",
+					Keywords:  []string{"夜", "疾走", "光"},
+					Narrative: "夜の街を走り続ける主人公",
+				},
+			},
+		},
+	}
+	modes := []string{"default", "girls_metal", "sparkle_rock", "techno_melancholic"}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			got, err := prompt.Build(mode, data)
+			if err != nil {
+				t.Fatalf("Build(%q) error = %v", mode, err)
+			}
+			if got == "" {
+				t.Fatalf("Build(%q) returned empty prompt", mode)
+			}
+		})
+	}
+}
+
 func scriptPromptTestData(title string) *orchestrator.TemplateData {
 	return &orchestrator.TemplateData{
 		SourceRecipe: &orchestrator.VideoRecipe{
