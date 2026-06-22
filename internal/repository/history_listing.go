@@ -61,7 +61,9 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		// {baseURI}/{jobID}/video_music_meta.json の1階層のみ対象にする。
 		// サブディレクトリ（regens/cut-N/ 等）の metadata は除外する。
 		// path.Dir は gs:// の // を潰すため strings ベースで深さを確認する。
-		rel := strings.TrimPrefix(gcsPath, r.baseURI+"/")
+		// コンストラクタで末尾スラッシュは除去済みだが、防御的に再度除去する。
+		baseURI := strings.TrimSuffix(r.baseURI, "/")
+		rel := strings.TrimPrefix(gcsPath, baseURI+"/")
 		if strings.Count(rel, "/") != 1 {
 			return nil
 		}

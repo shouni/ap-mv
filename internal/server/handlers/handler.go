@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"archive/zip"
-	"bytes"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -270,10 +269,12 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no keyframes available", http.StatusNotFound)
 		return
 	}
-	// ZIP をメモリ上で構築してからヘッダーを送信することで、
-	// 途中エラー時に 500 を返せる。GCS からは 1 ファイルずつストリーミングするため OOM は生じない。
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	// ヘッダーを先に送信してから ResponseWriter に直接ストリーミングする。
+	// ヘッダー送信後のエラーは HTTP ステータスで通知できないが、
+	// 接続切断によりクライアントが不完全なファイルとして検知できる (Web 標準の挙動)。
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
+	zw := zip.NewWriter(w)
 	if err := h.HistoryRepository.DownloadKeyframes(r.Context(), jobID, func(name string, reader io.Reader) error {
 		fw, err := zw.Create(name)
 		if err != nil {
@@ -286,19 +287,12 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}); err != nil {
-		slog.ErrorContext(r.Context(), "failed to build keyframe zip", "job_id", jobID, "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
 		return
 	}
 	if err := zw.Close(); err != nil {
 		slog.ErrorContext(r.Context(), "failed to finalize zip", "job_id", jobID, "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
 	}
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
-	w.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	_, _ = io.Copy(w, &buf)
 }
 
 // PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
