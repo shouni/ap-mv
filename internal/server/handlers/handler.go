@@ -290,6 +290,14 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
 		return
 	}
+	if assContent := domain.GenerateASS(history.Cuts); assContent != "" {
+		fw, err := zw.Create("lyrics.ass")
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to create ass zip entry", "job_id", jobID, "error", err)
+		} else if _, err := io.WriteString(fw, assContent); err != nil {
+			slog.ErrorContext(r.Context(), "failed to write ass zip entry", "job_id", jobID, "error", err)
+		}
+	}
 	if err := zw.Close(); err != nil {
 		slog.ErrorContext(r.Context(), "failed to finalize zip", "job_id", jobID, "error", err)
 	}
