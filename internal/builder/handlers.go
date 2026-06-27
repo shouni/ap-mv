@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"strings"
 
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
@@ -81,6 +82,9 @@ func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
 		Modes: make([]handlers.VisualModeOption, 0, len(templates)),
 	}
 	for mode := range templates {
+		if strings.HasPrefix(mode, "_") {
+			continue
+		}
 		options.Modes = append(options.Modes, handlers.VisualModeOption{
 			ID:        mode,
 			Name:      visualModeDisplayName(mode),

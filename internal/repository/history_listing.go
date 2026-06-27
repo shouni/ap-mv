@@ -192,7 +192,30 @@ func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, job
 			"error", err,
 		)
 	}
+	history.KeyframeZipURI = r.keyframeZipURI(jobID)
 	return history
+}
+
+// keyframeZipURI returns the GCS URI for the pre-built keyframe zip of a job.
+func (r *VideoHistoryRepository) keyframeZipURI(jobID string) string {
+	return r.baseURI + "/" + jobID + "/keyframes.zip"
+}
+
+// KeyframeZipSignedURL returns a signed download URL for the pre-built keyframe zip.
+// Returns empty string (without error) if the zip does not exist yet.
+func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error) {
+	if r == nil || r.reader == nil || r.signer == nil {
+		return "", nil
+	}
+	uri := r.keyframeZipURI(jobID)
+	exists, err := r.reader.Exists(ctx, uri)
+	if err != nil {
+		return "", fmt.Errorf("check keyframe zip existence: %w", err)
+	}
+	if !exists {
+		return "", nil
+	}
+	return r.signedURL(ctx, uri)
 }
 
 func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {

@@ -42,6 +42,7 @@ func buildPipeline(
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
+		runner.Writer = rio.Writer
 	}
 	runner.OutputBaseURI = workflowOutputBaseURI(cfg)
 	return runner, nil

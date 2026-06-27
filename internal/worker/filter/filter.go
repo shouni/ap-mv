@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	characterkit "github.com/shouni/go-character-kit/character"
+	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/domain"
@@ -19,6 +20,7 @@ type Context struct {
 	VideoRecipe *orchestrator.VideoRecipe
 	Workflows   *orchestrator.Workflows
 	Reader      orchestrator.ContentReader
+	Writer      remoteio.OutputWriter
 	VideoRunner ports.VideoRunner
 	TaskQueue   ports.TaskQueue
 	Characters  *characterkit.Characters

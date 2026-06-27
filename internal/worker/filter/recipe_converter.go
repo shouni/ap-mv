@@ -90,6 +90,42 @@ func applyLyricsToVideoRecipeCuts(recipe *orchestrator.VideoRecipe) {
 	domain.ApplyLyricsToVideoRecipeCuts(recipe)
 }
 
+// buildInputsTxt builds an ffmpeg concat demuxer inputs.txt from recipe cuts.
+func buildInputsTxt(cuts []orchestrator.Cut) string {
+	var sb strings.Builder
+	for _, cut := range cuts {
+		ref := strings.TrimSpace(cut.KeyframeReference)
+		if ref == "" {
+			continue
+		}
+		ext := path.Ext(ref)
+		if ext == "" {
+			ext = ".png"
+		}
+		fmt.Fprintf(&sb, "file 'cut_%02d%s'\n", cut.CutIndex, ext)
+		if cut.DurationSec > 0 {
+			fmt.Fprintf(&sb, "duration %.3f\n", cut.DurationSec)
+		}
+		fmt.Fprintln(&sb)
+	}
+	return sb.String()
+}
+
+// orchestratorCutsToHistoryCuts converts orchestrator cuts to domain history cuts for ASS generation.
+func orchestratorCutsToHistoryCuts(cuts []orchestrator.Cut) []domain.VideoHistoryCut {
+	result := make([]domain.VideoHistoryCut, 0, len(cuts))
+	for _, c := range cuts {
+		result = append(result, domain.VideoHistoryCut{
+			CutIndex:    c.CutIndex,
+			DurationSec: c.DurationSec,
+			Dialogue:    c.Dialogue,
+			StartSec:    c.StartSec,
+			EndSec:      c.EndSec,
+		})
+	}
+	return result
+}
+
 // findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。
 func findCutByIndex(cuts []orchestrator.Cut, cutIndex int) (int, error) {
 	for i := range cuts {

@@ -17,4 +17,5 @@ type HistoryRepository interface {
 	GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error)
 	DeleteHistory(ctx context.Context, jobID string) error
 	DownloadKeyframes(ctx context.Context, jobID string, sink KeyframeSink) error
+	KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error)
 }

@@ -45,6 +45,10 @@ func (r fakeHistoryRepository) DownloadKeyframes(context.Context, string, ports.
 	return nil
 }
 
+func (r fakeHistoryRepository) KeyframeZipSignedURL(context.Context, string) (string, error) {
+	return "", nil
+}
+
 // TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.
 func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
