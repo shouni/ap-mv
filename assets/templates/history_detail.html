@@ -25,6 +25,9 @@
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
                 <a class="btn btn-outline-success" href="/web/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
+                {{if .HistoryDetail.KeyframeZipURI}}
+                <button class="btn btn-outline-secondary" onclick="copyZipURI('{{.HistoryDetail.KeyframeZipURI}}', this)">Copy GCS URL</button>
+                {{end}}
                 <button class="btn btn-outline-danger" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
                 <a class="btn btn-outline-secondary" href="/web/history">Back</a>
             </div>
@@ -130,6 +133,13 @@ async function deleteHistory(jobID, csrfToken) {
     } else {
         alert('Delete failed: ' + resp.statusText);
     }
+}
+
+async function copyZipURI(uri, btn) {
+    await navigator.clipboard.writeText(uri);
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
 }
 </script>
 {{end}}

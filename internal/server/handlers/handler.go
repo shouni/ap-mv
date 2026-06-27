@@ -239,7 +239,8 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	}, "history_detail.html")
 }
 
-// DownloadKeyframes streams a zip archive of all valid keyframes for a job.
+// DownloadKeyframes redirects to the pre-built keyframe zip in GCS.
+// Falls back to on-demand zip generation for jobs that predate the pipeline change.
 func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
@@ -250,8 +251,18 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
 		return
 	}
-	// GetHistory はキャッシュを利用するため、キーフレームの有無を事前確認してもコスト低。
-	// ヘッダー送信前に 404 を返せるようにするため先に確認する。
+
+	// Try to redirect to the pre-built zip uploaded by the pipeline.
+	signedURL, err := h.HistoryRepository.KeyframeZipSignedURL(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get keyframe zip signed URL", "job_id", jobID, "error", err)
+	}
+	if signedURL != "" {
+		http.Redirect(w, r, signedURL, http.StatusFound)
+		return
+	}
+
+	// Fall back: build zip on-demand for jobs without a pre-built zip.
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
@@ -269,9 +280,6 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no keyframes available", http.StatusNotFound)
 		return
 	}
-	// ヘッダーを先に送信してから ResponseWriter に直接ストリーミングする。
-	// ヘッダー送信後のエラーは HTTP ステータスで通知できないが、
-	// 接続切断によりクライアントが不完全なファイルとして検知できる (Web 標準の挙動)。
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
 	zw := zip.NewWriter(w)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	characterkit "github.com/shouni/go-character-kit/character"
+	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"ap-mv/internal/domain"
@@ -29,6 +30,7 @@ type Runner struct {
 	Workflows          *orchestrator.Workflows
 	WorkflowFactory    func(context.Context, *domain.Task) (*orchestrator.Workflows, error)
 	Reader             orchestrator.ContentReader
+	Writer             remoteio.OutputWriter
 	OutputBaseURI      string
 	Notifier           ports.Notifier
 	Characters         *characterkit.Characters
@@ -108,6 +110,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 		TaskQueue:   r.TaskQueue,
 		Workflows:   workflows,
 		Reader:      r.Reader,
+		Writer:      r.Writer,
 		Characters:  r.Characters,
 		OutputPath:  r.outputPath(task),
 	}
@@ -237,6 +240,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.RegenerateCutKeyframeFilter{},
+			filter.ZipUploadFilter{},
 		}
 	}
 	filters := []filter.Filter{}
@@ -248,6 +252,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 	}
 	filters = append(filters,
 		filter.CutKeyframeFilter{},
+		filter.ZipUploadFilter{},
 	)
 	if command == domain.CommandVideoRecipeCreate || command == domain.CommandComposeToKeyframe {
 		return filters

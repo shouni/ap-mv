@@ -2,16 +2,17 @@ package domain
 
 // VideoHistory is the metadata shown in the generated MV history list.
 type VideoHistory struct {
-	JobID      string `json:"job_id"`
-	Title      string `json:"title"`
-	Mood       string `json:"mood,omitempty"`
-	Tempo      int    `json:"tempo,omitempty"`
-	CreatedAt  string `json:"created_at,omitempty"`
-	VisualMode string `json:"visual_mode,omitempty"`
-	CutCount   int    `json:"cut_count,omitempty"`
-	StorageURI string `json:"storage_uri,omitempty"`
-	SignedURL  string `json:"signed_url,omitempty"`
-	Generated  bool   `json:"generated,omitempty"`
+	JobID          string `json:"job_id"`
+	Title          string `json:"title"`
+	Mood           string `json:"mood,omitempty"`
+	Tempo          int    `json:"tempo,omitempty"`
+	CreatedAt      string `json:"created_at,omitempty"`
+	VisualMode     string `json:"visual_mode,omitempty"`
+	CutCount       int    `json:"cut_count,omitempty"`
+	StorageURI     string `json:"storage_uri,omitempty"`
+	SignedURL      string `json:"signed_url,omitempty"`
+	Generated      bool   `json:"generated,omitempty"`
+	KeyframeZipURI string `json:"keyframe_zip_uri,omitempty"`
 }
 
 // VideoHistoryCut is a display-ready cut entry for a generated MV history detail.
