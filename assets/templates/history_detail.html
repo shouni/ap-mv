@@ -136,10 +136,15 @@ async function deleteHistory(jobID, csrfToken) {
 }
 
 async function copyZipURI(uri, btn) {
-    await navigator.clipboard.writeText(uri);
-    const original = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = original; }, 1500);
+    try {
+        await navigator.clipboard.writeText(uri);
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = original; }, 1500);
+    } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        alert('Copy failed. Please copy manually:\n' + uri);
+    }
 }
 </script>
 {{end}}

@@ -253,9 +253,10 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to redirect to the pre-built zip uploaded by the pipeline.
+	// Continue to on-demand fallback even on signing error — intentional fail-soft.
 	signedURL, err := h.HistoryRepository.KeyframeZipSignedURL(r.Context(), jobID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get keyframe zip signed URL", "job_id", jobID, "error", err)
+		slog.ErrorContext(r.Context(), "keyframe zip signed URL failed, falling back to on-demand generation", "job_id", jobID, "error", err)
 	}
 	if signedURL != "" {
 		http.Redirect(w, r, signedURL, http.StatusFound)
