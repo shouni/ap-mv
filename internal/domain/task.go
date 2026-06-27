@@ -24,6 +24,7 @@ const (
 	CommandVideoRecipeCreate         TaskCommand = "video_recipe_create"
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
 	CommandRegenerateCutKeyframe     TaskCommand = "regenerate_cut_keyframe"
+	CommandRegenerateZip             TaskCommand = "regenerate_zip"
 
 	// Legacy task command names kept for existing queued tasks and clients.
 	CommandComposeToKeyframe  TaskCommand = "compose_to_keyframe"
@@ -44,7 +45,11 @@ type Task struct {
 	// CutIndex は再生成対象のカットインデックスです（regenerate_cut_keyframe コマンド専用）。
 	CutIndex *int `json:"cut_index,omitempty"`
 	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
-	OverwriteKeyframe bool         `json:"overwrite_keyframe,omitempty"`
+	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
+	// ASSPrimaryColor は歌唱済みシラブルの色（CSS hex, e.g. "#FFFF00"）。空のときはデフォルト黄色。
+	ASSPrimaryColor string `json:"ass_primary_color,omitempty"`
+	// ASSSecondaryColor は未歌唱シラブルの色（CSS hex, e.g. "#FFFFFF"）。空のときはデフォルト白。
+	ASSSecondaryColor string       `json:"ass_secondary_color,omitempty"`
 	RecipeURL         string       `json:"recipe_url,omitempty"`
 	AudioURL          string       `json:"audio_url,omitempty"`
 	Recipe            *MusicRecipe `json:"recipe,omitempty"`
@@ -125,10 +130,25 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err
 		}
+	case CommandRegenerateZip:
+		if strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("%s task requires recipe_url", t.Command)
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
 	}
 	return nil
+}
+
+// ASSColors returns the karaoke colors configured on this task.
+func (t *Task) ASSColors() ASSColors {
+	if t == nil {
+		return ASSColors{}
+	}
+	return ASSColors{Primary: t.ASSPrimaryColor, Secondary: t.ASSSecondaryColor}
 }
 
 // validateOptionalGCSURI validates an optional GCS URI field.

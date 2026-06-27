@@ -28,6 +28,16 @@
                 {{if .HistoryDetail.KeyframeZipURI}}
                 <button class="btn btn-outline-secondary" onclick="copyZipURI('{{.HistoryDetail.KeyframeZipURI}}', this)">Copy GCS URL</button>
                 {{end}}
+                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/regenerate-zip" class="d-flex align-items-center gap-2">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="d-flex align-items-center gap-1">
+                        <label class="small text-muted mb-0" title="歌唱済み文字の色">歌唱</label>
+                        <input type="color" name="primary_color" value="#ffff00" class="form-control form-control-color p-0 border-0" style="width:28px;height:28px" title="歌唱済み（Primary）色">
+                        <label class="small text-muted mb-0" title="未歌唱文字の色">未歌唱</label>
+                        <input type="color" name="secondary_color" value="#ffffff" class="form-control form-control-color p-0 border-0" style="width:28px;height:28px" title="未歌唱（Secondary）色">
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">ZIP再作成</button>
+                </form>
                 <button class="btn btn-outline-danger" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
                 <a class="btn btn-outline-secondary" href="/web/history">Back</a>
             </div>

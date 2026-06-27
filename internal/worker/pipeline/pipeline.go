@@ -236,10 +236,16 @@ func (r *Runner) outputPath(task *domain.Task) string {
 // video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) []filter.Filter {
-	if command == domain.CommandRegenerateCutKeyframe {
+	switch command {
+	case domain.CommandRegenerateCutKeyframe:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.RegenerateCutKeyframeFilter{},
+			filter.ZipUploadFilter{},
+		}
+	case domain.CommandRegenerateZip:
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
 			filter.ZipUploadFilter{},
 		}
 	}
