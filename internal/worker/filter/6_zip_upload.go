@@ -78,6 +78,7 @@ func (ZipUploadFilter) Execute(ctx context.Context, fc *Context) error {
 			}
 		}
 
+		applyLyricsToVideoRecipeCuts(fc.VideoRecipe)
 		historyCuts := orchestratorCutsToHistoryCuts(fc.VideoRecipe.Cuts)
 		if ass := domain.GenerateASS(historyCuts, fc.Task.ASSColors()); ass != "" {
 			fw, err := zw.Create("subtitles.ass")
