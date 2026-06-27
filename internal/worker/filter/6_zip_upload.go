@@ -28,7 +28,7 @@ func (ZipUploadFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 
 	outputPath := fc.OutputPath
-	if fc.Task != nil && fc.Task.Command == domain.CommandRegenerateCutKeyframe {
+	if fc.Task != nil && (fc.Task.Command == domain.CommandRegenerateCutKeyframe || fc.Task.Command == domain.CommandRegenerateZip) {
 		outputPath = originalJobOutputPath(fc.Task.RecipeURL)
 		if outputPath == "" {
 			return fmt.Errorf("zip_upload: cannot resolve original job output path from RecipeURL %q", fc.Task.RecipeURL)
@@ -79,7 +79,7 @@ func (ZipUploadFilter) Execute(ctx context.Context, fc *Context) error {
 		}
 
 		historyCuts := orchestratorCutsToHistoryCuts(fc.VideoRecipe.Cuts)
-		if ass := domain.GenerateASS(historyCuts); ass != "" {
+		if ass := domain.GenerateASS(historyCuts, fc.Task.ASSColors()); ass != "" {
 			fw, err := zw.Create("subtitles.ass")
 			if err != nil {
 				writeErr = fmt.Errorf("zip_upload: create subtitles.ass: %w", err)

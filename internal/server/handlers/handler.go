@@ -299,7 +299,7 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
 		return
 	}
-	if assContent := domain.GenerateASS(history.Cuts); assContent != "" {
+	if assContent := domain.GenerateASS(history.Cuts, domain.ASSColors{}); assContent != "" {
 		fw, err := zw.Create("lyrics.ass")
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to create ass zip entry", "job_id", jobID, "error", err)
@@ -353,6 +353,47 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		RecipeURL:         history.StorageURI,
 		CutIndex:          &cutIndex,
 		OverwriteKeyframe: r.FormValue("overwrite") == "on",
+		CreatedAt:         time.Now().UTC(),
+	}
+	h.enqueue(w, r, task)
+}
+
+// PostRegenerateZip enqueues a ZIP re-creation task for an existing job.
+// Optional form fields primary_color and secondary_color (CSS hex) override the default karaoke colors.
+func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
+	if !validCSRFToken(r) {
+		http.Error(w, "invalid csrf token", http.StatusForbidden)
+		return
+	}
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(history.StorageURI) == "" {
+		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+		return
+	}
+	newJobID, err := domain.NewJobID("regen-zip")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	task := &domain.Task{
+		JobID:             newJobID,
+		Command:           domain.CommandRegenerateZip,
+		RecipeURL:         history.StorageURI,
+		ASSPrimaryColor:   strings.TrimSpace(r.FormValue("primary_color")),
+		ASSSecondaryColor: strings.TrimSpace(r.FormValue("secondary_color")),
 		CreatedAt:         time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
