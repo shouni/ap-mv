@@ -11,12 +11,18 @@
 # -----------------------------------------------
 *.test           # テスト実行用のバイナリ
 *_test.go        # テストソースコード
+.gocache/        # Go ビルドキャッシュ (985MB超、ビルドコンテキスト送信を無駄に肥大化させる)
+.cache/
+/bin/
+/coverage.out
+/coverage.html
 
 # -----------------------------------------------
 # IDE/OS の設定ファイルと一時ファイル
 # -----------------------------------------------
 .idea/           # IntelliJ IDEA の設定
 .vscode/         # VS Code の設定
+.claude/         # Claude Code の設定
 *.iml            # IntelliJ IDEA のプロジェクトファイル
 .DS_Store        # macOS のメタデータ
 Thumbs.db        # Windows のメタデータ
