@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"archive/zip"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -109,10 +108,6 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	if !validCSRFToken(r) {
-		http.Error(w, "invalid csrf token", http.StatusForbidden)
-		return
-	}
 	jobID, err := domain.NewJobID("video-recipe")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -157,10 +152,6 @@ func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	if !validCSRFToken(r) {
-		http.Error(w, "invalid csrf token", http.StatusForbidden)
 		return
 	}
 	var recipe *domain.MusicRecipe
@@ -314,10 +305,6 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 
 // PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
 func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
-	if !validCSRFToken(r) {
-		http.Error(w, "invalid csrf token", http.StatusForbidden)
-		return
-	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -361,10 +348,6 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 // PostRegenerateZip enqueues a ZIP re-creation task for an existing job.
 // Optional form fields primary_color and secondary_color (CSS hex) override the default karaoke colors.
 func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
-	if !validCSRFToken(r) {
-		http.Error(w, "invalid csrf token", http.StatusForbidden)
-		return
-	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -463,19 +446,6 @@ func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName 
 	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-}
-
-// validCSRFToken reports whether the request contains a valid CSRF token.
-func validCSRFToken(r *http.Request) bool {
-	expected := csrfTokenFromContext(r.Context())
-	submitted := strings.TrimSpace(r.FormValue("csrf_token"))
-	if submitted == "" {
-		submitted = strings.TrimSpace(r.Header.Get("X-CSRF-Token"))
-	}
-	if expected == "" || submitted == "" || len(expected) != len(submitted) {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(expected), []byte(submitted)) == 1
 }
 
 // writeJSON writes a JSON response with the given status.

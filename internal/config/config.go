@@ -53,6 +53,9 @@ type Config struct {
 	// Authz Settings
 	AllowedEmails  []string `env:"ALLOWED_EMAILS"`
 	AllowedDomains []string `env:"ALLOWED_DOMAINS"`
+	// AllowedM2MServiceAccounts は、Web APIをサーバー間通信（OIDC Bearerトークン）で
+	// 呼び出せるサービスアカウントのメールアドレスです。空ならM2M認証は無効です。
+	AllowedM2MServiceAccounts []string `env:"ALLOWED_M2M_SERVICE_ACCOUNTS"`
 }
 
 // normalize normalizes the provided values.
@@ -68,6 +71,7 @@ func (c *Config) normalize() error {
 	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
 	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
 	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
+	c.AllowedM2MServiceAccounts = normalizeStringSlice(c.AllowedM2MServiceAccounts)
 	c.NormalizeModels()
 	return nil
 }

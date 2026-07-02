@@ -23,6 +23,7 @@ type AppHandlers struct {
 	Auth        *auth.Handler
 	Web         *handlers.Handler
 	Worker      *worker.Handler[domain.Task]
+	M2M         *auth.M2MVerifier
 	StaticFiles fs.FS
 }
 
@@ -65,10 +66,13 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 
 	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)
 
+	m2mVerifier := auth.NewM2MVerifier(appCtx.Config.ServiceURL, appCtx.Config.AllowedM2MServiceAccounts)
+
 	return &AppHandlers{
 		Auth:        authHandler,
 		Web:         webHandler,
 		Worker:      workerHandler,
+		M2M:         m2mVerifier,
 		StaticFiles: staticFiles,
 	}, nil
 }

@@ -138,6 +138,9 @@ Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
 | `ALLOWED_EMAILS` | ログインを許可するメールアドレスのリスト |
 | `ALLOWED_DOMAINS` | ログインを許可するドメインのリスト |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | `/web/*` エンドポイントを OIDC Bearer トークン（`Authorization: Bearer <ID Token>`, audience=`SERVICE_URL`）で呼び出せるサービスアカウントのメールアドレス一覧（カンマ区切り）。未設定の場合、サーバー間通信は常に拒否されます |
+
+ブラウザセッション（Cookie + CSRF）に加えて、`ALLOWED_M2M_SERVICE_ACCOUNTS` に登録済みのサービスアカウントが発行した OIDC Bearer トークンでも `/web/*` を認証でき、`Accept: application/json` を付けると JSON レスポンスを返します（ap-mcp など他サービスからのマシン間呼び出し向け）。M2M認証が成功したリクエストはCSRF検証をバイパスします。
 
 `server.Run` は起動時に `ValidateEssentialConfig()` を実行します。Cloud Run では `SESSION_SECRET`、`SESSION_ENCRYPT_KEY`、OAuth 設定、認可リスト、Cloud Tasks 設定、GCS/Veo 設定が未設定だと起動エラーになります。
 
