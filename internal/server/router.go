@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -55,8 +56,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		r.Use(h.Auth.Middleware)
-		r.Use(csrfContextMiddleware(h.Auth))
+		r.Use(protectedAccessMiddleware(h.Auth, h.M2M))
 
 		if h.Web != nil {
 			registerWebRoutes(r, h.Web)
@@ -108,6 +108,27 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
 		r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
 	})
+}
+
+// protectedAccessMiddleware は、有効なM2M(OIDC Bearer)トークンを持つリクエストは
+// セッション認証・CSRF検証をバイパスし、それ以外はブラウザセッション認証+CSRF検証にフォールバックします。
+func protectedAccessMiddleware(authHandler *auth.Handler, m2m *auth.M2MVerifier) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		sessionChain := authHandler.Middleware(csrfContextMiddleware(authHandler)(next))
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			payload, err := m2m.Verify(r)
+			if err == nil {
+				slog.Debug("M2M認証成功", "email", payload.Claims["email"], "path", r.URL.Path)
+				next.ServeHTTP(w, r)
+				return
+			}
+			// ブラウザセッションなどM2Mを試みていないリクエストはノイズになるためログしない。
+			if !errors.Is(err, auth.ErrM2MNotAttempted) {
+				slog.Info("M2M認証失敗、セッション認証にフォールバック", "error", err, "path", r.URL.Path)
+			}
+			sessionChain.ServeHTTP(w, r)
+		})
+	}
 }
 
 // csrfContextMiddleware returns middleware that stores CSRF tokens on the request context.
