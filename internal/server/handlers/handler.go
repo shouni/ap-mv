@@ -185,7 +185,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// History renders the history page.
+// History renders the history page, or returns JSON when Accept: application/json is set.
 func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 	if h.HistoryRepository == nil {
 		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
@@ -196,6 +196,10 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, page)
+		return
+	}
 	h.renderPage(w, PageData{
 		Title:        "History",
 		HistoryItems: page.Items,
@@ -203,7 +207,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 	}, "history.html")
 }
 
-// HistoryDetail renders a generated MV history detail page.
+// HistoryDetail renders a generated MV history detail page, or returns JSON when Accept: application/json is set.
 func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	if h.HistoryRepository == nil {
 		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
@@ -221,6 +225,10 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 			"error", err,
 		)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, history)
 		return
 	}
 	h.renderPage(w, PageData{
