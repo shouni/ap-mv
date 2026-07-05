@@ -1,3 +1,5 @@
+// Package filter は、動画生成ワーカーのパイプラインを構成する各ステップ（Filter）の
+// 実装を提供します。
 package filter
 
 import (
@@ -6,11 +8,13 @@ import (
 	"io"
 	"strings"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 const maxRecipeJSONSize = 5 * 1024 * 1024
 
+// RecipeLoadFilter は、タスクからレシピ（VideoRecipe/MusicRecipe）を読み込む
+// パイプラインの最初のステップです。
 type RecipeLoadFilter struct{}
 
 // Name returns the receiver name.

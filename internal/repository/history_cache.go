@@ -1,3 +1,4 @@
+// Package repository は、生成履歴（History）の永続化・キャッシュ・一覧整形を行います。
 package repository
 
 import (
@@ -5,7 +6,7 @@ import (
 
 	"github.com/jellydator/ttlcache/v3"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 const defaultHistoryCacheTTL = 10 * time.Minute

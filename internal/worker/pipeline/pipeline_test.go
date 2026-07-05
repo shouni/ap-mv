@@ -7,8 +7,8 @@ import (
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/worker/filter"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/worker/filter"
 )
 
 type noopFilter struct{}

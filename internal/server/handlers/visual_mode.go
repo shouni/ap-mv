@@ -6,12 +6,14 @@ import (
 	"strings"
 )
 
+// VisualModeOption は、フォームで選択可能な映像スタイル1件分の情報です。
 type VisualModeOption struct {
 	ID        string
 	Name      string
 	IsDefault bool
 }
 
+// VisualModeOptions は、フォームで選択可能な映像スタイル一覧とデフォルト選択を保持します。
 type VisualModeOptions struct {
 	Modes         []VisualModeOption
 	DefaultModeID string

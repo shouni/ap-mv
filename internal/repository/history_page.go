@@ -3,7 +3,7 @@ package repository
 import (
 	"sort"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 func selectHistoryPageIDs(jobIDs []string, page int, perPage int) ([]string, domain.PageMeta) {

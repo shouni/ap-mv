@@ -25,6 +25,7 @@ type VideoRecipe = orchestrator.VideoRecipe
 // VideoCut は go-veo-orchestrator が定義する動画カットです。
 type VideoCut = orchestrator.Cut
 
+// CutStatusGenerated は、キーフレーム生成が完了したカットのステータス値です。
 const CutStatusGenerated = string(orchestrator.CutStatusGenerated)
 
 // UnmarshalRecipeOrVideoRecipe parses either a MusicRecipe JSON or a VideoRecipe JSON.

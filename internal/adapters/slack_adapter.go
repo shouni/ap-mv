@@ -11,7 +11,7 @@ import (
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-notifier/pkg/slack"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 const (

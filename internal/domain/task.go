@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// AIModels は、テキスト・画像生成に使用するモデルとシード値を保持します。
 type AIModels struct {
 	// TextModel は歌詞生成およびレシピ構築（LLM）に使用するモデル
 	TextModel string `json:"text_model,omitempty"`
@@ -17,20 +18,28 @@ type AIModels struct {
 	Seed       *int64 `json:"seed,omitempty"`
 }
 
+// TaskCommand は、キューに投入されるタスクの種類を表します。
 type TaskCommand string
 
 const (
-	CommandCompose                   TaskCommand = "compose"
-	CommandVideoRecipeCreate         TaskCommand = "video_recipe_create"
+	// CommandCompose は、歌詞・レシピの作曲を行うコマンドです。
+	CommandCompose TaskCommand = "compose"
+	// CommandVideoRecipeCreate は、VideoRecipeを作成するコマンドです。
+	CommandVideoRecipeCreate TaskCommand = "video_recipe_create"
+	// CommandMVFromKeyframeVideoRecipe は、VideoRecipeからMVを生成するコマンドです。
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
-	CommandRegenerateCutKeyframe     TaskCommand = "regenerate_cut_keyframe"
-	CommandRegenerateZip             TaskCommand = "regenerate_zip"
+	// CommandRegenerateCutKeyframe は、指定カットのキーフレームを再生成するコマンドです。
+	CommandRegenerateCutKeyframe TaskCommand = "regenerate_cut_keyframe"
+	// CommandRegenerateZip は、キーフレームZIPを再生成するコマンドです。
+	CommandRegenerateZip TaskCommand = "regenerate_zip"
 
-	// Legacy task command names kept for existing queued tasks and clients.
-	CommandComposeToKeyframe  TaskCommand = "compose_to_keyframe"
+	// CommandComposeToKeyframe is a legacy task command name kept for existing queued tasks and clients.
+	CommandComposeToKeyframe TaskCommand = "compose_to_keyframe"
+	// CommandGenerateFromRecipe is a legacy task command name kept for existing queued tasks and clients.
 	CommandGenerateFromRecipe TaskCommand = "generate_from_recipe"
 )
 
+// Task は、キューに投入される動画生成タスク1件分のペイロードです。
 type Task struct {
 	JobID   string      `json:"job_id"`
 	Command TaskCommand `json:"command"`

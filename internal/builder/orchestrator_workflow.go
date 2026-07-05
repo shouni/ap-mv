@@ -12,11 +12,11 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
-	"ap-mv/assets"
-	"ap-mv/internal/adapters"
-	"ap-mv/internal/app"
-	"ap-mv/internal/config"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/assets"
+	"github.com/shouni/ap-mv/internal/adapters"
+	"github.com/shouni/ap-mv/internal/app"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // buildWorkflow builds orchestrator workflows from application config.

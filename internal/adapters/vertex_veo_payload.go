@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // buildGenerateBody は内部の動画生成リクエストを Vertex AI Veo のリクエスト本文へ変換します。

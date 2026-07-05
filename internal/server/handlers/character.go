@@ -1,3 +1,5 @@
+// Package handlers は、Web UI（フォーム表示・履歴閲覧・キーフレーム再生成等）の
+// HTTPハンドラーを提供します。
 package handlers
 
 import (
@@ -5,12 +7,14 @@ import (
 	"strings"
 )
 
+// CharacterOption は、フォームで選択可能なキャラクター1件分の情報です。
 type CharacterOption struct {
 	ID        string
 	Name      string
 	IsDefault bool
 }
 
+// CharacterOptions は、フォームで選択可能なキャラクター一覧とデフォルト選択を保持します。
 type CharacterOptions struct {
 	Characters         []CharacterOption
 	DefaultCharacterID string

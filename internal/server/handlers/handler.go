@@ -15,10 +15,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
+// Handler は、Web UIのハンドラーが共有する依存関係とフォーム選択肢を保持します。
 type Handler struct {
 	Queue             ports.TaskQueue
 	HistoryRepository ports.HistoryRepository
@@ -28,6 +29,7 @@ type Handler struct {
 	VisualOptions     VisualModeOptions
 }
 
+// PageData は、HTMLテンプレートに渡す共通の描画データです。
 type PageData struct {
 	Title               string
 	CSRFToken           string
@@ -90,7 +92,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 }
 
 // Home renders the home page.
-func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Home(w http.ResponseWriter, _ *http.Request) {
 	h.renderPage(w, PageData{Title: "Home"}, "index.html")
 }
 

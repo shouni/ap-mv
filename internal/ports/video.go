@@ -3,9 +3,9 @@ package ports
 import (
 	"context"
 	"strings"
-)
 
-import veoports "github.com/shouni/go-veo-orchestrator/ports"
+	veoports "github.com/shouni/go-veo-orchestrator/ports"
+)
 
 // VideoRunner は go-veo-orchestrator が定義する Veo adapter 境界です。
 type VideoRunner = veoports.VideoRunner

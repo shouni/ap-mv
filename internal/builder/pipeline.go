@@ -7,11 +7,11 @@ import (
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/app"
-	"ap-mv/internal/config"
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
-	"ap-mv/internal/worker/pipeline"
+	"github.com/shouni/ap-mv/internal/app"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/worker/pipeline"
 )
 
 // buildPipeline は、パイプラインの実行に必要な境界実装を注入して返します。

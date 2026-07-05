@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// CutKeyframeFilter は、各カットのキーフレーム画像を生成するパイプラインステップです。
 type CutKeyframeFilter struct{}
 
 // Name returns the receiver name.

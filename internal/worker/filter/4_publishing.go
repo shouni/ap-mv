@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
+// PublishingFilter は、生成済み動画を公開先へアップロードするパイプラインステップです。
 type PublishingFilter struct{}
 
 // Name returns the receiver name.

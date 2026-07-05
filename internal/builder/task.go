@@ -6,8 +6,8 @@ import (
 
 	"github.com/shouni/gcp-kit/tasks"
 
-	"ap-mv/internal/config"
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。

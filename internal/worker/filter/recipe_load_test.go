@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL verifies recipe loading and task audio URL application.

@@ -9,11 +9,11 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
 
-	"ap-mv/assets"
-	"ap-mv/internal/app"
-	"ap-mv/internal/config"
-	"ap-mv/internal/domain"
-	"ap-mv/internal/server/handlers"
+	"github.com/shouni/ap-mv/assets"
+	"github.com/shouni/ap-mv/internal/app"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
 const defaultSessionName = "ap-mv-session"
@@ -50,7 +50,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	}
 	visualOptions, err := buildVisualModeOptions()
 	if err != nil {
-		return nil, fmt.Errorf("Visual Mode選択肢の初期化に失敗しました: %w", err)
+		return nil, fmt.Errorf("visual Mode選択肢の初期化に失敗しました: %w", err)
 	}
 
 	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{

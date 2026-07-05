@@ -1,3 +1,4 @@
+// ap-mv は、音楽レシピからミュージックビデオを生成するWebアプリケーションです。
 package main
 
 import (
@@ -7,9 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"ap-mv/assets"
-	"ap-mv/internal/config"
-	"ap-mv/internal/server"
+	"github.com/shouni/ap-mv/assets"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/server"
 )
 
 // main starts the application.
@@ -17,16 +18,25 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// run はアプリケーションの初期化とサーバー起動を行います。defer によるクリーンアップが
+// os.Exit で無視されないよう、終了コードの決定は main 側に委ねます。
+func run() error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := server.Run(ctx, cfg, assets.Templates, assets.StaticFiles); err != nil {
 		slog.Error("server failed", "error", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }

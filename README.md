@@ -1,5 +1,6 @@
 # 🎬 AP MV (AP Music Video Orchestrator)
 
+[![CI](https://github.com/shouni/ap-mv/actions/workflows/ci.yml/badge.svg)](https://github.com/shouni/ap-mv/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-In%20Development-yellow)](#)
 [![Language](https://img.shields.io/badge/Language-Go-blue)](https://golang.org/)
 [![Platform](https://img.shields.io/badge/Platform-Cloud%20Run-blue?logo=google-cloud)](https://cloud.google.com/run)

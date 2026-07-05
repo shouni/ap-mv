@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference verifies that audio references are included in Veo request bodies.

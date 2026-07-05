@@ -1,3 +1,4 @@
+// Package app は、設定値から各種クライアントを組み立てて保持する DI コンテナを提供します。
 package app
 
 import (
@@ -7,9 +8,9 @@ import (
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio"
 
-	"ap-mv/internal/config"
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // Container はアプリケーションの依存関係（DIコンテナ）を保持します。

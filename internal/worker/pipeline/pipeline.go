@@ -1,3 +1,4 @@
+// Package pipeline は、Filter群を順に実行する動画生成ワーカーのパイプライン実行器を提供します。
 package pipeline
 
 import (
@@ -13,9 +14,9 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
-	"ap-mv/internal/worker/filter"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/worker/filter"
 )
 
 const notificationTimeout = 10 * time.Second

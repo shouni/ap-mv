@@ -1,3 +1,5 @@
+// Package assets は、HTMLテンプレート・静的ファイル・プロンプトテンプレートを
+// 埋め込みリソースとして提供します。
 package assets
 
 import (
@@ -7,6 +9,7 @@ import (
 )
 
 const (
+	// VideoRecipePromptDir は、VideoRecipe作成用プロンプトテンプレートの埋め込みパスです。
 	VideoRecipePromptDir = "prompts/video_recipe"
 	visualModePromptDir  = "prompts/visual_modes"
 )

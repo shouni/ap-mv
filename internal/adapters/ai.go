@@ -1,3 +1,5 @@
+// Package adapters は、Gemini/Vertex AI クライアントの初期化と、Veo動画生成APIの
+// リクエスト/レスポンス変換を行うアダプター実装を提供します。
 package adapters
 
 import (
@@ -7,7 +9,7 @@ import (
 
 	"github.com/shouni/go-gemini-client/gemini"
 
-	"ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/config"
 )
 
 const (
@@ -32,7 +34,7 @@ func NewGeminiAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 
 	aiClient, err := gemini.NewClient(ctx, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Gemini API クライアントの初期化に失敗しました: %w", err)
+		return nil, fmt.Errorf("gemini API クライアントの初期化に失敗しました: %w", err)
 	}
 
 	return aiClient, nil
@@ -52,7 +54,7 @@ func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 
 	aiClient, err := gemini.NewClient(ctx, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Vertex AI クライアントの初期化に失敗しました: %w", err)
+		return nil, fmt.Errorf("vertex AI クライアントの初期化に失敗しました: %w", err)
 	}
 
 	return aiClient, nil

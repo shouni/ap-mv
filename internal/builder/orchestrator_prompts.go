@@ -13,7 +13,7 @@ import (
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/assets"
+	"github.com/shouni/ap-mv/assets"
 )
 
 const defaultPromptMode = "default"

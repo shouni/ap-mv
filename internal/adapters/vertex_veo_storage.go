@@ -10,7 +10,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/shouni/go-remote-io/remoteio"
 
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // buildVeoOutputStorageURI は Vertex AI Veo が使う既定の GCS 出力ディレクトリを組み立てます。

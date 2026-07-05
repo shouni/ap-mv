@@ -58,7 +58,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 
 	if c.GoogleClientID == "" || c.GoogleClientSecret == "" || c.SessionSecret == "" {
-		return fmt.Errorf("Google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
+		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
 	}
 
 	if len(c.AllowedEmails) == 0 && len(c.AllowedDomains) == 0 {

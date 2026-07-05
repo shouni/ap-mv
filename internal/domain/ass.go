@@ -1,3 +1,5 @@
+// Package domain は、動画生成ワークフローが扱う中心的なドメインモデル
+// （音楽レシピ、タスク、履歴、字幕、通知）を定義します。
 package domain
 
 import (

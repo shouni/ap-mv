@@ -7,6 +7,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
+// RegenerateCutKeyframeFilter は、指定された単一カットのキーフレームのみを再生成するパイプラインステップです。
 type RegenerateCutKeyframeFilter struct{}
 
 // Name returns the receiver name.

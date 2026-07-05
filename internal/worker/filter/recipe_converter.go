@@ -8,7 +8,7 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // toVideoRecipe converts a domain music recipe to an orchestrator video recipe.
@@ -182,24 +182,6 @@ func seedValue(seed *int64) int64 {
 		return 0
 	}
 	return *seed
-}
-
-// seedPtr returns nil for zero seeds or a pointer to the seed otherwise.
-func seedPtr(seed int64) *int64 {
-	if seed == 0 {
-		return nil
-	}
-	return &seed
-}
-
-// firstPositiveInt returns the first matching positive int.
-func firstPositiveInt(values ...int) int {
-	for _, value := range values {
-		if value > 0 {
-			return value
-		}
-	}
-	return 0
 }
 
 // nonEmpty returns the first non-empty string.
