@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/config"
 )
 
 // TestBuildOrchestratorConfigMapsModels verifies that configured model names map into orchestrator config.

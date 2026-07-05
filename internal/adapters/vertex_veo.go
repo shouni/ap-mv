@@ -11,8 +11,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 
-	"ap-mv/internal/config"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"

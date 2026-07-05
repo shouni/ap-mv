@@ -1,10 +1,11 @@
+// Package ports は、ap-mv の各コンポーネントが依存するインターフェース（ポート）を定義します。
 package ports
 
 import (
 	"context"
 	"io"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // KeyframeSink はキーフレームダウンロード時に各ファイルごとに呼ばれるコールバックです。

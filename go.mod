@@ -1,4 +1,4 @@
-module ap-mv
+module github.com/shouni/ap-mv
 
 go 1.26
 

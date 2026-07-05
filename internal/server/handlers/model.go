@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
+// ModelOptions は、フォームで選択可能なGemini/画像生成モデルの一覧とデフォルト値を保持します。
 type ModelOptions struct {
 	GeminiModels       []string
 	ImageModels        []string

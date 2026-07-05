@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // Notifier sends asynchronous pipeline completion and error notifications.

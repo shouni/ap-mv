@@ -1,3 +1,4 @@
+// Package config は、環境変数からアプリケーション設定を読み込み・正規化します。
 package config
 
 import (
@@ -31,7 +32,7 @@ type Config struct {
 	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash,gemini-3.1-pro-preview"`
 	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image,gemini-3-pro-image"`
 	VeoModel               string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX" envDefault:"ap-mv/veo"`
+	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio         string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
 	VeoGenerateAudio       bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
 	VeoPollInterval        time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`

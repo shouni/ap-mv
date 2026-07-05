@@ -11,10 +11,10 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/shouni/gcp-kit/auth"
 
-	"ap-mv/assets"
-	"ap-mv/internal/builder"
-	"ap-mv/internal/ports"
-	"ap-mv/internal/server/handlers"
+	"github.com/shouni/ap-mv/assets"
+	"github.com/shouni/ap-mv/internal/builder"
+	"github.com/shouni/ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)

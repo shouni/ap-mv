@@ -7,8 +7,8 @@ import (
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // TestVideoGenerationFilterEnqueuesContinuationAfterOneCut verifies continuation task enqueueing after one cut.

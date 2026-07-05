@@ -10,11 +10,13 @@ import (
 
 	"github.com/shouni/go-remote-io/remoteio"
 
-	"ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
+// ZipUploadFilter は、生成済みキーフレームをZIPにまとめてアップロードするパイプラインステップです。
 type ZipUploadFilter struct{}
 
+// Name returns the receiver name.
 func (ZipUploadFilter) Name() string { return "zip_upload" }
 
 // Execute builds a keyframe zip and streams it to GCS at {outputPath}keyframes.zip.

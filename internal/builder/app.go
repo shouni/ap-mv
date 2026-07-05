@@ -1,3 +1,5 @@
+// Package builder は、設定値から各サービスクライアント・ハンドラー・パイプラインの
+// 依存関係を組み立てるファクトリ関数を提供します。
 package builder
 
 import (
@@ -8,10 +10,10 @@ import (
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
-	"ap-mv/internal/adapters"
-	"ap-mv/internal/app"
-	"ap-mv/internal/config"
-	"ap-mv/internal/repository"
+	"github.com/shouni/ap-mv/internal/adapters"
+	"github.com/shouni/ap-mv/internal/app"
+	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/repository"
 )
 
 // BuildContainer は外部サービスとの接続を確立し、依存関係を組み立てた app.Container を返します。

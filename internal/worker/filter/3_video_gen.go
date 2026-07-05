@@ -8,10 +8,11 @@ import (
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
+// VideoGenerationFilter は、VideoRecipeから実際の動画を生成するパイプラインステップです。
 type VideoGenerationFilter struct {
 	Runner ports.VideoRunner
 }

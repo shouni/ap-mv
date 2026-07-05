@@ -3,7 +3,7 @@ package builder
 import (
 	"testing"
 
-	"ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/config"
 )
 
 // TestBuildPipelinePassesOrchestratorConfig verifies that pipeline construction forwards orchestrator config.

@@ -1,3 +1,4 @@
+// Package server は、HTTPルーティングとミドルウェア（認証・CSRF・M2M検証）を構成します。
 package server
 
 import (
@@ -10,8 +11,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/shouni/gcp-kit/auth"
 
-	"ap-mv/internal/builder"
-	"ap-mv/internal/server/handlers"
+	"github.com/shouni/ap-mv/internal/builder"
+	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
 // NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
@@ -25,7 +26,9 @@ func NewRouter(h *builder.AppHandlers) http.Handler {
 // setupCommonMiddleware configures common middleware.
 func setupCommonMiddleware(r *chi.Mux) {
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	// middleware.RealIP は X-Forwarded-For を無条件に信頼するためIPスプーフィングの脆弱性がある
+	// (GHSA-3fxj-6jh8-hvhx 等）。RemoteAddr はログ出力にのみ使用しており、
+	// セキュリティ判断（認証・レート制限等）には使っていないため、あえて使用しない。
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)

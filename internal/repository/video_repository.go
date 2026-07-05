@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
-	"ap-mv/internal/domain"
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // DownloadKeyframes はジョブのキーフレーム画像を1枚ずつ sink へストリーミングします。

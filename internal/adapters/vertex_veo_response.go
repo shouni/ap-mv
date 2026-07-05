@@ -52,7 +52,7 @@ type vertexVideo struct {
 // firstGeneratedVideo は既知の Vertex AI Veo レスポンス形式から最初の生成動画を取り出します。
 func firstGeneratedVideo(op *vertexOperation) (vertexVideo, error) {
 	if op.Response == nil {
-		return vertexVideo{}, fmt.Errorf("Veo operation response is empty")
+		return vertexVideo{}, fmt.Errorf("veo operation response is empty")
 	}
 	if len(op.Response.Videos) > 0 {
 		video := op.Response.Videos[0]
@@ -68,5 +68,5 @@ func firstGeneratedVideo(op *vertexOperation) (vertexVideo, error) {
 		}
 		return video, nil
 	}
-	return vertexVideo{}, fmt.Errorf("Veo operation response contains no videos")
+	return vertexVideo{}, fmt.Errorf("veo operation response contains no videos")
 }

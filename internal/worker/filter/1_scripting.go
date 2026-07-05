@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// ScriptingFilter は、歌詞・レシピから台本（VideoRecipe）を生成するパイプラインステップです。
 type ScriptingFilter struct{}
 
 // Name returns the receiver name.

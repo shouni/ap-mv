@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
-	"ap-mv/internal/builder"
-	"ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/builder"
+	"github.com/shouni/ap-mv/internal/config"
 )
 
 const defaultShutdownTimeout = 30 * time.Second

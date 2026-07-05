@@ -4,17 +4,20 @@ import "testing"
 
 // TestNormalizeGCSBucket verifies GCS bucket normalization.
 func TestNormalizeGCSBucket(t *testing.T) {
-	tests := map[string]string{
-		"my-bucket":          "my-bucket",
-		" gs://my-bucket ":   "my-bucket",
-		"gs://my-bucket///":  "my-bucket",
-		"/my-bucket/":        "my-bucket",
-		"gs://my-bucket/out": "my-bucket/out",
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"my-bucket", "my-bucket"},
+		{" gs://my-bucket ", "my-bucket"},
+		{"gs://my-bucket///", "my-bucket"},
+		{"/my-bucket/", "my-bucket"},
+		{"gs://my-bucket/out", "my-bucket/out"},
 	}
 
-	for input, want := range tests {
-		if got := normalizeGCSBucket(input); got != want {
-			t.Fatalf("normalizeGCSBucket(%q) = %q, want %q", input, got, want)
+	for _, tt := range tests {
+		if got := normalizeGCSBucket(tt.input); got != tt.want {
+			t.Fatalf("normalizeGCSBucket(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
 }

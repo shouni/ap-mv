@@ -3,7 +3,7 @@ package builder
 import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/config"
 )
 
 // buildOrchestratorConfig builds orchestrator config.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // startOperation は Vertex AI に predictLongRunning リクエストを送信し、操作ハンドルを返します。
@@ -43,7 +43,7 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 			consecutiveErrors = 0
 			if op.Done {
 				if op.Error != nil {
-					return nil, fmt.Errorf("Veo operation failed: %s", op.Error.message())
+					return nil, fmt.Errorf("veo operation failed: %s", op.Error.message())
 				}
 				return &op, nil
 			}
