@@ -3,6 +3,7 @@ package handlers
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -49,6 +50,7 @@ type PageData struct {
 	HistoryItems        []domain.VideoHistory
 	HistoryDetail       domain.VideoHistoryDetail
 	PageMeta            domain.PageMeta
+	RegenerateCut       domain.VideoHistoryCut
 }
 
 // NewHandler constructs a handler with default character options.
@@ -65,6 +67,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"recipe.html",
 		"history.html",
 		"history_detail.html",
+		"regenerate_cut.html",
 		"queued.html",
 	} {
 		tmpl, err := template.ParseFS(
@@ -313,17 +316,70 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
-func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+// findHistoryCutByIndex returns the cut matching cutIndex, or false if none matches.
+func findHistoryCutByIndex(cuts []domain.VideoHistoryCut, cutIndex int) (domain.VideoHistoryCut, bool) {
+	for _, cut := range cuts {
+		if cut.CutIndex == cutIndex {
+			return cut, true
+		}
+	}
+	return domain.VideoHistoryCut{}, false
+}
+
+// parseJobIDAndCutIndex reads and validates the jobID and cutIndex URL params shared by the
+// regenerate-keyframe form page and its submit handler.
+func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err error) {
+	jobID = strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err = domain.ValidateJobID(jobID); err != nil {
+		return "", 0, err
+	}
+	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
+	cutIndex, err = strconv.Atoi(cutIndexStr)
+	if err != nil || cutIndex < 1 {
+		return "", 0, errors.New("invalid cut_index")
+	}
+	return jobID, cutIndex, nil
+}
+
+// RegenerateCutKeyframeForm renders a dedicated page for configuring a single cut's
+// keyframe regeneration (prompt override, seed override, overwrite) before submitting it.
+func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Request) {
+	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
-	cutIndex, err := strconv.Atoi(cutIndexStr)
-	if err != nil || cutIndex < 1 {
-		http.Error(w, "invalid cut_index", http.StatusBadRequest)
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get history detail for regenerate form",
+			"job_id", jobID,
+			"error", err,
+		)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
+	if !ok {
+		http.Error(w, "cut not found", http.StatusNotFound)
+		return
+	}
+	h.renderPage(w, PageData{
+		Title:         "Regenerate Cut",
+		CSRFToken:     csrfTokenFromContext(r.Context()),
+		HistoryDetail: history,
+		RegenerateCut: cut,
+	}, "regenerate_cut.html")
+}
+
+// PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
+func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
+	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if h.HistoryRepository == nil {
@@ -339,18 +395,38 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
 		return
 	}
+	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
+	if !ok {
+		http.Error(w, "cut not found", http.StatusNotFound)
+		return
+	}
 	newJobID, err := domain.NewJobID("regen-keyframe")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	task := &domain.Task{
-		JobID:             newJobID,
-		Command:           domain.CommandRegenerateCutKeyframe,
-		RecipeURL:         history.StorageURI,
-		CutIndex:          &cutIndex,
-		OverwriteKeyframe: r.FormValue("overwrite") == "on",
-		CreatedAt:         time.Now().UTC(),
+		JobID:                newJobID,
+		Command:              domain.CommandRegenerateCutKeyframe,
+		RecipeURL:            history.StorageURI,
+		CutIndex:             &cutIndex,
+		OverwriteKeyframe:    r.FormValue("overwrite") == "on",
+		OriginalJobID:        jobID,
+		VisualAnchorOverride: strings.TrimSpace(r.FormValue("visual_anchor")),
+		CreatedAt:            time.Now().UTC(),
+	}
+	if seedStr := strings.TrimSpace(r.FormValue("seed")); seedStr != "" {
+		if strings.TrimSpace(cut.CharacterID) == "" {
+			http.Error(w, "cut has no character to apply a seed override to", http.StatusBadRequest)
+			return
+		}
+		seed, err := strconv.ParseInt(seedStr, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid seed", http.StatusBadRequest)
+			return
+		}
+		task.SeedOverride = &seed
+		task.SeedOverrideCharacterID = cut.CharacterID
 	}
 	h.enqueue(w, r, task)
 }
@@ -387,6 +463,7 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 		RecipeURL:         history.StorageURI,
 		ASSPrimaryColor:   strings.TrimSpace(r.FormValue("primary_color")),
 		ASSSecondaryColor: strings.TrimSpace(r.FormValue("secondary_color")),
+		OriginalJobID:     jobID,
 		CreatedAt:         time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)

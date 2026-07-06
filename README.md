@@ -67,7 +67,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。保存後に `applyLyricsToVideoRecipeCuts` を実行し、`music_recipe.lyrics.lyrics` をセクション単位で分解して各カットの `dialogue` フィールドへ割り当てます。 |
 | **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
-| **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成します。対象カットを 1 枚の一時 recipe に切り出して `CutKeyframe.RunAndSave` を実行し、`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference` を更新して `Publish.Run` で metadata を上書き保存します。 |
+| **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成します。`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替え、対象カットを 1 枚の一時 recipe に切り出して `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、この再生成 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference` / `visual_anchor` を更新して `Publish.Run` で metadata を上書き保存します。 |
 
 ### Recipe / Audio GCS Inputs
 
@@ -275,7 +275,7 @@ sequenceDiagram
 2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON への署名付き URL）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
 3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
 4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
-5. 各カードの **Regenerate** ボタンから、そのカットのキーフレームのみ再生成できます。「上書き」チェックボックス（デフォルト ON）が ON の場合、再生成後に recipe の `keyframe_reference` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
+5. 各カードの **Regenerate** ボタンから `/web/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成できます。専用画面では、そのカットのビジュアルアンカー（プロンプト文言）の編集、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効）、「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成後に recipe の `keyframe_reference` / `visual_anchor` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
 6. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### 6. HTTP エンドポイント
@@ -295,7 +295,8 @@ sequenceDiagram
 | `GET` | `/web/history/{jobID}` | 履歴詳細 |
 | `DELETE` | `/web/history/{jobID}` | 履歴削除 |
 | `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
-| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成 |
+| `GET` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
+| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
 ---

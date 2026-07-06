@@ -38,7 +38,7 @@ func buildPipeline(
 		if task != nil {
 			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
 		}
-		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner, taskVisualMode(task))
+		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner, taskVisualMode(task), taskSeedOverride(task))
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
@@ -53,4 +53,16 @@ func taskVisualMode(task *domain.Task) string {
 		return ""
 	}
 	return task.VisualMode
+}
+
+// taskSeedOverride は、タスクに指定されたキャラクターシード上書きを characterSeedOverride に変換します。
+// 指定がなければ nil を返し、buildWorkflowWithConfig は既定のキャラクター定義をそのまま使います。
+func taskSeedOverride(task *domain.Task) *characterSeedOverride {
+	if task == nil || task.SeedOverride == nil || task.SeedOverrideCharacterID == "" {
+		return nil
+	}
+	return &characterSeedOverride{
+		characterID: task.SeedOverrideCharacterID,
+		seed:        *task.SeedOverride,
+	}
 }

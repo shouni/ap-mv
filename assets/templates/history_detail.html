@@ -80,14 +80,7 @@
                             <h2 class="h6 fw-bold mb-0">Cut {{.CutIndex}}</h2>
                             <div class="d-flex align-items-center gap-2">
                                 {{if .Status}}<span class="badge text-bg-light border">{{.Status}}</span>{{end}}
-                                <form method="POST" action="/web/history/{{$.HistoryDetail.JobID}}/cuts/{{.CutIndex}}/regenerate-keyframe" class="d-flex align-items-center gap-2">
-                                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-                                    <div class="form-check mb-0">
-                                        <input class="form-check-input" type="checkbox" name="overwrite" id="overwrite-{{.CutIndex}}" checked>
-                                        <label class="form-check-label small text-muted" for="overwrite-{{.CutIndex}}">上書き</label>
-                                    </div>
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Regenerate</button>
-                                </form>
+                                <a href="/web/history/{{$.HistoryDetail.JobID}}/cuts/{{.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
                             </div>
                         </div>
                         {{if .VisualAnchor}}<p class="mb-2">{{.VisualAnchor}}</p>{{end}}
