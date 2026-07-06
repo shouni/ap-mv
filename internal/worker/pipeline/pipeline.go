@@ -169,17 +169,22 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 	if task == nil {
 		return domain.NotificationRequest{}
 	}
+	historyJobID := task.JobID
+	if task.OriginalJobID != "" {
+		historyJobID = task.OriginalJobID
+	}
 	req := domain.NotificationRequest{
-		JobID:       task.JobID,
-		Command:     string(task.Command),
-		SourceURL:   task.SourceURL,
-		RecipeURL:   task.RecipeURL,
-		AudioURL:    task.AudioURL,
-		CharacterID: task.CharacterID,
-		VisualMode:  task.VisualMode,
-		TextModel:   task.TextModel,
-		ImageModel:  task.ImageModel,
-		CreatedAt:   task.CreatedAt,
+		JobID:        task.JobID,
+		HistoryJobID: historyJobID,
+		Command:      string(task.Command),
+		SourceURL:    task.SourceURL,
+		RecipeURL:    task.RecipeURL,
+		AudioURL:     task.AudioURL,
+		CharacterID:  task.CharacterID,
+		VisualMode:   task.VisualMode,
+		TextModel:    task.TextModel,
+		ImageModel:   task.ImageModel,
+		CreatedAt:    task.CreatedAt,
 	}
 	if result != nil {
 		req.OutputURI = result.outputPath
@@ -198,12 +203,13 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 // workflowsForTask はタスクで選択されたモデルに対応する Workflows を返します。
 //
 // タスクのモデル指定が Runner の既定設定と同じ場合は共有済み Workflows を使い、
-// 異なる場合のみ WorkflowFactory でタスク専用の Workflows を構築します。
+// 異なる場合、またはキャラクターシードの一時的な上書きが指定されている場合のみ
+// WorkflowFactory でタスク専用の Workflows を構築します。
 func (r *Runner) workflowsForTask(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 	if r == nil {
 		return nil, nil
 	}
-	if r.WorkflowFactory == nil || !r.usesCustomModels(task) {
+	if r.WorkflowFactory == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task)) {
 		return r.Workflows, nil
 	}
 	workflows, err := r.WorkflowFactory(ctx, task)
@@ -219,6 +225,11 @@ func (r *Runner) usesCustomModels(task *domain.Task) bool {
 		return false
 	}
 	return !r.OrchestratorConfig.UsesModels(task.TextModel, task.ImageModel)
+}
+
+// usesSeedOverride はタスクがキャラクターシードの一時的な上書きを指定しているかを判定します。
+func usesSeedOverride(task *domain.Task) bool {
+	return task != nil && task.SeedOverride != nil && task.SeedOverrideCharacterID != ""
 }
 
 // outputPath はタスク成果物を配置するベースパスを返します。

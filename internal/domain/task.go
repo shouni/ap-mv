@@ -55,6 +55,16 @@ type Task struct {
 	CutIndex *int `json:"cut_index,omitempty"`
 	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
 	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
+	// OriginalJobID は、再生成タスクの結果が実際に書き込まれる元ジョブのIDです（regenerate_cut_keyframe / regenerate_zip コマンド専用）。
+	// JobID は新規生成されたタスク自身のIDのため、通知等で参照先の History Detail を示すにはこちらを使います。
+	OriginalJobID string `json:"original_job_id,omitempty"`
+	// VisualAnchorOverride が空でないとき、再生成対象カットのビジュアルアンカー（プロンプト文言）をこの値に差し替えます（regenerate_cut_keyframe コマンド専用）。
+	VisualAnchorOverride string `json:"visual_anchor_override,omitempty"`
+	// SeedOverride が非nilのとき、再生成に使うキャラクターシードを一時的にこの値へ差し替えます（regenerate_cut_keyframe コマンド専用）。
+	SeedOverride *int64 `json:"seed_override,omitempty"`
+	// SeedOverrideCharacterID は、SeedOverride を適用する対象キャラクターIDです。
+	// ハンドラーが再生成対象カットの既存 CharacterID を解決して設定します（regenerate_cut_keyframe コマンド専用）。
+	SeedOverrideCharacterID string `json:"seed_override_character_id,omitempty"`
 	// ASSPrimaryColor は歌唱済みシラブルの色（CSS hex, e.g. "#FFFF00"）。空のときはデフォルト黄色。
 	ASSPrimaryColor string `json:"ass_primary_color,omitempty"`
 	// ASSSecondaryColor は未歌唱シラブルの色（CSS hex, e.g. "#FFFFFF"）。空のときはデフォルト白。

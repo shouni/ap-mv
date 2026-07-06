@@ -89,8 +89,12 @@ func (s *SlackAdapter) NotifyTaskError(ctx context.Context, errDetail error, req
 func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) string {
 	var sb strings.Builder
 	writeSlackRequestSummary(&sb, req)
-	if historyURL := s.historyDetailURL(req.JobID); historyURL != "" {
-		fmt.Fprintf(&sb, "*History Detail:* <%s|%s>\n", historyURL, req.JobID)
+	historyJobID := req.HistoryJobID
+	if historyJobID == "" {
+		historyJobID = req.JobID
+	}
+	if historyURL := s.historyDetailURL(historyJobID); historyURL != "" {
+		fmt.Fprintf(&sb, "*History Detail:* <%s|%s>\n", historyURL, historyJobID)
 	}
 	writeSlackRequestGenerationMetadata(&sb, req)
 	if req.CutCount > 0 {

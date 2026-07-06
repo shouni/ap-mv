@@ -3,6 +3,7 @@ package filter
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
@@ -34,6 +35,9 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 
 	targetCut := fc.VideoRecipe.Cuts[targetIdx]
 	targetCut.KeyframeReference = ""
+	if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
+		targetCut.VisualAnchor = anchor
+	}
 	tempRecipe := &orchestrator.VideoRecipe{
 		ProjectTitle: fc.VideoRecipe.ProjectTitle,
 		MusicRecipe:  fc.VideoRecipe.MusicRecipe,
@@ -51,6 +55,9 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 			return fmt.Errorf("regenerated keyframe not found for cut %d", cutIndex)
 		}
 		fc.VideoRecipe.Cuts[targetIdx].KeyframeReference = updatedTemp.Cuts[0].KeyframeReference
+		if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
+			fc.VideoRecipe.Cuts[targetIdx].VisualAnchor = anchor
+		}
 		if fc.Workflows.Publish != nil {
 			// 元ジョブの recipe を上書きする。fc.OutputPath は新規ジョブのパスのため、
 			// RecipeURL のディレクトリから元のジョブルートパスを導出する。
