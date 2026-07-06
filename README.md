@@ -275,7 +275,7 @@ sequenceDiagram
 2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON への署名付き URL）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
 3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
 4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
-5. 各カードの **Regenerate** ボタンから `/web/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成できます。専用画面では、そのカットのビジュアルアンカー（プロンプト文言）の編集、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効）、「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成後に recipe の `keyframe_reference` / `visual_anchor` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
+5. 各カードの **Regenerate** ボタンから `/web/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成できます。専用画面では、そのカットのビジュアルアンカー（プロンプト文言）の編集、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）、「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成後に recipe の `keyframe_reference` / `visual_anchor` が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
 6. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### 6. HTTP エンドポイント

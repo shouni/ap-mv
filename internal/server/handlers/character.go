@@ -12,6 +12,8 @@ type CharacterOption struct {
 	ID        string
 	Name      string
 	IsDefault bool
+	// Seed はキャラクターに紐づく生成シードです（未設定の場合は nil）。
+	Seed *int64
 }
 
 // CharacterOptions は、フォームで選択可能なキャラクター一覧とデフォルト選択を保持します。
@@ -67,4 +69,18 @@ func (o CharacterOptions) selectedID(value string) string {
 // characterIDFromForm reads the character selection from a request form.
 func (h *Handler) characterIDFromForm(r *http.Request) string {
 	return h.CharacterOptions.selectedID(r.FormValue("character_id"))
+}
+
+// seed returns the configured seed for characterID, or nil if the character or its seed is unknown.
+func (o CharacterOptions) seed(characterID string) *int64 {
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		return nil
+	}
+	for _, char := range o.Characters {
+		if char.ID == characterID {
+			return char.Seed
+		}
+	}
+	return nil
 }

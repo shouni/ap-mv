@@ -33,7 +33,7 @@
 
                     <div class="mb-3">
                         <label for="seed" class="form-label fw-semibold">シード値</label>
-                        <input type="number" class="form-control" id="seed" name="seed" placeholder="変更しない場合は空欄">
+                        <input type="number" class="form-control" id="seed" name="seed" value="{{.RegenerateSeedDefault}}" placeholder="変更しない場合は空欄">
                         {{if .RegenerateCut.CharacterID}}
                         <div class="form-text">対象キャラクター: <code>{{.RegenerateCut.CharacterID}}</code>。指定するとこのカットの再生成だけシードを一時的に差し替えます（他カットとのキャラクター一貫性が崩れる場合があります）。</div>
                         {{else}}

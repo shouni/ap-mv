@@ -32,25 +32,26 @@ type Handler struct {
 
 // PageData は、HTMLテンプレートに渡す共通の描画データです。
 type PageData struct {
-	Title               string
-	CSRFToken           string
-	JobID               string
-	Status              string
-	Message             string
-	CSS                 []string
-	JS                  []string
-	GeminiModels        []string
-	ImageModels         []string
-	Characters          []CharacterOption
-	VisualModes         []VisualModeOption
-	SelectedGeminiModel string
-	SelectedImageModel  string
-	SelectedCharacterID string
-	SelectedVisualMode  string
-	HistoryItems        []domain.VideoHistory
-	HistoryDetail       domain.VideoHistoryDetail
-	PageMeta            domain.PageMeta
-	RegenerateCut       domain.VideoHistoryCut
+	Title                 string
+	CSRFToken             string
+	JobID                 string
+	Status                string
+	Message               string
+	CSS                   []string
+	JS                    []string
+	GeminiModels          []string
+	ImageModels           []string
+	Characters            []CharacterOption
+	VisualModes           []VisualModeOption
+	SelectedGeminiModel   string
+	SelectedImageModel    string
+	SelectedCharacterID   string
+	SelectedVisualMode    string
+	HistoryItems          []domain.VideoHistory
+	HistoryDetail         domain.VideoHistoryDetail
+	PageMeta              domain.PageMeta
+	RegenerateCut         domain.VideoHistoryCut
+	RegenerateSeedDefault string
 }
 
 // NewHandler constructs a handler with default character options.
@@ -367,11 +368,16 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "cut not found", http.StatusNotFound)
 		return
 	}
+	seedDefault := ""
+	if seed := h.CharacterOptions.seed(cut.CharacterID); seed != nil {
+		seedDefault = strconv.FormatInt(*seed, 10)
+	}
 	h.renderPage(w, PageData{
-		Title:         "Regenerate Cut",
-		CSRFToken:     csrfTokenFromContext(r.Context()),
-		HistoryDetail: history,
-		RegenerateCut: cut,
+		Title:                 "Regenerate Cut",
+		CSRFToken:             csrfTokenFromContext(r.Context()),
+		HistoryDetail:         history,
+		RegenerateCut:         cut,
+		RegenerateSeedDefault: seedDefault,
 	}, "regenerate_cut.html")
 }
 
@@ -425,8 +431,10 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 			http.Error(w, "invalid seed", http.StatusBadRequest)
 			return
 		}
-		task.SeedOverride = &seed
-		task.SeedOverrideCharacterID = cut.CharacterID
+		if current := h.CharacterOptions.seed(cut.CharacterID); current == nil || *current != seed {
+			task.SeedOverride = &seed
+			task.SeedOverrideCharacterID = cut.CharacterID
+		}
 	}
 	h.enqueue(w, r, task)
 }
