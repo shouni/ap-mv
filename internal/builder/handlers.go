@@ -131,6 +131,7 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 			ID:        char.ID,
 			Name:      char.Name,
 			IsDefault: char.IsDefault,
+			Seed:      char.Seed,
 		})
 	}
 	return options, nil
