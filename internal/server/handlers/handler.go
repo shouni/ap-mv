@@ -3,6 +3,7 @@ package handlers
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -335,7 +336,7 @@ func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err err
 	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
 	cutIndex, err = strconv.Atoi(cutIndexStr)
 	if err != nil || cutIndex < 1 {
-		return "", 0, fmt.Errorf("invalid cut_index")
+		return "", 0, errors.New("invalid cut_index")
 	}
 	return jobID, cutIndex, nil
 }
