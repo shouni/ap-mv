@@ -20,7 +20,7 @@ type fakeCutKeyframeRunner struct {
 	resultKeyframeRef  string
 }
 
-func (f *fakeCutKeyframeRunner) Run(_ context.Context, recipe *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
+func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
 	return nil, nil
 }
 
