@@ -174,7 +174,12 @@ func TestGetHistoryLoadsCutKeyframeURLs(t *testing.T) {
 	}
 }
 
-func TestGetHistoryReusesRecipeLoadedByHistoryList(t *testing.T) {
+// TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt verifies GetHistory never reuses a
+// recipe cached by ListHistoryPage's bulk read: a single-job detail read always goes straight to
+// storage, so it can't serve a stale pre-regenerate/edit snapshot (this matters most under
+// multiple running instances, where a worker instance's cache invalidation can't reach every
+// other instance's in-memory cache).
+func TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -200,8 +205,44 @@ func TestGetHistoryReusesRecipeLoadedByHistoryList(t *testing.T) {
 	if _, err := repo.GetHistory(context.Background(), jobID); err != nil {
 		t.Fatalf("GetHistory() error = %v", err)
 	}
-	if got := reader.OpenCount(metadataURI); got != 1 {
-		t.Fatalf("metadata open count = %d, want 1", got)
+	if got := reader.OpenCount(metadataURI); got != 2 {
+		t.Fatalf("metadata open count = %d, want 2 (ListHistoryPage's cached read must not be reused by GetHistory)", got)
+	}
+}
+
+// TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt mirrors the GetHistory case:
+// downloading keyframes is a deliberate, low-frequency action where a user expects the current
+// state, so it must not silently serve a recipe cached by an earlier ListHistoryPage call.
+func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
+	t.Parallel()
+
+	const (
+		jobID       = "video-recipe-20260618-081931-abc"
+		metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
+		keyframeURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_001.png"
+	)
+	reader := &fakeHistoryReader{
+		paths: []string{metadataURI, keyframeURI},
+		files: map[string]string{
+			metadataURI: `{
+				"title": "軌跡のアーキテクト",
+				"cuts": [
+					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "keyframe_reference": "images/keyframe_001.png"}
+				]
+			}`,
+			keyframeURI: "fake-image-bytes",
+		},
+	}
+	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, fakeHistorySigner{}, NewHistoryCache())
+
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+		t.Fatalf("ListHistoryPage() error = %v", err)
+	}
+	if err := repo.DownloadKeyframes(context.Background(), jobID, func(string, io.Reader) error { return nil }); err != nil {
+		t.Fatalf("DownloadKeyframes() error = %v", err)
+	}
+	if got := reader.OpenCount(metadataURI); got != 2 {
+		t.Fatalf("metadata open count = %d, want 2 (ListHistoryPage's cached read must not be reused by DownloadKeyframes)", got)
 	}
 }
 

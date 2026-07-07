@@ -149,7 +149,7 @@ Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。
 
 生成履歴は `GCS_MUSIC_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<GCS_MUSIC_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下を参照します。ジョブごとの `video_music_meta.json` を一覧対象とし、詳細画面では同じ JSON の `cuts[]` から keyframe / video / status などを表示します。
 
-metadata JSON と一覧表示用メタデータは短時間 TTL cache に保持し、履歴一覧と詳細画面を行き来したときの GCS I/O を抑えます。署名付き URL は表示ごとに生成し、期限付き URL 自体は cache しません。
+**履歴一覧**（`ListHistoryPage`）は、多数の job を毎回読み直すコストを抑えるため、metadata JSON を短時間 TTL cache に保持します。**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は、regenerate/編集ジョブ完了直後に最新状態を確認したいケースで stale なキャッシュを返さないよう、常に GCS から直接読み込みます（キャッシュを一切経由しません）。Cloud Run が複数インスタンスで動く場合、ワーカーインスタンスでのキャッシュ無効化が他インスタンスの一覧キャッシュには届かないことがありますが、詳細・ダウンロードは常に最新なので実害はありません。署名付き URL は表示ごとに生成し、期限付き URL 自体は cache しません。
 
 ---
 
