@@ -35,6 +35,7 @@ type Runner struct {
 	OutputBaseURI      string
 	Notifier           ports.Notifier
 	Characters         *characterkit.Characters
+	HistoryRepository  ports.HistoryRepository
 }
 
 // New は VideoRunner と任意の orchestrator 設定から Runner を生成します。
@@ -104,16 +105,17 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 		return nil, err
 	}
 	fc := &filter.Context{
-		Task:        task,
-		Recipe:      task.Recipe,
-		VideoRecipe: task.VideoRecipe,
-		VideoRunner: r.VideoRunner,
-		TaskQueue:   r.TaskQueue,
-		Workflows:   workflows,
-		Reader:      r.Reader,
-		Writer:      r.Writer,
-		Characters:  r.Characters,
-		OutputPath:  r.outputPath(task),
+		Task:              task,
+		Recipe:            task.Recipe,
+		VideoRecipe:       task.VideoRecipe,
+		VideoRunner:       r.VideoRunner,
+		TaskQueue:         r.TaskQueue,
+		Workflows:         workflows,
+		Reader:            r.Reader,
+		Writer:            r.Writer,
+		Characters:        r.Characters,
+		OutputPath:        r.outputPath(task),
+		HistoryRepository: r.HistoryRepository,
 	}
 	filters := r.Filters
 	if len(filters) == 0 {

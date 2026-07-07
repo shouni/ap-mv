@@ -58,3 +58,9 @@ func (r *VideoHistoryRepository) setCachedVideoRecipe(jobID string, recipe domai
 func (r *VideoHistoryRepository) deleteCachedVideoRecipe(jobID string) {
 	r.recipeCache.Delete(jobID)
 }
+
+// InvalidateJob clears cached history/recipe metadata for jobID.
+func (r *VideoHistoryRepository) InvalidateJob(jobID string) {
+	r.deleteCachedHistory(jobID)
+	r.deleteCachedVideoRecipe(jobID)
+}

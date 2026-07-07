@@ -18,16 +18,17 @@ var ErrPipelineDeferred = errors.New("pipeline deferred")
 
 // Context は、パイプライン各ステップ（Filter）間で引き継がれる実行状態です。
 type Context struct {
-	Task        *domain.Task
-	Recipe      *domain.MusicRecipe
-	VideoRecipe *orchestrator.VideoRecipe
-	Workflows   *orchestrator.Workflows
-	Reader      orchestrator.ContentReader
-	Writer      remoteio.OutputWriter
-	VideoRunner ports.VideoRunner
-	TaskQueue   ports.TaskQueue
-	Characters  *characterkit.Characters
-	OutputPath  string
+	Task              *domain.Task
+	Recipe            *domain.MusicRecipe
+	VideoRecipe       *orchestrator.VideoRecipe
+	Workflows         *orchestrator.Workflows
+	Reader            orchestrator.ContentReader
+	Writer            remoteio.OutputWriter
+	VideoRunner       ports.VideoRunner
+	TaskQueue         ports.TaskQueue
+	Characters        *characterkit.Characters
+	OutputPath        string
+	HistoryRepository ports.HistoryRepository
 }
 
 // Filter は、動画生成パイプラインの1ステップを表すインターフェースです。

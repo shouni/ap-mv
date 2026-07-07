@@ -137,6 +137,12 @@ func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string)
 }
 
 // GetHistory loads generated MV job metadata and cut keyframe references.
+//
+// Unlike ListHistoryPage, this always reads storage directly rather than the TTL cache: a
+// single-job read is cheap, and callers use GetHistory precisely to check the latest state
+// right after a regenerate/edit job completes, when a stale cached copy would be most visible
+// and confusing (and, under multiple running instances, cache invalidation from the worker
+// instance that ran the job can't reach every other instance's in-memory cache anyway).
 func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error) {
 	if r == nil || r.reader == nil || r.baseURI == "" {
 		return domain.VideoHistoryDetail{}, errors.New("history repository is not properly configured")
@@ -144,11 +150,11 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
-	recipe, err := r.loadVideoRecipe(ctx, jobID)
+	recipe, err := r.fetchVideoRecipe(ctx, jobID)
 	if err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
-	history := r.buildHistoryFromRecipe(ctx, jobID, recipe)
+	history := r.buildHistoryFromFreshRecipe(ctx, jobID, recipe)
 	detail := domain.VideoHistoryDetail{
 		VideoHistory: history,
 		Cuts:         make([]domain.VideoHistoryCut, 0, len(recipe.Cuts)),
@@ -177,12 +183,28 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 	return detail, nil
 }
 
+// buildHistoryFromRecipe builds (or reuses a cached) VideoHistory for the bulk ListHistoryPage
+// path, where re-deriving every listed job's metadata on every page view would be wasteful.
 func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
 	history, ok := r.getCachedHistory(jobID)
 	if !ok {
 		history = videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
 		r.setCachedHistory(jobID, history)
 	}
+	return r.finalizeHistory(ctx, jobID, history)
+}
+
+// buildHistoryFromFreshRecipe builds VideoHistory directly from recipe without reading or
+// populating the history cache, so single-job reads (GetHistory) always reflect the latest
+// storage state rather than a snapshot cached before a regenerate/edit job completed.
+func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
+	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
+	return r.finalizeHistory(ctx, jobID, history)
+}
+
+// finalizeHistory fills in the fields that are never cached (signed URLs expire, so they're
+// always regenerated; the keyframe zip URI is cheap to derive).
+func (r *VideoHistoryRepository) finalizeHistory(ctx context.Context, jobID string, history domain.VideoHistory) domain.VideoHistory {
 	history.SignedURL = ""
 	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
 		history.SignedURL = signedURL
@@ -218,10 +240,23 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 	return r.signedURL(ctx, uri)
 }
 
+// loadVideoRecipe returns a cached recipe if present, otherwise fetches and caches one. Used by
+// the bulk ListHistoryPage path.
 func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
 	if recipe, ok := r.getCachedVideoRecipe(jobID); ok {
 		return recipe, nil
 	}
+	recipe, err := r.fetchVideoRecipe(ctx, jobID)
+	if err != nil {
+		return domain.VideoRecipe{}, err
+	}
+	r.setCachedVideoRecipe(jobID, recipe)
+	return recipe, nil
+}
+
+// fetchVideoRecipe always reads the recipe directly from storage, bypassing the cache entirely.
+// Used by single-job reads (GetHistory, DownloadKeyframes) that need the current state.
+func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
 	rc, err := r.reader.Open(ctx, r.metadataURI(jobID))
 	if err != nil {
 		return domain.VideoRecipe{}, err
@@ -236,7 +271,6 @@ func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID stri
 	if err != nil {
 		return domain.VideoRecipe{}, err
 	}
-	r.setCachedVideoRecipe(jobID, *recipe)
 	return *recipe, nil
 }
 

@@ -21,7 +21,7 @@ func (r *VideoHistoryRepository) DownloadKeyframes(ctx context.Context, jobID st
 	if err := domain.ValidateJobID(jobID); err != nil {
 		return err
 	}
-	recipe, err := r.loadVideoRecipe(ctx, jobID)
+	recipe, err := r.fetchVideoRecipe(ctx, jobID)
 	if err != nil {
 		return err
 	}

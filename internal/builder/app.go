@@ -73,6 +73,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		rio.Signer,
 		nil,
 	)
+	pipe.HistoryRepository = historyRepository
 
 	return &app.Container{
 		Config:            cfg,
