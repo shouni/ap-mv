@@ -5,6 +5,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
@@ -132,6 +133,33 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 	}
 	if recipe.Cuts[0].CutIndex != 0 || recipe.Cuts[0].EndSec != 0 {
 		t.Fatalf("source cut mutated: %#v", recipe.Cuts[0])
+	}
+}
+
+// TestKeyframePromptBuildEditReinforcesCharacterAndStyle verifies that editing an existing
+// keyframe still carries the character identity and style suffix reinforcement that BuildCut
+// gives full generation, plus an explicit "keep everything else the same" instruction and a
+// "no text" system prompt — so edits don't drift the art style like a bare edit instruction would.
+func TestKeyframePromptBuildEditReinforcesCharacterAndStyle(t *testing.T) {
+	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
+	cut := orchestrator.Cut{CutIndex: 2}
+
+	userPrompt, systemPrompt := p.BuildEdit(cut, char, "腕には絆創膏を1〜2枚のみにしてください")
+
+	for _, want := range []string{
+		"腕には絆創膏を1〜2枚のみにしてください",
+		"Character: Tsumugi",
+		"twin tails, green eyes",
+		"Japanese anime style, cel-shaded",
+		"Keep the composition, pose, background, and art style",
+	} {
+		if !strings.Contains(userPrompt, want) {
+			t.Fatalf("BuildEdit() userPrompt missing %q:\n%s", want, userPrompt)
+		}
+	}
+	if !strings.Contains(systemPrompt, "No text") {
+		t.Fatalf("BuildEdit() systemPrompt = %q, want text/caption exclusion", systemPrompt)
 	}
 }
 

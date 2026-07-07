@@ -33,10 +33,13 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 		return err
 	}
 
+	editPrompt := strings.TrimSpace(fc.Task.EditPrompt)
 	targetCut := fc.VideoRecipe.Cuts[targetIdx]
-	targetCut.KeyframeReference = ""
-	if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
-		targetCut.VisualAnchor = anchor
+	if editPrompt == "" {
+		targetCut.KeyframeReference = ""
+		if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
+			targetCut.VisualAnchor = anchor
+		}
 	}
 	tempRecipe := &orchestrator.VideoRecipe{
 		ProjectTitle: fc.VideoRecipe.ProjectTitle,
@@ -45,9 +48,18 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 	}
 
 	regenOutputPath := fmt.Sprintf("%sregens/cut-%d/", fc.OutputPath, cutIndex)
-	updatedTemp, err := fc.Workflows.CutKeyframe.RunAndSave(ctx, tempRecipe, regenOutputPath)
-	if err != nil {
-		return fmt.Errorf("regenerate cut %d keyframe: %w", cutIndex, err)
+	var updatedTemp *orchestrator.VideoRecipe
+	if editPrompt != "" {
+		// 編集モード: 既存キーフレームを構図はそのまま保ちつつ editPrompt の指示だけ反映する。
+		updatedTemp, err = fc.Workflows.CutKeyframe.EditAndSave(ctx, tempRecipe, editPrompt, regenOutputPath)
+		if err != nil {
+			return fmt.Errorf("edit cut %d keyframe: %w", cutIndex, err)
+		}
+	} else {
+		updatedTemp, err = fc.Workflows.CutKeyframe.RunAndSave(ctx, tempRecipe, regenOutputPath)
+		if err != nil {
+			return fmt.Errorf("regenerate cut %d keyframe: %w", cutIndex, err)
+		}
 	}
 
 	if fc.Task.OverwriteKeyframe {
@@ -55,8 +67,10 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 			return fmt.Errorf("regenerated keyframe not found for cut %d", cutIndex)
 		}
 		fc.VideoRecipe.Cuts[targetIdx].KeyframeReference = updatedTemp.Cuts[0].KeyframeReference
-		if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
-			fc.VideoRecipe.Cuts[targetIdx].VisualAnchor = anchor
+		if editPrompt == "" {
+			if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
+				fc.VideoRecipe.Cuts[targetIdx].VisualAnchor = anchor
+			}
 		}
 		if fc.Workflows.Publish != nil {
 			// 元ジョブの recipe を上書きする。fc.OutputPath は新規ジョブのパスのため、

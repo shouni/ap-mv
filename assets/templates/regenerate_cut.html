@@ -26,19 +26,43 @@
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
                     <div class="mb-3">
-                        <label for="visual_anchor" class="form-label fw-semibold">ビジュアルアンカー（プロンプト文言）</label>
-                        <textarea class="form-control" id="visual_anchor" name="visual_anchor" rows="5">{{.RegenerateCut.VisualAnchor}}</textarea>
-                        <div class="form-text">このカットのキーフレーム生成に使うプロンプト文言です。変更して再生成できます。</div>
+                        <label class="form-label fw-semibold d-block">モード</label>
+                        <div class="btn-group" role="group">
+                            <input type="radio" class="btn-check" name="mode" id="mode-regenerate" value="regenerate" checked>
+                            <label class="btn btn-outline-secondary btn-sm" for="mode-regenerate">フル再生成</label>
+                            <input type="radio" class="btn-check" name="mode" id="mode-edit" value="edit" {{if not .RegenerateCut.KeyframeURL}}disabled{{end}}>
+                            <label class="btn btn-outline-secondary btn-sm" for="mode-edit">部分編集</label>
+                        </div>
+                        <div class="form-text">
+                            フル再生成はプロンプトから作り直すため構図が変わりえます。部分編集は今の画像をそのまま保ち、指示した内容だけを直します。
+                            {{if not .RegenerateCut.KeyframeURL}}（このカットはまだキーフレームがないため部分編集は選べません）{{end}}
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="seed" class="form-label fw-semibold">シード値</label>
-                        <input type="number" class="form-control" id="seed" name="seed" value="{{.RegenerateSeedDefault}}" placeholder="変更しない場合は空欄">
-                        {{if .RegenerateCut.CharacterID}}
-                        <div class="form-text">対象キャラクター: <code>{{.RegenerateCut.CharacterID}}</code>。指定するとこのカットの再生成だけシードを一時的に差し替えます（他カットとのキャラクター一貫性が崩れる場合があります）。</div>
-                        {{else}}
-                        <div class="form-text text-warning">このカットにはキャラクターが設定されていないため、シード指定は無視されます。</div>
-                        {{end}}
+                    <div id="regenerate-fields">
+                        <div class="mb-3">
+                            <label for="visual_anchor" class="form-label fw-semibold">ビジュアルアンカー（プロンプト文言）</label>
+                            <textarea class="form-control" id="visual_anchor" name="visual_anchor" rows="5">{{.RegenerateCut.VisualAnchor}}</textarea>
+                            <div class="form-text">このカットのキーフレーム生成に使うプロンプト文言です。変更して再生成できます。</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="seed" class="form-label fw-semibold">シード値</label>
+                            <input type="number" class="form-control" id="seed" name="seed" value="{{.RegenerateSeedDefault}}" placeholder="変更しない場合は空欄">
+                            {{if .RegenerateCut.CharacterID}}
+                            <div class="form-text">対象キャラクター: <code>{{.RegenerateCut.CharacterID}}</code>。指定するとこのカットの再生成だけシードを一時的に差し替えます（他カットとのキャラクター一貫性が崩れる場合があります）。</div>
+                            {{else}}
+                            <div class="form-text text-warning">このカットにはキャラクターが設定されていないため、シード指定は無視されます。</div>
+                            {{end}}
+                        </div>
+                    </div>
+
+                    <div id="edit-fields" class="d-none">
+                        <div class="mb-3">
+                            <label for="edit_prompt" class="form-label fw-semibold">編集指示</label>
+                            <textarea class="form-control" id="edit_prompt" name="edit_prompt" rows="3" placeholder="例: 腕には絆創膏を1〜2枚のみにしてください"></textarea>
+                            <div class="form-text">今のキーフレーム画像はそのままに、この指示内容だけを反映します。構図・ポーズ・背景は変わりません。</div>
+                        </div>
                     </div>
 
                     <div class="form-check mb-3">
@@ -55,4 +79,19 @@
         </div>
     </div>
 </div>
+<script>
+(function () {
+    const regenerateFields = document.getElementById('regenerate-fields');
+    const editFields = document.getElementById('edit-fields');
+    const editPrompt = document.getElementById('edit_prompt');
+    document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            const isEdit = radio.value === 'edit' && radio.checked;
+            regenerateFields.classList.toggle('d-none', isEdit);
+            editFields.classList.toggle('d-none', !isEdit);
+            editPrompt.required = isEdit;
+        });
+    });
+})();
+</script>
 {{end}}

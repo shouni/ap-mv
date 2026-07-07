@@ -265,6 +265,29 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 	return userPrompt, systemPrompt
 }
 
+// BuildEdit builds prompts for editing an existing keyframe image with editPrompt, reinforcing
+// character identity and art style the same way BuildCut does so the edited result doesn't
+// drift from the rest of the cuts.
+func (p keyframePrompt) BuildEdit(cut orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
+	character := "the main character"
+	if char != nil {
+		character = char.Name
+	}
+	cues := ""
+	if char != nil && len(char.VisualCues) > 0 {
+		cues = strings.Join(char.VisualCues, ", ")
+	}
+	userPrompt := strings.Join(nonEmptyStrings(
+		"Edit the provided keyframe image. Keep the composition, pose, background, and art style exactly as they are; apply only this change.",
+		strings.TrimSpace(editPrompt),
+		"Character: "+character,
+		"Character visual cues: "+cues,
+		strings.TrimSpace(p.styleSuffix),
+	), "\n")
+	systemPrompt := "Edit the provided keyframe image with minimal changes beyond the requested edit. No text, captions, speech bubbles, logos, or watermarks."
+	return userPrompt, systemPrompt
+}
+
 func (p keyframePrompt) visualPrompt() string {
 	mode := strings.TrimSpace(p.visualMode)
 	if mode == "" {

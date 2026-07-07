@@ -59,7 +59,11 @@ type Task struct {
 	// JobID は新規生成されたタスク自身のIDのため、通知等で参照先の History Detail を示すにはこちらを使います。
 	OriginalJobID string `json:"original_job_id,omitempty"`
 	// VisualAnchorOverride が空でないとき、再生成対象カットのビジュアルアンカー（プロンプト文言）をこの値に差し替えます（regenerate_cut_keyframe コマンド専用）。
+	// EditPrompt が指定されている場合はそちらが優先され、VisualAnchorOverride は無視されます。
 	VisualAnchorOverride string `json:"visual_anchor_override,omitempty"`
+	// EditPrompt が空でないとき、フル再生成ではなく既存キーフレーム画像を編集する「編集モード」になります
+	// （regenerate_cut_keyframe コマンド専用）。構図・ポーズ・背景は保ったまま、この指示内容だけを反映します。
+	EditPrompt string `json:"edit_prompt,omitempty"`
 	// SeedOverride が非nilのとき、再生成に使うキャラクターシードを一時的にこの値へ差し替えます（regenerate_cut_keyframe コマンド専用）。
 	SeedOverride *int64 `json:"seed_override,omitempty"`
 	// SeedOverrideCharacterID は、SeedOverride を適用する対象キャラクターIDです。
