@@ -66,12 +66,10 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 		if updatedTemp == nil || len(updatedTemp.Cuts) == 0 {
 			return fmt.Errorf("regenerated keyframe not found for cut %d", cutIndex)
 		}
-		fc.VideoRecipe.Cuts[targetIdx].KeyframeReference = updatedTemp.Cuts[0].KeyframeReference
-		if editPrompt == "" {
-			if anchor := strings.TrimSpace(fc.Task.VisualAnchorOverride); anchor != "" {
-				fc.VideoRecipe.Cuts[targetIdx].VisualAnchor = anchor
-			}
-		}
+		// updatedTemp.Cuts[0] originated as a copy of fc.VideoRecipe.Cuts[targetIdx] (targetCut above),
+		// so overwriting the whole cut also carries over the VisualAnchor override applied earlier
+		// without repeating that logic here.
+		fc.VideoRecipe.Cuts[targetIdx] = updatedTemp.Cuts[0]
 		if fc.Workflows.Publish != nil {
 			// 元ジョブの recipe を上書きする。fc.OutputPath は新規ジョブのパスのため、
 			// RecipeURL のディレクトリから元のジョブルートパスを導出する。

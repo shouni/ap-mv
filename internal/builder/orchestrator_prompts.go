@@ -268,7 +268,7 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 // BuildEdit builds prompts for editing an existing keyframe image with editPrompt, reinforcing
 // character identity and art style the same way BuildCut does so the edited result doesn't
 // drift from the rest of the cuts.
-func (p keyframePrompt) BuildEdit(cut orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
+func (p keyframePrompt) BuildEdit(_ orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
 	character := "the main character"
 	if char != nil {
 		character = char.Name
