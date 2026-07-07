@@ -19,4 +19,8 @@ type HistoryRepository interface {
 	DeleteHistory(ctx context.Context, jobID string) error
 	DownloadKeyframes(ctx context.Context, jobID string, sink KeyframeSink) error
 	KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error)
+	// InvalidateJob clears cached history/recipe metadata for jobID, so a subsequent GetHistory
+	// reads fresh data from storage instead of a stale cached copy (e.g. after a regenerate/edit
+	// job writes new metadata back to jobID from a worker running in the same process).
+	InvalidateJob(jobID string)
 }

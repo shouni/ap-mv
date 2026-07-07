@@ -49,6 +49,8 @@ func (r fakeHistoryRepository) KeyframeZipSignedURL(context.Context, string) (st
 	return "", nil
 }
 
+func (r fakeHistoryRepository) InvalidateJob(string) {}
+
 // TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.
 func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
