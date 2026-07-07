@@ -419,6 +419,7 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		OverwriteKeyframe:    r.FormValue("overwrite") == "on",
 		OriginalJobID:        jobID,
 		VisualAnchorOverride: strings.TrimSpace(r.FormValue("visual_anchor")),
+		EditPrompt:           strings.TrimSpace(r.FormValue("edit_prompt")),
 		CreatedAt:            time.Now().UTC(),
 	}
 	if seedStr := strings.TrimSpace(r.FormValue("seed")); seedStr != "" {
