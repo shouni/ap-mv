@@ -205,6 +205,63 @@ func TestAllBundledVisualModesRender(t *testing.T) {
 	}
 }
 
+// TestScriptPromptBuildGroundsVisualAnchorInDefaultCharacter verifies that when characters are
+// wired into the script prompt, the default character's name and visual cues are rendered into
+// the prompt so the LLM writing each cut's visual_anchor has the same appearance grounding that
+// keyframe generation later uses — otherwise cuts can drift from the character sheet (e.g. a cut
+// describing "short dark hair" for a character actually defined with a long auburn ponytail).
+func TestScriptPromptBuildGroundsVisualAnchorInDefaultCharacter(t *testing.T) {
+	prompt, err := newScriptPrompt()
+	if err != nil {
+		t.Fatalf("newScriptPrompt() error = %v", err)
+	}
+	characters, err := characterkit.NewCharacters([]characterkit.Character{
+		{
+			ID:           "tsumugi",
+			Name:         "Tsumugi",
+			VisualCues:   []string{"short brownish-orange hair with a right-side ponytail", "bright light-blue eyes"},
+			ReferenceURL: "https://example.com/tsumugi.png",
+			IsDefault:    true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("characterkit.NewCharacters() error = %v", err)
+	}
+	prompt.characters = characters
+
+	got, err := prompt.Build("sparkle_rock", scriptPromptTestData("source"))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	for _, want := range []string{
+		"Protagonist (Tsumugi)",
+		"short brownish-orange hair with a right-side ponytail",
+		"bright light-blue eyes",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Build() missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestScriptPromptBuildOmitsProtagonistBlockWithoutCharacters verifies that Build still renders
+// cleanly (no stray template output) when no characters are configured, preserving existing
+// behavior for callers that don't wire a character repository.
+func TestScriptPromptBuildOmitsProtagonistBlockWithoutCharacters(t *testing.T) {
+	prompt, err := newScriptPrompt()
+	if err != nil {
+		t.Fatalf("newScriptPrompt() error = %v", err)
+	}
+
+	got, err := prompt.Build("sparkle_rock", scriptPromptTestData("source"))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if strings.Contains(got, "Protagonist") {
+		t.Fatalf("Build() rendered Protagonist block without configured characters:\n%s", got)
+	}
+}
+
 func scriptPromptTestData(title string) *orchestrator.TemplateData {
 	return &orchestrator.TemplateData{
 		SourceRecipe: &orchestrator.VideoRecipe{

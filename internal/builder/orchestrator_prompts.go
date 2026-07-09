@@ -24,6 +24,7 @@ type scriptPrompt struct {
 	visualTemplates  map[string]string
 	visualMode       string
 	sharedVisualTmpl *template.Template
+	characters       *characterkit.Characters
 }
 
 type scriptPromptData struct {
@@ -34,20 +35,22 @@ type scriptPromptData struct {
 
 // visualModeData はビジュアルモードテンプレートに渡すレシピ情報のフラット表現です。
 type visualModeData struct {
-	Title       string
-	Theme       string
-	Mood        string
-	Tempo       int
-	Key         string
-	Instruments []string
-	Sections    []orchestrator.Section
-	Hook        string
-	LyricText   string
-	Keywords    []string
-	Narrative   string
+	Title               string
+	Theme               string
+	Mood                string
+	Tempo               int
+	Key                 string
+	Instruments         []string
+	Sections            []orchestrator.Section
+	Hook                string
+	LyricText           string
+	Keywords            []string
+	Narrative           string
+	CharacterName       string
+	CharacterVisualCues []string
 }
 
-func newVisualModeData(recipe *orchestrator.VideoRecipe) visualModeData {
+func newVisualModeData(recipe *orchestrator.VideoRecipe, char *characterkit.Character) visualModeData {
 	if recipe == nil {
 		return visualModeData{}
 	}
@@ -66,7 +69,23 @@ func newVisualModeData(recipe *orchestrator.VideoRecipe) visualModeData {
 		d.Keywords = recipe.MusicRecipe.Lyrics.Keywords
 		d.Narrative = recipe.MusicRecipe.Lyrics.Narrative
 	}
+	if char != nil {
+		d.CharacterName = char.Name
+		d.CharacterVisualCues = char.VisualCues
+	}
 	return d
+}
+
+// defaultCharacter resolves the character whose VisualCues should ground script generation.
+// Only the default character is used here: at script-generation time the pipeline has not yet
+// resolved a per-task character override (that happens later via applyTaskCharacterIDToVideoRecipe),
+// so grounding on anything other than the default would require threading task state through the
+// external ScriptPrompt/TemplateData contract.
+func (p *scriptPrompt) defaultCharacter() *characterkit.Character {
+	if p == nil || p.characters == nil {
+		return nil
+	}
+	return p.characters.GetDefault()
 }
 
 // newScriptPrompt creates a script prompt from bundled prompt assets.
@@ -208,7 +227,7 @@ func (p *scriptPrompt) visualPrompt(mode string, data *orchestrator.TemplateData
 		return "", fmt.Errorf("parse visual mode template %q: %w", mode, err)
 	}
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, "main", newVisualModeData(data.SourceRecipe)); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "main", newVisualModeData(data.SourceRecipe, p.defaultCharacter())); err != nil {
 		return "", fmt.Errorf("render visual mode template %q: %w", mode, err)
 	}
 	return buf.String(), nil
