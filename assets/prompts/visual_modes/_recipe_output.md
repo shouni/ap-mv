@@ -10,4 +10,9 @@
 - Narrative: {{.Narrative}}{{end}}{{if .Sections}}
 - Sections:{{range .Sections}}
   - {{.Name}} ({{.Duration}}s): {{.Prompt}}{{end}}{{end}}
+{{if .CharacterName}}
+**Protagonist ({{.CharacterName}})**
+This is the only character who may appear. Every cut's `visual_anchor` must describe this exact appearance verbatim — do not invent, omit, or vary hair color, hairstyle, eye color, or outfit details between cuts.
+- {{join .CharacterVisualCues "\n- "}}
+{{end}}
 {{end}}

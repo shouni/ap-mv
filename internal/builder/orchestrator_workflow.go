@@ -71,6 +71,7 @@ func buildWorkflowWithConfig(
 		return nil, err
 	}
 	scriptPromptBuilder.visualMode = visualMode
+	scriptPromptBuilder.characters = characters
 	visualTemplates, err := assets.LoadVisualModeFiles()
 	if err != nil {
 		return nil, err
