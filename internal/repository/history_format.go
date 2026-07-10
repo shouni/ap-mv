@@ -32,6 +32,11 @@ func historyCreatedAtRaw(jobID string) string {
 		if !isDigits(raw) {
 			continue
 		}
+		// 偶然14桁の数字が含まれる jobID を誤ってタイムスタンプ扱いしないよう、
+		// 日付として妥当か検証し、不正な場合は次の候補へ進む。
+		if _, err := time.ParseInLocation("20060102150405", raw, time.UTC); err != nil {
+			continue
+		}
 		return raw
 	}
 	return ""
