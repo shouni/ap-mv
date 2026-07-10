@@ -262,6 +262,11 @@ func (r *Runner) outputPath(task *domain.Task) string {
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) []filter.Filter {
 	switch command {
+	case domain.CommandVideoGenContinuation:
+		return []filter.Filter{
+			filter.VideoGenerationFilter{Runner: videoRunner},
+			filter.PublishingFilter{},
+		}
 	case domain.CommandRegenerateCutKeyframe:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},

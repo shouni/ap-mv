@@ -45,8 +45,8 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	if len(queue.tasks) != 1 {
 		t.Fatalf("enqueued tasks = %d, want 1", len(queue.tasks))
 	}
-	if queue.tasks[0].Command != domain.CommandMVFromKeyframeVideoRecipe {
-		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandMVFromKeyframeVideoRecipe)
+	if queue.tasks[0].Command != domain.CommandVideoGenContinuation {
+		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandVideoGenContinuation)
 	}
 	if queue.tasks[0].VideoRecipe.Cuts[0].VideoID == "" {
 		t.Fatalf("continuation task did not include generated cut state")
@@ -86,6 +86,44 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	}
 	if len(queue.tasks) != 1 {
 		t.Fatalf("enqueued tasks = %d, want 1", len(queue.tasks))
+	}
+}
+
+// TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationCommand verifies that
+// deferring a short_video_from_section task does not re-trigger section_select on resume
+// (which would reset already-generated cuts back to pending) or cut_keyframe_gen/zip_upload
+// (which would discard the keyframes reused from the original job).
+func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationCommand(t *testing.T) {
+	sectionIndex := 0
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
+			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
+		},
+	}
+	task := &domain.Task{
+		JobID:        "short-1",
+		Command:      domain.CommandShortVideoFromSection,
+		SectionIndex: &sectionIndex,
+		VideoRecipe:  recipe,
+	}
+	queue := &captureQueue{}
+	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
+	})
+	if !errors.Is(err, ErrPipelineDeferred) {
+		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
+	}
+	if len(queue.tasks) != 1 {
+		t.Fatalf("enqueued tasks = %d, want 1", len(queue.tasks))
+	}
+	if queue.tasks[0].Command != domain.CommandVideoGenContinuation {
+		t.Fatalf("continuation command = %q, want %q", queue.tasks[0].Command, domain.CommandVideoGenContinuation)
 	}
 }
 

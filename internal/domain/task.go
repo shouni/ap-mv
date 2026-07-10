@@ -40,6 +40,13 @@ const (
 	CommandComposeToKeyframe TaskCommand = "compose_to_keyframe"
 	// CommandGenerateFromRecipe is a legacy task command name kept for existing queued tasks and clients.
 	CommandGenerateFromRecipe TaskCommand = "generate_from_recipe"
+
+	// CommandVideoGenContinuation is enqueued internally by VideoGenerationFilter to resume
+	// per-cut video generation after a prior cut. It is never issued by HTTP handlers. Unlike
+	// the original command it replaces, it skips scripting/keyframe/zip/section-select stages
+	// (already applied to the carried VideoRecipe) so continuation only re-runs video
+	// generation and publishing.
+	CommandVideoGenContinuation TaskCommand = "video_gen_continuation"
 )
 
 // Task は、キューに投入される動画生成タスク1件分のペイロードです。
@@ -140,7 +147,7 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
-	case CommandMVFromKeyframeVideoRecipe, CommandGenerateFromRecipe:
+	case CommandMVFromKeyframeVideoRecipe, CommandGenerateFromRecipe, CommandVideoGenContinuation:
 		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
 		}
