@@ -16,6 +16,31 @@ type VideoGenerationRequest = veoports.VideoGenerationRequest
 // VideoResponse は go-veo-orchestrator の動画生成レスポンス型です。
 type VideoResponse = veoports.VideoResponse
 
+// VideoRunnerConfigurator は、タスク単位で Veo モデルやアスペクト比を差し替えた
+// 派生 Runner を返せる VideoRunner のオプションインターフェースです。
+type VideoRunnerConfigurator interface {
+	WithVideoOptions(model, aspectRatio string) VideoRunner
+}
+
+// DeriveVideoRunner は、runner が VideoRunnerConfigurator を実装していれば
+// モデル・アスペクト比を差し替えた派生 Runner を返します。指定が両方空、
+// または runner が差し替えに対応しない場合は runner をそのまま返します。
+func DeriveVideoRunner(runner VideoRunner, model, aspectRatio string) VideoRunner {
+	if runner == nil {
+		return nil
+	}
+	model = strings.TrimSpace(model)
+	aspectRatio = strings.TrimSpace(aspectRatio)
+	if model == "" && aspectRatio == "" {
+		return runner
+	}
+	configurator, ok := runner.(VideoRunnerConfigurator)
+	if !ok {
+		return runner
+	}
+	return configurator.WithVideoOptions(model, aspectRatio)
+}
+
 type videoOutputBaseURIKey struct{}
 
 // WithVideoOutputBaseURI stores the job-scoped output base URI for video runners.

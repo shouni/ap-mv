@@ -175,12 +175,42 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 			EndSec:            cut.EndSec,
 		})
 	}
+	detail.Sections = historySectionsFromRecipe(recipe)
 	signedCuts, err := r.signHistoryCutURLs(ctx, detail.Cuts)
 	if err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
 	detail.Cuts = signedCuts
 	return detail, nil
+}
+
+// historySectionsFromRecipe converts recipe sections into display-ready entries with
+// normalized time ranges, so the short-video form can label each section option.
+func historySectionsFromRecipe(recipe domain.VideoRecipe) []domain.VideoHistorySection {
+	sections := recipe.MusicRecipe.Sections
+	if len(sections) == 0 {
+		return nil
+	}
+	result := make([]domain.VideoHistorySection, 0, len(sections))
+	cursor := 0
+	for i, sec := range sections {
+		start := sec.StartSeconds
+		if start == 0 && i > 0 {
+			start = cursor
+		}
+		end := sec.EndSeconds
+		if end <= start && sec.Duration > 0 {
+			end = start + sec.Duration
+		}
+		cursor = end
+		result = append(result, domain.VideoHistorySection{
+			SectionIndex: i,
+			Name:         strings.TrimSpace(sec.Name),
+			StartSeconds: start,
+			EndSeconds:   end,
+		})
+	}
+	return result
 }
 
 // buildHistoryFromRecipe builds (or reuses a cached) VideoHistory for the bulk ListHistoryPage
@@ -293,6 +323,22 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 				return nil
 			}
 			signedCuts[i].KeyframeURL = signedURL
+			return nil
+		})
+		eg.Go(func() error {
+			videoURI := strings.TrimSpace(signedCuts[i].VideoURL)
+			if !strings.HasPrefix(videoURI, "gs://") {
+				return nil
+			}
+			signedURL, err := r.signedURL(ctx, videoURI)
+			if err != nil {
+				slog.WarnContext(ctx, "failed to generate video signed URL",
+					"uri", videoURI,
+					"error", err,
+				)
+				return nil
+			}
+			signedCuts[i].VideoSignedURL = signedURL
 			return nil
 		})
 	}

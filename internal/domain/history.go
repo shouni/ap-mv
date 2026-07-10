@@ -26,15 +26,29 @@ type VideoHistoryCut struct {
 	KeyframeReference string  `json:"keyframe_reference,omitempty"`
 	KeyframeURL       string  `json:"keyframe_url,omitempty"`
 	VideoURL          string  `json:"video_url,omitempty"`
-	Status            string  `json:"status,omitempty"`
-	StartSec          float64 `json:"start_sec,omitempty"`
-	EndSec            float64 `json:"end_sec,omitempty"`
+	// VideoSignedURL は VideoURL（gs:// URI）をブラウザ再生用に署名した URL です。
+	// 署名 URL は期限付きのため cache されず、表示ごとに再生成されます。
+	VideoSignedURL string  `json:"video_signed_url,omitempty"`
+	Status         string  `json:"status,omitempty"`
+	StartSec       float64 `json:"start_sec,omitempty"`
+	EndSec         float64 `json:"end_sec,omitempty"`
+}
+
+// VideoHistorySection is a display-ready song section entry for a generated MV history detail.
+// SectionIndex is the position in the recipe's sections array; section names (e.g. "Chorus")
+// can repeat within a song, so selections reference the index rather than the name.
+type VideoHistorySection struct {
+	SectionIndex int    `json:"section_index"`
+	Name         string `json:"name"`
+	StartSeconds int    `json:"start_seconds"`
+	EndSeconds   int    `json:"end_seconds"`
 }
 
 // VideoHistoryDetail contains generated MV metadata and display-ready cuts.
 type VideoHistoryDetail struct {
 	VideoHistory
-	Cuts []VideoHistoryCut `json:"cuts,omitempty"`
+	Cuts     []VideoHistoryCut     `json:"cuts,omitempty"`
+	Sections []VideoHistorySection `json:"sections,omitempty"`
 }
 
 // PageMeta contains pagination metadata for history list views.

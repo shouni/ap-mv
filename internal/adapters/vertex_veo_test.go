@@ -28,6 +28,50 @@ func TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference(t *testing.T) {
 	}
 }
 
+// TestVertexVeoRunnerModelURL verifies regional and global endpoint URL construction.
+func TestVertexVeoRunnerModelURL(t *testing.T) {
+	regional := &VertexVeoRunner{projectID: "proj", locationID: "us-central1", model: "veo-3.1-generate-001"}
+	want := "https://us-central1-aiplatform.googleapis.com/v1/projects/proj/locations/us-central1/publishers/google/models/veo-3.1-generate-001:predictLongRunning"
+	if got := regional.modelURL("predictLongRunning"); got != want {
+		t.Fatalf("regional modelURL = %q, want %q", got, want)
+	}
+
+	global := &VertexVeoRunner{projectID: "proj", locationID: "global", model: "veo-3.1-generate-001"}
+	want = "https://aiplatform.googleapis.com/v1/projects/proj/locations/global/publishers/google/models/veo-3.1-generate-001:fetchPredictOperation"
+	if got := global.modelURL("fetchPredictOperation"); got != want {
+		t.Fatalf("global modelURL = %q, want %q", got, want)
+	}
+}
+
+// TestVertexVeoRunnerWithVideoOptionsDerivesRunner verifies per-task model/aspect derivation.
+func TestVertexVeoRunnerWithVideoOptionsDerivesRunner(t *testing.T) {
+	base := &VertexVeoRunner{model: "veo-3.1-generate-001", aspectRatio: "16:9"}
+
+	if got := base.WithVideoOptions("", ""); got != ports.VideoRunner(base) {
+		t.Fatalf("WithVideoOptions with empty values should return the same runner")
+	}
+	if got := base.WithVideoOptions("veo-3.1-generate-001", "16:9"); got != ports.VideoRunner(base) {
+		t.Fatalf("WithVideoOptions with identical values should return the same runner")
+	}
+
+	derived, ok := base.WithVideoOptions("veo-3.1-fast-generate-001", "9:16").(*VertexVeoRunner)
+	if !ok {
+		t.Fatalf("derived runner is not a *VertexVeoRunner")
+	}
+	if derived.model != "veo-3.1-fast-generate-001" || derived.aspectRatio != "9:16" {
+		t.Fatalf("derived = %q/%q, want overrides applied", derived.model, derived.aspectRatio)
+	}
+	if base.model != "veo-3.1-generate-001" || base.aspectRatio != "16:9" {
+		t.Fatalf("base runner was mutated: %q/%q", base.model, base.aspectRatio)
+	}
+
+	// 片方だけの指定は、もう片方の元設定を維持する。
+	partial, _ := base.WithVideoOptions("", "9:16").(*VertexVeoRunner)
+	if partial.model != "veo-3.1-generate-001" || partial.aspectRatio != "9:16" {
+		t.Fatalf("partial = %q/%q, want model kept and aspect overridden", partial.model, partial.aspectRatio)
+	}
+}
+
 // TestVertexVeoRunnerBuildGenerateBodyUsesJobScopedCutStorageURI verifies that job-scoped GCS output is used for cut generation.
 func TestVertexVeoRunnerBuildGenerateBodyUsesJobScopedCutStorageURI(t *testing.T) {
 	runner := &VertexVeoRunner{outputStorageURI: "gs://bucket/ap-mv/veo/"}

@@ -111,6 +111,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
 		r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
+		r.Post("/history/{jobID}/short-video", h.PostShortVideoFromSection)
 	})
 }
 

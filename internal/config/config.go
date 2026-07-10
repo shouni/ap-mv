@@ -11,6 +11,7 @@ import (
 const (
 	defaultGeminiModel = "gemini-3.5-flash"
 	defaultImageModel  = "gemini-3-pro-image-preview"
+	defaultVeoModel    = "veo-3.1-generate-001"
 	taskGeneratePath   = "/tasks/generate"
 )
 
@@ -32,6 +33,8 @@ type Config struct {
 	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash,gemini-3.1-pro-preview"`
 	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image,gemini-3-pro-image"`
 	VeoModel               string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
+	VeoModels              []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001,veo-3.1-fast-generate-001"`
+	VeoLocationID          string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio         string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
 	VeoGenerateAudio       bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
@@ -73,6 +76,11 @@ func (c *Config) normalize() error {
 	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
 	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
 	c.AllowedM2MServiceAccounts = normalizeStringSlice(c.AllowedM2MServiceAccounts)
+	// Veo は提供リージョンが限られる（例: us-central1）ため、Cloud Tasks 等と共有する
+	// GCP_LOCATION_ID とは別に VEO_LOCATION_ID で上書きできる。未設定なら共通値を使う。
+	if strings.TrimSpace(c.VeoLocationID) == "" {
+		c.VeoLocationID = c.LocationID
+	}
 	c.NormalizeModels()
 	return nil
 }
@@ -81,8 +89,10 @@ func (c *Config) normalize() error {
 func (c *Config) NormalizeModels() {
 	c.GeminiModels = normalizeModelList(c.GeminiModels, c.GeminiModel, defaultGeminiModel)
 	c.ImageModels = normalizeModelList(c.ImageModels, c.ImageModel, defaultImageModel)
+	c.VeoModels = normalizeModelList(c.VeoModels, c.VeoModel, defaultVeoModel)
 	c.GeminiModel = normalizeDefaultModel(c.GeminiModel, c.GeminiModels, defaultGeminiModel)
 	c.ImageModel = normalizeDefaultModel(c.ImageModel, c.ImageModels, defaultImageModel)
+	c.VeoModel = normalizeDefaultModel(c.VeoModel, c.VeoModels, defaultVeoModel)
 }
 
 // LoadConfig は環境変数から設定を読み込みます。

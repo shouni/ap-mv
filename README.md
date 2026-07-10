@@ -69,6 +69,8 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 | **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成・編集します。`EditPrompt` が指定されている場合は「編集モード」となり、既存の `keyframe_reference` を編集元画像として `CutKeyframe.EditAndSave`（内部的には `gemini-image-kit` の `GenerateSingleImage` に既存画像を入力として渡す会話型編集、通常生成と同じ `IMAGE_MODEL` を使用）を呼び、構図・ポーズ・背景を保ったまま指示内容だけを反映します（このとき `VisualAnchorOverride` は無視されます）。`EditPrompt` が空の場合は「フル再生成モード」で、`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替えたうえで `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、どちらのモードでもこの 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）を更新して `Publish.Run` で metadata を上書き保存します。 |
 
+| **7. Section Select** | `7_section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
+
 ### Recipe / Audio GCS Inputs
 
 | 入力 | 場所 | 内部フィールド | 用途 |
@@ -118,9 +120,11 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `SERVICE_ACCOUNT_EMAIL` | なし | Cloud Tasks OIDC token を発行する service account |
-| `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID |
+| `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
+| `VEO_MODELS` | `veo-3.1-generate-001,veo-3.1-fast-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |
+| `VEO_LOCATION_ID` | `GCP_LOCATION_ID` の値 | Veo API を呼び出す Vertex AI location。`global` も指定可能（グローバルエンドポイント `aiplatform.googleapis.com` を使用）。Veo は提供リージョンが限られるため、データ所在地の要件がなければ `global` を、リージョン固定が必要なら `us-central1` 等を指定します |
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
-| `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16` |
+| `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16`。タスク側の指定（ショート動画生成の `veo_aspect_ratio`）があればそちらを優先 |
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
@@ -280,7 +284,8 @@ sequenceDiagram
    - **部分編集**（キーフレームが既にあるカットのみ選択可）: 「腕には絆創膏を1〜2枚のみにしてください」のような編集指示だけを入力します。今の画像を入力として同じ画像生成モデル（`IMAGE_MODEL`）に渡す会話型編集のため、構図・ポーズ・背景を保ったまま指示内容だけを反映します。同じキャラクターの他カットとの一貫性を保ちたい軽微な修正（小物の数・色など）に向いています。
 
    どちらのモードでも、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）と「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成/編集後に recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-6. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
+6. 詳細画面の **ショート動画生成 (Veo)** フォームでは、レシピにセクションが定義されている場合に、セクション・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比（既定 `9:16`）を選んで送信できます。選択したセクションに属するカット群のキーフレームと歌詞をそのまま使い、`short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。完了後は履歴一覧に新しいジョブとして表示されます。
+7. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### 6. HTTP エンドポイント
 
@@ -301,6 +306,7 @@ sequenceDiagram
 | `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
 | `GET` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
 | `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット |
+| `POST` | `/web/history/{jobID}/short-video` | 指定セクションからショート動画生成（`section_index` / `veo_model` / `aspect_ratio`） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
 ---

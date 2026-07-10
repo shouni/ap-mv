@@ -56,8 +56,10 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
 		GeminiModels:       appCtx.Config.GeminiModels,
 		ImageModels:        appCtx.Config.ImageModels,
+		VeoModels:          appCtx.Config.VeoModels,
 		DefaultGeminiModel: appCtx.Config.GeminiModel,
 		DefaultImageModel:  appCtx.Config.ImageModel,
+		DefaultVeoModel:    appCtx.Config.VeoModel,
 	}, characterOptions, visualOptions)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)

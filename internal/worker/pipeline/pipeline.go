@@ -104,11 +104,12 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	if err != nil {
 		return nil, err
 	}
+	videoRunner := ports.DeriveVideoRunner(r.VideoRunner, task.VeoModel, task.VeoAspectRatio)
 	fc := &filter.Context{
 		Task:              task,
 		Recipe:            task.Recipe,
 		VideoRecipe:       task.VideoRecipe,
-		VideoRunner:       r.VideoRunner,
+		VideoRunner:       videoRunner,
 		TaskQueue:         r.TaskQueue,
 		Workflows:         workflows,
 		Reader:            r.Reader,
@@ -119,7 +120,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	}
 	filters := r.Filters
 	if len(filters) == 0 {
-		filters = defaultFilters(task.Command, r.VideoRunner)
+		filters = defaultFilters(task.Command, videoRunner)
 	}
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
@@ -211,7 +212,7 @@ func (r *Runner) workflowsForTask(ctx context.Context, task *domain.Task) (*orch
 	if r == nil {
 		return nil, nil
 	}
-	if r.WorkflowFactory == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task)) {
+	if r.WorkflowFactory == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
 		return r.Workflows, nil
 	}
 	workflows, err := r.WorkflowFactory(ctx, task)
@@ -232,6 +233,16 @@ func (r *Runner) usesCustomModels(task *domain.Task) bool {
 // usesSeedOverride はタスクがキャラクターシードの一時的な上書きを指定しているかを判定します。
 func usesSeedOverride(task *domain.Task) bool {
 	return task != nil && task.SeedOverride != nil && task.SeedOverrideCharacterID != ""
+}
+
+// usesVeoOptions はタスクが Veo モデルまたはアスペクト比の差し替えを指定しているかを判定します。
+// 指定がある場合は、共有 Workflows ではなく差し替え済み VideoRunner を持つ
+// タスク専用 Workflows を構築する必要があります。
+func usesVeoOptions(task *domain.Task) bool {
+	if task == nil {
+		return false
+	}
+	return strings.TrimSpace(task.VeoModel) != "" || strings.TrimSpace(task.VeoAspectRatio) != ""
 }
 
 // outputPath はタスク成果物を配置するベースパスを返します。
@@ -261,6 +272,13 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.ZipUploadFilter{},
+		}
+	case domain.CommandShortVideoFromSection:
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
+			filter.SectionSelectFilter{},
+			filter.VideoGenerationFilter{Runner: videoRunner},
+			filter.PublishingFilter{},
 		}
 	}
 	filters := []filter.Filter{}
