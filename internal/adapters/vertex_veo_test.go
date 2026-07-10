@@ -28,6 +28,21 @@ func TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference(t *testing.T) {
 	}
 }
 
+// TestVertexVeoRunnerModelURL verifies regional and global endpoint URL construction.
+func TestVertexVeoRunnerModelURL(t *testing.T) {
+	regional := &VertexVeoRunner{projectID: "proj", locationID: "us-central1", model: "veo-3.1-generate-001"}
+	want := "https://us-central1-aiplatform.googleapis.com/v1/projects/proj/locations/us-central1/publishers/google/models/veo-3.1-generate-001:predictLongRunning"
+	if got := regional.modelURL("predictLongRunning"); got != want {
+		t.Fatalf("regional modelURL = %q, want %q", got, want)
+	}
+
+	global := &VertexVeoRunner{projectID: "proj", locationID: "global", model: "veo-3.1-generate-001"}
+	want = "https://aiplatform.googleapis.com/v1/projects/proj/locations/global/publishers/google/models/veo-3.1-generate-001:fetchPredictOperation"
+	if got := global.modelURL("fetchPredictOperation"); got != want {
+		t.Fatalf("global modelURL = %q, want %q", got, want)
+	}
+}
+
 // TestVertexVeoRunnerWithVideoOptionsDerivesRunner verifies per-task model/aspect derivation.
 func TestVertexVeoRunnerWithVideoOptionsDerivesRunner(t *testing.T) {
 	base := &VertexVeoRunner{model: "veo-3.1-generate-001", aspectRatio: "16:9"}

@@ -89,7 +89,13 @@ func (r *VertexVeoRunner) postJSON(ctx context.Context, url string, body any, ou
 }
 
 // modelURL は指定された Veo メソッド用の Vertex AI Publisher Model エンドポイント URL を組み立てます。
+// global エンドポイントはリージョンエンドポイントと異なりホスト名にロケーションプレフィックスを付けません
+// （https://aiplatform.googleapis.com/v1/projects/{p}/locations/global/...）。
 func (r *VertexVeoRunner) modelURL(method string) string {
-	return fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
-		r.locationID, r.projectID, r.locationID, r.model, method)
+	host := r.locationID + "-aiplatform.googleapis.com"
+	if r.locationID == "global" {
+		host = "aiplatform.googleapis.com"
+	}
+	return fmt.Sprintf("https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
+		host, r.projectID, r.locationID, r.model, method)
 }
