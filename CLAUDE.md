@@ -57,7 +57,7 @@ AP MV is a Cloud Run + Cloud Tasks async orchestrator that turns a "Music Recipe
 Veo's biggest failure mode is characters/context breaking across cuts. Four mechanisms keep cuts coherent, and touching `3_video_gen.go` or `VertexVeoRunner` requires understanding all four:
 
 - **Seed-based determinism** — a per-character seed is reused across cuts.
-- **Keyframe anchor (image-to-video)** — a keyframe image generated from character seed + reference image is passed as Veo's `image` input; character reference art is passed separately as `referenceImages` (higher priority).
+- **Keyframe anchor (image-to-video / reference-to-video)** — a keyframe image generated from character seed + reference image anchors each cut. When the cut's character has reference art, [character art, keyframe] are sent as Veo's `referenceImages` (asset type, max 3); otherwise the keyframe is sent as the `image` input (image-to-video). `referenceImages` is only supported by non-Fast Veo 3 models (the adapter falls back to `image` otherwise), and Veo rejects `video` + `referenceImages`/`image` together, so when `VEO_USE_PREVIOUS_VIDEO` provides video-to-video context the image references are omitted for that cut.
 - **Audio-driven prompting** — each cut's `audio_cue` (e.g. "synchronized with the heavy bass drop at 0:10") is injected into the Veo prompt.
 - **Context chain (video-to-video)** — the previous cut's `VideoID` is passed as `PreviousVideoID` to the next cut's request, chaining context.
 

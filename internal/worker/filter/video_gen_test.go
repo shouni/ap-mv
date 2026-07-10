@@ -82,6 +82,42 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	}
 }
 
+// TestVideoGenerationFilterExpandsUnsupportedDurations verifies that cuts longer than Veo's
+// supported durations are split into sub-cuts before generation in the full MV flow.
+func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 10, VisualAnchor: "long cut", KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
+		},
+	}
+	task := &domain.Task{
+		JobID:       "job-1",
+		Command:     domain.CommandMVFromKeyframeVideoRecipe,
+		VideoRecipe: recipe,
+	}
+	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(recipe.Cuts) != 2 {
+		t.Fatalf("cuts = %d, want 2 (10s cut split into 8s + 4s)", len(recipe.Cuts))
+	}
+	for i, wantDuration := range []float64{8, 4} {
+		if recipe.Cuts[i].DurationSec != wantDuration {
+			t.Errorf("cut[%d] duration = %v, want %v", i, recipe.Cuts[i].DurationSec, wantDuration)
+		}
+		if recipe.Cuts[i].Status != orchestrator.CutStatusGenerated {
+			t.Errorf("cut[%d] status = %q, want generated", i, recipe.Cuts[i].Status)
+		}
+	}
+}
+
 type sequenceRunner struct{}
 
 // Run starts the receiver workflow.

@@ -16,15 +16,23 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 	instance := map[string]any{
 		"prompt": strings.TrimSpace(req.Prompt),
 	}
+	hasVideoContext := false
 	if r.usePreviousVideo {
 		if media := previousVideoMedia(req.PreviousVideoID); media != nil {
 			instance["video"] = media
+			hasVideoContext = true
 		}
 	}
-	if refs := referenceImagesMedia(req); refs != nil {
-		instance["referenceImages"] = refs
-	} else if media := imageMedia(req); media != nil {
-		instance["image"] = media
+	// Veo は video / referenceImages / image を同一リクエストで併用できないため、
+	// video-to-video 文脈がある場合は画像参照を送らない。referenceImages は
+	// 対応モデル（Veo 3 系、Fast を除く）のみで使い、非対応モデルはキーフレームの
+	// image 入力（image-to-video）へフォールバックする。
+	if !hasVideoContext {
+		if refs := referenceImagesMedia(req); refs != nil && r.modelSupportsReferenceImages() {
+			instance["referenceImages"] = refs
+		} else if media := imageMedia(req); media != nil {
+			instance["image"] = media
+		}
 	}
 	if media := audioMedia(req); media != nil {
 		instance["audio"] = media
@@ -47,6 +55,13 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 		"instances":  []any{instance},
 		"parameters": parameters,
 	}
+}
+
+// modelSupportsReferenceImages は使用モデルが referenceImages（asset 参照）に対応するかを返します。
+// referenceImages は Veo 3 系のみサポートで、Veo 3.1 Fast は非対応です。
+func (r *VertexVeoRunner) modelSupportsReferenceImages() bool {
+	model := strings.ToLower(r.model)
+	return strings.HasPrefix(model, "veo-3") && !strings.Contains(model, "fast")
 }
 
 // validateVertexVeoRequest は Veo API アダプターに必要なリクエスト項目を検証します。

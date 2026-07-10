@@ -28,6 +28,71 @@ func TestVertexVeoRunnerBuildGenerateBodyIncludesAudioReference(t *testing.T) {
 	}
 }
 
+// TestVertexVeoRunnerBuildGenerateBodyReferenceImages verifies referenceImages handling:
+// supported models send asset references, unsupported models fall back to image input,
+// and video-to-video context excludes both.
+func TestVertexVeoRunnerBuildGenerateBodyReferenceImages(t *testing.T) {
+	req := ports.VideoGenerationRequest{
+		Prompt:          "scene",
+		CutIndex:        1,
+		DurationSec:     8,
+		ImageReference:  "gs://bucket/kf.png",
+		ReferenceImages: []string{"gs://bucket/characters/zundamon.png", "gs://bucket/kf.png"},
+		PreviousVideoID: "gs://bucket/prev.mp4",
+	}
+
+	// 対応モデル: referenceImages を送り、image は送らない。
+	runner := &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/"}
+	instance := firstInstance(t, runner.buildGenerateBody(context.Background(), req))
+	refs, ok := instance["referenceImages"].([]map[string]any)
+	if !ok || len(refs) != 2 {
+		t.Fatalf("referenceImages = %v, want 2 asset references", instance["referenceImages"])
+	}
+	if got := refs[0]["referenceType"]; got != "asset" {
+		t.Fatalf("referenceType = %v, want asset", got)
+	}
+	if _, hasImage := instance["image"]; hasImage {
+		t.Fatalf("image should not be sent together with referenceImages")
+	}
+
+	// 非対応モデル (Fast): image 入力へフォールバック。
+	runner = &VertexVeoRunner{model: "veo-3.1-fast-generate-001", outputStorageURI: "gs://bucket/out/"}
+	instance = firstInstance(t, runner.buildGenerateBody(context.Background(), req))
+	if _, hasRefs := instance["referenceImages"]; hasRefs {
+		t.Fatalf("fast model should not send referenceImages")
+	}
+	image, ok := instance["image"].(map[string]any)
+	if !ok || image["gcsUri"] != "gs://bucket/kf.png" {
+		t.Fatalf("image = %v, want keyframe fallback", instance["image"])
+	}
+
+	// video-to-video 文脈: video のみ送り、referenceImages / image は送らない。
+	runner = &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/", usePreviousVideo: true}
+	instance = firstInstance(t, runner.buildGenerateBody(context.Background(), req))
+	if _, hasVideo := instance["video"]; !hasVideo {
+		t.Fatalf("video context should be sent when usePreviousVideo is enabled")
+	}
+	if _, hasRefs := instance["referenceImages"]; hasRefs {
+		t.Fatalf("referenceImages must not be sent together with video")
+	}
+	if _, hasImage := instance["image"]; hasImage {
+		t.Fatalf("image must not be sent together with video")
+	}
+}
+
+func firstInstance(t *testing.T, body map[string]any) map[string]any {
+	t.Helper()
+	instances, ok := body["instances"].([]any)
+	if !ok || len(instances) == 0 {
+		t.Fatalf("instances missing in body: %v", body)
+	}
+	instance, ok := instances[0].(map[string]any)
+	if !ok {
+		t.Fatalf("instance is not a map: %v", instances[0])
+	}
+	return instance
+}
+
 // TestVertexVeoRunnerModelURL verifies regional and global endpoint URL construction.
 func TestVertexVeoRunnerModelURL(t *testing.T) {
 	regional := &VertexVeoRunner{projectID: "proj", locationID: "us-central1", model: "veo-3.1-generate-001"}

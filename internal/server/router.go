@@ -100,9 +100,9 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Post("/compose", h.PostVideoRecipeCreate)
 		r.Get("/video-recipe-create", h.VideoRecipeCreateForm)
 		r.Post("/video-recipe-create", h.PostVideoRecipeCreate)
-		r.Get("/generate-from-recipe", h.RecipeForm)
+		// フォーム画面は履歴詳細の動画生成フォームへ統合済み。POST は ap-mcp 等の
+		// M2M 呼び出しの互換性のために残している。
 		r.Post("/generate-from-recipe", h.PostRecipe)
-		r.Get("/mv-from-keyframe-video-recipe", h.RecipeForm)
 		r.Post("/mv-from-keyframe-video-recipe", h.PostRecipe)
 		r.Get("/history", h.History)
 		r.Get("/history/{jobID}", h.HistoryDetail)
@@ -111,7 +111,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
 		r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
-		r.Post("/history/{jobID}/short-video", h.PostShortVideoFromSection)
+		r.Post("/history/{jobID}/generate-video", h.PostGenerateVideoFromHistory)
 	})
 }
 

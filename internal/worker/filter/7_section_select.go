@@ -55,7 +55,11 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	if len(cuts) == 0 {
 		return fmt.Errorf("no cuts found in section %d (%s)", sectionIndex, sections[sectionIndex].Name)
 	}
-	fc.VideoRecipe.Cuts = cuts
+	// Veo の image_to_video はカット尺 4/6/8 秒しか受け付けないため、セクション尺のまま
+	// 保存された長いカット（キーフレームのみ生成したレシピ等）は 8 秒以下のサブカットへ
+	// 分割し、各尺をサポート値に丸めてから動画生成へ渡す。さらに YouTube ショートの
+	// 上限（60秒）に収まるよう、超過分のカットは切り詰める。
+	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {
@@ -77,6 +81,9 @@ func sectionTimeRange(sections []orchestrator.Section, index int) (float64, floa
 	}
 	return start, end
 }
+
+// youtubeShortMaxDurationSec は YouTube ショート動画の最大尺（秒）です。
+const youtubeShortMaxDurationSec = 60.0
 
 // resolveRecipeObjectURI は元ジョブ相対のオブジェクト参照を絶対URIへ解決します。
 // すでにスキーム付きの参照、または base が導出できない場合はそのまま返します。

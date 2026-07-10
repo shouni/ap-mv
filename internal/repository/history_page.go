@@ -10,7 +10,14 @@ func selectHistoryPageIDs(jobIDs []string, page int, perPage int) ([]string, dom
 	if page < 1 {
 		page = 1
 	}
+	// 作成日時（jobID 埋め込みタイムスタンプ）の降順でソートする。jobID の文字列比較だと
+	// プレフィックス（video-recipe- / short- / mv- 等）順になってしまうため。
+	// タイムスタンプを持たない jobID は末尾に回し、同時刻は jobID 降順で安定させる。
 	sort.Slice(jobIDs, func(i, j int) bool {
+		ti, tj := historyCreatedAtRaw(jobIDs[i]), historyCreatedAtRaw(jobIDs[j])
+		if ti != tj {
+			return ti > tj
+		}
 		return jobIDs[i] > jobIDs[j]
 	})
 

@@ -118,7 +118,12 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	if err := eg.Wait(); err != nil {
 		return domain.VideoHistoryPage{}, err
 	}
+	// 並列取得で順序が崩れるため、ページ選択時と同じ作成日時降順で並べ直す。
 	sort.Slice(histories, func(i, j int) bool {
+		ti, tj := historyCreatedAtRaw(histories[i].JobID), historyCreatedAtRaw(histories[j].JobID)
+		if ti != tj {
+			return ti > tj
+		}
 		return histories[i].JobID > histories[j].JobID
 	})
 
