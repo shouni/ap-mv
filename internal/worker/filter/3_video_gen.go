@@ -30,6 +30,9 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
+	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
+	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts)
 	if fc.Workflows != nil && fc.Workflows.Video != nil {
 		return f.runWithWorkflow(ctx, fc)
 	}

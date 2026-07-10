@@ -46,8 +46,9 @@ func newSectionSelectRecipe() *orchestrator.VideoRecipe {
 }
 
 // TestSectionSelectFilterTrimsToSectionCuts verifies that only the selected section's cuts
-// remain, their generation state is reset, and relative keyframe references are resolved
-// against the original job root.
+// remain, their generation state is reset, relative keyframe references are resolved against
+// the original job root, and durations are normalized to Veo-supported values (a 10s cut is
+// split into 8s + 4s sub-cuts sharing the same keyframe).
 func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 	sectionIndex := 1
 	fc := &Context{
@@ -64,21 +65,115 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if len(fc.VideoRecipe.Cuts) != 1 {
-		t.Fatalf("cuts = %d, want 1", len(fc.VideoRecipe.Cuts))
+	if len(fc.VideoRecipe.Cuts) != 2 {
+		t.Fatalf("cuts = %d, want 2 (10s cut split into 8s + 4s)", len(fc.VideoRecipe.Cuts))
 	}
-	cut := fc.VideoRecipe.Cuts[0]
-	if cut.CutIndex != 2 {
-		t.Fatalf("cut index = %d, want 2", cut.CutIndex)
+	for i, wantDuration := range []float64{8, 4} {
+		cut := fc.VideoRecipe.Cuts[i]
+		if cut.CutIndex != i+1 {
+			t.Errorf("cut[%d] index = %d, want %d", i, cut.CutIndex, i+1)
+		}
+		if cut.DurationSec != wantDuration {
+			t.Errorf("cut[%d] duration = %v, want %v", i, cut.DurationSec, wantDuration)
+		}
+		if cut.Status != orchestrator.CutStatusPending {
+			t.Errorf("cut[%d] status = %q, want %q", i, cut.Status, orchestrator.CutStatusPending)
+		}
+		if cut.VideoID != "" || cut.VideoURL != "" {
+			t.Errorf("cut[%d] video state not cleared: id=%q url=%q", i, cut.VideoID, cut.VideoURL)
+		}
+		if want := "gs://bucket/jobs/orig-job/images/cut_2.png"; cut.KeyframeReference != want {
+			t.Errorf("cut[%d] keyframe reference = %q, want %q", i, cut.KeyframeReference, want)
+		}
 	}
-	if cut.Status != orchestrator.CutStatusPending {
-		t.Errorf("status = %q, want %q", cut.Status, orchestrator.CutStatusPending)
+	if got := fc.VideoRecipe.Cuts[0].StartSec; got != 10 {
+		t.Errorf("cut[0] start = %v, want 10", got)
 	}
-	if cut.VideoID != "" || cut.VideoURL != "" {
-		t.Errorf("video state not cleared: id=%q url=%q", cut.VideoID, cut.VideoURL)
+	if got := fc.VideoRecipe.Cuts[1].StartSec; got != 18 {
+		t.Errorf("cut[1] start = %v, want 18", got)
 	}
-	if want := "gs://bucket/jobs/orig-job/images/cut_2.png"; cut.KeyframeReference != want {
-		t.Errorf("keyframe reference = %q, want %q", cut.KeyframeReference, want)
+}
+
+// TestSplitCutBySupportedDurations verifies long cuts are split into Veo-supported durations
+// and dialogue lines are distributed across the sub-cuts.
+func TestSplitCutBySupportedDurations(t *testing.T) {
+	cut := orchestrator.Cut{
+		CutIndex:          3,
+		StartSec:          40,
+		EndSec:            75,
+		DurationSec:       35,
+		KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png",
+		Dialogue:          "line1\nline2\nline3\nline4\nline5",
+	}
+
+	subCuts := splitCutBySupportedDurations(cut)
+
+	wantDurations := []float64{8, 8, 8, 8, 4}
+	if len(subCuts) != len(wantDurations) {
+		t.Fatalf("sub cuts = %d, want %d", len(subCuts), len(wantDurations))
+	}
+	offset := 40.0
+	for i, want := range wantDurations {
+		if subCuts[i].DurationSec != want {
+			t.Errorf("sub[%d] duration = %v, want %v", i, subCuts[i].DurationSec, want)
+		}
+		if subCuts[i].StartSec != offset {
+			t.Errorf("sub[%d] start = %v, want %v", i, subCuts[i].StartSec, offset)
+		}
+		if subCuts[i].KeyframeReference != cut.KeyframeReference {
+			t.Errorf("sub[%d] keyframe = %q, want parent keyframe", i, subCuts[i].KeyframeReference)
+		}
+		offset += want
+	}
+	if subCuts[0].Dialogue != "line1" || subCuts[4].Dialogue != "line5" {
+		t.Errorf("dialogue distribution = %q ... %q, want line1 ... line5", subCuts[0].Dialogue, subCuts[4].Dialogue)
+	}
+}
+
+// TestCapCutsTotalDuration verifies the YouTube Shorts 60s cap keeps whole cuts within the
+// limit and always keeps at least the first cut.
+func TestCapCutsTotalDuration(t *testing.T) {
+	cuts := make([]orchestrator.Cut, 9)
+	for i := range cuts {
+		cuts[i] = orchestrator.Cut{CutIndex: i + 1, DurationSec: 8}
+	}
+	capped := capCutsTotalDuration(cuts, 60)
+	if len(capped) != 7 {
+		t.Fatalf("capped cuts = %d, want 7 (7*8=56s <= 60s)", len(capped))
+	}
+
+	// 56s + 4s = 60s ちょうどは収まる。
+	cuts = append(cuts[:7], orchestrator.Cut{CutIndex: 8, DurationSec: 4})
+	capped = capCutsTotalDuration(cuts, 60)
+	if len(capped) != 8 {
+		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
+	}
+
+	// 上限超えの単独カットでも先頭は必ず残す。
+	capped = capCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, DurationSec: 90}}, 60)
+	if len(capped) != 1 {
+		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
+	}
+}
+
+// TestSnapToSupportedDuration verifies snapping to Veo-supported durations (ties round up).
+func TestSnapToSupportedDuration(t *testing.T) {
+	tests := []struct {
+		in   float64
+		want float64
+	}{
+		{in: 0, want: 4},
+		{in: 3, want: 4},
+		{in: 4, want: 4},
+		{in: 5, want: 6},
+		{in: 6, want: 6},
+		{in: 7, want: 8},
+		{in: 8, want: 8},
+	}
+	for _, tt := range tests {
+		if got := snapToSupportedDuration(tt.in); got != tt.want {
+			t.Errorf("snapToSupportedDuration(%v) = %v, want %v", tt.in, got, tt.want)
+		}
 	}
 }
 

@@ -54,6 +54,15 @@ type PageData struct {
 	PageMeta              domain.PageMeta
 	RegenerateCut         domain.VideoHistoryCut
 	RegenerateSeedDefault string
+	LatestVideo           *HomeLatestVideo
+}
+
+// HomeLatestVideo は、ホームに埋め込む最新ジョブの動画再生情報です。
+type HomeLatestVideo struct {
+	JobID     string
+	Title     string
+	VideoURL  string
+	PosterURL string
 }
 
 // NewHandler constructs a handler with default character options.
@@ -67,7 +76,6 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	for _, name := range []string{
 		"index.html",
 		"compose.html",
-		"recipe.html",
 		"history.html",
 		"history_detail.html",
 		"regenerate_cut.html",
@@ -97,9 +105,54 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	}, nil
 }
 
-// Home renders the home page.
-func (h *Handler) Home(w http.ResponseWriter, _ *http.Request) {
-	h.renderPage(w, PageData{Title: "Home"}, "index.html")
+// homeRecentJobs はホームに表示する直近ジョブ件数です。
+const homeRecentJobs = 10
+
+// Home renders the home page with the most recent jobs and the latest generated video.
+func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Home"}
+	if h.HistoryRepository != nil {
+		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to load recent history for home", "error", err)
+		} else {
+			data.HistoryItems = page.Items
+			data.LatestVideo = h.latestVideoForHome(r, page.Items)
+		}
+	}
+	h.renderPage(w, data, "index.html")
+}
+
+// latestVideoForHome は直近ジョブのうち最初に動画を持つジョブから、ホーム掲載用の
+// 再生情報を返します。見つからなければ nil を返します。
+func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistory) *HomeLatestVideo {
+	for _, item := range items {
+		if !item.Generated {
+			continue
+		}
+		detail, err := h.HistoryRepository.GetHistory(r.Context(), item.JobID)
+		if err != nil {
+			slog.WarnContext(r.Context(), "failed to load latest video for home",
+				"job_id", item.JobID,
+				"error", err,
+			)
+			return nil
+		}
+		for _, cut := range detail.Cuts {
+			if cut.VideoSignedURL != "" {
+				return &HomeLatestVideo{
+					JobID:     detail.JobID,
+					Title:     detail.Title,
+					VideoURL:  cut.VideoSignedURL,
+					PosterURL: cut.KeyframeURL,
+				}
+			}
+		}
+		// 最新の生成済みジョブに再生可能な動画がなければ、それ以上は遡らない
+		// （表示ごとに GetHistory を積み重ねない）。
+		return nil
+	}
+	return nil
 }
 
 // VideoRecipeCreateForm renders the video recipe creation form.
@@ -151,12 +204,9 @@ func (h *Handler) withModelOptions(data PageData) PageData {
 	return h.VisualOptions.applyToPageData(data)
 }
 
-// RecipeForm renders the recipe form.
-func (h *Handler) RecipeForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, h.withModelOptions(PageData{Title: "MV From Keyframe Video Recipe", CSRFToken: csrfTokenFromContext(r.Context())}), "recipe.html")
-}
-
-// PostRecipe handles recipe form submissions.
+// PostRecipe handles recipe submissions.
+// Web UI のフォーム画面は履歴詳細の動画生成フォームに統合されて廃止済みですが、
+// このエンドポイントは ap-mcp 等の M2M 呼び出し（JSON レスポンス）で使われ続けています。
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -480,10 +530,11 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// PostShortVideoFromSection は、既存ジョブの1セクション分のカット群からショート動画を
-// 生成するタスクを投入します。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
-// サーバー側で解決するため、フォーム入力はセクションと Veo モデル・アスペクト比だけです。
-func (h *Handler) PostShortVideoFromSection(w http.ResponseWriter, r *http.Request) {
+// PostGenerateVideoFromHistory は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
+// target=full で全カットのフルMV生成、target=<セクションインデックス> でそのセクションだけの
+// ショート動画生成になります。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
+// サーバー側で解決するため、フォーム入力は対象と Veo モデル・アスペクト比だけです。
+func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -502,28 +553,34 @@ func (h *Handler) PostShortVideoFromSection(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
 		return
 	}
-	if len(history.Sections) == 0 {
-		http.Error(w, "no sections available in this recipe", http.StatusBadRequest)
-		return
-	}
-	sectionIndex, err := strconv.Atoi(strings.TrimSpace(r.FormValue("section_index")))
-	if err != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
-		http.Error(w, "invalid section_index", http.StatusBadRequest)
-		return
-	}
-	newJobID, err := domain.NewJobID("short")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	task := &domain.Task{
-		JobID:          newJobID,
-		Command:        domain.CommandShortVideoFromSection,
 		RecipeURL:      history.StorageURI,
-		SectionIndex:   &sectionIndex,
 		VeoModel:       h.veoModelFromForm(r),
 		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
 		CreatedAt:      time.Now().UTC(),
+	}
+	target := strings.TrimSpace(r.FormValue("target"))
+	if target == "full" {
+		task.Command = domain.CommandMVFromKeyframeVideoRecipe
+		task.JobID, err = domain.NewJobID("mv")
+	} else {
+		if len(history.Sections) == 0 {
+			http.Error(w, "no sections available in this recipe", http.StatusBadRequest)
+			return
+		}
+		sectionIndex, convErr := strconv.Atoi(target)
+		if convErr != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
+			http.Error(w, "invalid target section", http.StatusBadRequest)
+			return
+		}
+		task.Command = domain.CommandShortVideoFromSection
+		task.SectionIndex = &sectionIndex
+		task.JobID, err = domain.NewJobID("short")
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	h.enqueue(w, r, task)
 }

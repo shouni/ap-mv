@@ -62,14 +62,14 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 | フィルター工程 | 担当モジュール | 役割・内容 |
 | --- | --- | --- |
-| **0. Recipe Load** | `0_recipe_load.go` | `/web/mv-from-keyframe-video-recipe` のフォームで入力された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
+| **0. Recipe Load** | `0_recipe_load.go` | 履歴詳細の動画生成フォームや M2M（`POST /web/mv-from-keyframe-video-recipe`）で指定された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
 | **1. Scripting** | `1_scripting.go` | `/web/video-recipe-create` の videoレシピ作成フローで `Workflows.Script.Run` を呼び、Character、MusicRecipe GCS URL / JSON、Visual Mode 的プロンプトから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。保存後に `applyLyricsToVideoRecipeCuts` を実行し、`music_recipe.lyrics.lyrics` をセクション単位で分解して各カットの `dialogue` フィールドへ割り当てます。 |
 | **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 | **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成・編集します。`EditPrompt` が指定されている場合は「編集モード」となり、既存の `keyframe_reference` を編集元画像として `CutKeyframe.EditAndSave`（内部的には `gemini-image-kit` の `GenerateSingleImage` に既存画像を入力として渡す会話型編集、通常生成と同じ `IMAGE_MODEL` を使用）を呼び、構図・ポーズ・背景を保ったまま指示内容だけを反映します（このとき `VisualAnchorOverride` は無視されます）。`EditPrompt` が空の場合は「フル再生成モード」で、`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替えたうえで `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、どちらのモードでもこの 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）を更新して `Publish.Run` で metadata を上書き保存します。 |
 
-| **7. Section Select** | `7_section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
+| **7. Section Select** | `7_section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。Veo の image_to_video はカット尺 4/6/8 秒のみサポートするため、8 秒超のカット（キーフレームのみ生成したレシピはセクション尺のままのことがある）は同じキーフレームを引き継いだサブカット列へ分割し、各尺をサポート値に丸め、歌詞は行単位でサブカットへ均等配分します（`CutIndex` は 1 から振り直し。この尺の正規化は Video Gen フィルタでフルMVフローにも適用され、生成済みカットは変更されません）。さらにショートは YouTube ショートの上限 60 秒に収まるよう超過カットを切り詰めます。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
 
 ### Recipe / Audio GCS Inputs
 
@@ -284,7 +284,7 @@ sequenceDiagram
    - **部分編集**（キーフレームが既にあるカットのみ選択可）: 「腕には絆創膏を1〜2枚のみにしてください」のような編集指示だけを入力します。今の画像を入力として同じ画像生成モデル（`IMAGE_MODEL`）に渡す会話型編集のため、構図・ポーズ・背景を保ったまま指示内容だけを反映します。同じキャラクターの他カットとの一貫性を保ちたい軽微な修正（小物の数・色など）に向いています。
 
    どちらのモードでも、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）と「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成/編集後に recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-6. 詳細画面の **ショート動画生成 (Veo)** フォームでは、レシピにセクションが定義されている場合に、セクション・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比（既定 `9:16`）を選んで送信できます。選択したセクションに属するカット群のキーフレームと歌詞をそのまま使い、`short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。完了後は履歴一覧に新しいジョブとして表示されます。
+6. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
 7. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
 ### 6. HTTP エンドポイント
@@ -298,15 +298,14 @@ sequenceDiagram
 | `GET` | `/` | ホーム |
 | `GET` | `/web/video-recipe-create` | VideoRecipe 作成フォーム（`/web/compose` も同じ handler） |
 | `POST` | `/web/video-recipe-create` | VideoRecipe 作成サブミット（`/web/compose` も同じ handler） |
-| `GET` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成フォーム（`/web/generate-from-recipe` も同じ handler） |
-| `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成サブミット（`/web/generate-from-recipe` も同じ handler） |
+| `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成（`/web/generate-from-recipe` も同じ handler）。フォーム画面は履歴詳細の動画生成フォームへ統合済みで、ap-mcp 等の M2M 呼び出し互換のために残している |
 | `GET` | `/web/history` | 履歴一覧 |
 | `GET` | `/web/history/{jobID}` | 履歴詳細 |
 | `DELETE` | `/web/history/{jobID}` | 履歴削除 |
 | `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
 | `GET` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
 | `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット |
-| `POST` | `/web/history/{jobID}/short-video` | 指定セクションからショート動画生成（`section_index` / `veo_model` / `aspect_ratio`） |
+| `POST` | `/web/history/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
 ---

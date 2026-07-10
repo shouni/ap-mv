@@ -150,6 +150,9 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
+			return err
+		}
 		if t.Recipe != nil {
 			return ValidateMusicRecipe(t.Recipe)
 		}
