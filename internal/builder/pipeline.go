@@ -35,10 +35,12 @@ func buildPipeline(
 	runner.Characters = characters
 	runner.WorkflowFactory = func(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 		orchCfg := runner.OrchestratorConfig
+		taskVideoRunner := videoRunner
 		if task != nil {
 			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
+			taskVideoRunner = ports.DeriveVideoRunner(videoRunner, task.VeoModel, task.VeoAspectRatio)
 		}
-		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, videoRunner, taskVisualMode(task), taskSeedOverride(task))
+		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, taskVideoRunner, taskVisualMode(task), taskSeedOverride(task))
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}

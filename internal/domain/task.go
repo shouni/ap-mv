@@ -32,6 +32,9 @@ const (
 	CommandRegenerateCutKeyframe TaskCommand = "regenerate_cut_keyframe"
 	// CommandRegenerateZip は、キーフレームZIPを再生成するコマンドです。
 	CommandRegenerateZip TaskCommand = "regenerate_zip"
+	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
+	// 動画化してショート動画を生成するコマンドです。
+	CommandShortVideoFromSection TaskCommand = "short_video_from_section"
 
 	// CommandComposeToKeyframe is a legacy task command name kept for existing queued tasks and clients.
 	CommandComposeToKeyframe TaskCommand = "compose_to_keyframe"
@@ -53,6 +56,13 @@ type Task struct {
 	CharacterID string `json:"character_id,omitempty"`
 	// CutIndex は再生成対象のカットインデックスです（regenerate_cut_keyframe コマンド専用）。
 	CutIndex *int `json:"cut_index,omitempty"`
+	// SectionIndex は動画化対象のセクション配列インデックス（0始まり）です（short_video_from_section コマンド専用）。
+	// セクション名はサビ等で重複しうるため、名前ではなくインデックスで指定します。
+	SectionIndex *int `json:"section_index,omitempty"`
+	// VeoModel が空でないとき、動画生成に使う Veo モデルをタスク単位で差し替えます。
+	VeoModel string `json:"veo_model,omitempty"`
+	// VeoAspectRatio が空でないとき、動画のアスペクト比（"16:9" または "9:16"）をタスク単位で差し替えます。
+	VeoAspectRatio string `json:"veo_aspect_ratio,omitempty"`
 	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
 	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
 	// OriginalJobID は、再生成タスクの結果が実際に書き込まれる元ジョブのIDです（regenerate_cut_keyframe / regenerate_zip コマンド専用）。
@@ -160,6 +170,19 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err
 		}
+	case CommandShortVideoFromSection:
+		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+		}
+		if t.SectionIndex == nil || *t.SectionIndex < 0 {
+			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
 	}
@@ -172,6 +195,15 @@ func (t *Task) ASSColors() ASSColors {
 		return ASSColors{}
 	}
 	return ASSColors{Primary: t.ASSPrimaryColor, Secondary: t.ASSSecondaryColor}
+}
+
+// validateOptionalAspectRatio validates an optional Veo aspect ratio field.
+func validateOptionalAspectRatio(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "16:9" || value == "9:16" {
+		return nil
+	}
+	return fmt.Errorf("veo_aspect_ratio must be 16:9 or 9:16")
 }
 
 // validateOptionalGCSURI validates an optional GCS URI field.

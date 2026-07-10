@@ -63,6 +63,44 @@
             </div>
         </div>
 
+        {{if .HistoryDetail.Sections}}
+        <div class="card bg-body-tertiary border-0 mb-4">
+            <div class="card-body">
+                <h2 class="h6 fw-bold mb-1">ショート動画生成 (Veo)</h2>
+                <p class="small text-muted mb-3">選択したセクションのキーフレームと歌詞から、そのセクションだけの動画を新しいジョブとして生成します。</p>
+                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/short-video" class="row g-2 align-items-end">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="col-md-4">
+                        <label for="short-section" class="form-label small text-muted mb-1">セクション</label>
+                        <select id="short-section" name="section_index" class="form-select form-select-sm">
+                            {{range .HistoryDetail.Sections}}
+                            <option value="{{.SectionIndex}}">{{.SectionIndex}}: {{if .Name}}{{.Name}}{{else}}(no name){{end}} ({{.StartSeconds}}s–{{.EndSeconds}}s)</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="short-veo-model" class="form-label small text-muted mb-1">Veo モデル</label>
+                        <select id="short-veo-model" name="veo_model" class="form-select form-select-sm">
+                            {{range .VeoModels}}
+                            <option value="{{.}}" {{if eq . $.SelectedVeoModel}}selected{{end}}>{{.}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="short-aspect" class="form-label small text-muted mb-1">アスペクト比</label>
+                        <select id="short-aspect" name="aspect_ratio" class="form-select form-select-sm">
+                            <option value="9:16" selected>9:16 (ショート)</option>
+                            <option value="16:9">16:9</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">生成開始</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {{end}}
+
         {{if .HistoryDetail.Cuts}}
         <div class="row g-4">
             {{range .HistoryDetail.Cuts}}

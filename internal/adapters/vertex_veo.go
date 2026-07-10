@@ -58,8 +58,12 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	if strings.TrimSpace(cfg.ProjectID) == "" {
 		return nil, fmt.Errorf("GCP_PROJECT_ID is required")
 	}
-	if strings.TrimSpace(cfg.LocationID) == "" {
-		return nil, fmt.Errorf("GCP_LOCATION_ID is required")
+	locationID := strings.TrimSpace(cfg.VeoLocationID)
+	if locationID == "" {
+		locationID = strings.TrimSpace(cfg.LocationID)
+	}
+	if locationID == "" {
+		return nil, fmt.Errorf("VEO_LOCATION_ID or GCP_LOCATION_ID is required")
 	}
 	if strings.TrimSpace(cfg.GCSBucket) == "" {
 		return nil, fmt.Errorf("GCS_MUSIC_BUCKET is required")
@@ -89,7 +93,7 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		client:                   oauth2.NewClient(ctxWithClient, ts),
 		videoCopier:              &gcsVideoCopier{client: storageClient},
 		projectID:                strings.TrimSpace(cfg.ProjectID),
-		locationID:               strings.TrimSpace(cfg.LocationID),
+		locationID:               locationID,
 		model:                    model,
 		outputStorageURI:         buildVeoOutputStorageURI(cfg.GCSBucket, cfg.VeoOutputPrefix),
 		aspectRatio:              aspectRatio,
@@ -99,6 +103,25 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		maxPollConsecutiveErrors: maxPollConsecutiveErrors,
 		usePreviousVideo:         cfg.VeoUsePreviousVideo,
 	}, nil
+}
+
+// WithVideoOptions は、モデルとアスペクト比だけを差し替えた派生 Runner を返します。
+// HTTP クライアントや GCS クライアントは共有するため、タスク単位で安全に呼び出せます。
+// 空文字の指定は元の設定値を維持します。
+func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.VideoRunner {
+	model = strings.TrimSpace(model)
+	aspectRatio = strings.TrimSpace(aspectRatio)
+	if (model == "" || model == r.model) && (aspectRatio == "" || aspectRatio == r.aspectRatio) {
+		return r
+	}
+	derived := *r
+	if model != "" {
+		derived.model = model
+	}
+	if aspectRatio != "" {
+		derived.aspectRatio = aspectRatio
+	}
+	return &derived
 }
 
 // Run は Veo の動画生成オペレーションを開始し、完了まで待って生成動画のメタデータを返します。

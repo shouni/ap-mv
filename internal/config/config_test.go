@@ -23,6 +23,8 @@ var configEnvKeys = []string{
 	"IMAGE_MODEL",
 	"IMAGE_MODELS",
 	"VEO_MODEL",
+	"VEO_MODELS",
+	"VEO_LOCATION_ID",
 	"VEO_OUTPUT_PREFIX",
 	"VEO_ASPECT_RATIO",
 	"VEO_GENERATE_AUDIO",
@@ -177,6 +179,49 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	}
 	if len(cfg.AllowedDomains) != 2 || cfg.AllowedDomains[1] != "example.jp" {
 		t.Fatalf("AllowedDomains = %#v", cfg.AllowedDomains)
+	}
+}
+
+// TestLoadConfigFromEnvVeoModelsAndLocation verifies Veo model list normalization and
+// the VEO_LOCATION_ID fallback to GCP_LOCATION_ID.
+func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("GCP_LOCATION_ID", "asia-northeast1")
+	t.Setenv("VEO_MODEL", "veo-selected")
+	t.Setenv("VEO_MODELS", "veo-a, veo-b")
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv() error = %v", err)
+	}
+
+	if cfg.VeoModel != "veo-selected" {
+		t.Fatalf("VeoModel = %q", cfg.VeoModel)
+	}
+	if len(cfg.VeoModels) != 3 || cfg.VeoModels[0] != "veo-selected" || cfg.VeoModels[1] != "veo-a" || cfg.VeoModels[2] != "veo-b" {
+		t.Fatalf("VeoModels = %v, want selected model prepended", cfg.VeoModels)
+	}
+	if cfg.VeoLocationID != "asia-northeast1" {
+		t.Fatalf("VeoLocationID = %q, want fallback to GCP_LOCATION_ID", cfg.VeoLocationID)
+	}
+}
+
+// TestLoadConfigFromEnvVeoLocationOverride verifies VEO_LOCATION_ID takes precedence over GCP_LOCATION_ID.
+func TestLoadConfigFromEnvVeoLocationOverride(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("GCP_LOCATION_ID", "asia-northeast1")
+	t.Setenv("VEO_LOCATION_ID", "us-central1")
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv() error = %v", err)
+	}
+
+	if cfg.VeoLocationID != "us-central1" {
+		t.Fatalf("VeoLocationID = %q, want us-central1", cfg.VeoLocationID)
+	}
+	if cfg.LocationID != "asia-northeast1" {
+		t.Fatalf("LocationID = %q, want asia-northeast1", cfg.LocationID)
 	}
 }
 

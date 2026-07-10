@@ -41,10 +41,12 @@ type PageData struct {
 	JS                    []string
 	GeminiModels          []string
 	ImageModels           []string
+	VeoModels             []string
 	Characters            []CharacterOption
 	VisualModes           []VisualModeOption
 	SelectedGeminiModel   string
 	SelectedImageModel    string
+	SelectedVeoModel      string
 	SelectedCharacterID   string
 	SelectedVisualMode    string
 	HistoryItems          []domain.VideoHistory
@@ -237,11 +239,11 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, history)
 		return
 	}
-	h.renderPage(w, PageData{
+	h.renderPage(w, h.withModelOptions(PageData{
 		Title:         "History Detail",
 		CSRFToken:     csrfTokenFromContext(r.Context()),
 		HistoryDetail: history,
-	}, "history_detail.html")
+	}), "history_detail.html")
 }
 
 // DownloadKeyframes redirects to the pre-built keyframe zip in GCS.
@@ -474,6 +476,50 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 		ASSSecondaryColor: strings.TrimSpace(r.FormValue("secondary_color")),
 		OriginalJobID:     jobID,
 		CreatedAt:         time.Now().UTC(),
+	}
+	h.enqueue(w, r, task)
+}
+
+// PostShortVideoFromSection は、既存ジョブの1セクション分のカット群からショート動画を
+// 生成するタスクを投入します。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
+// サーバー側で解決するため、フォーム入力はセクションと Veo モデル・アスペクト比だけです。
+func (h *Handler) PostShortVideoFromSection(w http.ResponseWriter, r *http.Request) {
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := domain.ValidateJobID(jobID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(history.StorageURI) == "" {
+		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+		return
+	}
+	sectionIndex, err := strconv.Atoi(strings.TrimSpace(r.FormValue("section_index")))
+	if err != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
+		http.Error(w, "invalid section_index", http.StatusBadRequest)
+		return
+	}
+	newJobID, err := domain.NewJobID("short")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	task := &domain.Task{
+		JobID:          newJobID,
+		Command:        domain.CommandShortVideoFromSection,
+		RecipeURL:      history.StorageURI,
+		SectionIndex:   &sectionIndex,
+		VeoModel:       h.veoModelFromForm(r),
+		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		CreatedAt:      time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }
