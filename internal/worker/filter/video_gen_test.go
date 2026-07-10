@@ -53,6 +53,42 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	}
 }
 
+// TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists verifies the production
+// path keeps using per-cut continuation even when orchestrator workflows are configured.
+func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
+			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
+		},
+	}
+	task := &domain.Task{
+		JobID:       "job-1",
+		Command:     domain.CommandMVFromKeyframeVideoRecipe,
+		VideoRecipe: recipe,
+	}
+	queue := &captureQueue{}
+	workflow := &recordingVideoWorkflow{}
+	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
+		Workflows:   &orchestrator.Workflows{Video: workflow},
+	})
+	if !errors.Is(err, ErrPipelineDeferred) {
+		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
+	}
+	if workflow.runCalled {
+		t.Fatal("workflow video runner was called; want direct per-cut runner")
+	}
+	if len(queue.tasks) != 1 {
+		t.Fatalf("enqueued tasks = %d, want 1", len(queue.tasks))
+	}
+}
+
 // TestVideoGenerationFilterAddsOutputPathToContext verifies that video generation receives the output path through context.
 func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
@@ -152,4 +188,18 @@ func (q *captureQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	copied := *task
 	q.tasks = append(q.tasks, &copied)
 	return nil
+}
+
+type recordingVideoWorkflow struct {
+	runCalled bool
+}
+
+func (w *recordingVideoWorkflow) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*orchestrator.VideoResponse, error) {
+	w.runCalled = true
+	return nil, nil
+}
+
+func (w *recordingVideoWorkflow) RunAndSave(_ context.Context, _ *orchestrator.VideoRecipe, _ string) (*orchestrator.VideoPlotResponse, error) {
+	w.runCalled = true
+	return nil, nil
 }

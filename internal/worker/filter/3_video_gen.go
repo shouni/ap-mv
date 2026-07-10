@@ -33,10 +33,20 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
 	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
 	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts)
+	if f.hasVideoRunner(fc) {
+		return f.runDirect(ctx, fc)
+	}
 	if fc.Workflows != nil && fc.Workflows.Video != nil {
 		return f.runWithWorkflow(ctx, fc)
 	}
 	return f.runDirect(ctx, fc)
+}
+
+func (f VideoGenerationFilter) hasVideoRunner(fc *Context) bool {
+	if f.Runner != nil {
+		return true
+	}
+	return fc != nil && fc.VideoRunner != nil
 }
 
 // runWithWorkflow delegates cut generation to the orchestrator workflow.
