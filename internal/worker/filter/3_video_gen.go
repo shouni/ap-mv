@@ -110,7 +110,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			}
 			fc.Recipe = domainRecipe
 			nextTask := *fc.Task
-			nextTask.Command = domain.CommandMVFromKeyframeVideoRecipe
+			nextTask.Command = domain.CommandVideoGenContinuation
 			nextTask.Recipe = fc.Recipe
 			nextTask.VideoRecipe = fc.VideoRecipe
 			nextTask.CreatedAt = time.Now().UTC()

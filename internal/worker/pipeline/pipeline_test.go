@@ -99,6 +99,28 @@ func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
 	}
 }
 
+// TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages verifies that the
+// internal continuation command only resumes video generation and publishing, since the
+// carried VideoRecipe already reflects scripting/keyframe/section-select/zip-upload results
+// from the original command that deferred it.
+func TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages(t *testing.T) {
+	filters := defaultFilters(domain.CommandVideoGenContinuation, nil)
+
+	got := make([]string, 0, len(filters))
+	for _, flt := range filters {
+		got = append(got, flt.Name())
+	}
+	want := []string{"video_gen", "publishing"}
+	if len(got) != len(want) {
+		t.Fatalf("filters = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("filters = %v, want %v", got, want)
+		}
+	}
+}
+
 // TestRunUsesWorkflowFactoryForSelectedModels verifies workflow creation for custom selected models.
 func TestRunUsesWorkflowFactoryForSelectedModels(t *testing.T) {
 	calls := 0
