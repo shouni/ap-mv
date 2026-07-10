@@ -502,6 +502,10 @@ func (h *Handler) PostShortVideoFromSection(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
 		return
 	}
+	if len(history.Sections) == 0 {
+		http.Error(w, "no sections available in this recipe", http.StatusBadRequest)
+		return
+	}
 	sectionIndex, err := strconv.Atoi(strings.TrimSpace(r.FormValue("section_index")))
 	if err != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
 		http.Error(w, "invalid section_index", http.StatusBadRequest)

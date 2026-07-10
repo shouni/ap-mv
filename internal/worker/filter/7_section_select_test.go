@@ -82,6 +82,30 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 	}
 }
 
+// TestResolveRecipeObjectURI verifies safe joining regardless of trailing/leading slashes.
+func TestResolveRecipeObjectURI(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+		ref  string
+		want string
+	}{
+		{name: "base with trailing slash", base: "gs://bucket/jobs/job-1/", ref: "images/cut_1.png", want: "gs://bucket/jobs/job-1/images/cut_1.png"},
+		{name: "base without trailing slash", base: "gs://bucket/jobs/job-1", ref: "images/cut_1.png", want: "gs://bucket/jobs/job-1/images/cut_1.png"},
+		{name: "ref with leading slash", base: "gs://bucket/jobs/job-1/", ref: "/images/cut_1.png", want: "gs://bucket/jobs/job-1/images/cut_1.png"},
+		{name: "absolute ref kept", base: "gs://bucket/jobs/job-1/", ref: "gs://other/keyframe.png", want: "gs://other/keyframe.png"},
+		{name: "empty base kept", base: "", ref: "images/cut_1.png", want: "images/cut_1.png"},
+		{name: "empty ref kept", base: "gs://bucket/jobs/job-1/", ref: "", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveRecipeObjectURI(tt.base, tt.ref); got != tt.want {
+				t.Fatalf("resolveRecipeObjectURI(%q, %q) = %q, want %q", tt.base, tt.ref, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestSectionSelectFilterRejectsOutOfRangeSection verifies out-of-range section indexes fail.
 func TestSectionSelectFilterRejectsOutOfRangeSection(t *testing.T) {
 	sectionIndex := 5

@@ -80,10 +80,11 @@ func sectionTimeRange(sections []orchestrator.Section, index int) (float64, floa
 
 // resolveRecipeObjectURI は元ジョブ相対のオブジェクト参照を絶対URIへ解決します。
 // すでにスキーム付きの参照、または base が導出できない場合はそのまま返します。
+// base の末尾スラッシュ有無に依存せず安全に連結します。
 func resolveRecipeObjectURI(base, ref string) string {
 	ref = strings.TrimSpace(ref)
 	if ref == "" || strings.Contains(ref, "://") || base == "" {
 		return ref
 	}
-	return base + strings.TrimLeft(ref, "/")
+	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(ref, "/")
 }

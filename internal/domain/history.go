@@ -26,9 +26,12 @@ type VideoHistoryCut struct {
 	KeyframeReference string  `json:"keyframe_reference,omitempty"`
 	KeyframeURL       string  `json:"keyframe_url,omitempty"`
 	VideoURL          string  `json:"video_url,omitempty"`
-	Status            string  `json:"status,omitempty"`
-	StartSec          float64 `json:"start_sec,omitempty"`
-	EndSec            float64 `json:"end_sec,omitempty"`
+	// VideoSignedURL は VideoURL（gs:// URI）をブラウザ再生用に署名した URL です。
+	// 署名 URL は期限付きのため cache されず、表示ごとに再生成されます。
+	VideoSignedURL string  `json:"video_signed_url,omitempty"`
+	Status         string  `json:"status,omitempty"`
+	StartSec       float64 `json:"start_sec,omitempty"`
+	EndSec         float64 `json:"end_sec,omitempty"`
 }
 
 // VideoHistorySection is a display-ready song section entry for a generated MV history detail.

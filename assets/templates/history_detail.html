@@ -106,7 +106,11 @@
             {{range .HistoryDetail.Cuts}}
             <div class="col-md-6 col-xl-4">
                 <div class="card h-100 history-cut-card">
-                    {{if .KeyframeURL}}
+                    {{if .VideoSignedURL}}
+                    <video class="card-img-top history-keyframe" controls preload="metadata" {{if .KeyframeURL}}poster="{{.KeyframeURL}}"{{end}}>
+                        <source src="{{.VideoSignedURL}}" type="video/mp4">
+                    </video>
+                    {{else if .KeyframeURL}}
                     <img src="{{.KeyframeURL}}" class="card-img-top history-keyframe" alt="Cut {{.CutIndex}} keyframe" loading="lazy">
                     {{else}}
                     <div class="history-keyframe history-keyframe-empty d-flex align-items-center justify-content-center text-muted">
@@ -146,9 +150,12 @@
                                 {{end}}
                             </dd>
                             {{end}}
-                            {{if .VideoURL}}
+                            {{if .VideoSignedURL}}
                             <dt class="col-5 text-muted fw-normal">Video</dt>
-                            <dd class="col-7 mb-1 text-break"><a href="{{.VideoURL}}" target="_blank" rel="noopener">Open video</a></dd>
+                            <dd class="col-7 mb-1 text-break"><a href="{{.VideoSignedURL}}" target="_blank" rel="noopener">Open video</a></dd>
+                            {{else if .VideoURL}}
+                            <dt class="col-5 text-muted fw-normal">Video</dt>
+                            <dd class="col-7 mb-1 text-break"><code>{{.VideoURL}}</code></dd>
                             {{end}}
                         </dl>
                     </div>

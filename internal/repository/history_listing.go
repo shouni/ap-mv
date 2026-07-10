@@ -325,6 +325,22 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 			signedCuts[i].KeyframeURL = signedURL
 			return nil
 		})
+		eg.Go(func() error {
+			videoURI := strings.TrimSpace(signedCuts[i].VideoURL)
+			if !strings.HasPrefix(videoURI, "gs://") {
+				return nil
+			}
+			signedURL, err := r.signedURL(ctx, videoURI)
+			if err != nil {
+				slog.WarnContext(ctx, "failed to generate video signed URL",
+					"uri", videoURI,
+					"error", err,
+				)
+				return nil
+			}
+			signedCuts[i].VideoSignedURL = signedURL
+			return nil
+		})
 	}
 	if err := eg.Wait(); err != nil {
 		return nil, err
