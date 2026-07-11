@@ -7,6 +7,7 @@ import (
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
+	"github.com/shouni/ap-mv/internal/adapters"
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/domain"
@@ -54,6 +55,7 @@ func buildPipeline(
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
 		runner.Writer = rio.Writer
+		runner.VideoProcessor = adapters.NewFFmpegVideoProcessor(runner.Reader, runner.Writer)
 	}
 	runner.OutputBaseURI = workflowOutputBaseURI(cfg)
 	return runner, nil

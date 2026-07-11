@@ -18,6 +18,9 @@ type VideoGenerationFilter struct {
 	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
 	// true の場合、先頭カット以降は video_extension 用の尺（7秒固定）へ正規化します。
 	UsePreviousVideo bool
+	// VideoProcessor は、チェーンリセット時に直前チェーンの最終フレームを抽出するために
+	// 使います。nilの場合はフレーム抽出をスキップし、静的な立ち絵参照画像のまま生成します。
+	VideoProcessor ports.VideoProcessor
 }
 
 // Name returns the receiver name.
@@ -38,7 +41,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
 	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
 	// （詳細は expandCutsToSupportedDurations のコメント参照）。
-	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo)
+	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.VideoRecipe.MusicRecipe.Sections)
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
 	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
@@ -100,6 +103,18 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 		// PreviousVideoIDを引き継がずに生成する。
 		if f.UsePreviousVideo && cut.DurationSec != veoVideoExtensionDurationSec {
 			lastVideoID = ""
+			cut.IsChainStart = true
+			// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成された
+			// チェーンが存在することを意味する。その最終フレームを次チェーンの
+			// 参照画像として引き継ぎ、静的な立ち絵からの独立生成による見た目の
+			// ブレ（衣装ズレ等）を抑える。ただしセクション境界（IsSectionStart）は
+			// 意図的な場面転換なので、直前セクションの絵を引き継がず、そのカット
+			// 自身に割り当てられたキーフレーム参照のまま生成する。
+			if i > 0 && !cut.IsSectionStart {
+				if err := f.applyChainResetKeyframe(ctx, fc, cut, fc.VideoRecipe.Cuts[i-1].VideoURL); err != nil {
+					return err
+				}
+			}
 		}
 		if err := generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
 			return err
@@ -118,6 +133,34 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 	}
 	fc.Recipe = domainRecipe
 	return nil
+}
+
+// applyChainResetKeyframe は、チェーンリセット後の新規ベースカットの参照画像を、静的な
+// 立ち絵ではなく直前チェーンの実際の生成結果の最終フレームへ差し替えます。VideoProcessor
+// が未設定、または直前動画のURLが空の場合は何もしません（従来通り静的な立ち絵のまま生成）。
+func (f VideoGenerationFilter) applyChainResetKeyframe(ctx context.Context, fc *Context, cut *orchestrator.Cut, previousVideoURL string) error {
+	if f.VideoProcessor == nil || strings.TrimSpace(previousVideoURL) == "" {
+		return nil
+	}
+	destURI := chainFrameDestURI(fc.OutputPath, cut.CutIndex)
+	if destURI == "" {
+		return nil
+	}
+	frameURI, err := f.VideoProcessor.ExtractLastFrame(ctx, previousVideoURL, destURI)
+	if err != nil {
+		return fmt.Errorf("extract last frame for chain reset at cut %d: %w", cut.CutIndex, err)
+	}
+	cut.KeyframeReference = frameURI
+	return nil
+}
+
+// chainFrameDestURI はチェーンリセット時に抽出する最終フレーム画像の保存先URIを組み立てます。
+func chainFrameDestURI(outputPath string, cutIndex int) string {
+	outputPath = strings.TrimRight(strings.TrimSpace(outputPath), "/")
+	if outputPath == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.jpg", outputPath, cutIndex)
 }
 
 // generateCut runs a single cut through the video runner and updates its status, VideoID, and

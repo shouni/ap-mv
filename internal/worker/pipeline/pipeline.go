@@ -36,6 +36,8 @@ type Runner struct {
 	Notifier           ports.Notifier
 	Characters         *characterkit.Characters
 	HistoryRepository  ports.HistoryRepository
+	// VideoProcessor は、継続チェーンのフレーム引き継ぎ・ハードカット結合に使います。
+	VideoProcessor ports.VideoProcessor
 	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
 	UsePreviousVideo bool
 }
@@ -122,7 +124,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	}
 	filters := r.Filters
 	if len(filters) == 0 {
-		filters = defaultFilters(task.Command, videoRunner, r.UsePreviousVideo)
+		filters = defaultFilters(task.Command, videoRunner, r.UsePreviousVideo, r.VideoProcessor)
 	}
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
@@ -265,11 +267,14 @@ func (r *Runner) outputPath(task *domain.Task) string {
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
 // video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
 // enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
-func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool) []filter.Filter {
-	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo}
+func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool, videoProcessor ports.VideoProcessor) []filter.Filter {
+	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo, VideoProcessor: videoProcessor}
+	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
+	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
+	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: videoProcessor}
 	switch command {
 	case domain.CommandVideoGenContinuation:
-		return []filter.Filter{videoGen, filter.PublishingFilter{}}
+		return []filter.Filter{videoGen, chainFinalize, filter.PublishingFilter{}}
 	case domain.CommandRegenerateCutKeyframe:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
@@ -286,6 +291,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 			filter.RecipeLoadFilter{},
 			filter.SectionSelectFilter{},
 			videoGen,
+			chainFinalize,
 			filter.PublishingFilter{},
 		}
 	case domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
@@ -300,6 +306,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 			videoGen,
+			chainFinalize,
 			filter.PublishingFilter{},
 		}
 	default: // domain.CommandMVFromKeyframeVideoRecipe, domain.CommandGenerateFromRecipe
@@ -308,6 +315,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 			videoGen,
+			chainFinalize,
 			filter.PublishingFilter{},
 		}
 	}

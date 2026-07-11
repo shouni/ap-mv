@@ -63,7 +63,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	// 上限（60秒）に収まるよう、超過分のカットは切り詰める。
 	// video_extension 用の 7 秒固定への正規化は、後続の VideoGenerationFilter が
 	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video 用の {4,6,8} で分割・丸めるだけでよい。
-	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false), youtubeShortMaxDurationSec)
+	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, sections), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {

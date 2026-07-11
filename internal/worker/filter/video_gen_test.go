@@ -3,6 +3,7 @@ package filter
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -190,6 +191,116 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 			t.Errorf("cut[%d] status = %q, want generated", i, recipe.Cuts[i].Status)
 		}
 	}
+}
+
+// TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart verifies that, when a chain
+// resets (mirroring expandCutsToSupportedDurations' behavior for a section needing more than
+// Veo's ~30s video_extension continuation limit), the reset cut is marked IsChainStart, its
+// KeyframeReference is overridden with the previous chain's extracted last frame, and
+// ExtractLastFrame is NOT called for the very first chain (there is no previous chain yet).
+func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 2, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 3, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 4, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 5, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	vp := &recordingVideoProcessor{}
+	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	// 8,7,7,7,8(reset): cumulative 8->15->22->29, then 29+7>30 so cut5 resets.
+	wantChainStart := []bool{true, false, false, false, true}
+	for i, want := range wantChainStart {
+		if recipe.Cuts[i].IsChainStart != want {
+			t.Errorf("cut[%d] IsChainStart = %v, want %v", i, recipe.Cuts[i].IsChainStart, want)
+		}
+	}
+
+	if len(vp.extractCalls) != 1 {
+		t.Fatalf("ExtractLastFrame calls = %d, want 1 (only for the mid-job reset)", len(vp.extractCalls))
+	}
+	if vp.extractCalls[0].videoURI != "gs://bucket/cut_4.mp4" {
+		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's video URL", vp.extractCalls[0].videoURI)
+	}
+	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.jpg" {
+		t.Errorf("ExtractLastFrame destURI = %q", vp.extractCalls[0].destURI)
+	}
+	if recipe.Cuts[4].KeyframeReference != vp.extractCalls[0].destURI {
+		t.Errorf("cut[4] KeyframeReference = %q, want extracted frame URI %q", recipe.Cuts[4].KeyframeReference, vp.extractCalls[0].destURI)
+	}
+}
+
+// TestRunDirectSkipsFrameExtractionAtSectionBoundary verifies that a section-boundary reset
+// (Verse -> Chorus) is marked IsChainStart like any other reset (so ChainFinalizeFilter still
+// treats it as a hard-cut boundary), but does NOT extract the previous chain's last frame —
+// the section's own intended keyframe is used instead, since the scene is meant to change.
+func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{
+			Title: "test",
+			Sections: []orchestrator.Section{
+				{Name: "Verse", StartSeconds: 0, EndSeconds: 16},
+				{Name: "Chorus", StartSeconds: 16, EndSeconds: 32},
+			},
+		},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, StartSec: 0, DurationSec: 8, VisualAnchor: "verse", KeyframeReference: "gs://bucket/verse.png"},
+			{CutIndex: 2, StartSec: 8, DurationSec: 8, VisualAnchor: "verse", KeyframeReference: "gs://bucket/verse.png"},
+			{CutIndex: 3, StartSec: 16, DurationSec: 8, VisualAnchor: "chorus", KeyframeReference: "gs://bucket/chorus.png"},
+			{CutIndex: 4, StartSec: 24, DurationSec: 8, VisualAnchor: "chorus", KeyframeReference: "gs://bucket/chorus.png"},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	vp := &recordingVideoProcessor{}
+	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if !recipe.Cuts[2].IsChainStart {
+		t.Error("cut[2] IsChainStart = false, want true (section boundary is still a chain boundary)")
+	}
+	if !recipe.Cuts[2].IsSectionStart {
+		t.Error("cut[2] IsSectionStart = false, want true")
+	}
+	if len(vp.extractCalls) != 0 {
+		t.Fatalf("ExtractLastFrame calls = %d, want 0 (section boundary must not extract the previous chain's frame)", len(vp.extractCalls))
+	}
+	if recipe.Cuts[2].KeyframeReference != "gs://bucket/chorus.png" {
+		t.Errorf("cut[2] KeyframeReference = %q, want unchanged section keyframe", recipe.Cuts[2].KeyframeReference)
+	}
+}
+
+type indexedURLRunner struct{}
+
+// Run returns a per-cut-index video URL/ID so tests can assert exactly which cut's video
+// was referenced downstream (e.g. as ExtractLastFrame's input).
+func (indexedURLRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
+	return &ports.VideoResponse{
+		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
+		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		CutIndex: req.CutIndex,
+	}, nil
 }
 
 type sequenceRunner struct{}
