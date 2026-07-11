@@ -42,8 +42,24 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 			)
 			return nil
 		}
-		// Veoのvideo-to-video継続生成では後続カットほど直前カットの内容を
-		// 含む累積動画になるため、末尾から探して最初に見つかった完成版を使う。
+		// FinalVideoURL（継続チェーンをハードカットで結合した完成動画、chain_finalize.go）が
+		// あればそれを最優先で使う。無い場合（final_video_url追加より前に生成された旧ジョブ）
+		// は、末尾カットから探して最初に見つかった完成版を使う旧来のフォールバックに戻る。
+		// 注意: 旧フォールバックは「チェーンが1本だけ」という前提に基づいており、チェーンが
+		// リセットされたジョブでは末尾チェーンの断片だけが表示されてしまう
+		// （video_music_meta.jsonがfinal_video_urlを持つ新しいジョブでは発生しない）。
+		if detail.FinalVideoSignedURL != "" {
+			poster := ""
+			if len(detail.Cuts) > 0 {
+				poster = detail.Cuts[0].KeyframeURL
+			}
+			return &HomeLatestVideo{
+				JobID:     detail.JobID,
+				Title:     detail.Title,
+				VideoURL:  detail.FinalVideoSignedURL,
+				PosterURL: poster,
+			}
+		}
 		for i := len(detail.Cuts) - 1; i >= 0; i-- {
 			cut := detail.Cuts[i]
 			if cut.VideoSignedURL != "" {

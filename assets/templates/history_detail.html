@@ -63,6 +63,24 @@
             </div>
         </div>
 
+        {{if .HistoryDetail.FinalVideoSignedURL}}
+        <div class="card bg-body-tertiary border-0 mb-4">
+            <div class="card-body">
+                <h2 class="h6 fw-bold mb-3">🎬 完成動画</h2>
+                <video class="w-100 rounded" style="max-height: 480px; background: #000;" controls preload="metadata">
+                    <source src="{{.HistoryDetail.FinalVideoSignedURL}}" type="video/mp4">
+                </video>
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                    <a class="btn btn-outline-primary btn-sm" href="{{.HistoryDetail.FinalVideoSignedURL}}" target="_blank" rel="noopener">動画を開く</a>
+                    {{if .HistoryDetail.FinalVideoURL}}
+                    <button class="btn btn-outline-secondary btn-sm" onclick="copyZipURI('{{.HistoryDetail.FinalVideoURL}}', this)">Copy GCS URL</button>
+                    {{end}}
+                </div>
+                <p class="small text-muted mb-0 mt-2">複数の継続チェーンをハードカットで結合した完成版です。</p>
+            </div>
+        </div>
+        {{end}}
+
         {{if .HistoryDetail.Cuts}}
         <div class="card bg-body-tertiary border-0 mb-4">
             <div class="card-body">
@@ -115,6 +133,7 @@
         {{end}}
 
         {{if .HistoryDetail.Cuts}}
+        <h2 class="h6 fw-bold mb-3">カット別詳細</h2>
         <div class="row g-4">
             {{range .HistoryDetail.Cuts}}
             <div class="col-md-6 col-xl-4">
