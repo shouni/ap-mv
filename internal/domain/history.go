@@ -42,6 +42,11 @@ type VideoHistorySection struct {
 	Name         string `json:"name"`
 	StartSeconds int    `json:"start_seconds"`
 	EndSeconds   int    `json:"end_seconds"`
+	// Generated is true when every cut whose StartSec falls within this section already has
+	// status=generated, meaning a "generate video from history" request for this section would
+	// re-trigger real Veo generation (SectionSelectFilter resets already-generated cuts to
+	// pending) rather than being skipped like a redundant full-recipe request would be.
+	Generated bool `json:"generated,omitempty"`
 }
 
 // VideoHistoryDetail contains generated MV metadata and display-ready cuts.

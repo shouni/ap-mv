@@ -212,9 +212,27 @@ func historySectionsFromRecipe(recipe domain.VideoRecipe) []domain.VideoHistoryS
 			Name:         strings.TrimSpace(sec.Name),
 			StartSeconds: start,
 			EndSeconds:   end,
+			Generated:    sectionCutsAllGenerated(recipe.Cuts, float64(start), float64(end)),
 		})
 	}
 	return result
+}
+
+// sectionCutsAllGenerated reports whether every cut whose StartSec falls within [start, end)
+// already has status=generated. A section with no matching cuts is not considered generated,
+// since there is nothing there to skip.
+func sectionCutsAllGenerated(cuts []domain.VideoCut, start, end float64) bool {
+	found := false
+	for _, cut := range cuts {
+		if cut.StartSec < start || cut.StartSec >= end {
+			continue
+		}
+		found = true
+		if !cut.IsGenerated() {
+			return false
+		}
+	}
+	return found
 }
 
 // buildHistoryFromRecipe builds (or reuses a cached) VideoHistory for the bulk ListHistoryPage

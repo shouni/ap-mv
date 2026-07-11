@@ -67,7 +67,10 @@
         <div class="card bg-body-tertiary border-0 mb-4">
             <div class="card-body">
                 <h2 class="h6 fw-bold mb-1">動画生成 (Veo)</h2>
-                <p class="small text-muted mb-3">保存済みのキーフレームと歌詞から、新しいジョブとして動画を生成します。セクションを選ぶとそのセクションだけのショート動画（最大60秒・9:16推奨）になります。</p>
+                {{if .HistoryDetail.Generated}}
+                <p class="small text-muted mb-0">このジョブは全カット生成済みです。同じ対象を再度生成すると、フルMVはキーフレームの再生成コストのみ無駄になり、セクション指定は生成状態がリセットされて Veo が再実行されます（実コストが発生します）。</p>
+                {{else}}
+                <p class="small text-muted mb-3">保存済みのキーフレームと歌詞から、新しいジョブとして動画を生成します。セクションを選ぶとそのセクションだけのショート動画（最大60秒・9:16推奨）になります。生成済みの対象は選択肢から除外しています。</p>
                 <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/generate-video" class="row g-2 align-items-end">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <div class="col-md-4">
@@ -75,7 +78,9 @@
                         <select id="gen-target" name="target" class="form-select form-select-sm">
                             <option value="full">フルMV（全カット）</option>
                             {{range .HistoryDetail.Sections}}
+                            {{if not .Generated}}
                             <option value="{{.SectionIndex}}">ショート {{.SectionIndex}}: {{if .Name}}{{.Name}}{{else}}(no name){{end}} ({{.StartSeconds}}s–{{.EndSeconds}}s)</option>
+                            {{end}}
                             {{end}}
                         </select>
                     </div>
@@ -104,6 +109,7 @@
                     document.getElementById('gen-aspect').value = this.value === 'full' ? '16:9' : '9:16';
                 });
                 </script>
+                {{end}}
             </div>
         </div>
         {{end}}
