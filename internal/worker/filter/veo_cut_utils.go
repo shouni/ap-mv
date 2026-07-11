@@ -98,15 +98,19 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 // sectionIndexForStartSec は startSec が属するセクションの index を返します。
 // 各セクションの StartSeconds のうち startSec 以下で最大のものを採用するため、
 // duration正規化による数秒のズレ（EndSecondsとの間の隙間）があっても頑健に判定できます。
-// 一致するセクションが無い場合は -1 を返します。
+// sections の並び順（StartSeconds昇順であるはず、という暗黙の前提）には依存せず、
+// 常にStartSeconds自体の大小で判定します。一致するセクションが無い場合は -1 を返します。
 func sectionIndexForStartSec(sections []orchestrator.Section, startSec float64) int {
-	best := -1
+	bestIndex := -1
+	bestStart := -1.0
 	for i, s := range sections {
-		if float64(s.StartSeconds) <= startSec {
-			best = i
+		start := float64(s.StartSeconds)
+		if start <= startSec && start >= bestStart {
+			bestIndex = i
+			bestStart = start
 		}
 	}
-	return best
+	return bestIndex
 }
 
 // splitCutBySupportedDurations は1カットをサポート尺のサブカット列へ分割します。

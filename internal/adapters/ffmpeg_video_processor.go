@@ -50,13 +50,13 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 	if err != nil {
 		return "", fmt.Errorf("extract last frame: download %s: %w", videoURI, err)
 	}
-	defer os.Remove(localVideo)
+	defer func() { _ = os.Remove(localVideo) }()
 
 	localFrame, err := tempFilePath(".jpg")
 	if err != nil {
 		return "", fmt.Errorf("extract last frame: %w", err)
 	}
-	defer os.Remove(localFrame)
+	defer func() { _ = os.Remove(localFrame) }()
 
 	// -sseof -1: 末尾1秒手前からデコードを開始し、その中の最後の1フレームだけ書き出す。
 	// ファイル全体をデコードするより高速。
@@ -90,7 +90,7 @@ func (p *FFmpegVideoProcessor) ConcatHardCut(ctx context.Context, videoURIs []st
 	localPaths := make([]string, 0, len(videoURIs))
 	defer func() {
 		for _, lp := range localPaths {
-			os.Remove(lp)
+			_ = os.Remove(lp)
 		}
 	}()
 	for i, uri := range videoURIs {
@@ -105,13 +105,13 @@ func (p *FFmpegVideoProcessor) ConcatHardCut(ctx context.Context, videoURIs []st
 	if err != nil {
 		return "", fmt.Errorf("concat hard cut: %w", err)
 	}
-	defer os.Remove(listFile)
+	defer func() { _ = os.Remove(listFile) }()
 
 	localOut, err := tempFilePath(".mp4")
 	if err != nil {
 		return "", fmt.Errorf("concat hard cut: %w", err)
 	}
-	defer os.Remove(localOut)
+	defer func() { _ = os.Remove(localOut) }()
 
 	// 各チェーンはVeoの別々の生成呼び出しで作られたクリップなので、コーデック/パラメータの
 	// 一致を前提にできる "-c copy" は使わず、常に再エンコードする(クリップは数十秒程度なので
@@ -138,19 +138,16 @@ func (p *FFmpegVideoProcessor) downloadToTemp(ctx context.Context, srcURI, ext s
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", srcURI, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
-	path, err := tempFilePath(ext)
+	f, err := os.CreateTemp("", "ap-mv-videoproc-*"+ext)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create temp file: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return "", fmt.Errorf("open temp file: %w", err)
-	}
-	defer f.Close()
+	path := f.Name()
+	defer func() { _ = f.Close() }()
 	if _, err := io.Copy(f, rc); err != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", fmt.Errorf("write temp file: %w", err)
 	}
 	return path, nil
@@ -162,7 +159,7 @@ func (p *FFmpegVideoProcessor) uploadFromTemp(ctx context.Context, localPath, de
 	if err != nil {
 		return fmt.Errorf("open %s: %w", localPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return p.Writer.Write(ctx, destURI, f, remoteio.WithContentType(contentType))
 }
 
@@ -172,7 +169,7 @@ func (p *FFmpegVideoProcessor) streamCopy(ctx context.Context, srcURI, destURI, 
 	if err != nil {
 		return fmt.Errorf("open %s: %w", srcURI, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	return p.Writer.Write(ctx, destURI, rc, remoteio.WithContentType(contentType))
 }
 
@@ -184,7 +181,7 @@ func tempFilePath(ext string) (string, error) {
 	}
 	path := f.Name()
 	if err := f.Close(); err != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", fmt.Errorf("close temp file: %w", err)
 	}
 	return path, nil
@@ -192,18 +189,20 @@ func tempFilePath(ext string) (string, error) {
 
 // writeConcatList は ffmpeg concat demuxer 用のリストファイルを作成し、そのパスを返します。
 func writeConcatList(localPaths []string) (string, error) {
-	listPath, err := tempFilePath(".txt")
+	f, err := os.CreateTemp("", "ap-mv-videoproc-*.txt")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create concat list: %w", err)
 	}
+	listPath := f.Name()
+	defer func() { _ = f.Close() }()
 	var sb strings.Builder
 	for _, p := range localPaths {
 		// concat demuxerはシングルクォートを '\'' でエスケープする
 		escaped := strings.ReplaceAll(p, "'", `'\''`)
 		fmt.Fprintf(&sb, "file '%s'\n", escaped)
 	}
-	if err := os.WriteFile(listPath, []byte(sb.String()), 0o600); err != nil {
-		os.Remove(listPath)
+	if _, err := f.WriteString(sb.String()); err != nil {
+		_ = os.Remove(listPath)
 		return "", fmt.Errorf("write concat list: %w", err)
 	}
 	return listPath, nil
