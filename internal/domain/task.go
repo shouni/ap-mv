@@ -68,7 +68,11 @@ type Task struct {
 	SectionIndex *int `json:"section_index,omitempty"`
 	// VeoModel が空でないとき、動画生成に使う Veo モデルをタスク単位で差し替えます。
 	VeoModel string `json:"veo_model,omitempty"`
-	// VeoAspectRatio が空でないとき、動画のアスペクト比（"16:9" または "9:16"）をタスク単位で差し替えます。
+	// VeoAspectRatio が空でないとき、アスペクト比（"16:9" または "9:16"）をタスク単位で指定します。
+	// 新規レシピ作成（video_recipe_create/compose系）ではキーフレーム生成に使われ、
+	// その値が VideoRecipe.AspectRatio に記録されます。既存ジョブに対する操作
+	// （動画生成・カット再生成）では、ハンドラが記録済みの VideoRecipe.AspectRatio を
+	// そのままここへ設定し直すため、キーフレームと動画のアスペクト比が常に一致します。
 	VeoAspectRatio string `json:"veo_aspect_ratio,omitempty"`
 	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
 	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
@@ -147,6 +151,9 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
+			return err
+		}
 	case CommandMVFromKeyframeVideoRecipe, CommandGenerateFromRecipe, CommandVideoGenContinuation:
 		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
@@ -171,6 +178,9 @@ func (t *Task) Validate() error {
 			return fmt.Errorf("%s task requires cut_index", t.Command)
 		}
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
 			return err
 		}
 	case CommandRegenerateZip:

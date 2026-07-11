@@ -119,10 +119,12 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	task := &domain.Task{
-		JobID:                newJobID,
-		Command:              domain.CommandRegenerateCutKeyframe,
-		RecipeURL:            history.StorageURI,
-		CutIndex:             &cutIndex,
+		JobID:     newJobID,
+		Command:   domain.CommandRegenerateCutKeyframe,
+		RecipeURL: history.StorageURI,
+		CutIndex:  &cutIndex,
+		// 同一ジョブ内の他カットとアスペクト比がズレないよう、既存レシピの値を引き継ぐ。
+		VeoAspectRatio:       history.AspectRatio,
 		OverwriteKeyframe:    r.FormValue("overwrite") == "on",
 		OriginalJobID:        jobID,
 		VisualAnchorOverride: strings.TrimSpace(r.FormValue("visual_anchor")),
@@ -197,9 +199,12 @@ func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Re
 		return
 	}
 	task := &domain.Task{
-		RecipeURL:      history.StorageURI,
-		VeoModel:       h.veoModelFromForm(r),
-		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		RecipeURL: history.StorageURI,
+		VeoModel:  h.veoModelFromForm(r),
+		// アスペクト比はキーフレーム作成時に1回だけ選ばれ、既存レシピに記録済みの値
+		// (history.AspectRatio) を必ず引き継ぐ。動画生成フォームでの選択肢は無い
+		// （キーフレームと異なるアスペクト比の動画は生成できないため）。
+		VeoAspectRatio: history.AspectRatio,
 		Command:        command,
 		SectionIndex:   sectionIndex,
 		CreatedAt:      time.Now().UTC(),

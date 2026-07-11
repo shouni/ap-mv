@@ -98,15 +98,16 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	task := &domain.Task{
-		JobID:       jobID,
-		Command:     domain.CommandVideoRecipeCreate,
-		AIModels:    h.aiModelsFromForm(r),
-		SourceURL:   firstNonEmptyFormValue(r, "music_recipe_url", "url"),
-		Text:        strings.TrimSpace(r.FormValue("text")),
-		ImageURL:    strings.TrimSpace(r.FormValue("image_url")),
-		CharacterID: h.characterIDFromForm(r),
-		VisualMode:  h.visualModeFromForm(r),
-		CreatedAt:   time.Now().UTC(),
+		JobID:          jobID,
+		Command:        domain.CommandVideoRecipeCreate,
+		AIModels:       h.aiModelsFromForm(r),
+		SourceURL:      firstNonEmptyFormValue(r, "music_recipe_url", "url"),
+		Text:           strings.TrimSpace(r.FormValue("text")),
+		ImageURL:       strings.TrimSpace(r.FormValue("image_url")),
+		CharacterID:    h.characterIDFromForm(r),
+		VisualMode:     h.visualModeFromForm(r),
+		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		CreatedAt:      time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }
@@ -146,15 +147,16 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	task := &domain.Task{
-		JobID:       jobID,
-		Command:     domain.CommandMVFromKeyframeVideoRecipe,
-		AIModels:    h.aiModelsFromForm(r),
-		RecipeURL:   strings.TrimSpace(r.FormValue("recipe_url")),
-		CharacterID: h.characterIDFromForm(r),
-		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
-		Recipe:      recipe,
-		VideoRecipe: videoRecipe,
-		CreatedAt:   time.Now().UTC(),
+		JobID:          jobID,
+		Command:        domain.CommandMVFromKeyframeVideoRecipe,
+		AIModels:       h.aiModelsFromForm(r),
+		RecipeURL:      strings.TrimSpace(r.FormValue("recipe_url")),
+		CharacterID:    h.characterIDFromForm(r),
+		AudioURL:       strings.TrimSpace(r.FormValue("audio_url")),
+		Recipe:         recipe,
+		VideoRecipe:    videoRecipe,
+		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		CreatedAt:      time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }

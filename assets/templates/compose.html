@@ -31,6 +31,14 @@
                         </select>
                     </div>
                     {{end}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Aspect Ratio</label>
+                        <select class="form-select" name="aspect_ratio">
+                            <option value="16:9" selected>16:9</option>
+                            <option value="9:16">9:16 (ショート)</option>
+                        </select>
+                        <div class="form-text">キーフレーム作成時に一度だけ決まります。以降の動画生成（フルMV・ショート・カット再生成）はこの値を引き継ぎ、選び直すことはできません。</div>
+                    </div>
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Gemini Model</label>

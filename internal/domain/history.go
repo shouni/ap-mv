@@ -19,6 +19,10 @@ type VideoHistory struct {
 	// FinalVideoSignedURL は FinalVideoURL をブラウザ再生用に署名したURLです。期限付きのため
 	// キャッシュされず、表示ごとに再生成されます（SignedURLと同じ扱い）。
 	FinalVideoSignedURL string `json:"final_video_signed_url,omitempty"`
+	// AspectRatio は、このジョブのキーフレーム・動画生成に使われたアスペクト比です
+	// （例: "16:9", "9:16"）。キーフレーム作成時に一度だけ決まり、既存ジョブに対する
+	// 動画生成・カット再生成はこの値をそのまま引き継ぎます（アスペクト比を都度選び直すことはない）。
+	AspectRatio string `json:"aspect_ratio,omitempty"`
 }
 
 // VideoHistoryCut is a display-ready cut entry for a generated MV history detail.

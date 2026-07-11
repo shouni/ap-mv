@@ -161,3 +161,18 @@ func TestTaskValidateAcceptsVideoRecipeCreate(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+// TestTaskValidateVideoRecipeCreateAspectRatio verifies that CommandVideoRecipeCreate (where the
+// aspect ratio is chosen once, at keyframe creation time) accepts valid values and rejects
+// invalid ones, matching the validation already applied to video-generation commands.
+func TestTaskValidateVideoRecipeCreateAspectRatio(t *testing.T) {
+	valid := Task{JobID: "job-1", Command: CommandVideoRecipeCreate, Text: "source", VeoAspectRatio: "9:16"}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil for aspect ratio %q", err, valid.VeoAspectRatio)
+	}
+
+	invalid := Task{JobID: "job-1", Command: CommandVideoRecipeCreate, Text: "source", VeoAspectRatio: "4:3"}
+	if err := invalid.Validate(); err == nil || !strings.Contains(err.Error(), "veo_aspect_ratio") {
+		t.Fatalf("Validate() error = %v, want error containing %q", err, "veo_aspect_ratio")
+	}
+}
