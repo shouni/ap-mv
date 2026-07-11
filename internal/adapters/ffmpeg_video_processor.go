@@ -52,20 +52,22 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 	}
 	defer func() { _ = os.Remove(localVideo) }()
 
-	localFrame, err := tempFilePath(".jpg")
+	localFrame, err := tempFilePath(".png")
 	if err != nil {
 		return "", fmt.Errorf("extract last frame: %w", err)
 	}
 	defer func() { _ = os.Remove(localFrame) }()
 
 	// -sseof -1: 末尾1秒手前からデコードを開始し、その中の最後の1フレームだけ書き出す。
-	// ファイル全体をデコードするより高速。
-	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-sseof", "-1", "-i", localVideo, "-frames:v", "1", "-q:v", "2", localFrame)
+	// ファイル全体をデコードするより高速。PNG(可逆)で出力する。動画自体は既にH.264で
+	// 非可逆圧縮済みだが、ここでJPEG等の非可逆フォーマットへさらに変換すると、次チェーンの
+	// 参照画像として二重圧縮による劣化が加わってしまうため避ける。
+	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-sseof", "-1", "-i", localVideo, "-frames:v", "1", localFrame)
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		return "", fmt.Errorf("extract last frame: ffmpeg: %w: %s", runErr, out)
 	}
 
-	if err := p.uploadFromTemp(ctx, localFrame, destURI, "image/jpeg"); err != nil {
+	if err := p.uploadFromTemp(ctx, localFrame, destURI, "image/png"); err != nil {
 		return "", fmt.Errorf("extract last frame: upload %s: %w", destURI, err)
 	}
 	return destURI, nil

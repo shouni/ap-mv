@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -236,7 +237,7 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	if vp.extractCalls[0].videoURI != "gs://bucket/cut_4.mp4" {
 		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's video URL", vp.extractCalls[0].videoURI)
 	}
-	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.jpg" {
+	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.png" {
 		t.Errorf("ExtractLastFrame destURI = %q", vp.extractCalls[0].destURI)
 	}
 	if recipe.Cuts[4].KeyframeReference != vp.extractCalls[0].destURI {
@@ -289,6 +290,81 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 	if recipe.Cuts[2].KeyframeReference != "gs://bucket/chorus.png" {
 		t.Errorf("cut[2] KeyframeReference = %q, want unchanged section keyframe", recipe.Cuts[2].KeyframeReference)
 	}
+}
+
+// TestVideoSeedFallsBackToCharacterSeed verifies Veo generation receives the cut's character
+// seed when the recipe has no explicit seed, and the recipe-level seed wins when present.
+// Without any seed, independent chain-start generations drift in appearance (costume/eye color),
+// so the character seed used for keyframe image generation is reused as the video seed.
+func TestVideoSeedFallsBackToCharacterSeed(t *testing.T) {
+	charSeed := int64(208222065)
+	characters := &characterkit.Characters{
+		ByID: map[string]*characterkit.Character{
+			"tsumugi": {ID: "tsumugi", Seed: &charSeed},
+		},
+	}
+
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	runner := &seedCaptureRunner{}
+	flt := VideoGenerationFilter{Runner: runner}
+
+	err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		Characters:  characters,
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner.seeds) != 1 || runner.seeds[0] != charSeed {
+		t.Errorf("seeds = %v, want [%d] (character seed fallback)", runner.seeds, charSeed)
+	}
+
+	// Recipe-level seed must take precedence over the character seed.
+	recipeSeed := int64(777)
+	recipe2 := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
+		},
+	}
+	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
+	// in the MusicRecipe struct literal above.
+	recipe2.MusicRecipe.Seed = &recipeSeed
+	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}
+	runner2 := &seedCaptureRunner{}
+	flt2 := VideoGenerationFilter{Runner: runner2}
+
+	if err := flt2.Execute(context.Background(), &Context{
+		Task:        task2,
+		VideoRecipe: recipe2,
+		Characters:  characters,
+	}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner2.seeds) != 1 || runner2.seeds[0] != recipeSeed {
+		t.Errorf("seeds = %v, want [%d] (recipe seed takes precedence)", runner2.seeds, recipeSeed)
+	}
+}
+
+type seedCaptureRunner struct {
+	seeds []int64
+}
+
+// Run records each request's seed and returns a fixed successful response.
+func (r *seedCaptureRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
+	r.seeds = append(r.seeds, req.Seed)
+	return &ports.VideoResponse{
+		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
+		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		CutIndex: req.CutIndex,
+	}, nil
 }
 
 type indexedURLRunner struct{}
