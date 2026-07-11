@@ -8,8 +8,16 @@
                     <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">MusicRecipe GCS URL</label>
-                        <input class="form-control" name="music_recipe_url" placeholder="gs://bucket/path/music_recipe.json">
+                        <label class="form-label fw-semibold">Music Job ID</label>
+                        <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Aspect Ratio</label>
+                        <select class="form-select" name="aspect_ratio">
+                            <option value="16:9" selected>16:9</option>
+                            <option value="9:16">9:16 (ショート)</option>
+                        </select>
+                        <div class="form-text">キーフレーム作成時に一度だけ決まります。以降の動画生成（フルMV・ショート・カット再生成）はこの値を引き継ぎ、選び直すことはできません。</div>
                     </div>
                     {{if .VisualModes}}
                     <div class="mb-3">
@@ -31,14 +39,6 @@
                         </select>
                     </div>
                     {{end}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Aspect Ratio</label>
-                        <select class="form-select" name="aspect_ratio">
-                            <option value="16:9" selected>16:9</option>
-                            <option value="9:16">9:16 (ショート)</option>
-                        </select>
-                        <div class="form-text">キーフレーム作成時に一度だけ決まります。以降の動画生成（フルMV・ショート・カット再生成）はこの値を引き継ぎ、選び直すことはできません。</div>
-                    </div>
                     <div class="row g-3">
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-semibold">Gemini Model</label>
