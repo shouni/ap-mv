@@ -72,7 +72,17 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 			continue
 		}
 		if expanded[i].IsGenerated() {
-			cumulative += expanded[i].DurationSec
+			// 生成済みカットがそれ自体チェーンの起点（IsChainStart、先頭カットまたは
+			// 過去のリセット）だった場合、累積尺はそのカット自身の尺から数え直す。
+			// 常に加算するだけだと、一度リセットが起きた後もそれ以前のチェーンの
+			// 累積尺を引きずり続けてしまい、以降のカットが（実際には累積尺に余裕が
+			// あるのに）毎回誤ってリセット扱いになる（再開のたびに1カットずつ
+			// 処理される runDirect の性質上、この関数は毎回全カットを再計算する）。
+			if i == 0 || expanded[i].IsChainStart {
+				cumulative = expanded[i].DurationSec
+			} else {
+				cumulative += expanded[i].DurationSec
+			}
 			continue
 		}
 		isSectionStart := i > 0 && sectionAt[i] >= 0 && sectionAt[i] != sectionAt[i-1]
