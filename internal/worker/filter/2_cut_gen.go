@@ -26,6 +26,13 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
+	// RunAndSave（下）はキーフレーム生成後、自らGCSへvideo_music_meta.jsonを書き込む
+	// （go-veo-orchestrator/runner/keyframe.go）。そのため呼び出し前にAspectRatioを
+	// 確定させておく必要がある。呼び出し後に設定すると、メモリ上のオブジェクトは
+	// 更新されてもGCS上のファイルには反映されない（既に書き込み済みのため）。
+	if strings.TrimSpace(fc.VideoRecipe.AspectRatio) == "" {
+		fc.VideoRecipe.AspectRatio = resolvedAspectRatio(fc.Task)
+	}
 	if fc.Workflows == nil || fc.Workflows.CutKeyframe == nil {
 		recipe, err := toDomainRecipe(fc.VideoRecipe)
 		fc.Recipe = recipe
@@ -40,9 +47,6 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyLyricsToVideoRecipeCuts(recipe)
-	if strings.TrimSpace(recipe.AspectRatio) == "" {
-		recipe.AspectRatio = resolvedAspectRatio(fc.Task)
-	}
 	fc.VideoRecipe = recipe
 	fc.Recipe, err = toDomainRecipe(recipe)
 	return err
