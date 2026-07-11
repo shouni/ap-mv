@@ -41,7 +41,15 @@ func buildPipeline(
 			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
 			taskVideoRunner = ports.DeriveVideoRunner(videoRunner, task.VeoModel, task.VeoAspectRatio)
 		}
-		return buildWorkflowWithConfig(ctx, cfg, orchCfg, rio, httpClient, taskVideoRunner, taskVisualMode(task), taskSeedOverride(task))
+		return buildWorkflowWithConfig(ctx, workflowBuildParams{
+			cfg:          cfg,
+			orchCfg:      orchCfg,
+			rio:          rio,
+			httpClient:   httpClient,
+			videoRunner:  taskVideoRunner,
+			visualMode:   taskVisualMode(task),
+			seedOverride: taskSeedOverride(task),
+		})
 	}
 	if rio != nil {
 		runner.Reader = workflowReader{delegate: rio.Reader}
