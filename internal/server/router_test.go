@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,9 +14,15 @@ import (
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/builder"
-	"github.com/shouni/ap-mv/internal/ports"
+	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/server/handlers"
 )
+
+// inlineTaskQueue is a no-op ports.TaskQueue stub for tests that only exercise routing/auth
+// and never need a task to actually run.
+type inlineTaskQueue struct{}
+
+func (inlineTaskQueue) Enqueue(context.Context, *domain.Task) error { return nil }
 
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
@@ -124,7 +131,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("auth.NewHandler() error = %v", err)
 	}
 
-	webHandler, err := handlers.NewHandler(assets.Templates, ports.InlineTaskQueue{})
+	webHandler, err := handlers.NewHandler(assets.Templates, inlineTaskQueue{})
 	if err != nil {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}

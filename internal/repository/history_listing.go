@@ -22,6 +22,8 @@ import (
 const (
 	videoMetadataFile   = "video_music_meta.json"
 	regenKeyframePrefix = "regen-keyframe-"
+	// historyFetchConcurrency caps parallel GCS fetches when signing/loading history in bulk.
+	historyFetchConcurrency = 10
 )
 
 // VideoHistoryRepository lists generated MV metadata from the workflow output directory.
@@ -90,7 +92,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 
 	selectedIDs, meta := selectHistoryPageIDs(jobIDs, page, perPage)
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(10)
+	eg.SetLimit(historyFetchConcurrency)
 
 	histories := make([]domain.VideoHistory, 0, len(selectedIDs))
 	var mu sync.Mutex
@@ -203,10 +205,7 @@ func historySectionsFromRecipe(recipe domain.VideoRecipe) []domain.VideoHistoryS
 		if start == 0 && i > 0 {
 			start = cursor
 		}
-		end := sec.EndSeconds
-		if end <= start && sec.Duration > 0 {
-			end = start + sec.Duration
-		}
+		end := domain.SectionEndSeconds(start, sec.EndSeconds, sec.Duration)
 		cursor = end
 		result = append(result, domain.VideoHistorySection{
 			SectionIndex: i,
@@ -255,7 +254,7 @@ func (r *VideoHistoryRepository) finalizeHistory(ctx context.Context, jobID stri
 
 // keyframeZipURI returns the GCS URI for the pre-built keyframe zip of a job.
 func (r *VideoHistoryRepository) keyframeZipURI(jobID string) string {
-	return r.baseURI + "/" + jobID + "/keyframes.zip"
+	return r.jobObjectURI(jobID, "keyframes.zip")
 }
 
 // KeyframeZipSignedURL returns a signed download URL for the pre-built keyframe zip.
@@ -312,7 +311,7 @@ func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID str
 func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []domain.VideoHistoryCut) ([]domain.VideoHistoryCut, error) {
 	signedCuts := append([]domain.VideoHistoryCut(nil), cuts...)
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(10)
+	eg.SetLimit(historyFetchConcurrency)
 	for i := range signedCuts {
 		eg.Go(func() error {
 			ref := signedCuts[i].KeyframeReference
@@ -375,11 +374,16 @@ func (r *VideoHistoryRepository) resolveJobObjectURI(jobID string, uri string) s
 	if uri == "" || strings.Contains(uri, "://") {
 		return uri
 	}
-	return r.baseURI + "/" + jobID + "/" + strings.TrimLeft(uri, "/")
+	return r.jobObjectURI(jobID, strings.TrimLeft(uri, "/"))
 }
 
 func (r *VideoHistoryRepository) metadataURI(jobID string) string {
-	return r.baseURI + "/" + jobID + "/" + videoMetadataFile
+	return r.jobObjectURI(jobID, videoMetadataFile)
+}
+
+// jobObjectURI builds the GCS URI for a named object under a job's output directory.
+func (r *VideoHistoryRepository) jobObjectURI(jobID, name string) string {
+	return r.baseURI + "/" + jobID + "/" + name
 }
 
 func (r *VideoHistoryRepository) signedURL(ctx context.Context, uri string) (string, error) {

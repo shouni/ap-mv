@@ -57,22 +57,22 @@ func firstGeneratedVideo(op *vertexOperation) (vertexVideo, error) {
 		return vertexVideo{}, fmt.Errorf("veo operation response is empty")
 	}
 	if len(op.Response.Videos) > 0 {
-		video := op.Response.Videos[0]
-		if video.GCSURI == "" {
-			video.GCSURI = video.URI
-		}
-		return video, nil
+		return normalizeVideoGCSURI(op.Response.Videos[0]), nil
 	}
 	if len(op.Response.GeneratedVideos) > 0 {
-		video := op.Response.GeneratedVideos[0].Video
-		if video.GCSURI == "" {
-			video.GCSURI = video.URI
-		}
-		return video, nil
+		return normalizeVideoGCSURI(op.Response.GeneratedVideos[0].Video), nil
 	}
 	if op.Response.RaiMediaFilteredCount > 0 || len(op.Response.RaiMediaFilteredReasons) > 0 {
 		reasons := strings.Join(op.Response.RaiMediaFilteredReasons, "; ")
 		return vertexVideo{}, fmt.Errorf("veo operation response contains no videos: filtered by content safety policy (count=%d, reasons=%s)", op.Response.RaiMediaFilteredCount, reasons)
 	}
 	return vertexVideo{}, fmt.Errorf("veo operation response contains no videos")
+}
+
+// normalizeVideoGCSURI fills GCSURI from URI when the response omitted the former.
+func normalizeVideoGCSURI(video vertexVideo) vertexVideo {
+	if video.GCSURI == "" {
+		video.GCSURI = video.URI
+	}
+	return video
 }
