@@ -71,6 +71,47 @@ func TestExpandCutsToSupportedDurationsDisabled(t *testing.T) {
 	}
 }
 
+// TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset reproduces runDirect's
+// real resumption pattern: it generates exactly one cut per Cloud Tasks invocation, and each
+// invocation re-runs expandCutsToSupportedDurations over the FULL cuts list (mixing generated
+// and pending cuts). A regression here previously caused every cut after the first chain reset
+// to also become a reset, because the cumulative counter kept summing every generated cut's
+// duration forever instead of restarting from a generated cut that was itself a chain start.
+func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, StartSec: 40, DurationSec: 8},
+		{CutIndex: 2, StartSec: 48, DurationSec: 8},
+		{CutIndex: 3, StartSec: 56, DurationSec: 8},
+		{CutIndex: 4, StartSec: 64, DurationSec: 8},
+		{CutIndex: 5, StartSec: 72, DurationSec: 8},
+		{CutIndex: 6, StartSec: 80, DurationSec: 8},
+		{CutIndex: 7, StartSec: 88, DurationSec: 8},
+	}
+
+	// Simulate one Cloud Tasks invocation per cut: re-expand the whole list (as
+	// VideoGenerationFilter.Execute does on every resumption), then "generate" the next
+	// pending cut, marking IsChainStart exactly as runDirect does.
+	for next := 0; next < len(cuts); next++ {
+		cuts = expandCutsToSupportedDurations(cuts, true, nil)
+		if cuts[next].DurationSec != veoVideoExtensionDurationSec {
+			cuts[next].IsChainStart = true
+		}
+		cuts[next].Status = orchestrator.CutStatusGenerated
+	}
+
+	// 8,7,7,7 (chain1, cumulative 8->15->22->29) then reset at cut5 (chain2: 8,7,7).
+	wantDurations := []float64{8, 7, 7, 7, 8, 7, 7}
+	wantChainStart := []bool{true, false, false, false, true, false, false}
+	for i := range cuts {
+		if cuts[i].DurationSec != wantDurations[i] {
+			t.Errorf("cut[%d] duration = %v, want %v", i, cuts[i].DurationSec, wantDurations[i])
+		}
+		if cuts[i].IsChainStart != wantChainStart[i] {
+			t.Errorf("cut[%d] IsChainStart = %v, want %v", i, cuts[i].IsChainStart, wantChainStart[i])
+		}
+	}
+}
+
 // TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset verifies that a section change
 // resets the cumulative-duration chain even though the technical cap hasn't been reached, and
 // that only the section-boundary cut is marked IsSectionStart (not ordinary technical resets).
