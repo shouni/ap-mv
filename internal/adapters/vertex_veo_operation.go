@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -13,10 +14,13 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
+// rawResponseLogLimit は診断ログに残す生レスポンス本文の最大バイト数です。
+const rawResponseLogLimit = 4000
+
 // startOperation は Vertex AI に predictLongRunning リクエストを送信し、操作ハンドルを返します。
 func (r *VertexVeoRunner) startOperation(ctx context.Context, req ports.VideoGenerationRequest) (*vertexOperation, error) {
 	var op vertexOperation
-	if err := r.postJSON(ctx, r.modelURL("predictLongRunning"), r.buildGenerateBody(ctx, req), &op); err != nil {
+	if _, err := r.postJSON(ctx, r.modelURL("predictLongRunning"), r.buildGenerateBody(ctx, req), &op); err != nil {
 		return nil, fmt.Errorf("start Veo operation: %w", err)
 	}
 	if strings.TrimSpace(op.Name) == "" {
@@ -34,7 +38,8 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 	for {
 		var op vertexOperation
 		body := map[string]string{"operationName": operationName}
-		if err := r.postJSON(ctx, r.modelURL("fetchPredictOperation"), body, &op); err != nil {
+		raw, err := r.postJSON(ctx, r.modelURL("fetchPredictOperation"), body, &op)
+		if err != nil {
 			consecutiveErrors++
 			if consecutiveErrors >= r.maxPollConsecutiveErrors {
 				return nil, fmt.Errorf("fetch Veo operation failed consecutively %d times: %w", consecutiveErrors, err)
@@ -44,6 +49,12 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 			if op.Done {
 				if op.Error != nil {
 					return nil, fmt.Errorf("veo operation failed: %s", op.Error.message())
+				}
+				if op.Response == nil || (len(op.Response.Videos) == 0 && len(op.Response.GeneratedVideos) == 0) {
+					slog.WarnContext(ctx, "veo operation completed with no videos in response",
+						"operation", operationName,
+						"raw_response", truncateForLog(raw, rawResponseLogLimit),
+					)
 				}
 				return &op, nil
 			}
@@ -58,34 +69,43 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 }
 
 // postJSON は JSON POST リクエストを送信し、JSON レスポンスを out にデコードします。
-func (r *VertexVeoRunner) postJSON(ctx context.Context, url string, body any, out any) error {
+// 呼び出し元が診断ログに利用できるよう、デコード前の生レスポンス本文も返します。
+func (r *VertexVeoRunner) postJSON(ctx context.Context, url string, body any, out any) ([]byte, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	resp, err := r.client.Do(httpReq)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return fmt.Errorf("read response: %w", err)
+		return nil, fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(respBody)))
+		return nil, fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(respBody)))
 	}
 	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
-	return nil
+	return respBody, nil
+}
+
+// truncateForLog はログ出力用に本文を上限バイト数まで切り詰めます。
+func truncateForLog(body []byte, limit int) string {
+	if len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit]) + "...(truncated)"
 }
 
 // modelURL は指定された Veo メソッド用の Vertex AI Publisher Model エンドポイント URL を組み立てます。

@@ -34,8 +34,10 @@ func (e vertexError) message() string {
 }
 
 type vertexVeoResult struct {
-	Videos          []vertexVideo          `json:"videos,omitempty"`
-	GeneratedVideos []vertexGeneratedVideo `json:"generatedVideos,omitempty"`
+	Videos                  []vertexVideo          `json:"videos,omitempty"`
+	GeneratedVideos         []vertexGeneratedVideo `json:"generatedVideos,omitempty"`
+	RaiMediaFilteredCount   int                    `json:"raiMediaFilteredCount,omitempty"`
+	RaiMediaFilteredReasons []string               `json:"raiMediaFilteredReasons,omitempty"`
 }
 
 type vertexGeneratedVideo struct {
@@ -67,6 +69,10 @@ func firstGeneratedVideo(op *vertexOperation) (vertexVideo, error) {
 			video.GCSURI = video.URI
 		}
 		return video, nil
+	}
+	if op.Response.RaiMediaFilteredCount > 0 || len(op.Response.RaiMediaFilteredReasons) > 0 {
+		reasons := strings.Join(op.Response.RaiMediaFilteredReasons, "; ")
+		return vertexVideo{}, fmt.Errorf("veo operation response contains no videos: filtered by content safety policy (count=%d, reasons=%s)", op.Response.RaiMediaFilteredCount, reasons)
 	}
 	return vertexVideo{}, fmt.Errorf("veo operation response contains no videos")
 }
