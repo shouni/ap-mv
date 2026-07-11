@@ -22,6 +22,7 @@
                     <th>Title</th>
                     <th>Created</th>
                     <th>Cuts</th>
+                    <th>Aspect Ratio</th>
                     <th>Status</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -36,6 +37,7 @@
                     </td>
                     <td>{{.CreatedAt}}</td>
                     <td>{{.CutCount}}</td>
+                    <td>{{.AspectRatio}}</td>
                     <td>
                         {{if .Generated}}
                         <span class="badge text-bg-success">generated</span>

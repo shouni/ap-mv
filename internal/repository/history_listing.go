@@ -391,6 +391,7 @@ func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.Vide
 		StorageURI:    metadataURI,
 		Generated:     allCutsGenerated(recipe.Cuts),
 		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
+		AspectRatio:   strings.TrimSpace(recipe.AspectRatio),
 	}
 	if history.Title == "" {
 		history.Title = jobID

@@ -431,6 +431,90 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	}
 }
 
+// TestPostRegenerateCutKeyframeInheritsHistoryAspectRatio verifies the queued task's aspect
+// ratio always comes from the existing recipe (history.AspectRatio), never from user input —
+// there is no aspect_ratio form field for cut regeneration, since a single cut can't have a
+// different aspect ratio from the rest of its job.
+func TestPostRegenerateCutKeyframeInheritsHistoryAspectRatio(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:       "job-1",
+				StorageURI:  "gs://bucket/jobs/job-1/video_music_meta.json",
+				AspectRatio: "9:16",
+			},
+			Cuts: []domain.VideoHistoryCut{{CutIndex: 1, VisualAnchor: "original anchor"}},
+		},
+	}
+
+	form := url.Values{"csrf_token": {"token"}}
+	req := newRegenerateRequest(http.MethodPost, "/web/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostRegenerateCutKeyframe(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostRegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil {
+		t.Fatal("queued task is nil")
+	}
+	if queue.task.VeoAspectRatio != "9:16" {
+		t.Fatalf("queued VeoAspectRatio = %q, want %q (inherited from history)", queue.task.VeoAspectRatio, "9:16")
+	}
+}
+
+// TestPostGenerateVideoFromHistoryInheritsAspectRatio verifies the queued task's aspect ratio
+// comes from the existing recipe (history.AspectRatio), ignoring any aspect_ratio form value a
+// caller might still send (the generate-video form no longer offers this choice).
+func TestPostGenerateVideoFromHistoryInheritsAspectRatio(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:       "job-1",
+				StorageURI:  "gs://bucket/jobs/job-1/video_music_meta.json",
+				AspectRatio: "9:16",
+			},
+		},
+	}
+
+	form := url.Values{
+		"csrf_token":   {"token"},
+		"target":       {"full"},
+		"aspect_ratio": {"16:9"}, // must be ignored even if a stale client still sends it
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/history/job-1/generate-video", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostGenerateVideoFromHistory(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostGenerateVideoFromHistory status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil {
+		t.Fatal("queued task is nil")
+	}
+	if queue.task.VeoAspectRatio != "9:16" {
+		t.Fatalf("queued VeoAspectRatio = %q, want %q (inherited from history, not form)", queue.task.VeoAspectRatio, "9:16")
+	}
+}
+
 // newRegenerateRequest builds a request carrying jobID/cutIndex chi route params.
 func newRegenerateRequest(method, target, jobID, cutIndex string, body *strings.Reader) *http.Request {
 	var req *http.Request

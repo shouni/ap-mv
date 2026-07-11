@@ -39,7 +39,7 @@ func buildPipeline(
 		orchCfg := runner.OrchestratorConfig
 		taskVideoRunner := videoRunner
 		if task != nil {
-			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel)
+			orchCfg = orchCfg.WithModels(task.TextModel, task.ImageModel).WithAspectRatio(task.VeoAspectRatio)
 			taskVideoRunner = ports.DeriveVideoRunner(videoRunner, task.VeoModel, task.VeoAspectRatio)
 		}
 		return buildWorkflowWithConfig(ctx, workflowBuildParams{

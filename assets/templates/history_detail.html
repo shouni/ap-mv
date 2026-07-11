@@ -91,7 +91,7 @@
                 <p class="small text-muted mb-3">保存済みのキーフレームと歌詞から、新しいジョブとして動画を生成します。セクションを選ぶとそのセクションだけのショート動画（最大60秒・9:16推奨）になります。生成済みの対象は選択肢から除外しています。</p>
                 <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/generate-video" class="row g-2 align-items-end">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <div class="col-md-4">
+                    <div class="col-md-5">
                         <label for="gen-target" class="form-label small text-muted mb-1">対象</label>
                         <select id="gen-target" name="target" class="form-select form-select-sm">
                             <option value="full">フルMV（全カット）</option>
@@ -102,7 +102,7 @@
                             {{end}}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-5">
                         <label for="gen-veo-model" class="form-label small text-muted mb-1">Veo モデル</label>
                         <select id="gen-veo-model" name="veo_model" class="form-select form-select-sm">
                             {{range .VeoModels}}
@@ -111,22 +111,12 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <label for="gen-aspect" class="form-label small text-muted mb-1">アスペクト比</label>
-                        <select id="gen-aspect" name="aspect_ratio" class="form-select form-select-sm">
-                            <option value="16:9">16:9</option>
-                            <option value="9:16">9:16 (ショート)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
                         <button type="submit" class="btn btn-primary btn-sm w-100">生成開始</button>
                     </div>
                 </form>
-                <script>
-                // 対象の切り替えに合わせてアスペクト比の初期値を追従させる（フル=16:9、ショート=9:16）。
-                document.getElementById('gen-target').addEventListener('change', function () {
-                    document.getElementById('gen-aspect').value = this.value === 'full' ? '16:9' : '9:16';
-                });
-                </script>
+                {{if .HistoryDetail.AspectRatio}}
+                <p class="small text-muted mb-0 mt-2">アスペクト比: {{.HistoryDetail.AspectRatio}}（キーフレーム作成時に決定済み）</p>
+                {{end}}
                 {{end}}
             </div>
         </div>
