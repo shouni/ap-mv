@@ -166,12 +166,12 @@ func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) 
 // PostVideoRecipeCreate handles video recipe creation form submissions.
 func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	jobID, err := domain.NewJobID("video-recipe")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -209,7 +209,7 @@ func (h *Handler) withModelOptions(data PageData) PageData {
 // このエンドポイントは ap-mcp 等の M2M 呼び出し（JSON レスポンス）で使われ続けています。
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	var recipe *domain.MusicRecipe
@@ -218,7 +218,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if recipeJSON != "" {
 		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
 		if err != nil {
-			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
+			writeError(w, r, http.StatusBadRequest, "invalid recipe json: "+err.Error())
 			return
 		}
 		recipe = parsedRecipe
@@ -226,7 +226,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	}
 	jobID, err := domain.NewJobID("recipe")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -251,7 +251,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if wantsJSON(r) {
@@ -273,7 +273,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
@@ -282,7 +282,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 			"job_id", jobID,
 			"error", err,
 		)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	if wantsJSON(r) {
@@ -394,6 +394,26 @@ func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err err
 	return jobID, cutIndex, nil
 }
 
+// loadHistoryForMutation loads history for jobID and validates it has a resolvable storage URI,
+// as required by every handler that enqueues a follow-up task against an existing job. On
+// failure it writes the appropriate error response itself and returns ok=false.
+func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request, jobID string) (domain.VideoHistoryDetail, bool) {
+	if h.HistoryRepository == nil {
+		writeError(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
+		return domain.VideoHistoryDetail{}, false
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		return domain.VideoHistoryDetail{}, false
+	}
+	if strings.TrimSpace(history.StorageURI) == "" {
+		writeError(w, r, http.StatusInternalServerError, "recipe storage URI is not available")
+		return domain.VideoHistoryDetail{}, false
+	}
+	return history, true
+}
+
 // RegenerateCutKeyframeForm renders a dedicated page for configuring a single cut's
 // keyframe regeneration (prompt override, seed override, overwrite) before submitting it.
 func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Request) {
@@ -437,30 +457,21 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+	history, ok := h.loadHistoryForMutation(w, r, jobID)
+	if !ok {
 		return
 	}
 	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
 	if !ok {
-		http.Error(w, "cut not found", http.StatusNotFound)
+		writeError(w, r, http.StatusNotFound, "cut not found")
 		return
 	}
 	newJobID, err := domain.NewJobID("regen-keyframe")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -476,12 +487,12 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 	}
 	if seedStr := strings.TrimSpace(r.FormValue("seed")); seedStr != "" {
 		if strings.TrimSpace(cut.CharacterID) == "" {
-			http.Error(w, "cut has no character to apply a seed override to", http.StatusBadRequest)
+			writeError(w, r, http.StatusBadRequest, "cut has no character to apply a seed override to")
 			return
 		}
 		seed, err := strconv.ParseInt(seedStr, 10, 64)
 		if err != nil {
-			http.Error(w, "invalid seed", http.StatusBadRequest)
+			writeError(w, r, http.StatusBadRequest, "invalid seed")
 			return
 		}
 		if current := h.CharacterOptions.seed(cut.CharacterID); current == nil || *current != seed {
@@ -497,25 +508,16 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+	history, ok := h.loadHistoryForMutation(w, r, jobID)
+	if !ok {
 		return
 	}
 	newJobID, err := domain.NewJobID("regen-zip")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -537,64 +539,66 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
+	history, ok := h.loadHistoryForMutation(w, r, jobID)
+	if !ok {
 		return
 	}
 
+	command, sectionIndex, err := resolveHistoryGenerationTask(strings.TrimSpace(r.FormValue("target")), len(history.Sections))
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	task := &domain.Task{
 		RecipeURL:      history.StorageURI,
 		VeoModel:       h.veoModelFromForm(r),
 		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		Command:        command,
+		SectionIndex:   sectionIndex,
 		CreatedAt:      time.Now().UTC(),
 	}
-	target := strings.TrimSpace(r.FormValue("target"))
-	if target == "full" {
-		task.Command = domain.CommandMVFromKeyframeVideoRecipe
-		task.JobID, err = domain.NewJobID("mv")
-	} else {
-		if len(history.Sections) == 0 {
-			http.Error(w, "no sections available in this recipe", http.StatusBadRequest)
-			return
-		}
-		sectionIndex, convErr := strconv.Atoi(target)
-		if convErr != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
-			http.Error(w, "invalid target section", http.StatusBadRequest)
-			return
-		}
-		task.Command = domain.CommandShortVideoFromSection
-		task.SectionIndex = &sectionIndex
-		task.JobID, err = domain.NewJobID("short")
+	jobIDPrefix := "mv"
+	if command == domain.CommandShortVideoFromSection {
+		jobIDPrefix = "short"
 	}
+	task.JobID, err = domain.NewJobID(jobIDPrefix)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
 	h.enqueue(w, r, task)
+}
+
+// resolveHistoryGenerationTask decides the task command and section index implied by a
+// "generate video from history" request's target selector: "full" for the whole recipe's MV,
+// or a section array index (as a string) for a short video from just that section.
+func resolveHistoryGenerationTask(target string, sectionCount int) (domain.TaskCommand, *int, error) {
+	if target == "full" {
+		return domain.CommandMVFromKeyframeVideoRecipe, nil, nil
+	}
+	if sectionCount == 0 {
+		return "", nil, errors.New("no sections available in this recipe")
+	}
+	sectionIndex, err := strconv.Atoi(target)
+	if err != nil || sectionIndex < 0 || sectionIndex >= sectionCount {
+		return "", nil, errors.New("invalid target section")
+	}
+	return domain.CommandShortVideoFromSection, &sectionIndex, nil
 }
 
 // DeleteHistory handles history deletion requests.
 func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.HistoryRepository != nil {
 		if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, r, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
@@ -612,12 +616,12 @@ func pageFromQuery(r *http.Request) int {
 // enqueue validates and submits a task to the configured queue.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
@@ -636,6 +640,17 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 
 func wantsJSON(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
+}
+
+// writeError writes an error response, using JSON when the caller requested it (mirroring
+// writeJSON's success-path content negotiation) so M2M/JSON callers (Accept: application/json)
+// reliably get a JSON error body instead of an HTML/plain-text one.
+func writeError(w http.ResponseWriter, r *http.Request, status int, message string) {
+	if wantsJSON(r) {
+		writeJSON(w, status, map[string]string{"error": message})
+		return
+	}
+	http.Error(w, message, status)
 }
 
 // renderPage renders a named HTML template.
