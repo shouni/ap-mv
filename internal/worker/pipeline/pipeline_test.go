@@ -63,7 +63,7 @@ func (n *contextRecordingNotifier) NotifyTaskError(ctx context.Context, _ error,
 
 // TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
 func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil, false)
+	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil, false, nil)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
@@ -82,13 +82,13 @@ func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
 
 // TestDefaultFiltersForLegacyComposeStillRunsFullPipeline verifies the legacy compose default filter chain.
 func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
-	filters := defaultFilters(domain.CommandCompose, nil, false)
+	filters := defaultFilters(domain.CommandCompose, nil, false, nil)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
 		got = append(got, flt.Name())
 	}
-	want := []string{"scripting", "cut_keyframe_gen", "zip_upload", "video_gen", "publishing"}
+	want := []string{"scripting", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"}
 	if len(got) != len(want) {
 		t.Fatalf("filters = %v, want %v", got, want)
 	}
@@ -104,13 +104,13 @@ func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
 // carried VideoRecipe already reflects scripting/keyframe/section-select/zip-upload results
 // from the original command that deferred it.
 func TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoGenContinuation, nil, false)
+	filters := defaultFilters(domain.CommandVideoGenContinuation, nil, false, nil)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
 		got = append(got, flt.Name())
 	}
-	want := []string{"video_gen", "publishing"}
+	want := []string{"video_gen", "chain_finalize", "publishing"}
 	if len(got) != len(want) {
 		t.Fatalf("filters = %v, want %v", got, want)
 	}
