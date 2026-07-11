@@ -15,9 +15,9 @@ var configEnvKeys = []string{
 	"WORKER_URL",
 	"TASK_AUDIENCE_URL",
 	"SERVICE_ACCOUNT_EMAIL",
-	"GCS_MUSIC_BUCKET",
+	"AP_MV_BUCKET",
+	"AP_MUSIC_BUCKET",
 	"SLACK_WEBHOOK_URL",
-	"GEMINI_API_KEY",
 	"GEMINI_MODEL",
 	"GEMINI_MODELS",
 	"IMAGE_MODEL",
@@ -123,7 +123,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	t.Setenv("SERVICE_URL", "https://example.com")
 	t.Setenv("WORKER_URL", "https://worker.example.com/tasks/generate")
 	t.Setenv("TASK_AUDIENCE_URL", "https://tasks.example.com")
-	t.Setenv("GCS_MUSIC_BUCKET", "gs://music-bucket/output/")
+	t.Setenv("AP_MV_BUCKET", "gs://music-bucket/output/")
 	t.Setenv("GEMINI_MODEL", "gemini-selected")
 	t.Setenv("GEMINI_MODELS", "gemini-a, gemini-b")
 	t.Setenv("IMAGE_MODEL", "image-standard")

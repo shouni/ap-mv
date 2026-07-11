@@ -21,6 +21,9 @@ type Handler struct {
 	ModelOptions      ModelOptions
 	CharacterOptions  CharacterOptions
 	VisualOptions     VisualModeOptions
+	// MusicBucket は、Video Recipe Create フォームの Music Job ID から
+	// レシピJSON（gs://<MusicBucket>/<jobID>.json）を解決するためのGCSバケット名です。
+	MusicBucket string
 }
 
 // PageData は、HTMLテンプレートに渡す共通の描画データです。

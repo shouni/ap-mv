@@ -19,15 +19,18 @@ const (
 
 // Config はアプリ設定です。
 type Config struct {
-	ServiceURL             string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	Port                   string        `env:"PORT" envDefault:"8080"`
-	ProjectID              string        `env:"GCP_PROJECT_ID"`
-	LocationID             string        `env:"GCP_LOCATION_ID"`
-	QueueID                string        `env:"CLOUD_TASKS_QUEUE_ID"`
-	WorkerURL              string        `env:"WORKER_URL"`
-	TaskAudienceURL        string        `env:"TASK_AUDIENCE_URL"`
-	ServiceAccountEmail    string        `env:"SERVICE_ACCOUNT_EMAIL"`
-	GCSBucket              string        `env:"GCS_MUSIC_BUCKET"`
+	ServiceURL          string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	Port                string `env:"PORT" envDefault:"8080"`
+	ProjectID           string `env:"GCP_PROJECT_ID"`
+	LocationID          string `env:"GCP_LOCATION_ID"`
+	QueueID             string `env:"CLOUD_TASKS_QUEUE_ID"`
+	WorkerURL           string `env:"WORKER_URL"`
+	TaskAudienceURL     string `env:"TASK_AUDIENCE_URL"`
+	ServiceAccountEmail string `env:"SERVICE_ACCOUNT_EMAIL"`
+	GCSBucket           string `env:"AP_MV_BUCKET"`
+	// MusicBucket は、Video Recipe Create の Music Job ID からレシピJSON
+	// （gs://<MusicBucket>/<jobID>.json、ap-comp/lyric-videoと同じ規則）を解決するために使う。
+	MusicBucket            string        `env:"AP_MUSIC_BUCKET" envDefault:"ap-music"`
 	SlackWebhookURL        string        `env:"SLACK_WEBHOOK_URL"`
 	GeminiModel            string        `env:"GEMINI_MODEL"`
 	ImageModel             string        `env:"IMAGE_MODEL"`
@@ -74,6 +77,7 @@ func (c *Config) normalize() error {
 		c.TaskAudienceURL = c.ServiceURL
 	}
 	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
+	c.MusicBucket = normalizeGCSBucket(c.MusicBucket)
 	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
 	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
 	c.AllowedM2MServiceAccounts = normalizeStringSlice(c.AllowedM2MServiceAccounts)

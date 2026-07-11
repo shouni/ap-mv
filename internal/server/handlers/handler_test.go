@@ -137,14 +137,15 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
+	h.MusicBucket = "ap-music"
 
 	form := url.Values{
-		"csrf_token":       {"token"},
-		"music_recipe_url": {"gs://bucket/music_recipe.json"},
-		"text_model":       {"gemini-alt"},
-		"image_model":      {"image-alt"},
-		"character_id":     {"zundamon"},
-		"audio_url":        {"gs://bucket/music.mp3"},
+		"csrf_token":   {"token"},
+		"music_job_id": {"20260711132823-256e9128"},
+		"text_model":   {"gemini-alt"},
+		"image_model":  {"image-alt"},
+		"character_id": {"zundamon"},
+		"audio_url":    {"gs://bucket/music.mp3"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -174,8 +175,8 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if queue.task.CharacterID != "zundamon" {
 		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
 	}
-	if queue.task.SourceURL != "gs://bucket/music_recipe.json" {
-		t.Fatalf("queued source URL = %q, want music recipe URL", queue.task.SourceURL)
+	if queue.task.SourceURL != "gs://ap-music/20260711132823-256e9128.json" {
+		t.Fatalf("queued source URL = %q, want music recipe URL derived from music_job_id", queue.task.SourceURL)
 	}
 	if queue.task.VisualMode != "default" {
 		t.Fatalf("queued visual mode = %q, want default", queue.task.VisualMode)
@@ -198,11 +199,12 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
+	h.MusicBucket = "ap-music"
 
 	form := url.Values{
-		"csrf_token":       {"token"},
-		"music_recipe_url": {"gs://bucket/music_recipe.json"},
-		"visual_mode":      {"sparkle_rock"},
+		"csrf_token":   {"token"},
+		"music_job_id": {"20260711132823-256e9128"},
+		"visual_mode":  {"sparkle_rock"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -222,8 +224,10 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 	}
 }
 
-// TestPostVideoRecipeCreateReturnsJSONWhenRequested verifies API clients can still request JSON.
-func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
+// TestPostVideoRecipeCreateFallsBackToURLForM2M verifies the raw `url` form field (used by
+// ap-mcp's compose_video tool, which also accepts plain text/image sources unrelated to a music
+// job) still works when music_job_id is absent.
+func TestPostVideoRecipeCreateFallsBackToURLForM2M(t *testing.T) {
 	queue := &recordingQueue{}
 	h, err := NewHandler(assets.Templates, queue)
 	if err != nil {
@@ -231,8 +235,65 @@ func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
 	}
 
 	form := url.Values{
-		"csrf_token":       {"token"},
-		"music_recipe_url": {"gs://bucket/music_recipe.json"},
+		"csrf_token": {"token"},
+		"url":        {"gs://bucket/source.json"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostVideoRecipeCreate(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+	}
+	if queue.task == nil || queue.task.SourceURL != "gs://bucket/source.json" {
+		t.Fatalf("queued source URL = %v, want gs://bucket/source.json", queue.task)
+	}
+}
+
+// TestPostVideoRecipeCreateRejectsInvalidMusicJobID verifies a malformed music_job_id is
+// rejected rather than silently building a broken GCS path.
+func TestPostVideoRecipeCreateRejectsInvalidMusicJobID(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.MusicBucket = "ap-music"
+
+	form := url.Values{
+		"csrf_token":   {"token"},
+		"music_job_id": {"not a valid id!"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.PostVideoRecipeCreate(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if queue.task != nil {
+		t.Fatal("task should not have been queued for an invalid music_job_id")
+	}
+}
+
+// TestPostVideoRecipeCreateReturnsJSONWhenRequested verifies API clients can still request JSON.
+func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
+	queue := &recordingQueue{}
+	h, err := NewHandler(assets.Templates, queue)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.MusicBucket = "ap-music"
+
+	form := url.Values{
+		"csrf_token":   {"token"},
+		"music_job_id": {"20260711132823-256e9128"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -765,7 +826,7 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`name="music_recipe_url"`,
+		`name="music_job_id"`,
 		`name="text_model"`,
 		`value="gemini-default" selected`,
 		`value="gemini-alt"`,

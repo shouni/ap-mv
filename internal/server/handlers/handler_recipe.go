@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -97,11 +98,16 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	sourceURL, err := h.musicRecipeSourceURL(r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	task := &domain.Task{
 		JobID:          jobID,
 		Command:        domain.CommandVideoRecipeCreate,
 		AIModels:       h.aiModelsFromForm(r),
-		SourceURL:      firstNonEmptyFormValue(r, "music_recipe_url", "url"),
+		SourceURL:      sourceURL,
 		Text:           strings.TrimSpace(r.FormValue("text")),
 		ImageURL:       strings.TrimSpace(r.FormValue("image_url")),
 		CharacterID:    h.characterIDFromForm(r),
@@ -112,13 +118,22 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 	h.enqueue(w, r, task)
 }
 
-func firstNonEmptyFormValue(r *http.Request, names ...string) string {
-	for _, name := range names {
-		if value := strings.TrimSpace(r.FormValue(name)); value != "" {
-			return value
-		}
+// musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
+// submits music_job_id (ap-comp/lyric-videoと同じ規則で gs://<MusicBucket>/<jobID>.json を組み立てる)。
+// M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts
+// plain text/image sources unrelated to a music job.
+func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
+	musicJobID := strings.TrimSpace(r.FormValue("music_job_id"))
+	if musicJobID == "" {
+		return strings.TrimSpace(r.FormValue("url")), nil
 	}
-	return ""
+	if err := domain.ValidateJobID(musicJobID); err != nil {
+		return "", fmt.Errorf("invalid music_job_id: %w", err)
+	}
+	if strings.TrimSpace(h.MusicBucket) == "" {
+		return "", fmt.Errorf("AP_MUSIC_BUCKET is not configured")
+	}
+	return fmt.Sprintf("gs://%s/%s.json", strings.TrimSpace(h.MusicBucket), musicJobID), nil
 }
 
 // PostRecipe handles recipe submissions.
