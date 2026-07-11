@@ -20,23 +20,53 @@ const veoMaxCutDurationSec = 8.0
 // image_to_video の {4,6,8} とは異なるサポート値のため、個別に定義しています。
 const veoVideoExtensionDurationSec = 7.0
 
+// veoContinuationMaxDurationSec は Veo の video_extension が「前の動画」として受け付けられる
+// 累積尺の上限（秒）です。実運用で確認済み: 累積29秒(cut4)までの動画をPreviousVideoIDとして
+// 渡す継続生成は成功するが、累積36秒(cut5)の動画を渡すと
+// "Video duration 36 seconds exceeds the maximum duration 30 seconds" (code=3) で失敗する。
+// このため継続チェーンの累積尺がこの値に達する手前で新しいチェーンへリセットする
+// （動画を打ち切るのではなく、そのカットをPreviousVideoIDなしの新規ベースとして生成し直す）。
+const veoContinuationMaxDurationSec = 30.0
+
 // expandCutsToSupportedDurations は各カットの尺を Veo のサポート値へ正規化します。
 // 8 秒を超えるカットは同じキーフレーム・プロンプトを引き継いだサブカット列へ分割し、
 // 歌詞（Dialogue）は行単位でサブカットへ均等配分します。分割後は CutIndex を 1 から振り直します。
-// usePreviousVideo が true の場合、先頭カット以降（PreviousVideoID を伴い video_extension で
-// 生成される想定のカット）は image_to_video 用の {4,6,8} ではなく 7 秒固定へ揃えます。
+//
+// usePreviousVideo が true の場合、原則として先頭カット以降（PreviousVideoID を伴い
+// video_extension で生成される想定のカット）は image_to_video 用の {4,6,8} ではなく 7 秒固定へ
+// 揃えます。ただし video_extension は「前の動画」として渡せる累積尺に上限
+// (veoContinuationMaxDurationSec) があり、これを超えると Veo 側が
+// "Video duration N seconds exceeds the maximum duration 30 seconds" (code=3) で拒否するため、
+// 累積尺が上限に達する手前でチェーンをリセットします。リセットされたカットは
+// PreviousVideoID を使わない新規ベース（image_to_video、{4,6,8}秒）として扱われ、
+// そこから新しい継続チェーンが始まります（runDirect の lastVideoID リセット処理と対）。
+// 生成済みカットは実動画の尺と metadata がずれないよう変更しませんが、累積尺の計算には
+// 含めます（再開時にチェーン状態を正しく引き継ぐため）。
 // SectionSelectFilter（ショート動画）と VideoGenerationFilter（フルMV）の両方から使われます。
 func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
 	for _, cut := range cuts {
 		expanded = append(expanded, splitCutBySupportedDurations(cut)...)
 	}
+	cumulative := 0.0
 	for i := range expanded {
 		expanded[i].CutIndex = i + 1
-		if usePreviousVideo && i > 0 && !expanded[i].IsGenerated() {
-			expanded[i].DurationSec = veoVideoExtensionDurationSec
-			expanded[i].EndSec = expanded[i].StartSec + veoVideoExtensionDurationSec
+		if !usePreviousVideo {
+			continue
 		}
+		if expanded[i].IsGenerated() {
+			cumulative += expanded[i].DurationSec
+			continue
+		}
+		if cumulative == 0 || cumulative+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
+			// 新規チェーンの先頭（曲頭、またはリセット直後）。splitCutBySupportedDurations が
+			// 既に割り当てた {4,6,8} 秒の尺をそのまま使う。
+			cumulative = expanded[i].DurationSec
+			continue
+		}
+		expanded[i].DurationSec = veoVideoExtensionDurationSec
+		expanded[i].EndSec = expanded[i].StartSec + veoVideoExtensionDurationSec
+		cumulative += veoVideoExtensionDurationSec
 	}
 	return expanded
 }
