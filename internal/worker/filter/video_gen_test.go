@@ -236,7 +236,7 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	if vp.extractCalls[0].videoURI != "gs://bucket/cut_4.mp4" {
 		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's video URL", vp.extractCalls[0].videoURI)
 	}
-	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.jpg" {
+	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.png" {
 		t.Errorf("ExtractLastFrame destURI = %q", vp.extractCalls[0].destURI)
 	}
 	if recipe.Cuts[4].KeyframeReference != vp.extractCalls[0].destURI {

@@ -160,7 +160,7 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 	if outputPath == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.jpg", outputPath, cutIndex)
+	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.png", outputPath, cutIndex)
 }
 
 // generateCut runs a single cut through the video runner and updates its status, VideoID, and
