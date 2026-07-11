@@ -236,10 +236,7 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	for i, cut := range recipe.Cuts {
 		for _, sec := range recipe.MusicRecipe.Sections {
 			sStart := float64(sec.StartSeconds)
-			sEnd := float64(sec.EndSeconds)
-			if sEnd <= sStart && sec.Duration > 0 {
-				sEnd = sStart + float64(sec.Duration)
-			}
+			sEnd := float64(SectionEndSeconds(sec.StartSeconds, sec.EndSeconds, sec.Duration))
 			if cut.StartSec >= sStart && cut.StartSec < sEnd {
 				secCutsMap[sec.Name] = append(secCutsMap[sec.Name], i)
 				break
@@ -254,7 +251,7 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 		}
 		for pos, idx := range cutIndices {
 			if strings.TrimSpace(recipe.Cuts[idx].Dialogue) == "" {
-				recipe.Cuts[idx].Dialogue = assignLinesForCut(lines, pos, len(cutIndices))
+				recipe.Cuts[idx].Dialogue = DistributeLines(lines, pos, len(cutIndices))
 			}
 		}
 	}
@@ -276,14 +273,67 @@ func parseLyricsSections(lyricsText string) map[string][]string {
 	return result
 }
 
-func assignLinesForCut(lines []string, pos, totalCuts int) string {
-	if totalCuts <= 1 {
+// NormalizeModelList returns a deduplicated model list with `preferred` first (if non-empty),
+// followed by the remaining unique values in order. Returns a single-element list containing
+// fallback if the result would otherwise be empty.
+func NormalizeModelList(values []string, preferred, fallback string) []string {
+	seen := make(map[string]bool, len(values)+1)
+	result := make([]string, 0, len(values)+1)
+	if preferred = strings.TrimSpace(preferred); preferred != "" {
+		result = append(result, preferred)
+		seen[preferred] = true
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" && !seen[value] {
+			result = append(result, value)
+			seen[value] = true
+		}
+	}
+	if len(result) == 0 {
+		result = append(result, fallback)
+	}
+	return result
+}
+
+// NormalizeDefaultModel selects a valid default model: value if non-empty, otherwise the first
+// entry of models, otherwise fallback.
+func NormalizeDefaultModel(value string, models []string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	if len(models) > 0 {
+		return models[0]
+	}
+	return fallback
+}
+
+// SectionEndSeconds derives a section's end time in seconds, falling back to
+// startSeconds+duration when endSeconds has not been set (endSeconds <= startSeconds).
+// If duration is also unset, endSeconds is returned unchanged.
+func SectionEndSeconds(startSeconds, endSeconds, duration int) int {
+	if endSeconds <= startSeconds && duration > 0 {
+		return startSeconds + duration
+	}
+	return endSeconds
+}
+
+// DistributeLines splits lines proportionally across `total` buckets and returns the lines
+// assigned to bucket `pos` (0-indexed), joined by newlines. Used both to spread lyrics lines
+// across a section's cuts and to spread a cut's dialogue across its sub-cuts after duration
+// splitting (internal/worker/filter).
+func DistributeLines(lines []string, pos, total int) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	if total <= 1 {
 		return strings.Join(lines, "\n")
 	}
 	n := len(lines)
-	start := (pos * n) / totalCuts
-	end := ((pos + 1) * n) / totalCuts
-	if start >= n {
+	start := pos * n / total
+	end := (pos + 1) * n / total
+	if start >= n || start >= end {
 		return ""
 	}
 	if end > n {
@@ -306,9 +356,7 @@ func NormalizeMusicRecipe(r *MusicRecipe) error {
 		if section.StartSeconds == 0 && i > 0 {
 			section.StartSeconds = cursor
 		}
-		if section.EndSeconds <= section.StartSeconds {
-			section.EndSeconds = section.StartSeconds + section.Duration
-		}
+		section.EndSeconds = SectionEndSeconds(section.StartSeconds, section.EndSeconds, section.Duration)
 		cursor = section.EndSeconds
 	}
 	return ValidateMusicRecipe(r)

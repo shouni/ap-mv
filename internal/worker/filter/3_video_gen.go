@@ -36,6 +36,11 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
 	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
 	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo)
+	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
+	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
+	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
+	// （resumable ではなく、内部で全カットをまとめて処理する）。
+	// (3) どちらもなければ runDirect を呼び、runner未設定のエラーを返す。
 	if f.hasVideoRunner(fc) {
 		return f.runDirect(ctx, fc)
 	}
@@ -86,41 +91,15 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			}
 			continue
 		}
-		res, err := runner.Run(ctx, ports.VideoGenerationRequest{
-			CutIndex:        cut.CutIndex,
-			Prompt:          videoPrompt(*cut),
-			DurationSec:     cut.DurationSec,
-			Seed:            seedValue(fc.VideoRecipe.MusicRecipe.Seed),
-			PreviousVideoID: lastVideoID,
-			ImageReference:  cut.KeyframeReference,
-			ReferenceImages: buildReferenceImages(fc, *cut),
-			AudioReference:  cut.AudioReference,
-		})
-		if err != nil {
-			return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
+		if err := generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
+			return err
 		}
-		cut.Status = orchestrator.CutStatusGenerated
-		cut.VideoID = res.VideoID
-		cut.VideoURL = res.CloudURL
-		lastVideoID = res.VideoID
+		lastVideoID = cut.VideoID
 		// 継続タスクのエンキューに失敗した場合、Cloud Tasks は元のタスクを再試行する。
 		// 再試行時には直前の続きタスクのペイロード（このカットはまだ pending）から再開するため、
 		// カットが再生成される可能性があるが、状態の整合性は保たれる。
 		if hasPendingCuts(fc.VideoRecipe) && fc.TaskQueue != nil {
-			domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
-			if err != nil {
-				return err
-			}
-			fc.Recipe = domainRecipe
-			nextTask := *fc.Task
-			nextTask.Command = domain.CommandVideoGenContinuation
-			nextTask.Recipe = fc.Recipe
-			nextTask.VideoRecipe = fc.VideoRecipe
-			nextTask.CreatedAt = time.Now().UTC()
-			if err := fc.TaskQueue.Enqueue(ctx, &nextTask); err != nil {
-				return fmt.Errorf("enqueue continuation after cut %d: %w", cut.CutIndex, err)
-			}
-			return ErrPipelineDeferred
+			return enqueueContinuation(ctx, fc, cut.CutIndex)
 		}
 	}
 	domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
@@ -129,6 +108,49 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 	}
 	fc.Recipe = domainRecipe
 	return nil
+}
+
+// generateCut runs a single cut through the video runner and updates its status, VideoID, and
+// VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoID
+// context (video-to-video continuation).
+func generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID string) error {
+	res, err := runner.Run(ctx, ports.VideoGenerationRequest{
+		CutIndex:        cut.CutIndex,
+		Prompt:          videoPrompt(*cut),
+		DurationSec:     cut.DurationSec,
+		Seed:            seedValue(fc.VideoRecipe.MusicRecipe.Seed),
+		PreviousVideoID: lastVideoID,
+		ImageReference:  cut.KeyframeReference,
+		ReferenceImages: buildReferenceImages(fc, *cut),
+		AudioReference:  cut.AudioReference,
+	})
+	if err != nil {
+		return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
+	}
+	cut.Status = orchestrator.CutStatusGenerated
+	cut.VideoID = res.VideoID
+	cut.VideoURL = res.CloudURL
+	return nil
+}
+
+// enqueueContinuation persists the in-progress VideoRecipe and enqueues a
+// CommandVideoGenContinuation task to resume generation of the remaining pending cuts, then
+// returns ErrPipelineDeferred so the pipeline stops here instead of treating this run as complete.
+func enqueueContinuation(ctx context.Context, fc *Context, cutIndex int) error {
+	domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
+	if err != nil {
+		return err
+	}
+	fc.Recipe = domainRecipe
+	nextTask := *fc.Task
+	nextTask.Command = domain.CommandVideoGenContinuation
+	nextTask.Recipe = fc.Recipe
+	nextTask.VideoRecipe = fc.VideoRecipe
+	nextTask.CreatedAt = time.Now().UTC()
+	if err := fc.TaskQueue.Enqueue(ctx, &nextTask); err != nil {
+		return fmt.Errorf("enqueue continuation after cut %d: %w", cutIndex, err)
+	}
+	return ErrPipelineDeferred
 }
 
 // ensureVideoRecipe converts fc.Recipe to fc.VideoRecipe when it is not already set.

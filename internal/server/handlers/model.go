@@ -19,45 +19,12 @@ type ModelOptions struct {
 
 // normalize normalizes the provided values.
 func (o *ModelOptions) normalize() {
-	o.GeminiModels = normalizeModelOptions(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
-	o.ImageModels = normalizeModelOptions(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
-	o.VeoModels = normalizeModelOptions(o.VeoModels, o.DefaultVeoModel, "veo-3.1-generate-001")
-	o.DefaultGeminiModel = normalizeSelectedModel(o.DefaultGeminiModel, o.GeminiModels)
-	o.DefaultImageModel = normalizeSelectedModel(o.DefaultImageModel, o.ImageModels)
-	o.DefaultVeoModel = normalizeSelectedModel(o.DefaultVeoModel, o.VeoModels)
-}
-
-// normalizeModelOptions normalizes available model options.
-func normalizeModelOptions(values []string, preferred, fallback string) []string {
-	seen := make(map[string]bool, len(values)+1)
-	result := make([]string, 0, len(values)+1)
-	if preferred = strings.TrimSpace(preferred); preferred != "" {
-		result = append(result, preferred)
-		seen[preferred] = true
-	}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" && !seen[value] {
-			result = append(result, value)
-			seen[value] = true
-		}
-	}
-	if len(result) == 0 {
-		result = append(result, fallback)
-	}
-	return result
-}
-
-// normalizeSelectedModel normalizes the selected model value.
-func normalizeSelectedModel(value string, values []string) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	if len(values) > 0 {
-		return values[0]
-	}
-	return ""
+	o.GeminiModels = domain.NormalizeModelList(o.GeminiModels, o.DefaultGeminiModel, "gemini-3.5-flash")
+	o.ImageModels = domain.NormalizeModelList(o.ImageModels, o.DefaultImageModel, "gemini-3-pro-image-preview")
+	o.VeoModels = domain.NormalizeModelList(o.VeoModels, o.DefaultVeoModel, "veo-3.1-generate-001")
+	o.DefaultGeminiModel = domain.NormalizeDefaultModel(o.DefaultGeminiModel, o.GeminiModels, "")
+	o.DefaultImageModel = domain.NormalizeDefaultModel(o.DefaultImageModel, o.ImageModels, "")
+	o.DefaultVeoModel = domain.NormalizeDefaultModel(o.DefaultVeoModel, o.VeoModels, "")
 }
 
 // firstModelOptions returns the first matching model options.

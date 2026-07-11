@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // veoSupportedDurationsSec は Veo image_to_video が受け付けるカット尺（秒）の昇順リストです。
@@ -76,7 +78,7 @@ func splitCutBySupportedDurations(cut orchestrator.Cut) []orchestrator.Cut {
 
 	lines := splitDialogueLines(cut.Dialogue)
 	for i := range subCuts {
-		subCuts[i].Dialogue = dialogueForSubCut(lines, i, len(subCuts))
+		subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
 	}
 	return subCuts
 }
@@ -114,21 +116,4 @@ func splitDialogueLines(dialogue string) []string {
 		}
 	}
 	return lines
-}
-
-// dialogueForSubCut は歌詞行をサブカット数で均等配分し、pos 番目の担当行を返します。
-func dialogueForSubCut(lines []string, pos, total int) string {
-	if len(lines) == 0 {
-		return ""
-	}
-	if total <= 1 {
-		return strings.Join(lines, "\n")
-	}
-	n := len(lines)
-	start := pos * n / total
-	end := (pos + 1) * n / total
-	if start >= end {
-		return ""
-	}
-	return strings.Join(lines[start:end], "\n")
 }

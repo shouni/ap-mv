@@ -37,6 +37,8 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 
 動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成済み状態を含む `video_music_meta.json` または Recipe を再投入した場合、`status=generated` のカットをスキップし、保持済みの `video_id` を次カットの `PreviousVideoID` に引き継げます。これにより、生成済みメタデータを起点に途中カットから再開しやすい回復性（Resilience）を備えています。
 
+`VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/worker/pipeline/pipeline.go` の `defaultFilters` は `video_gen_continuation` を Video Gen → Publishing のみのフィルター列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`internal/worker/filter/veo_cut_utils.go` の `veoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
+
 ### ⛓ Cloud Tasks Worker Execution
 
 Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks/generate` が OIDC 検証後に pipeline を実行します。現在の実処理は `go-veo-orchestrator/workflow` に集約しており、Script / Cut Keyframe / Video / Publish の各 runner を worker 実行内で順に呼び出します。`status=generated` のカットは `VideoTimelineRunner` 側でスキップされ、保持済みの `video_id` を次カットの `PreviousVideoID` として引き継ぎます。
@@ -65,10 +67,10 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | **0. Recipe Load** | `0_recipe_load.go` | 履歴詳細の動画生成フォームや M2M（`POST /web/mv-from-keyframe-video-recipe`）で指定された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
 | **1. Scripting** | `1_scripting.go` | `/web/video-recipe-create` の videoレシピ作成フローで `Workflows.Script.Run` を呼び、Character、MusicRecipe GCS URL / JSON、Visual Mode 的プロンプトから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
 | **2. Cut Keyframe Gen** | `2_cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。保存後に `applyLyricsToVideoRecipeCuts` を実行し、`music_recipe.lyrics.lyrics` をセクション単位で分解して各カットの `dialogue` フィールドへ割り当てます。 |
-| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。 |
+| **3. Video Gen (Veo)** | `3_video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoID`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。`VEO_USE_PREVIOUS_VIDEO=true` の場合の挙動は上記の Resumable Video Chain 節を参照してください。 |
 | **4. Publishing** | `4_publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 | **5. Regen Cut Keyframe** | `5_regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成・編集します。`EditPrompt` が指定されている場合は「編集モード」となり、既存の `keyframe_reference` を編集元画像として `CutKeyframe.EditAndSave`（内部的には `gemini-image-kit` の `GenerateSingleImage` に既存画像を入力として渡す会話型編集、通常生成と同じ `IMAGE_MODEL` を使用）を呼び、構図・ポーズ・背景を保ったまま指示内容だけを反映します（このとき `VisualAnchorOverride` は無視されます）。`EditPrompt` が空の場合は「フル再生成モード」で、`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替えたうえで `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、どちらのモードでもこの 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）を更新して `Publish.Run` で metadata を上書き保存します。 |
-
+| **6. Zip Upload** | `6_zip_upload.go` | 生成済みキーフレーム、`inputs.txt`、`subtitles.ass`（歌詞がある場合）を ZIP にまとめ `{outputPath}keyframes.zip` へストリーミングアップロードします。`regenerate_cut_keyframe` コマンドでは `OverwriteKeyframe=true` のときのみ実行し、`regenerate_cut_keyframe` / `regenerate_zip` コマンドでは元ジョブの出力パスを `RecipeURL` から逆算して上書きします。 |
 | **7. Section Select** | `7_section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。Veo の image_to_video はカット尺 4/6/8 秒のみサポートするため、8 秒超のカット（キーフレームのみ生成したレシピはセクション尺のままのことがある）は同じキーフレームを引き継いだサブカット列へ分割し、各尺をサポート値に丸め、歌詞は行単位でサブカットへ均等配分します（`CutIndex` は 1 から振り直し。この尺の正規化は Video Gen フィルタでフルMVフローにも適用され、生成済みカットは変更されません）。さらにショートは YouTube ショートの上限 60 秒に収まるよう超過カットを切り詰めます。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
 
 ### Recipe / Audio GCS Inputs
@@ -128,6 +130,10 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
+| `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
+| `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoID` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
+| `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成の同時実行数（`errgroup.SetLimit`） |
+| `KEYFRAME_RATE_INTERVAL` | `60s` | キーフレーム生成のレート制御間隔（`golang.org/x/time/rate`） |
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
@@ -176,21 +182,11 @@ ap-mv/
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
     ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias
     ├── repository/         # GCS 上の video_music_meta.json を一覧・詳細取得・削除する履歴 repository
-    ├── server/
-    │   ├── handlers/       # Web UI / task handler / CSRF context
-    │   ├── router.go       # chi ルーティング、OAuth、CSRF、Cloud Tasks OIDC
-    │   └── server.go       # BuildContainer から HTTP server 起動と graceful shutdown
+    ├── server/              # chi ルーティング、OAuth、CSRF、Cloud Tasks OIDC、HTTP server起動
+    │   └── handlers/       # Web UI / task handler / CSRF context
     └── worker/
         ├── pipeline/       # Task command から filter chain を実行
-        └── filter/         # go-veo-orchestrator/workflow runner を呼ぶ各処理フィルター
-            ├── filter.go   # 各フィルターが満たすべき共通インターフェースの定義
-            ├── recipe_converter.go # lyria.MusicRecipe と VideoRecipe の相互変換
-            ├── 0_recipe_load.go  # VideoRecipe / MusicRecipe JSON・GCS URI から Recipe を読み込み
-            ├── 1_scripting.go    # video_recipe_create 入力から VideoRecipe を生成
-            ├── 2_cut_gen.go      # 各カットの静止画キーフレームを高精度生成・歌詞割り当て
-            ├── 3_video_gen.go    # Veo APIへの数珠繋ぎ（Video-to-VideoID連鎖）動画生成
-            ├── 4_publishing.go   # video_music_meta.json のGCS保存
-            └── 5_regen_cut_keyframe.go # 指定カットのキーフレームのみ再生成・上書き保存
+        └── filter/         # go-veo-orchestrator/workflow runner を呼ぶ各処理フィルター（0〜7番、詳細は後述の Workflows 表を参照）
 
 ```
 

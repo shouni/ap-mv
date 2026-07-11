@@ -257,18 +257,19 @@ func (r *Runner) outputPath(task *domain.Task) string {
 	return strings.TrimRight(r.OutputBaseURI, "/") + "/" + task.JobID + "/"
 }
 
-// defaultFilters はタスクコマンドに応じた標準フィルター列を返します。
+// defaultFilters はタスクコマンドに応じた標準フィルター列を返します。各ケースがその
+// コマンドの完全なフィルター列を返すため、コマンドごとの違いは1箇所を見れば分かります。
 //
 // compose/video_recipe_create 系はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
-// video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
+// video_recipe_create/compose_to_keyframe はキーフレーム生成までで停止し、動画生成と公開は実行しません。
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
+// video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
+// enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool) []filter.Filter {
+	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo}
 	switch command {
 	case domain.CommandVideoGenContinuation:
-		return []filter.Filter{
-			filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
-			filter.PublishingFilter{},
-		}
+		return []filter.Filter{videoGen, filter.PublishingFilter{}}
 	case domain.CommandRegenerateCutKeyframe:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
@@ -284,27 +285,30 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.SectionSelectFilter{},
-			filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
+			videoGen,
+			filter.PublishingFilter{},
+		}
+	case domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
+		return []filter.Filter{
+			filter.ScriptingFilter{},
+			filter.CutKeyframeFilter{},
+			filter.ZipUploadFilter{},
+		}
+	case domain.CommandCompose:
+		return []filter.Filter{
+			filter.ScriptingFilter{},
+			filter.CutKeyframeFilter{},
+			filter.ZipUploadFilter{},
+			videoGen,
+			filter.PublishingFilter{},
+		}
+	default: // domain.CommandMVFromKeyframeVideoRecipe, domain.CommandGenerateFromRecipe
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
+			filter.CutKeyframeFilter{},
+			filter.ZipUploadFilter{},
+			videoGen,
 			filter.PublishingFilter{},
 		}
 	}
-	filters := []filter.Filter{}
-	switch command {
-	case domain.CommandCompose, domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
-		filters = append(filters, filter.ScriptingFilter{})
-	default:
-		filters = append(filters, filter.RecipeLoadFilter{})
-	}
-	filters = append(filters,
-		filter.CutKeyframeFilter{},
-		filter.ZipUploadFilter{},
-	)
-	if command == domain.CommandVideoRecipeCreate || command == domain.CommandComposeToKeyframe {
-		return filters
-	}
-	filters = append(filters,
-		filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
-		filter.PublishingFilter{},
-	)
-	return filters
 }

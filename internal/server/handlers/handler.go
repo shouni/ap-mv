@@ -1,20 +1,13 @@
 package handlers
 
 import (
-	"archive/zip"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -105,500 +98,11 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 	}, nil
 }
 
-// homeRecentJobs はホームに表示する直近ジョブ件数です。
-const homeRecentJobs = 10
-
-// Home renders the home page with the most recent jobs and the latest generated video.
-func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Home"}
-	if h.HistoryRepository != nil {
-		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to load recent history for home", "error", err)
-		} else {
-			data.HistoryItems = page.Items
-			data.LatestVideo = h.latestVideoForHome(r, page.Items)
-		}
-	}
-	h.renderPage(w, data, "index.html")
-}
-
-// latestVideoForHome は直近ジョブのうち最初に動画を持つジョブから、ホーム掲載用の
-// 再生情報を返します。見つからなければ nil を返します。
-func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistory) *HomeLatestVideo {
-	for _, item := range items {
-		if !item.Generated {
-			continue
-		}
-		detail, err := h.HistoryRepository.GetHistory(r.Context(), item.JobID)
-		if err != nil {
-			slog.WarnContext(r.Context(), "failed to load latest video for home",
-				"job_id", item.JobID,
-				"error", err,
-			)
-			return nil
-		}
-		for _, cut := range detail.Cuts {
-			if cut.VideoSignedURL != "" {
-				return &HomeLatestVideo{
-					JobID:     detail.JobID,
-					Title:     detail.Title,
-					VideoURL:  cut.VideoSignedURL,
-					PosterURL: cut.KeyframeURL,
-				}
-			}
-		}
-		// 最新の生成済みジョブに再生可能な動画がなければ、それ以上は遡らない
-		// （表示ごとに GetHistory を積み重ねない）。
-		return nil
-	}
-	return nil
-}
-
-// VideoRecipeCreateForm renders the video recipe creation form.
-func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, h.withModelOptions(PageData{
-		Title:     "Video Recipe Create",
-		CSRFToken: csrfTokenFromContext(r.Context()),
-	}), "compose.html")
-}
-
-// PostVideoRecipeCreate handles video recipe creation form submissions.
-func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	jobID, err := domain.NewJobID("video-recipe")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	task := &domain.Task{
-		JobID:       jobID,
-		Command:     domain.CommandVideoRecipeCreate,
-		AIModels:    h.aiModelsFromForm(r),
-		SourceURL:   firstNonEmptyFormValue(r, "music_recipe_url", "url"),
-		Text:        strings.TrimSpace(r.FormValue("text")),
-		ImageURL:    strings.TrimSpace(r.FormValue("image_url")),
-		CharacterID: h.characterIDFromForm(r),
-		VisualMode:  h.visualModeFromForm(r),
-		CreatedAt:   time.Now().UTC(),
-	}
-	h.enqueue(w, r, task)
-}
-
-func firstNonEmptyFormValue(r *http.Request, names ...string) string {
-	for _, name := range names {
-		if value := strings.TrimSpace(r.FormValue(name)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 // withModelOptions adds model and character selections to page data.
 func (h *Handler) withModelOptions(data PageData) PageData {
 	data = h.ModelOptions.applyToPageData(data)
 	data = h.CharacterOptions.applyToPageData(data)
 	return h.VisualOptions.applyToPageData(data)
-}
-
-// PostRecipe handles recipe submissions.
-// Web UI のフォーム画面は履歴詳細の動画生成フォームに統合されて廃止済みですが、
-// このエンドポイントは ap-mcp 等の M2M 呼び出し（JSON レスポンス）で使われ続けています。
-func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	var recipe *domain.MusicRecipe
-	var videoRecipe *domain.VideoRecipe
-	recipeJSON := strings.TrimSpace(r.FormValue("recipe_json"))
-	if recipeJSON != "" {
-		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
-		if err != nil {
-			http.Error(w, "invalid recipe json: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		recipe = parsedRecipe
-		videoRecipe = parsedVideoRecipe
-	}
-	jobID, err := domain.NewJobID("recipe")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	task := &domain.Task{
-		JobID:       jobID,
-		Command:     domain.CommandMVFromKeyframeVideoRecipe,
-		AIModels:    h.aiModelsFromForm(r),
-		RecipeURL:   strings.TrimSpace(r.FormValue("recipe_url")),
-		CharacterID: h.characterIDFromForm(r),
-		AudioURL:    strings.TrimSpace(r.FormValue("audio_url")),
-		Recipe:      recipe,
-		VideoRecipe: videoRecipe,
-		CreatedAt:   time.Now().UTC(),
-	}
-	h.enqueue(w, r, task)
-}
-
-// History renders the history page, or returns JSON when Accept: application/json is set.
-func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
-	if h.HistoryRepository == nil {
-		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
-		return
-	}
-	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if wantsJSON(r) {
-		writeJSON(w, http.StatusOK, page)
-		return
-	}
-	h.renderPage(w, PageData{
-		Title:        "History",
-		HistoryItems: page.Items,
-		PageMeta:     page.PageMeta,
-	}, "history.html")
-}
-
-// HistoryDetail renders a generated MV history detail page, or returns JSON when Accept: application/json is set.
-func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
-	if h.HistoryRepository == nil {
-		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
-		return
-	}
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get history detail",
-			"job_id", jobID,
-			"error", err,
-		)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if wantsJSON(r) {
-		writeJSON(w, http.StatusOK, history)
-		return
-	}
-	h.renderPage(w, h.withModelOptions(PageData{
-		Title:         "History Detail",
-		CSRFToken:     csrfTokenFromContext(r.Context()),
-		HistoryDetail: history,
-	}), "history_detail.html")
-}
-
-// DownloadKeyframes redirects to the pre-built keyframe zip in GCS.
-// Falls back to on-demand zip generation for jobs that predate the pipeline change.
-func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-
-	// Try to redirect to the pre-built zip uploaded by the pipeline.
-	// Continue to on-demand fallback even on signing error — intentional fail-soft.
-	signedURL, err := h.HistoryRepository.KeyframeZipSignedURL(r.Context(), jobID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "keyframe zip signed URL failed, falling back to on-demand generation", "job_id", jobID, "error", err)
-	}
-	if signedURL != "" {
-		http.Redirect(w, r, signedURL, http.StatusFound)
-		return
-	}
-
-	// Fall back: build zip on-demand for jobs without a pre-built zip.
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	hasKeyframes := false
-	for _, cut := range history.Cuts {
-		if strings.TrimSpace(cut.KeyframeReference) != "" {
-			hasKeyframes = true
-			break
-		}
-	}
-	if !hasKeyframes {
-		http.Error(w, "no keyframes available", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
-	zw := zip.NewWriter(w)
-	if err := h.HistoryRepository.DownloadKeyframes(r.Context(), jobID, func(name string, reader io.Reader) error {
-		fw, err := zw.Create(name)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to create zip entry", "job_id", jobID, "file", name, "error", err)
-			return err
-		}
-		if _, err := io.Copy(fw, reader); err != nil {
-			slog.ErrorContext(r.Context(), "failed to write zip entry", "job_id", jobID, "file", name, "error", err)
-			return err
-		}
-		return nil
-	}); err != nil {
-		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
-		return
-	}
-	if assContent := domain.GenerateASS(history.Cuts, domain.ASSColors{}); assContent != "" {
-		fw, err := zw.Create("lyrics.ass")
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to create ass zip entry", "job_id", jobID, "error", err)
-		} else if _, err := io.WriteString(fw, assContent); err != nil {
-			slog.ErrorContext(r.Context(), "failed to write ass zip entry", "job_id", jobID, "error", err)
-		}
-	}
-	if err := zw.Close(); err != nil {
-		slog.ErrorContext(r.Context(), "failed to finalize zip", "job_id", jobID, "error", err)
-	}
-}
-
-// findHistoryCutByIndex returns the cut matching cutIndex, or false if none matches.
-func findHistoryCutByIndex(cuts []domain.VideoHistoryCut, cutIndex int) (domain.VideoHistoryCut, bool) {
-	for _, cut := range cuts {
-		if cut.CutIndex == cutIndex {
-			return cut, true
-		}
-	}
-	return domain.VideoHistoryCut{}, false
-}
-
-// parseJobIDAndCutIndex reads and validates the jobID and cutIndex URL params shared by the
-// regenerate-keyframe form page and its submit handler.
-func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err error) {
-	jobID = strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err = domain.ValidateJobID(jobID); err != nil {
-		return "", 0, err
-	}
-	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
-	cutIndex, err = strconv.Atoi(cutIndexStr)
-	if err != nil || cutIndex < 1 {
-		return "", 0, errors.New("invalid cut_index")
-	}
-	return jobID, cutIndex, nil
-}
-
-// RegenerateCutKeyframeForm renders a dedicated page for configuring a single cut's
-// keyframe regeneration (prompt override, seed override, overwrite) before submitting it.
-func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Request) {
-	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get history detail for regenerate form",
-			"job_id", jobID,
-			"error", err,
-		)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
-	if !ok {
-		http.Error(w, "cut not found", http.StatusNotFound)
-		return
-	}
-	seedDefault := ""
-	if seed := h.CharacterOptions.seed(cut.CharacterID); seed != nil {
-		seedDefault = strconv.FormatInt(*seed, 10)
-	}
-	h.renderPage(w, PageData{
-		Title:                 "Regenerate Cut",
-		CSRFToken:             csrfTokenFromContext(r.Context()),
-		HistoryDetail:         history,
-		RegenerateCut:         cut,
-		RegenerateSeedDefault: seedDefault,
-	}, "regenerate_cut.html")
-}
-
-// PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
-func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
-	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
-		return
-	}
-	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
-	if !ok {
-		http.Error(w, "cut not found", http.StatusNotFound)
-		return
-	}
-	newJobID, err := domain.NewJobID("regen-keyframe")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	task := &domain.Task{
-		JobID:                newJobID,
-		Command:              domain.CommandRegenerateCutKeyframe,
-		RecipeURL:            history.StorageURI,
-		CutIndex:             &cutIndex,
-		OverwriteKeyframe:    r.FormValue("overwrite") == "on",
-		OriginalJobID:        jobID,
-		VisualAnchorOverride: strings.TrimSpace(r.FormValue("visual_anchor")),
-		EditPrompt:           strings.TrimSpace(r.FormValue("edit_prompt")),
-		CreatedAt:            time.Now().UTC(),
-	}
-	if seedStr := strings.TrimSpace(r.FormValue("seed")); seedStr != "" {
-		if strings.TrimSpace(cut.CharacterID) == "" {
-			http.Error(w, "cut has no character to apply a seed override to", http.StatusBadRequest)
-			return
-		}
-		seed, err := strconv.ParseInt(seedStr, 10, 64)
-		if err != nil {
-			http.Error(w, "invalid seed", http.StatusBadRequest)
-			return
-		}
-		if current := h.CharacterOptions.seed(cut.CharacterID); current == nil || *current != seed {
-			task.SeedOverride = &seed
-			task.SeedOverrideCharacterID = cut.CharacterID
-		}
-	}
-	h.enqueue(w, r, task)
-}
-
-// PostRegenerateZip enqueues a ZIP re-creation task for an existing job.
-// Optional form fields primary_color and secondary_color (CSS hex) override the default karaoke colors.
-func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
-		return
-	}
-	newJobID, err := domain.NewJobID("regen-zip")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	task := &domain.Task{
-		JobID:             newJobID,
-		Command:           domain.CommandRegenerateZip,
-		RecipeURL:         history.StorageURI,
-		ASSPrimaryColor:   strings.TrimSpace(r.FormValue("primary_color")),
-		ASSSecondaryColor: strings.TrimSpace(r.FormValue("secondary_color")),
-		OriginalJobID:     jobID,
-		CreatedAt:         time.Now().UTC(),
-	}
-	h.enqueue(w, r, task)
-}
-
-// PostGenerateVideoFromHistory は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
-// target=full で全カットのフルMV生成、target=<セクションインデックス> でそのセクションだけの
-// ショート動画生成になります。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
-// サーバー側で解決するため、フォーム入力は対象と Veo モデル・アスペクト比だけです。
-func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
-		return
-	}
-	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if strings.TrimSpace(history.StorageURI) == "" {
-		http.Error(w, "recipe storage URI is not available", http.StatusInternalServerError)
-		return
-	}
-
-	task := &domain.Task{
-		RecipeURL:      history.StorageURI,
-		VeoModel:       h.veoModelFromForm(r),
-		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
-		CreatedAt:      time.Now().UTC(),
-	}
-	target := strings.TrimSpace(r.FormValue("target"))
-	if target == "full" {
-		task.Command = domain.CommandMVFromKeyframeVideoRecipe
-		task.JobID, err = domain.NewJobID("mv")
-	} else {
-		if len(history.Sections) == 0 {
-			http.Error(w, "no sections available in this recipe", http.StatusBadRequest)
-			return
-		}
-		sectionIndex, convErr := strconv.Atoi(target)
-		if convErr != nil || sectionIndex < 0 || sectionIndex >= len(history.Sections) {
-			http.Error(w, "invalid target section", http.StatusBadRequest)
-			return
-		}
-		task.Command = domain.CommandShortVideoFromSection
-		task.SectionIndex = &sectionIndex
-		task.JobID, err = domain.NewJobID("short")
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.enqueue(w, r, task)
-}
-
-// DeleteHistory handles history deletion requests.
-func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
-	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if h.HistoryRepository != nil {
-		if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
 }
 
 func pageFromQuery(r *http.Request) int {
@@ -612,12 +116,12 @@ func pageFromQuery(r *http.Request) int {
 // enqueue validates and submits a task to the configured queue.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			writeError(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
@@ -636,6 +140,17 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 
 func wantsJSON(r *http.Request) bool {
 	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
+}
+
+// writeError writes an error response, using JSON when the caller requested it (mirroring
+// writeJSON's success-path content negotiation) so M2M/JSON callers (Accept: application/json)
+// reliably get a JSON error body instead of an HTML/plain-text one.
+func writeError(w http.ResponseWriter, r *http.Request, status int, message string) {
+	if wantsJSON(r) {
+		writeJSON(w, status, map[string]string{"error": message})
+		return
+	}
+	http.Error(w, message, status)
 }
 
 // renderPage renders a named HTML template.

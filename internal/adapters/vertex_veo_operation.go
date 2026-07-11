@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -51,8 +52,10 @@ func (r *VertexVeoRunner) waitOperation(ctx context.Context, operationName strin
 					return nil, fmt.Errorf("veo operation failed: %s", op.Error.message())
 				}
 				if op.Response == nil || (len(op.Response.Videos) == 0 && len(op.Response.GeneratedVideos) == 0) {
+					raiFiltered := op.Response != nil && op.Response.RaiMediaFilteredCount > 0
 					slog.WarnContext(ctx, "veo operation completed with no videos in response",
 						"operation", operationName,
+						"rai_filtered", raiFiltered,
 						"raw_response", truncateForLog(raw, rawResponseLogLimit),
 					)
 				}
@@ -101,9 +104,13 @@ func (r *VertexVeoRunner) postJSON(ctx context.Context, url string, body any, ou
 }
 
 // truncateForLog はログ出力用に本文を上限バイト数まで切り詰めます。
+// マルチバイト文字の途中で切断して無効なUTF-8を生成しないよう、文字境界まで後退します。
 func truncateForLog(body []byte, limit int) string {
 	if len(body) <= limit {
 		return string(body)
+	}
+	for limit > 0 && !utf8.RuneStart(body[limit]) {
+		limit--
 	}
 	return string(body[:limit]) + "...(truncated)"
 }

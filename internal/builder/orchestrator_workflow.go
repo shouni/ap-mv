@@ -27,7 +27,13 @@ func buildWorkflow(
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 ) (*orchestrator.Workflows, error) {
-	return buildWorkflowWithConfig(ctx, cfg, buildOrchestratorConfig(cfg), rio, httpClient, videoRunner, "", nil)
+	return buildWorkflowWithConfig(ctx, workflowBuildParams{
+		cfg:         cfg,
+		orchCfg:     buildOrchestratorConfig(cfg),
+		rio:         rio,
+		httpClient:  httpClient,
+		videoRunner: videoRunner,
+	})
 }
 
 // characterSeedOverride は、1回のワークフロー構築だけ特定キャラクターのシードを差し替える指定です。
@@ -38,24 +44,28 @@ type characterSeedOverride struct {
 	seed        int64
 }
 
+// workflowBuildParams bundles buildWorkflowWithConfig's inputs into one struct. Several
+// parameters share a type (two *config.Config-adjacent structs, two string-ish knobs), which
+// made the previous 7-argument positional signature easy to transpose by mistake at call sites.
+type workflowBuildParams struct {
+	cfg          *config.Config
+	orchCfg      orchestrator.Config
+	rio          *app.RemoteIO
+	httpClient   httpkit.HTTPClient
+	videoRunner  ports.VideoRunner
+	visualMode   string
+	seedOverride *characterSeedOverride
+}
+
 // buildWorkflowWithConfig builds orchestrator workflows from an explicit orchestrator config.
-// seedOverride が非nilの場合、対象キャラクターのシードのみをこの構築分に限って差し替えます。
-func buildWorkflowWithConfig(
-	ctx context.Context,
-	cfg *config.Config,
-	orchCfg orchestrator.Config,
-	rio *app.RemoteIO,
-	httpClient httpkit.HTTPClient,
-	videoRunner ports.VideoRunner,
-	visualMode string,
-	seedOverride *characterSeedOverride,
-) (*orchestrator.Workflows, error) {
-	if cfg == nil || rio == nil || rio.Reader == nil || rio.Writer == nil || httpClient == nil {
+// p.seedOverride が非nilの場合、対象キャラクターのシードのみをこの構築分に限って差し替えます。
+func buildWorkflowWithConfig(ctx context.Context, p workflowBuildParams) (*orchestrator.Workflows, error) {
+	if p.cfg == nil || p.rio == nil || p.rio.Reader == nil || p.rio.Writer == nil || p.httpClient == nil {
 		return nil, nil
 	}
-	orchCfg.ApplyDefaults()
+	p.orchCfg.ApplyDefaults()
 
-	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
+	aiClient, err := adapters.NewVertexAIAdapter(ctx, p.cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
 	}
@@ -63,14 +73,14 @@ func buildWorkflowWithConfig(
 	if err != nil {
 		return nil, err
 	}
-	if seedOverride != nil {
-		characters = withCharacterSeedOverride(characters, seedOverride.characterID, seedOverride.seed)
+	if p.seedOverride != nil {
+		characters = withCharacterSeedOverride(characters, p.seedOverride.characterID, p.seedOverride.seed)
 	}
 	scriptPromptBuilder, err := newScriptPrompt()
 	if err != nil {
 		return nil, err
 	}
-	scriptPromptBuilder.visualMode = visualMode
+	scriptPromptBuilder.visualMode = p.visualMode
 	scriptPromptBuilder.characters = characters
 	visualTemplates, err := assets.LoadVisualModeFiles()
 	if err != nil {
@@ -78,18 +88,18 @@ func buildWorkflowWithConfig(
 	}
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
-		Config:      orchCfg,
-		HTTPClient:  httpClient,
-		Reader:      workflowReader{delegate: rio.Reader},
-		Writer:      rio.Writer,
+		Config:      p.orchCfg,
+		HTTPClient:  p.httpClient,
+		Reader:      workflowReader{delegate: p.rio.Reader},
+		Writer:      p.rio.Writer,
 		AIClient:    aiClient,
-		VideoRunner: videoRunner,
+		VideoRunner: p.videoRunner,
 		PromptDeps: &workflow.PromptDeps{
 			Characters:   characters,
 			ScriptPrompt: scriptPromptBuilder,
 			KeyframePrompt: keyframePrompt{
-				styleSuffix:     orchCfg.StyleSuffix,
-				visualMode:      visualMode,
+				styleSuffix:     p.orchCfg.StyleSuffix,
+				visualMode:      p.visualMode,
 				visualTemplates: visualTemplates,
 			},
 		},

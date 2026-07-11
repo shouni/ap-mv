@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // SectionSelectFilter は、レシピを fc.Task.SectionIndex で指定されたセクションに属する
@@ -77,10 +79,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 func sectionTimeRange(sections []orchestrator.Section, index int) (float64, float64) {
 	sec := sections[index]
 	start := float64(sec.StartSeconds)
-	end := float64(sec.EndSeconds)
-	if end <= start && sec.Duration > 0 {
-		end = start + float64(sec.Duration)
-	}
+	end := float64(domain.SectionEndSeconds(sec.StartSeconds, sec.EndSeconds, sec.Duration))
 	return start, end
 }
 
