@@ -13,17 +13,28 @@ var veoSupportedDurationsSec = []float64{4, 6, 8}
 // veoMaxCutDurationSec は Veo image_to_video の最大カット尺（秒）です。
 const veoMaxCutDurationSec = 8.0
 
+// veoVideoExtensionDurationSec は Veo の video_extension（video-to-video、前カット動画を
+// PreviousVideoID として引き継ぐ生成）が受け付ける唯一のカット尺（秒）です。
+// image_to_video の {4,6,8} とは異なるサポート値のため、個別に定義しています。
+const veoVideoExtensionDurationSec = 7.0
+
 // expandCutsToSupportedDurations は各カットの尺を Veo のサポート値へ正規化します。
 // 8 秒を超えるカットは同じキーフレーム・プロンプトを引き継いだサブカット列へ分割し、
 // 歌詞（Dialogue）は行単位でサブカットへ均等配分します。分割後は CutIndex を 1 から振り直します。
+// usePreviousVideo が true の場合、先頭カット以降（PreviousVideoID を伴い video_extension で
+// 生成される想定のカット）は image_to_video 用の {4,6,8} ではなく 7 秒固定へ揃えます。
 // SectionSelectFilter（ショート動画）と VideoGenerationFilter（フルMV）の両方から使われます。
-func expandCutsToSupportedDurations(cuts []orchestrator.Cut) []orchestrator.Cut {
+func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
 	for _, cut := range cuts {
 		expanded = append(expanded, splitCutBySupportedDurations(cut)...)
 	}
 	for i := range expanded {
 		expanded[i].CutIndex = i + 1
+		if usePreviousVideo && i > 0 && !expanded[i].IsGenerated() {
+			expanded[i].DurationSec = veoVideoExtensionDurationSec
+			expanded[i].EndSec = expanded[i].StartSec + veoVideoExtensionDurationSec
+		}
 	}
 	return expanded
 }

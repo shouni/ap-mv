@@ -36,6 +36,8 @@ type Runner struct {
 	Notifier           ports.Notifier
 	Characters         *characterkit.Characters
 	HistoryRepository  ports.HistoryRepository
+	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
+	UsePreviousVideo bool
 }
 
 // New は VideoRunner と任意の orchestrator 設定から Runner を生成します。
@@ -120,7 +122,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	}
 	filters := r.Filters
 	if len(filters) == 0 {
-		filters = defaultFilters(task.Command, videoRunner)
+		filters = defaultFilters(task.Command, videoRunner, r.UsePreviousVideo)
 	}
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
@@ -260,11 +262,11 @@ func (r *Runner) outputPath(task *domain.Task) string {
 // compose/video_recipe_create 系はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
 // video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
-func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) []filter.Filter {
+func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool) []filter.Filter {
 	switch command {
 	case domain.CommandVideoGenContinuation:
 		return []filter.Filter{
-			filter.VideoGenerationFilter{Runner: videoRunner},
+			filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
 			filter.PublishingFilter{},
 		}
 	case domain.CommandRegenerateCutKeyframe:
@@ -282,7 +284,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.SectionSelectFilter{},
-			filter.VideoGenerationFilter{Runner: videoRunner},
+			filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
 			filter.PublishingFilter{},
 		}
 	}
@@ -301,7 +303,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner) [
 		return filters
 	}
 	filters = append(filters,
-		filter.VideoGenerationFilter{Runner: videoRunner},
+		filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo},
 		filter.PublishingFilter{},
 	)
 	return filters
