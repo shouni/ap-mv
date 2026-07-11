@@ -176,14 +176,6 @@ func toDomainRecipe(recipe *orchestrator.VideoRecipe) (*domain.MusicRecipe, erro
 	return domainRecipe, domain.NormalizeMusicRecipe(domainRecipe)
 }
 
-// seedValue returns zero for nil seeds or the seed value otherwise.
-func seedValue(seed *int64) int64 {
-	if seed == nil {
-		return 0
-	}
-	return *seed
-}
-
 // nonEmpty returns the first non-empty string.
 func nonEmpty(values ...string) string {
 	for _, value := range values {
