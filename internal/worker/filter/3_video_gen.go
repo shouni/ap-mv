@@ -15,6 +15,9 @@ import (
 // VideoGenerationFilter は、VideoRecipeから実際の動画を生成するパイプラインステップです。
 type VideoGenerationFilter struct {
 	Runner ports.VideoRunner
+	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
+	// true の場合、先頭カット以降は video_extension 用の尺（7秒固定）へ正規化します。
+	UsePreviousVideo bool
 }
 
 // Name returns the receiver name.
@@ -32,7 +35,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
 	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
-	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts)
+	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo)
 	if f.hasVideoRunner(fc) {
 		return f.runDirect(ctx, fc)
 	}

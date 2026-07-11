@@ -63,7 +63,7 @@ func (n *contextRecordingNotifier) NotifyTaskError(ctx context.Context, _ error,
 
 // TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
 func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil)
+	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil, false)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
@@ -82,7 +82,7 @@ func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
 
 // TestDefaultFiltersForLegacyComposeStillRunsFullPipeline verifies the legacy compose default filter chain.
 func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
-	filters := defaultFilters(domain.CommandCompose, nil)
+	filters := defaultFilters(domain.CommandCompose, nil, false)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {
@@ -104,7 +104,7 @@ func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
 // carried VideoRecipe already reflects scripting/keyframe/section-select/zip-upload results
 // from the original command that deferred it.
 func TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoGenContinuation, nil)
+	filters := defaultFilters(domain.CommandVideoGenContinuation, nil, false)
 
 	got := make([]string, 0, len(filters))
 	for _, flt := range filters {

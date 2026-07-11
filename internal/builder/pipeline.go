@@ -23,6 +23,7 @@ func buildPipeline(
 	videoRunner ports.VideoRunner,
 ) (*pipeline.Runner, error) {
 	runner := pipeline.New(videoRunner, buildOrchestratorConfig(cfg))
+	runner.UsePreviousVideo = cfg.VeoUsePreviousVideo
 	workflows, err := buildWorkflow(ctx, cfg, rio, httpClient, videoRunner)
 	if err != nil {
 		return nil, err
