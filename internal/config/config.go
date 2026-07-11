@@ -29,7 +29,6 @@ type Config struct {
 	ServiceAccountEmail    string        `env:"SERVICE_ACCOUNT_EMAIL"`
 	GCSBucket              string        `env:"GCS_MUSIC_BUCKET"`
 	SlackWebhookURL        string        `env:"SLACK_WEBHOOK_URL"`
-	GeminiAPIKey           string        `env:"GEMINI_API_KEY"`
 	GeminiModel            string        `env:"GEMINI_MODEL"`
 	ImageModel             string        `env:"IMAGE_MODEL"`
 	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash,gemini-3.1-pro-preview"`
