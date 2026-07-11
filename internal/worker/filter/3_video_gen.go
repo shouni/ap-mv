@@ -35,6 +35,9 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
 	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
+	// usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
+	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
+	// （詳細は expandCutsToSupportedDurations のコメント参照）。
 	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo)
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
@@ -90,6 +93,13 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				lastVideoID = cut.VideoID
 			}
 			continue
+		}
+		// expandCutsToSupportedDurations は、video_extension の累積尺がVeoの上限に達する
+		// 手前でチェーンをリセットし、そのカットを7秒固定ではなく{4,6,8}秒のいずれかに
+		// 揃える。7秒固定でない = チェーンリセット後の新規ベースカットなので、
+		// PreviousVideoIDを引き継がずに生成する。
+		if f.UsePreviousVideo && cut.DurationSec != veoVideoExtensionDurationSec {
+			lastVideoID = ""
 		}
 		if err := generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
 			return err
