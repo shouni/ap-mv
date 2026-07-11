@@ -9,8 +9,8 @@ require (
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/shouni/gcp-kit v1.3.0
-	github.com/shouni/gemini-image-kit v1.9.0
-	github.com/shouni/go-character-kit v1.0.3
+	github.com/shouni/gemini-image-kit v1.9.1
+	github.com/shouni/go-character-kit v1.0.6
 	github.com/shouni/go-gemini-client v1.9.1
 	github.com/shouni/go-http-kit v1.6.0
 	github.com/shouni/go-notifier v1.3.0
