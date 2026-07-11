@@ -51,6 +51,75 @@ func (r fakeHistoryRepository) KeyframeZipSignedURL(context.Context, string) (st
 
 func (r fakeHistoryRepository) InvalidateJob(string) {}
 
+// TestLatestVideoForHomePrefersFinalVideoSignedURL verifies that when a job's chain-finalize
+// result (FinalVideoSignedURL) is available, it is used instead of scanning cuts backward —
+// scanning the last cut alone would show only the last chain's fragment for jobs with more than
+// one continuation chain (see chain_finalize.go).
+func TestLatestVideoForHomePrefersFinalVideoSignedURL(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, &recordingQueue{}, ModelOptions{}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:               "job-1",
+				Title:               "Test MV",
+				Generated:           true,
+				FinalVideoSignedURL: "https://signed.example/final.mp4",
+			},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, KeyframeURL: "https://signed.example/cut1.png", VideoSignedURL: "https://signed.example/cut1.mp4"},
+				{CutIndex: 2, VideoSignedURL: "https://signed.example/cut2.mp4"},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	got := h.latestVideoForHome(req, []domain.VideoHistory{{JobID: "job-1", Generated: true}})
+
+	if got == nil {
+		t.Fatal("latestVideoForHome() = nil, want a result")
+	}
+	if got.VideoURL != "https://signed.example/final.mp4" {
+		t.Errorf("VideoURL = %q, want FinalVideoSignedURL", got.VideoURL)
+	}
+	if got.PosterURL != "https://signed.example/cut1.png" {
+		t.Errorf("PosterURL = %q, want first cut's keyframe", got.PosterURL)
+	}
+}
+
+// TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo verifies backward compatibility for
+// jobs generated before final_video_url existed: scanning cuts from the end still works.
+func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, &recordingQueue{}, ModelOptions{}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Test MV", Generated: true},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, VideoSignedURL: "https://signed.example/cut1.mp4"},
+				{CutIndex: 2, KeyframeURL: "https://signed.example/cut2.png", VideoSignedURL: "https://signed.example/cut2.mp4"},
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	got := h.latestVideoForHome(req, []domain.VideoHistory{{JobID: "job-1", Generated: true}})
+
+	if got == nil {
+		t.Fatal("latestVideoForHome() = nil, want a result")
+	}
+	if got.VideoURL != "https://signed.example/cut2.mp4" {
+		t.Errorf("VideoURL = %q, want last cut's VideoSignedURL", got.VideoURL)
+	}
+	if got.PosterURL != "https://signed.example/cut2.png" {
+		t.Errorf("PosterURL = %q, want last cut's keyframe", got.PosterURL)
+	}
+}
+
 // TestPostVideoRecipeCreateQueuesVideoRecipeCreate verifies that submissions queue video recipe creation.
 func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	queue := &recordingQueue{}
@@ -304,6 +373,57 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 		`src="https://signed.example/keyframe.png"`,
 		"blue stage",
 		"Cut 1",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "完成動画") {
+		t.Fatalf("HistoryDetail body unexpectedly rendered 完成動画 block without FinalVideoSignedURL: %s", body)
+	}
+}
+
+// TestHistoryDetailRendersFinalVideo verifies the history detail page shows the chain-finalize
+// result (final_video_url) as a prominent player, distinct from the per-cut cards.
+func TestHistoryDetailRendersFinalVideo(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:               "job-1",
+				Title:               "Test MV",
+				FinalVideoURL:       "gs://bucket/jobs/job-1/videos/final.mp4",
+				FinalVideoSignedURL: "https://signed.example/final.mp4",
+			},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, VideoSignedURL: "https://signed.example/cut1.mp4"},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"完成動画",
+		`src="https://signed.example/final.mp4"`,
+		// FinalVideoURL is rendered inside onclick="copyZipURI('...')", a JS string-literal
+		// context, so html/template escapes "/" as "\/" to defend against "</script>"-style
+		// breakout sequences. The escaping is correct/expected, so check for the escaped form.
+		`gs:\/\/bucket\/jobs\/job-1\/videos\/final.mp4`,
+		"カット別詳細",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("HistoryDetail body missing %q: %s", want, body)

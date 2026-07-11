@@ -266,6 +266,15 @@ func (r *VideoHistoryRepository) finalizeHistory(ctx context.Context, jobID stri
 			"error", err,
 		)
 	}
+	history.FinalVideoSignedURL = ""
+	if signedURL, err := r.signedURL(ctx, history.FinalVideoURL); err == nil {
+		history.FinalVideoSignedURL = signedURL
+	} else {
+		slog.WarnContext(ctx, "failed to generate final video signed URL",
+			"uri", history.FinalVideoURL,
+			"error", err,
+		)
+	}
 	history.KeyframeZipURI = r.keyframeZipURI(jobID)
 	return history
 }
@@ -372,15 +381,16 @@ func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []
 
 func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
 	history := domain.VideoHistory{
-		JobID:      jobID,
-		Title:      strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
-		Mood:       strings.TrimSpace(recipe.MusicRecipe.Mood),
-		Tempo:      recipe.MusicRecipe.Tempo,
-		CreatedAt:  formatHistoryCreatedAt(jobID),
-		VisualMode: strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
-		CutCount:   len(recipe.Cuts),
-		StorageURI: metadataURI,
-		Generated:  allCutsGenerated(recipe.Cuts),
+		JobID:         jobID,
+		Title:         strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
+		Mood:          strings.TrimSpace(recipe.MusicRecipe.Mood),
+		Tempo:         recipe.MusicRecipe.Tempo,
+		CreatedAt:     formatHistoryCreatedAt(jobID),
+		VisualMode:    strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
+		CutCount:      len(recipe.Cuts),
+		StorageURI:    metadataURI,
+		Generated:     allCutsGenerated(recipe.Cuts),
+		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
 	}
 	if history.Title == "" {
 		history.Title = jobID
