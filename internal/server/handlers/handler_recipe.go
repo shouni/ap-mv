@@ -42,7 +42,10 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 			)
 			return nil
 		}
-		for _, cut := range detail.Cuts {
+		// Veoのvideo-to-video継続生成では後続カットほど直前カットの内容を
+		// 含む累積動画になるため、末尾から探して最初に見つかった完成版を使う。
+		for i := len(detail.Cuts) - 1; i >= 0; i-- {
+			cut := detail.Cuts[i]
 			if cut.VideoSignedURL != "" {
 				return &HomeLatestVideo{
 					JobID:     detail.JobID,
