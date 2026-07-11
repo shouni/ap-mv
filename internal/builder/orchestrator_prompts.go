@@ -280,7 +280,11 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 		p.visualPrompt(),
 		strings.TrimSpace(p.styleSuffix),
 	), "\n")
-	systemPrompt := "Generate a single cinematic keyframe. No text, captions, speech bubbles, logos, or watermarks."
+	systemPrompt := "Generate a single cinematic keyframe depicting exactly one character. " +
+		"The reference image may show that same character from multiple angles (e.g. front/side/back " +
+		"turnaround) for identity and art-style reference only — treat it as one character's design " +
+		"sheet, not multiple people, and never depict more than one character or reproduce that " +
+		"multi-view layout in the output. No text, captions, speech bubbles, logos, or watermarks."
 	return userPrompt, systemPrompt
 }
 

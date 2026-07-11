@@ -136,6 +136,32 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 	}
 }
 
+// TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets is a regression test: character
+// reference images are often multi-pose turnaround sheets (front/side/back in one image), and
+// without an explicit instruction the image model sometimes reproduces that multi-figure layout
+// instead of treating it as one character's identity/style reference (observed in
+// video-recipe-20260711-212833-438dd22e71d3 cut 1: two near-identical Tsumugi figures generated
+// side by side). The system prompt must explicitly rule this out.
+func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T) {
+	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
+	cut := orchestrator.Cut{CutIndex: 1, VisualAnchor: "sitting in a train car"}
+
+	_, systemPrompt := p.BuildCut(cut, char)
+
+	for _, want := range []string{
+		"exactly one character",
+		"multiple angles",
+		"not multiple people",
+		"never depict more than one character",
+		"No text",
+	} {
+		if !strings.Contains(systemPrompt, want) {
+			t.Fatalf("BuildCut() systemPrompt missing %q:\n%s", want, systemPrompt)
+		}
+	}
+}
+
 // TestKeyframePromptBuildEditReinforcesCharacterAndStyle verifies that editing an existing
 // keyframe still carries the character identity and style suffix reinforcement that BuildCut
 // gives full generation, plus an explicit "keep everything else the same" instruction and a
