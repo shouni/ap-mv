@@ -106,7 +106,7 @@ func TestSplitCutBySupportedDurations(t *testing.T) {
 		Dialogue:          "line1\nline2\nline3\nline4\nline5",
 	}
 
-	subCuts := splitCutBySupportedDurations(cut)
+	subCuts := splitCutBySupportedDurations(cut, veoSupportedDurationsSec)
 
 	wantDurations := []float64{8, 8, 8, 8, 4}
 	if len(subCuts) != len(wantDurations) {
@@ -171,7 +171,7 @@ func TestSnapToSupportedDuration(t *testing.T) {
 		{in: 8, want: 8},
 	}
 	for _, tt := range tests {
-		if got := snapToSupportedDuration(tt.in); got != tt.want {
+		if got := snapToSupportedDuration(tt.in, veoSupportedDurationsSec); got != tt.want {
 			t.Errorf("snapToSupportedDuration(%v) = %v, want %v", tt.in, got, tt.want)
 		}
 	}

@@ -64,6 +64,14 @@ func (r *VertexVeoRunner) modelSupportsReferenceImages() bool {
 	return strings.HasPrefix(model, "veo-3") && !strings.Contains(model, "fast")
 }
 
+// SupportsReferenceImages は modelSupportsReferenceImages を公開し、ports.ReferenceImagesSupporter を
+// 満たします。呼び出し元（カットの尺をVeoのサポート値へ正規化する処理）が、このRunnerが
+// reference_to_video（referenceImages、8秒固定）を使うか image_to_video（{4,6,8}秒）を使うかを、
+// モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
+func (r *VertexVeoRunner) SupportsReferenceImages() bool {
+	return r.modelSupportsReferenceImages()
+}
+
 // validateVertexVeoRequest は Veo API アダプターに必要なリクエスト項目を検証します。
 func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 	if strings.TrimSpace(req.Prompt) == "" {
