@@ -76,7 +76,6 @@ type legacyVideoRecipeFields struct {
 	Lyrics      *LyricsDraft   `json:"lyrics,omitempty"`
 	AudioModel  string         `json:"audio_model,omitempty"`
 	ComposeMode string         `json:"compose_mode,omitempty"`
-	Seed        *int64         `json:"seed,omitempty"`
 }
 
 func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy legacyVideoRecipeFields) {
@@ -106,10 +105,6 @@ func applyLegacyVideoRecipeFields(recipe *VideoRecipe, legacy legacyVideoRecipeF
 	}
 	if recipe.MusicRecipe.ComposeMode == "" {
 		recipe.MusicRecipe.ComposeMode = legacy.ComposeMode
-	}
-	if recipe.MusicRecipe.Seed == nil && legacy.Seed != nil {
-		seed := *legacy.Seed
-		recipe.MusicRecipe.Seed = &seed
 	}
 }
 

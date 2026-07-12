@@ -19,7 +19,6 @@ func TestDecodeVideoRecipeJSONMapsLegacyFields(t *testing.T) {
 			"lyrics": "line one"
 		},
 		"compose_mode": "sparkle_rock",
-		"seed": 0,
 		"cuts": [
 			{"duration_sec": 8, "audio_cue": "verse", "visual_anchor": "rooftop"}
 		]
@@ -34,12 +33,6 @@ func TestDecodeVideoRecipeJSONMapsLegacyFields(t *testing.T) {
 	}
 	if recipe.MusicRecipe.Lyrics == nil || recipe.MusicRecipe.Lyrics.Lyrics != "line one" {
 		t.Fatalf("MusicRecipe.Lyrics = %#v", recipe.MusicRecipe.Lyrics)
-	}
-	if recipe.MusicRecipe.Seed == nil {
-		t.Fatal("MusicRecipe.Seed = nil, want explicit zero seed")
-	}
-	if *recipe.MusicRecipe.Seed != 0 {
-		t.Fatalf("MusicRecipe.Seed = %d, want 0", *recipe.MusicRecipe.Seed)
 	}
 	if recipe.Cuts[0].CutIndex != 1 {
 		t.Fatalf("CutIndex = %d, want 1", recipe.Cuts[0].CutIndex)

@@ -180,17 +180,13 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.png", outputPath, cutIndex)
 }
 
-// videoSeed は Veo 動画生成へ渡すシードを解決します。レシピ全体のシード
-// (MusicRecipe.Seed) が明示されていればそれを最優先し、無ければカットの
-// キャラクターに紐づくシード（キーフレーム画像生成と同じ値）へフォールバック
-// します。シード無し（0 = Veoリクエストから省略）の独立生成はチェーン起点
-// ごとに見た目が確率的にブレるため、少なくともキャラクター単位で固定した
-// シードを常に渡すことで、同一ジョブ内・ジョブ間のキャラ一貫性を高めます。
-// どちらも無い場合のみ 0 を返します（従来挙動）。
+// videoSeed は Veo 動画生成へ渡すシードを解決します。カットのキャラクターに紐づくシード
+// （キーフレーム画像生成と同じ値、go-veo-orchestrator@v1.6.0/keyframe/generator.go が
+// 常に char.Seed のみを使うのと揃えています）を返します。シード無し（0 = Veoリクエストから
+// 省略）の独立生成はチェーン起点ごとに見た目が確率的にブレるため、少なくともキャラクター
+// 単位で固定したシードを常に渡すことで、同一ジョブ内・ジョブ間のキャラ一貫性を高めます。
+// キャラクターにシードが無い場合のみ 0 を返します（従来挙動）。
 func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
-	if seed := fc.VideoRecipe.MusicRecipe.Seed; seed != nil {
-		return *seed
-	}
 	if fc.Characters != nil {
 		if char := fc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil && char.Seed != nil {
 			return *char.Seed
