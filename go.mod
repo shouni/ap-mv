@@ -10,7 +10,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/shouni/gcp-kit v1.3.0
 	github.com/shouni/gemini-image-kit v1.9.1
-	github.com/shouni/go-character-kit v1.0.7
+	github.com/shouni/go-character-kit v1.0.8
 	github.com/shouni/go-gemini-client v1.9.1
 	github.com/shouni/go-http-kit v1.6.0
 	github.com/shouni/go-notifier v1.3.0
