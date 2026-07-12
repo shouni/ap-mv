@@ -224,11 +224,11 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	// 8,7,7,8(reset),7: cumulative 8->15->22, then 22+7>24 so cut4 resets.
-	// veoContinuationMaxDurationSec=24 caps each chain at 2 video_extension continuations
-	// (not 3) to limit color-drift accumulation, so this chain is shorter than Veo's ~30s
-	// hard API limit would otherwise allow.
-	wantChainStart := []bool{true, false, false, true, false}
+	// 8,7,7,7,8(reset): cumulative 8->15->22->29, then 29+7>29 so cut5 resets.
+	// veoContinuationMaxDurationSec=29 caps each chain at 3 video_extension continuations,
+	// matching Veo's real ~30s API ceiling (color drift is handled separately by
+	// colorCorrectExtensionCut, not by resetting more often).
+	wantChainStart := []bool{true, false, false, false, true}
 	for i, want := range wantChainStart {
 		if recipe.Cuts[i].IsChainStart != want {
 			t.Errorf("cut[%d] IsChainStart = %v, want %v", i, recipe.Cuts[i].IsChainStart, want)
@@ -238,17 +238,17 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	if len(vp.extractCalls) != 1 {
 		t.Fatalf("ExtractLastFrame calls = %d, want 1 (only for the mid-job reset)", len(vp.extractCalls))
 	}
-	// cut3 is a video_extension continuation, so it goes through colorCorrectExtensionCut
+	// cut4 is a video_extension continuation, so it goes through colorCorrectExtensionCut
 	// before becoming lastVideoID — the reset's frame extraction must read from that
 	// corrected video, not the raw (possibly color-drifted) Veo output.
-	if vp.extractCalls[0].videoURI != "gs://bucket/jobs/job-1/videos/cut_03_color_corrected.mp4" {
+	if vp.extractCalls[0].videoURI != "gs://bucket/jobs/job-1/videos/cut_04_color_corrected.mp4" {
 		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's color-corrected video URL", vp.extractCalls[0].videoURI)
 	}
-	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_04.png" {
+	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_05.png" {
 		t.Errorf("ExtractLastFrame destURI = %q", vp.extractCalls[0].destURI)
 	}
-	if recipe.Cuts[3].KeyframeReference != vp.extractCalls[0].destURI {
-		t.Errorf("cut[3] KeyframeReference = %q, want extracted frame URI %q", recipe.Cuts[3].KeyframeReference, vp.extractCalls[0].destURI)
+	if recipe.Cuts[4].KeyframeReference != vp.extractCalls[0].destURI {
+		t.Errorf("cut[4] KeyframeReference = %q, want extracted frame URI %q", recipe.Cuts[4].KeyframeReference, vp.extractCalls[0].destURI)
 	}
 }
 
