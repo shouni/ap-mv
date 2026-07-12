@@ -136,6 +136,11 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
 			return err
 		}
+		if f.UsePreviousVideo && cut.DurationSec == veoVideoExtensionDurationSec {
+			if err := f.colorCorrectExtensionCut(ctx, fc, cut); err != nil {
+				return err
+			}
+		}
 		lastVideoID = cut.VideoID
 		// 継続タスクのエンキューに失敗した場合、Cloud Tasks は元のタスクを再試行する。
 		// 再試行時には直前の続きタスクのペイロード（このカットはまだ pending）から再開するため、
@@ -178,6 +183,47 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 		return ""
 	}
 	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.png", outputPath, cutIndex)
+}
+
+// colorCorrectExtensionCut は、video_extension（video-to-video継続）で生成された直後のカットの
+// 彩度を、キャラクター参照アートへ引き戻します。Veo の video_extension は直前の生成結果を
+// 条件入力として再利用するため、継続を重ねるたびに彩度がドリフトして蓄積します（実運用で確認済み:
+// 継続1回目で彩度+20%、以降のラウンドでもコントラストが単調に増加し続けた）。補正後の
+// VideoURL/VideoIDを次カットのPreviousVideoIDとして使うことで、ドリフトが次世代へ複利的に
+// 蓄積するのを防ぎます。VideoProcessor未設定、またはキャラクターに参照アートが無い場合は
+// 何もしません（従来通り無補正のまま）。
+func (f VideoGenerationFilter) colorCorrectExtensionCut(ctx context.Context, fc *Context, cut *orchestrator.Cut) error {
+	if f.VideoProcessor == nil || fc.Characters == nil {
+		return nil
+	}
+	char := fc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID))
+	if char == nil {
+		return nil
+	}
+	referenceURL := strings.TrimSpace(char.ReferenceURL)
+	if referenceURL == "" {
+		return nil
+	}
+	destURI := colorCorrectedVideoDestURI(fc.OutputPath, cut.CutIndex)
+	if destURI == "" {
+		return nil
+	}
+	correctedURI, err := f.VideoProcessor.ColorMatchSaturation(ctx, cut.VideoURL, referenceURL, destURI)
+	if err != nil {
+		return fmt.Errorf("color match saturation for cut %d: %w", cut.CutIndex, err)
+	}
+	cut.VideoURL = correctedURI
+	cut.VideoID = correctedURI
+	return nil
+}
+
+// colorCorrectedVideoDestURI は彩度補正済み動画の保存先URIを組み立てます。
+func colorCorrectedVideoDestURI(outputPath string, cutIndex int) string {
+	outputPath = strings.TrimRight(strings.TrimSpace(outputPath), "/")
+	if outputPath == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/videos/cut_%02d_color_corrected.mp4", outputPath, cutIndex)
 }
 
 // videoSeed は Veo 動画生成へ渡すシードを解決します。カットのキャラクターに紐づくシード

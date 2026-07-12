@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/shouni/go-remote-io/remoteio"
@@ -13,6 +15,10 @@ import (
 
 	"github.com/shouni/ap-mv/internal/ports"
 )
+
+// satavgPattern は ffmpeg の signalstats フィルタが metadata=print で出力する平均彩度
+// （0-255スケール）を抽出する正規表現です。
+var satavgPattern = regexp.MustCompile(`lavfi\.signalstats\.SATAVG=([0-9.]+)`)
 
 // defaultFFmpegBinary は PATH 上の ffmpeg 実行ファイル名です（Dockerfile で
 // /usr/local/bin/ffmpeg に静的リンクバイナリを配置しています）。
@@ -58,11 +64,16 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 	}
 	defer func() { _ = os.Remove(localFrame) }()
 
-	// -sseof -1: 末尾1秒手前からデコードを開始し、その中の最後の1フレームだけ書き出す。
-	// ファイル全体をデコードするより高速。PNG(可逆)で出力する。動画自体は既にH.264で
-	// 非可逆圧縮済みだが、ここでJPEG等の非可逆フォーマットへさらに変換すると、次チェーンの
+	// -sseof -3: 末尾3秒手前からデコードを開始する（ファイル全体をデコードするより高速）。
+	// -frames:v 1 だとシーク直後に最初にデコードされた1フレーム（末尾から最大3秒手前）を
+	// 書き出してしまい、本当の最終フレームとズレる。実ジョブで検証したところ、この
+	// ズレは末尾1秒手前の設定でもPSNR ~17dB相当の無視できない差になっていた。
+	// -update 1（image2 マルチプレクサの単一ファイル上書きモード）を使い、シーク後に
+	// デコードされる残り数秒分の最後の1フレーム（＝真の最終フレーム）が書き込まれた
+	// 状態で終わるようにする。PNG(可逆)で出力する。動画自体は既にH.264で非可逆圧縮
+	// 済みだが、ここでJPEG等の非可逆フォーマットへさらに変換すると、次チェーンの
 	// 参照画像として二重圧縮による劣化が加わってしまうため避ける。
-	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-sseof", "-1", "-i", localVideo, "-frames:v", "1", localFrame)
+	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-sseof", "-3", "-i", localVideo, "-update", "1", localFrame)
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		return "", fmt.Errorf("extract last frame: ffmpeg: %w: %s", runErr, out)
 	}
@@ -71,6 +82,98 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 		return "", fmt.Errorf("extract last frame: upload %s: %w", destURI, err)
 	}
 	return destURI, nil
+}
+
+// ColorMatchSaturation は videoURI の彩度を referenceImageURI の平均彩度に合わせて補正します。
+func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoURI, referenceImageURI, destURI string) (string, error) {
+	if p == nil || p.Reader == nil || p.Writer == nil {
+		return "", fmt.Errorf("ffmpeg video processor is not configured")
+	}
+	localVideo, err := p.downloadToTemp(ctx, videoURI, ".mp4")
+	if err != nil {
+		return "", fmt.Errorf("color match saturation: download video %s: %w", videoURI, err)
+	}
+	defer func() { _ = os.Remove(localVideo) }()
+
+	localRef, err := p.downloadToTemp(ctx, referenceImageURI, ".png")
+	if err != nil {
+		return "", fmt.Errorf("color match saturation: download reference %s: %w", referenceImageURI, err)
+	}
+	defer func() { _ = os.Remove(localRef) }()
+
+	refSat, err := p.averageSaturation(ctx, localRef)
+	if err != nil {
+		return "", fmt.Errorf("color match saturation: measure reference: %w", err)
+	}
+	// 動画は末尾付近をサンプリングする。video_extension は累積動画全体を毎回再生成するため、
+	// 先頭フレームは(その回では)まだ新規生成されていない古い区間で、ドリフトが蓄積していない
+	// ことがある。ドリフトは各世代で新しく生成される末尾側に現れるため、そこを測らないと
+	// 実際のドリフト量を過小評価してしまう（実測: 同じ動画で先頭フレームSATAVG=26.7に対し
+	// 末尾1秒手前は35.7、末尾側でしかドリフトを検出できなかった）。
+	videoSat, err := p.averageSaturationNearEnd(ctx, localVideo)
+	if err != nil {
+		return "", fmt.Errorf("color match saturation: measure video: %w", err)
+	}
+	if videoSat <= 0 {
+		return "", fmt.Errorf("color match saturation: video has no measurable saturation")
+	}
+
+	// 補正比率。基準画像1枚・動画1フレームだけのサンプルという粗い測定なので、
+	// 誤差や構図差による過補正で不自然な見た目にならないよう [0.7, 1.3] にクランプする。
+	ratio := refSat / videoSat
+	if ratio < 0.7 {
+		ratio = 0.7
+	} else if ratio > 1.3 {
+		ratio = 1.3
+	}
+
+	localOut, err := tempFilePath(".mp4")
+	if err != nil {
+		return "", fmt.Errorf("color match saturation: %w", err)
+	}
+	defer func() { _ = os.Remove(localOut) }()
+
+	// eq=saturation=<ratio> で全フレームの彩度を一律スケーリングする。音声は再エンコードせず
+	// そのままコピーする（映像フィルタのみが対象のため）。
+	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-i", localVideo,
+		"-vf", fmt.Sprintf("eq=saturation=%.4f", ratio),
+		"-c:v", "libx264", "-preset", "fast", "-crf", "18", "-c:a", "copy", localOut)
+	if out, runErr := cmd.CombinedOutput(); runErr != nil {
+		return "", fmt.Errorf("color match saturation: ffmpeg encode: %w: %s", runErr, out)
+	}
+
+	if err := p.uploadFromTemp(ctx, localOut, destURI, "video/mp4"); err != nil {
+		return "", fmt.Errorf("color match saturation: upload %s: %w", destURI, err)
+	}
+	return destURI, nil
+}
+
+// averageSaturation は ffmpeg の signalstats フィルタで、画像（またはシーク済み動画）の
+// 先頭フレームの平均彩度(SATAVG, 0-255スケール)を測定します。
+func (p *FFmpegVideoProcessor) averageSaturation(ctx context.Context, localPath string) (float64, error) {
+	return p.averageSaturationArgs(ctx, "-i", localPath, "-frames:v", "1", "-vf", "signalstats,metadata=print", "-f", "null", "-")
+}
+
+// averageSaturationNearEnd は動画の末尾1秒手前のフレームの平均彩度を測定します。
+func (p *FFmpegVideoProcessor) averageSaturationNearEnd(ctx context.Context, localVideo string) (float64, error) {
+	return p.averageSaturationArgs(ctx, "-sseof", "-1", "-i", localVideo, "-frames:v", "1", "-vf", "signalstats,metadata=print", "-f", "null", "-")
+}
+
+func (p *FFmpegVideoProcessor) averageSaturationArgs(ctx context.Context, args ...string) (float64, error) {
+	cmd := exec.CommandContext(ctx, p.binary(), args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, fmt.Errorf("ffmpeg signalstats: %w: %s", err, out)
+	}
+	match := satavgPattern.FindSubmatch(out)
+	if match == nil {
+		return 0, fmt.Errorf("SATAVG not found in ffmpeg signalstats output")
+	}
+	sat, err := strconv.ParseFloat(string(match[1]), 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse SATAVG %q: %w", match[1], err)
+	}
+	return sat, nil
 }
 
 // ConcatHardCut は videoURIs をハードカットで結合し destURI へアップロードします。
