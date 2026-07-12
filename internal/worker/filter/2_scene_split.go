@@ -20,8 +20,10 @@ type SceneSplitFilter struct {
 	UsePreviousVideo bool
 }
 
+// Name returns the receiver name.
 func (SceneSplitFilter) Name() string { return "scene_split" }
 
+// Execute runs the receiver processing step.
 func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
 	if fc == nil {
 		return fmt.Errorf("scene split requires recipe")
@@ -204,10 +206,10 @@ func sceneVisualAnchor(anchor string, index, total int) string {
 }
 
 func sceneBeatLabel(index, total int) string {
-	switch {
-	case index == 0:
+	switch index {
+	case 0:
 		return fmt.Sprintf("scene beat %d/%d: establish this section's emotion and motion", index+1, total)
-	case index == total-1:
+	case total - 1:
 		return fmt.Sprintf("scene beat %d/%d: resolve the section and prepare the next visual transition", index+1, total)
 	default:
 		return fmt.Sprintf("scene beat %d/%d: escalate the movement and emotional intensity", index+1, total)
@@ -215,10 +217,10 @@ func sceneBeatLabel(index, total int) string {
 }
 
 func sceneStage(index, total int) string {
-	switch {
-	case index == 0:
+	switch index {
+	case 0:
 		return fmt.Sprintf("Scene beat %d/%d: establishing keyframe, wider cinematic framing, clear environment, the protagonist's pose begins the motion.", index+1, total)
-	case index == total-1:
+	case total - 1:
 		return fmt.Sprintf("Scene beat %d/%d: transition keyframe, changed camera angle and lighting, the protagonist lands in a pose that can connect to the next section.", index+1, total)
 	default:
 		variants := []string{
