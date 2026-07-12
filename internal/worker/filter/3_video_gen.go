@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
+	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -131,7 +133,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				}
 			}
 		}
-		if err := generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
+		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
 			return err
 		}
 		lastVideoID = cut.VideoID
@@ -200,15 +202,17 @@ func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
 // generateCut runs a single cut through the video runner and updates its status, VideoID, and
 // VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoID
 // context (video-to-video continuation).
-func generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID string) error {
+func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID string) error {
+	referenceImages := buildReferenceImages(fc, *cut)
+	mode := videoGenModeFor(f.UsePreviousVideo, lastVideoID, referenceImages, runner)
 	res, err := runner.Run(ctx, ports.VideoGenerationRequest{
 		CutIndex:        cut.CutIndex,
-		Prompt:          videoPrompt(*cut),
+		Prompt:          videoPrompt(*cut, mode),
 		DurationSec:     cut.DurationSec,
 		Seed:            videoSeed(fc, cut),
 		PreviousVideoID: lastVideoID,
 		ImageReference:  cut.KeyframeReference,
-		ReferenceImages: buildReferenceImages(fc, *cut),
+		ReferenceImages: referenceImages,
 		AudioReference:  cut.AudioReference,
 	})
 	if err != nil {
@@ -293,16 +297,70 @@ func hasPendingCuts(recipe *orchestrator.VideoRecipe) bool {
 	return false
 }
 
-// videoPrompt builds the prompt used for video generation.
-func videoPrompt(cut orchestrator.Cut) string {
+// veoGenerationMode は、Veo へのリクエストが実際にどの生成機能で解釈されるかを表します。
+// 値は assets/prompts/video_gen/ 配下のプロンプトファイル名（拡張子なし）と一致します。
+type veoGenerationMode string
+
+const (
+	// veoModeImageToVideo はキーフレーム画像を image 入力とする image_to_video です。
+	veoModeImageToVideo veoGenerationMode = "image_to_video"
+	// veoModeReferenceToVideo は [キャラ立ち絵, キーフレーム] を referenceImages とする
+	// reference_to_video です（Veo 3系の非Fastモデルのみ、8秒固定）。
+	veoModeReferenceToVideo veoGenerationMode = "reference_to_video"
+	// veoModeVideoExtension は前カット動画を video 入力とする video_extension
+	// （video-to-video継続）です。このモードでは画像参照は一切送られません。
+	veoModeVideoExtension veoGenerationMode = "video_extension"
+)
+
+// videoGenGuidance は Veo 生成モード別のプロンプトガイダンスを保持します。
+// 埋め込みアセット（コンパイル時に存在が保証される）のため実行時の読み込み失敗は
+// 事実上起こらないが、万一欠けてもガイダンス無しで生成を続行する（テストで全モードの
+// 存在を検証しているため、欠落はCIで検出される）。
+var videoGenGuidance = sync.OnceValue(func() map[string]string {
+	prompts, err := assets.LoadVideoGenPrompts()
+	if err != nil {
+		return map[string]string{}
+	}
+	return prompts
+})
+
+// videoGenModeFor は、このカットのリクエストが Veo のどの生成機能で解釈されるかを判定します。
+// 分岐は adapters.VertexVeoRunner.buildGenerateBody と揃えています:
+// video 入力があれば画像参照は送られず video_extension、referenceImages が使えるなら
+// reference_to_video、それ以外は image_to_video。runner が ports.ReferenceImagesSupporter を
+// 実装しない場合（テストダブル等）は image_to_video 側へ倒します。
+func videoGenModeFor(usePreviousVideo bool, lastVideoID string, referenceImages []string, runner ports.VideoRunner) veoGenerationMode {
+	// adapters.previousVideoMedia は gs:// スキームの PreviousVideoID のみ video 入力にする。
+	if usePreviousVideo && strings.HasPrefix(strings.TrimSpace(lastVideoID), "gs://") {
+		return veoModeVideoExtension
+	}
+	if len(referenceImages) > 0 && referenceImagesSupported(runner) {
+		return veoModeReferenceToVideo
+	}
+	return veoModeImageToVideo
+}
+
+// videoPrompt builds the prompt used for video generation, appending the guidance that matches
+// how Veo will actually interpret the request (image_to_video / reference_to_video /
+// video_extension). 生成モードごとに正しい前提（開始フレームあり・参照画像あり・前クリップ
+// 継続）を伝えることで、存在しない入力への言及（例: video_extension で「参照画像に合わせろ」）を
+// 避けます。VisualAnchor と AudioCue が両方空の場合は従来通り空文字を返し、
+// validateVertexVeoRequest の「prompt is required」検証で壊れたレシピを検出できるままにします。
+func videoPrompt(cut orchestrator.Cut, mode veoGenerationMode) string {
 	anchor := strings.TrimSpace(cut.VisualAnchor)
 	cue := strings.TrimSpace(cut.AudioCue)
-	if cue == "" {
-		return anchor
+	if anchor == "" && cue == "" {
+		return ""
 	}
-	sync := "Synchronize motion and camera timing with audio cue: " + cue
-	if anchor == "" {
-		return sync
+	parts := make([]string, 0, 3)
+	if anchor != "" {
+		parts = append(parts, anchor)
 	}
-	return anchor + "\n" + sync
+	if cue != "" {
+		parts = append(parts, "Synchronize motion and camera timing with audio cue: "+cue)
+	}
+	if guidance := strings.TrimSpace(videoGenGuidance()[string(mode)]); guidance != "" {
+		parts = append(parts, guidance)
+	}
+	return strings.Join(parts, "\n")
 }

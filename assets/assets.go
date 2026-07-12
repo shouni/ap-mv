@@ -12,6 +12,7 @@ const (
 	// VideoRecipePromptDir は、VideoRecipe作成用プロンプトテンプレートの埋め込みパスです。
 	VideoRecipePromptDir = "prompts/video_recipe"
 	visualModePromptDir  = "prompts/visual_modes"
+	videoGenPromptDir    = "prompts/video_gen"
 )
 
 var (
@@ -31,6 +32,12 @@ var (
 	//go:embed prompts/visual_modes/*.md
 	visualModeFiles embed.FS
 
+	// videoGenPromptFiles は Veo 動画生成モード別のプロンプトガイダンスです。
+	// ファイル名（拡張子なし）が Veo の生成モード（image_to_video / reference_to_video /
+	// video_extension）に対応します。
+	//go:embed prompts/video_gen/*.md
+	videoGenPromptFiles embed.FS
+
 	// DefaultVisualMode represents the default visual mode template key.
 	DefaultVisualMode = "default"
 )
@@ -38,4 +45,10 @@ var (
 // LoadVisualModeFiles は埋め込まれた映像スタイル用プロンプトファイルを読み込みます。
 func LoadVisualModeFiles() (map[string]string, error) {
 	return resource.Load(visualModeFiles, visualModePromptDir, "")
+}
+
+// LoadVideoGenPrompts は埋め込まれた Veo 動画生成モード別プロンプトを読み込みます。
+// キーはファイル名（拡張子なし）: image_to_video / reference_to_video / video_extension。
+func LoadVideoGenPrompts() (map[string]string, error) {
+	return resource.Load(videoGenPromptFiles, videoGenPromptDir, "")
 }

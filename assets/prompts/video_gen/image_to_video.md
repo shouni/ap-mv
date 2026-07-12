@@ -1,0 +1,1 @@
+Animate the scene forward from the provided starting keyframe image. Depict exactly one character, keeping the appearance, outfit, and art style consistent with the starting frame throughout the clip. No text, captions, subtitles, lyrics, logos, or watermarks.
