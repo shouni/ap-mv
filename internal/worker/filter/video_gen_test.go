@@ -366,11 +366,15 @@ func TestVideoGenModeForMirrorsAdapterBranches(t *testing.T) {
 	}
 }
 
-// TestVideoSeedFallsBackToCharacterSeed verifies Veo generation receives the cut's character
-// seed when the recipe has no explicit seed, and the recipe-level seed wins when present.
-// Without any seed, independent chain-start generations drift in appearance (costume/eye color),
-// so the character seed used for keyframe image generation is reused as the video seed.
-func TestVideoSeedFallsBackToCharacterSeed(t *testing.T) {
+// TestVideoSeedUsesCharacterSeed verifies Veo generation always receives the cut's character
+// seed (the same value keyframe image generation uses, per go-veo-orchestrator's
+// keyframe.Generator), regardless of any legacy recipe-level seed that might still be present
+// on an already-decoded recipe. Without any seed, independent chain-start generations drift in
+// appearance (costume/eye color), so the character seed is reused as the video seed. Recipe-level
+// seed (MusicRecipe.Seed) is a removed legacy migration path (see domain.applyLegacyVideoRecipeFields)
+// that this filter deliberately no longer reads, since honoring it caused keyframe generation
+// (always character-seeded) and video generation to silently diverge on legacy-migrated recipes.
+func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	charSeed := int64(208222065)
 	characters := &characterkit.Characters{
 		ByID: map[string]*characterkit.Character{
@@ -378,12 +382,17 @@ func TestVideoSeedFallsBackToCharacterSeed(t *testing.T) {
 		},
 	}
 
+	recipeSeed := int64(777)
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
 			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
 		},
 	}
+	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
+	// in the MusicRecipe struct literal above. Setting it here simulates a recipe carrying a
+	// stale legacy seed value that must now be ignored in favor of the character seed.
+	recipe.MusicRecipe.Seed = &recipeSeed
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
 	runner := &seedCaptureRunner{}
 	flt := VideoGenerationFilter{Runner: runner}
@@ -397,33 +406,7 @@ func TestVideoSeedFallsBackToCharacterSeed(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if len(runner.seeds) != 1 || runner.seeds[0] != charSeed {
-		t.Errorf("seeds = %v, want [%d] (character seed fallback)", runner.seeds, charSeed)
-	}
-
-	// Recipe-level seed must take precedence over the character seed.
-	recipeSeed := int64(777)
-	recipe2 := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
-		},
-	}
-	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
-	// in the MusicRecipe struct literal above.
-	recipe2.MusicRecipe.Seed = &recipeSeed
-	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}
-	runner2 := &seedCaptureRunner{}
-	flt2 := VideoGenerationFilter{Runner: runner2}
-
-	if err := flt2.Execute(context.Background(), &Context{
-		Task:        task2,
-		VideoRecipe: recipe2,
-		Characters:  characters,
-	}); err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	if len(runner2.seeds) != 1 || runner2.seeds[0] != recipeSeed {
-		t.Errorf("seeds = %v, want [%d] (recipe seed takes precedence)", runner2.seeds, recipeSeed)
+		t.Errorf("seeds = %v, want [%d] (character seed, ignoring stale recipe-level seed)", runner.seeds, charSeed)
 	}
 }
 
