@@ -39,7 +39,7 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 
 `VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/worker/pipeline/pipeline.go` の `defaultFilters` は `video_gen_continuation` を Video Gen → Publishing のみのフィルター列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`internal/worker/filter/veo_cut_utils.go` の `veoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
 
-継続チェーンの累積尺が `veoContinuationMaxDurationSec`（29秒、`internal/worker/filter/veo_cut_utils.go`）に達する手前で、Veo の video_extension が「前の動画」として受け付けられる実際の上限（累積約30秒、超えると `code=3` で失敗）に触れる前に、自動的に新しいチェーンへリセットします。リセットされたカットは `PreviousVideoID` を使わない新規ベース（image_to_video または reference_to_video）として、直前チェーンの最終フレーム（`ExtractLastFrame` で抽出）を参照画像に差し替えて生成されます。image_to_video/reference_to_video は video_extension ほど滑らかな動きにならない（実測でフレーム間変化のばらつきが大きく、静止と急な動きが混ざる）ため、リセット頻度そのものはできるだけ抑え、彩度ドリフトへの対処は上記の彩度補正に任せる方針にしています。
+継続チェーンの累積尺が `veoContinuationMaxDurationSec`（24秒、`internal/worker/filter/veo_cut_utils.go`）に達する手前で、自動的に新しいチェーンへリセットします（Veo の video_extension が「前の動画」として受け付けられる実際の上限は累積約30秒で、超えると `code=3` で失敗するため、余裕を持って手前で切ります）。リセットされたカットは `PreviousVideoID` を使わない新規ベース（image_to_video または reference_to_video）として、直前チェーンの最終フレーム（`ExtractLastFrame` で抽出）を参照画像に差し替えて生成されます。
 
 ### ⛓ Cloud Tasks Worker Execution
 

@@ -33,17 +33,12 @@ const veoVideoExtensionDurationSec = 7.0
 // Veo の video_extension が「前の動画」として受け付けられる累積尺の実際の上限は30秒
 // （実運用で確認済み: 累積29秒(cut4)までの動画をPreviousVideoIDとして渡す継続生成は成功するが、
 // 累積36秒(cut5)の動画を渡すと "Video duration 36 seconds exceeds the maximum duration 30
-// seconds" (code=3) で失敗する）。この値はほぼその実上限（29秒）に合わせている。
-//
-// リセット直後のカットは image_to_video/reference_to_video（静止画からの生成）になり、
-// video_extension（本物のvideo-to-video継続）に比べて動きが「ほぼ静止→時々大きくジャンプ」
-// というかくついた見た目になりやすいことを実ジョブのフレーム差分で確認済み。そのため
-// リセット頻度そのものを増やしたくない。一方 video_extension は前回の生成結果を条件入力
-// として再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトする問題も
-// 実ジョブで確認しているが、そちらは colorCorrectExtensionCut（各世代の出力をシーン
-// キーフレームへ引き戻す彩度補正）で個別に対処済みなので、この上限を必要以上に
-// 低くしてリセット頻度を上げる必要はない。
-const veoContinuationMaxDurationSec = 29.0
+// seconds" (code=3) で失敗する）。しかし video_extension は前回の生成結果を条件入力として
+// 再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積する
+// （実ジョブで確認: 継続1回目で彩度+20%、以降のラウンドでもコントラストが単調に増加し続けた）。
+// そのためAPI上限の30秒ではなく、より低いこの値で早めにリセットし、1チェーンあたりの
+// 継続回数（＝ドリフトの蓄積量）を抑える。
+const veoContinuationMaxDurationSec = 24.0
 
 // expandCutsToSupportedDurations は各カットの尺を Veo のサポート値へ正規化します。
 // 8 秒を超えるカットは同じキーフレーム・プロンプトを引き継いだサブカット列へ分割し、
