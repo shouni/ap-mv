@@ -227,8 +227,21 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
                 <dd class="col-7 mb-1">{{printf "%.1f" $cut.DurationSec}} sec</dd>
                 {{end}}
                 {{if $cut.AudioCue}}
+                {{$audioCue := $cut.AudioCueParts}}
+                {{if and $audioCue.Vocal (not $cut.Dialogue)}}
+                <!-- Dialogue is the same lyric line with real newlines, so only show this
+                     AudioCue-derived Vocal text when Dialogue isn't already rendering it below. -->
+                <dt class="col-5 text-muted fw-normal">Vocal</dt>
+                <dd class="col-7 mb-1">{{$audioCue.Vocal}}</dd>
+                {{end}}
+                {{if $audioCue.Description}}
                 <dt class="col-5 text-muted fw-normal">Audio Cue</dt>
-                <dd class="col-7 mb-1">{{$cut.AudioCue}}</dd>
+                <dd class="col-7 mb-1">{{$audioCue.Description}}</dd>
+                {{end}}
+                {{if $audioCue.SceneBeat}}
+                <dt class="col-5 text-muted fw-normal">Scene Beat</dt>
+                <dd class="col-7 mb-1">{{$audioCue.SceneBeat}}</dd>
+                {{end}}
                 {{end}}
                 {{if $cut.VideoSignedURL}}
                 <dt class="col-5 text-muted fw-normal">Video</dt>

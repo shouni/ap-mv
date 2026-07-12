@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestVideoHistoryDetailSectionGroupsBucketsCutsBySection(t *testing.T) {
 	detail := VideoHistoryDetail{
@@ -58,5 +61,66 @@ func TestVideoHistoryDetailSectionGroupsReturnsNilWithoutSections(t *testing.T) 
 	}
 	if groups := detail.SectionGroups(); groups != nil {
 		t.Errorf("SectionGroups() = %+v, want nil", groups)
+	}
+}
+
+func TestVideoHistoryCutAudioCuePartsSplitsDescriptionVocalAndSceneBeat(t *testing.T) {
+	cut := VideoHistoryCut{
+		AudioCue: "Verse: Rhythmic guitar chug builds momentum. Vocal: '時刻表なんて 気にしなくていい / 風が導く方へ 踏み出す' / scene beat 1/2: establish this section's emotion and motion",
+	}
+	parts := cut.AudioCueParts()
+	if parts.Description != "Verse: Rhythmic guitar chug builds momentum." {
+		t.Errorf("Description = %q", parts.Description)
+	}
+	if parts.Vocal != "時刻表なんて 気にしなくていい / 風が導く方へ 踏み出す" {
+		t.Errorf("Vocal = %q", parts.Vocal)
+	}
+	if parts.SceneBeat != "scene beat 1/2: establish this section's emotion and motion" {
+		t.Errorf("SceneBeat = %q", parts.SceneBeat)
+	}
+}
+
+func TestVideoHistoryCutAudioCuePartsWithoutSceneBeat(t *testing.T) {
+	cut := VideoHistoryCut{
+		AudioCue: "Chorus: Anthemic chorus explosion, layered guitars and powerful drums. Vocal: 'さあ行こう 知らない街へ / 迷うことさえ 宝物にして'",
+	}
+	parts := cut.AudioCueParts()
+	if parts.Description != "Chorus: Anthemic chorus explosion, layered guitars and powerful drums." {
+		t.Errorf("Description = %q", parts.Description)
+	}
+	if parts.Vocal != "さあ行こう 知らない街へ / 迷うことさえ 宝物にして" {
+		t.Errorf("Vocal = %q", parts.Vocal)
+	}
+	if parts.SceneBeat != "" {
+		t.Errorf("SceneBeat = %q, want empty", parts.SceneBeat)
+	}
+}
+
+func TestVideoHistoryCutAudioCuePartsWithoutVocalMarkerKeepsFullTextAsDescription(t *testing.T) {
+	cut := VideoHistoryCut{AudioCue: "Instrumental build with no vocal line yet."}
+	parts := cut.AudioCueParts()
+	if parts.Description != "Instrumental build with no vocal line yet." {
+		t.Errorf("Description = %q", parts.Description)
+	}
+	if parts.Vocal != "" {
+		t.Errorf("Vocal = %q, want empty", parts.Vocal)
+	}
+}
+
+func TestVideoHistoryCutAudioCuePartsHandlesVocalBeginsPhrasing(t *testing.T) {
+	// Real recipe data uses varied phrasing ("Vocal begins:", not just "Vocal:") before the
+	// quoted lyric line; the parser must match on "Vocal" + a quote, not an exact "Vocal:" label.
+	cut := VideoHistoryCut{
+		AudioCue: "Verse: Clean arpeggiated electric guitar intro. Vocal begins: '思い出だけを 鞄に詰めて / 知らない駅で 降りてみよう'",
+	}
+	parts := cut.AudioCueParts()
+	if parts.Description != "Verse: Clean arpeggiated electric guitar intro." {
+		t.Errorf("Description = %q", parts.Description)
+	}
+	if parts.Vocal != "思い出だけを 鞄に詰めて / 知らない駅で 降りてみよう" {
+		t.Errorf("Vocal = %q", parts.Vocal)
+	}
+	if strings.Contains(parts.Description, "思い出だけを") {
+		t.Errorf("lyric text leaked into Description: %q", parts.Description)
 	}
 }

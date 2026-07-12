@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 // VideoHistory is the metadata shown in the generated MV history list.
 type VideoHistory struct {
 	JobID          string `json:"job_id"`
@@ -42,6 +44,59 @@ type VideoHistoryCut struct {
 	Status         string  `json:"status,omitempty"`
 	StartSec       float64 `json:"start_sec,omitempty"`
 	EndSec         float64 `json:"end_sec,omitempty"`
+}
+
+// AudioCueParts is the display-ready breakdown of an AudioCue string into its instrumental/
+// section description, the sung lyric line, and (when the cut was split into scene beats)
+// scene-beat guidance.
+type AudioCueParts struct {
+	Description string
+	Vocal       string
+	SceneBeat   string
+}
+
+// AudioCueParts splits AudioCue into its components for a more scannable history detail
+// display. AudioCue is free-form text: ScriptingFilter's LLM output describes the section
+// then quotes the sung line (phrasing varies — "Vocal:", "Vocal begins:", "Vocal continues:",
+// ...), and SceneSplitFilter (internal/worker/filter/2_scene_split.go's sceneAudioCue) appends
+// " / scene beat N/M: <guidance>" when a cut is split into sub-cuts. Rather than matching one
+// exact "Vocal:" label, this looks for "Vocal" followed by a quoted line, so any phrasing works.
+// Parsing is best-effort: text that doesn't match either marker stays in Description, so
+// nothing is silently dropped.
+//
+// Note: the quoted lyric is usually identical to VideoHistoryCut.Dialogue (the structured
+// per-cut lyric line assigned by applyLyricsToVideoRecipeCuts) — callers that already render
+// Dialogue should skip Vocal to avoid showing the same line twice.
+func (c VideoHistoryCut) AudioCueParts() AudioCueParts {
+	text := strings.TrimSpace(c.AudioCue)
+	var parts AudioCueParts
+	if before, after, ok := strings.Cut(text, " / scene beat "); ok {
+		parts.SceneBeat = "scene beat " + strings.TrimSpace(after)
+		text = strings.TrimSpace(before)
+	}
+	if vocalIdx := strings.Index(text, "Vocal"); vocalIdx >= 0 {
+		if quote, quoteStart := firstQuoteAt(text, vocalIdx); quoteStart >= 0 {
+			if closeOffset := strings.IndexByte(text[quoteStart+1:], quote); closeOffset >= 0 {
+				parts.Description = strings.TrimSpace(text[:vocalIdx])
+				parts.Vocal = text[quoteStart+1 : quoteStart+1+closeOffset]
+				return parts
+			}
+		}
+	}
+	parts.Description = text
+	return parts
+}
+
+// firstQuoteAt returns the byte and index of the first ' or " in text at or after start, or
+// (0, -1) if neither appears. Indexing at an ASCII quote byte is always a valid UTF-8 slice
+// boundary even when the surrounding text (e.g. lyrics) is non-ASCII.
+func firstQuoteAt(text string, start int) (byte, int) {
+	idx := strings.IndexAny(text[start:], "'\"")
+	if idx < 0 {
+		return 0, -1
+	}
+	pos := start + idx
+	return text[pos], pos
 }
 
 // VideoHistorySection is a display-ready song section entry for a generated MV history detail.
