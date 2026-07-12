@@ -27,10 +27,32 @@ Use the source recipe as the narrative seed, then convert it into a short music 
 If the source recipe includes lyrics, treat the lyrics as the primary emotional and narrative material.
 Every cut must be specific enough for both keyframe image generation and Veo video generation.
 
+## Scene Split Strategy
+
+Do not treat one music section as one video cut by default. A section is a musical container; split
+each section into multiple directed scene beats when its duration or emotional movement needs it.
+This is especially important because Veo video-to-video continuation cannot use more than about
+30 seconds of previous-video context, and long single-image sections create unnatural joins.
+
+- For each section, create 1 to 4 cuts depending on duration and musical change.
+- Keep each cut at a Veo-friendly duration. For image/reference-only generation, use 4, 6, or 8
+  seconds. For video-to-video continuation planning, use scene-block durations such as 8, 15, or
+  22 seconds so the downstream pipeline can turn them into 8s keyframe bases followed by 7s
+  continuation cuts.
+- If a section is long, split it into multiple balanced scene blocks instead of making one long cut.
+- Each cut inside the same section must have a distinct directorial purpose: change camera framing,
+  character pose, movement direction, lighting intensity, background detail, weather/particles, or
+  emotional peak.
+- Consecutive cuts should connect naturally: the end pose, gaze direction, camera motion, or visual
+  motif of one cut should lead into the next, while still producing a different keyframe.
+- Around 24 to 30 seconds of accumulated continuation, plan a natural reset beat: a new composition,
+  lighting shift, or section-aware establishing frame that can become a fresh keyframe.
+
 ## Dynamic Prompting Rules
 
 - Derive the timeline from the song's emotional progression, especially lyrics, repeated phrases, section changes, and musical peaks.
 - For each cut, make `visual_anchor` a concrete scene that can be drawn as a keyframe: subject, action, expression, camera framing, background, lighting, and motion cues.
+- When several cuts belong to the same section, make each `visual_anchor` visibly different. Do not repeat the same anchor with only minor wording changes.
 - Every `visual_anchor` must depict the single protagonist alone. Never introduce other people, crowds, band members, or background figures — downstream keyframe and video generation enforce exactly one character per cut, and an anchor describing multiple people will conflict with that constraint.
 - For each cut, make `audio_cue` describe the musical or lyrical moment: intro, verse, pre-chorus, chorus, drop, bridge, climax, silence, vocal phrase, beat accent, or instrumental change.
 - Let `audio_cue` and the lyric meaning influence the character's pose, facial expression, camera distance, weather, particles, light intensity, and movement direction.
@@ -83,9 +105,10 @@ Every cut must be specific enough for both keyframe image generation and Veo vid
 
 ## Rules
 
-- Create 2 to 5 cuts unless the source strongly requires a different count.
+- Create enough cuts to cover the musical sections as scene beats; 4 to 12 cuts is normal for a short MV, and longer source recipes may require more.
 - Put song-level metadata, lyrics, instruments, and section information inside `music_recipe`.
-- Use duration_sec values suitable for Veo.
+- Use Veo-friendly `duration_sec` values. Prefer 4, 6, or 8 seconds for ordinary image/reference cuts; use 15 or 22 seconds only when the cut is a video-to-video scene block.
+- Do not output a cut longer than 22 seconds. Split the section into balanced scene blocks instead.
 - Leave character_id empty unless the source clearly names an available character; the default character will be selected by the character definition.
 - Use audio_reference only when the source explicitly provides a GCS audio URI.
 - Make visual_anchor concrete enough for image generation and video generation.

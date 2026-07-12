@@ -269,6 +269,7 @@ func (r *Runner) outputPath(task *domain.Task) string {
 // enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
 func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool, videoProcessor ports.VideoProcessor) []filter.Filter {
 	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo, VideoProcessor: videoProcessor}
+	sceneSplit := filter.SceneSplitFilter{UsePreviousVideo: usePreviousVideo}
 	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
 	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
 	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: videoProcessor}
@@ -297,12 +298,14 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 	case domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
 		return []filter.Filter{
 			filter.ScriptingFilter{},
+			sceneSplit,
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 		}
 	case domain.CommandCompose:
 		return []filter.Filter{
 			filter.ScriptingFilter{},
+			sceneSplit,
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 			videoGen,
@@ -312,6 +315,7 @@ func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, u
 	default: // domain.CommandMVFromKeyframeVideoRecipe, domain.CommandGenerateFromRecipe
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
+			sceneSplit,
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 			videoGen,

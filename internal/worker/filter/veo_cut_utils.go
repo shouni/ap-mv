@@ -103,7 +103,7 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 			}
 			continue
 		}
-		isSectionStart := i > 0 && sectionAt[i] >= 0 && sectionAt[i] != sectionAt[i-1]
+		isSectionStart := expanded[i].IsSectionStart || (i > 0 && sectionAt[i] >= 0 && sectionAt[i] != sectionAt[i-1])
 		if isSectionStart {
 			cumulative = 0
 		}
@@ -197,6 +197,10 @@ func splitCutBySupportedDurations(cut orchestrator.Cut, allowedDurations []float
 			d = snapToSupportedDuration(remaining, allowedDurations)
 		}
 		sub := cut
+		if len(subCuts) > 0 {
+			sub.IsChainStart = false
+			sub.IsSectionStart = false
+		}
 		sub.StartSec = cut.StartSec + offset
 		sub.DurationSec = d
 		// Note: d が切り上げ方向へ丸められた場合、sub.EndSec は元の cut.EndSec を超過し、

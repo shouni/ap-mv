@@ -69,7 +69,7 @@ func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
 	for _, flt := range filters {
 		got = append(got, flt.Name())
 	}
-	want := []string{"scripting", "cut_keyframe_gen", "zip_upload"}
+	want := []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"}
 	if len(got) != len(want) {
 		t.Fatalf("filters = %v, want %v", got, want)
 	}
@@ -88,7 +88,7 @@ func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
 	for _, flt := range filters {
 		got = append(got, flt.Name())
 	}
-	want := []string{"scripting", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"}
+	want := []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"}
 	if len(got) != len(want) {
 		t.Fatalf("filters = %v, want %v", got, want)
 	}

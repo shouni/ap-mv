@@ -165,3 +165,27 @@ func TestExpandCutsToSupportedDurationsNoSectionsIsNoop(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandCutsToSupportedDurationsRespectsSceneSplitReset(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, StartSec: 0, DurationSec: 15, VisualAnchor: "scene 1", KeyframeReference: "gs://bucket/scene1.png"},
+		{CutIndex: 2, StartSec: 15, DurationSec: 15, VisualAnchor: "scene 2", KeyframeReference: "gs://bucket/scene2.png", IsSectionStart: true},
+		{CutIndex: 3, StartSec: 30, DurationSec: 22, VisualAnchor: "scene 3", KeyframeReference: "gs://bucket/scene3.png", IsSectionStart: true},
+	}
+
+	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+
+	wantDurations := []float64{8, 7, 8, 7, 8, 7, 7}
+	wantSectionStart := []bool{false, false, true, false, true, false, false}
+	if len(got) != len(wantDurations) {
+		t.Fatalf("cuts = %d, want %d", len(got), len(wantDurations))
+	}
+	for i := range got {
+		if got[i].DurationSec != wantDurations[i] {
+			t.Errorf("cut[%d].DurationSec = %v, want %v", i, got[i].DurationSec, wantDurations[i])
+		}
+		if got[i].IsSectionStart != wantSectionStart[i] {
+			t.Errorf("cut[%d].IsSectionStart = %v, want %v", i, got[i].IsSectionStart, wantSectionStart[i])
+		}
+	}
+}
