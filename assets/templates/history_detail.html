@@ -65,7 +65,7 @@
         <div class="card bg-body-tertiary border-0 mb-4">
             <div class="card-body">
                 <h2 class="h6 fw-bold mb-3">🎬 完成動画</h2>
-                <video class="w-100 rounded" style="max-height: 480px; background: #000;" controls preload="metadata">
+                <video class="w-100 rounded" style="max-height: 480px; background: #000; object-fit: contain; aspect-ratio: {{if eq .HistoryDetail.AspectRatio "9:16"}}9 / 16{{else}}16 / 9{{end}};" controls preload="metadata">
                     <source src="{{.HistoryDetail.FinalVideoSignedURL}}" type="video/mp4">
                 </video>
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
@@ -125,13 +125,13 @@
             <div class="col-md-6 col-xl-4">
                 <div class="card h-100 history-cut-card">
                     {{if .VideoSignedURL}}
-                    <video class="card-img-top history-keyframe" controls preload="metadata" {{if .KeyframeURL}}poster="{{.KeyframeURL}}"{{end}}>
+                    <video class="card-img-top history-keyframe{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" controls preload="metadata" {{if .KeyframeURL}}poster="{{.KeyframeURL}}"{{end}}>
                         <source src="{{.VideoSignedURL}}" type="video/mp4">
                     </video>
                     {{else if .KeyframeURL}}
-                    <img src="{{.KeyframeURL}}" class="card-img-top history-keyframe" alt="Cut {{.CutIndex}} keyframe" loading="lazy">
+                    <img src="{{.KeyframeURL}}" class="card-img-top history-keyframe{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" alt="Cut {{.CutIndex}} keyframe" loading="lazy">
                     {{else}}
-                    <div class="history-keyframe history-keyframe-empty d-flex align-items-center justify-content-center text-muted">
+                    <div class="history-keyframe history-keyframe-empty{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}} d-flex align-items-center justify-content-center text-muted">
                         No keyframe
                     </div>
                     {{end}}
