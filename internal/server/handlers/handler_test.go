@@ -480,10 +480,11 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	for _, want := range []string{
 		"完成動画",
 		`src="https://signed.example/final.mp4"`,
-		// FinalVideoURL is rendered inside onclick="copyZipURI('...')", a JS string-literal
-		// context, so html/template escapes "/" as "\/" to defend against "</script>"-style
-		// breakout sequences. The escaping is correct/expected, so check for the escaped form.
-		`gs:\/\/bucket\/jobs\/job-1\/videos\/final.mp4`,
+		"Copy MV Job ID",
+		// JobID is rendered inside onclick="copyToClipboard('...')", a JS string-literal
+		// context, so html/template would escape "/" as "\/" to defend against "</script>"-style
+		// breakout sequences; job-1 has no such characters so it renders unescaped here.
+		`copyToClipboard('job-1', this)`,
 		"カット別詳細",
 	} {
 		if !strings.Contains(body, want) {
