@@ -77,7 +77,9 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"regenerate_cut.html",
 		"queued.html",
 	} {
-		tmpl, err := template.ParseFS(
+		tmpl, err := template.New(name).Funcs(template.FuncMap{
+			"dict": templateDict,
+		}).ParseFS(
 			assets,
 			"templates/layout.html",
 			"templates/"+name,
@@ -99,6 +101,24 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		CharacterOptions: characterOptions,
 		VisualOptions:    selectedVisualOptions,
 	}, nil
+}
+
+// templateDict builds a map from alternating string-key/value pairs, letting templates pass
+// multiple named values into a {{template}} invocation (which otherwise accepts only one "."
+// pipeline value).
+func templateDict(pairs ...any) (map[string]any, error) {
+	if len(pairs)%2 != 0 {
+		return nil, fmt.Errorf("dict: odd number of arguments")
+	}
+	m := make(map[string]any, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		key, ok := pairs[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("dict: key %v is not a string", pairs[i])
+		}
+		m[key] = pairs[i+1]
+	}
+	return m, nil
 }
 
 // withModelOptions adds model and character selections to page data.

@@ -66,6 +66,58 @@ type VideoHistoryDetail struct {
 	Sections []VideoHistorySection `json:"sections,omitempty"`
 }
 
+// VideoHistorySectionGroup pairs a song section with the cuts whose StartSec falls inside its
+// time range, for section-grouped display on the history detail page (SceneSplitFilter can
+// expand a single section into many cuts, so a flat cut list is hard to scan).
+type VideoHistorySectionGroup struct {
+	// Section is the zero value for the trailing "unassigned" group (SectionIndex 0, empty
+	// Name), used for cuts whose StartSec doesn't fall within any known section.
+	Section VideoHistorySection
+	Cuts    []VideoHistoryCut
+}
+
+// SectionGroups buckets Cuts by which Sections time range their StartSec falls into, preserving
+// section order. Returns nil when there are no sections (e.g. jobs predating StartSec/Sections,
+// or short-video jobs), so callers should fall back to rendering Cuts as a flat list.
+func (d VideoHistoryDetail) SectionGroups() []VideoHistorySectionGroup {
+	if len(d.Sections) == 0 {
+		return nil
+	}
+	groups := make([]VideoHistorySectionGroup, len(d.Sections))
+	for i, sec := range d.Sections {
+		groups[i].Section = sec
+	}
+	var unassigned []VideoHistoryCut
+	for _, cut := range d.Cuts {
+		idx := sectionIndexForCutStart(d.Sections, cut.StartSec)
+		if idx < 0 {
+			unassigned = append(unassigned, cut)
+			continue
+		}
+		groups[idx].Cuts = append(groups[idx].Cuts, cut)
+	}
+	if len(unassigned) > 0 {
+		groups = append(groups, VideoHistorySectionGroup{Cuts: unassigned})
+	}
+	return groups
+}
+
+// sectionIndexForCutStart returns the index of the section whose StartSeconds is the largest
+// value still <= startSec, mirroring internal/worker/filter's sectionIndexForStartSec so a cut
+// lands in the right section even with the small StartSec/EndSeconds rounding gaps duration
+// normalization can introduce. Returns -1 when startSec is before every section's start.
+func sectionIndexForCutStart(sections []VideoHistorySection, startSec float64) int {
+	bestIndex := -1
+	bestStart := -1
+	for i, s := range sections {
+		if float64(s.StartSeconds) <= startSec && s.StartSeconds >= bestStart {
+			bestIndex = i
+			bestStart = s.StartSeconds
+		}
+	}
+	return bestIndex
+}
+
 // PageMeta contains pagination metadata for history list views.
 type PageMeta struct {
 	Page       int  `json:"page"`
