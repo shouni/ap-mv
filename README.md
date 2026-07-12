@@ -31,13 +31,15 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 * **Seed-Based Determinism**: キャラクター固有 Seed 値の完全管理による再現性の担保。
 * **Keyframe Anchor (Image-to-Video)**: `gemini-image-kit` を応用。キャラクター Seed と参照画像から、ブレのない静止画キーフレームを高精度生成し、Veo へ Image-to-Video 入力として渡します。キャラ立ち絵は `referenceImages`（優先）、キーフレームは `image` としてそれぞれ Veo API にセットされます。
 * **Audio-Driven Prompting**: Music Recipe の `audio_cue`（例: `synchronized with the heavy bass drop at 0:10`）を Veo 用プロンプトへ自動インジェクション。
-* **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoID` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。
+* **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoID` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。Veo の video_extension は前回の生成結果を条件入力として再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積するため（実運用で確認済み）、各世代の出力をそのカットのシーン用キーフレーム画像へ彩度補正で引き戻し（`internal/worker/filter/3_video_gen.go` の `colorCorrectExtensionCut`）、補正後の動画を次カットの `PreviousVideoID` として連鎖させます。
 
 ### 🔁 Resumable Video Chain (レジューム機能)
 
 動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成済み状態を含む `video_music_meta.json` または Recipe を再投入した場合、`status=generated` のカットをスキップし、保持済みの `video_id` を次カットの `PreviousVideoID` に引き継げます。これにより、生成済みメタデータを起点に途中カットから再開しやすい回復性（Resilience）を備えています。
 
 `VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/worker/pipeline/pipeline.go` の `defaultFilters` は `video_gen_continuation` を Video Gen → Publishing のみのフィルター列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`internal/worker/filter/veo_cut_utils.go` の `veoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
+
+継続チェーンの累積尺が `veoContinuationMaxDurationSec`（29秒、`internal/worker/filter/veo_cut_utils.go`）に達する手前で、Veo の video_extension が「前の動画」として受け付けられる実際の上限（累積約30秒、超えると `code=3` で失敗）に触れる前に、自動的に新しいチェーンへリセットします。リセットされたカットは `PreviousVideoID` を使わない新規ベース（image_to_video または reference_to_video）として、直前チェーンの最終フレーム（`ExtractLastFrame` で抽出）を参照画像に差し替えて生成されます。image_to_video/reference_to_video は video_extension ほど滑らかな動きにならない（実測でフレーム間変化のばらつきが大きく、静止と急な動きが混ざる）ため、リセット頻度そのものはできるだけ抑え、彩度ドリフトへの対処は上記の彩度補正に任せる方針にしています。
 
 ### ⛓ Cloud Tasks Worker Execution
 
@@ -172,7 +174,7 @@ ap-mv/
 ├── main.go                 # エントリーポイント
 ├── Dockerfile              # Cloud Run 向け FROM scratch コンテナ定義
 ├── assets/                 # embed.FS で配布する静的・プロンプト資産
-│   ├── prompts/            # VideoRecipe 生成・Visual Mode 用プロンプトテンプレート
+│   ├── prompts/            # VideoRecipe 生成・Visual Mode・Veo動画生成モード別（image_to_video / reference_to_video / video_extension）のプロンプトテンプレート
 │   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
 └── internal/
     ├── adapters/           # Vertex AI Veo adapter
