@@ -99,9 +99,11 @@ func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *t
 		cuts[next].Status = orchestrator.CutStatusGenerated
 	}
 
-	// 8,7,7,7 (chain1, cumulative 8->15->22->29) then reset at cut5 (chain2: 8,7,7).
-	wantDurations := []float64{8, 7, 7, 7, 8, 7, 7}
-	wantChainStart := []bool{true, false, false, false, true, false, false}
+	// 8,7,7 (chain1, cumulative 8->15->22) then reset at cut4 (chain2: 8,7,7) then
+	// reset at cut7 (chain3: 8). veoContinuationMaxDurationSec=24 caps each chain at 2
+	// video_extension continuations (not 3) to limit color-drift accumulation.
+	wantDurations := []float64{8, 7, 7, 8, 7, 7, 8}
+	wantChainStart := []bool{true, false, false, true, false, false, true}
 	for i := range cuts {
 		if cuts[i].DurationSec != wantDurations[i] {
 			t.Errorf("cut[%d] duration = %v, want %v", i, cuts[i].DurationSec, wantDurations[i])

@@ -92,11 +92,13 @@ func TestChainFinalizeFilterNoopWithoutVideoProcessor(t *testing.T) {
 
 // recordingVideoProcessor is a fake ports.VideoProcessor that records calls for assertions.
 type recordingVideoProcessor struct {
-	extractCalls []extractCall
-	concatCalls  []concatCall
+	extractCalls    []extractCall
+	concatCalls     []concatCall
+	colorMatchCalls []colorMatchCall
 
-	extractResult string
-	concatResult  string
+	extractResult    string
+	concatResult     string
+	colorMatchResult string
 }
 
 type extractCall struct {
@@ -107,6 +109,12 @@ type extractCall struct {
 type concatCall struct {
 	videoURIs []string
 	destURI   string
+}
+
+type colorMatchCall struct {
+	videoURI          string
+	referenceImageURI string
+	destURI           string
 }
 
 func (p *recordingVideoProcessor) ExtractLastFrame(_ context.Context, videoURI, destURI string) (string, error) {
@@ -121,6 +129,14 @@ func (p *recordingVideoProcessor) ConcatHardCut(_ context.Context, videoURIs []s
 	p.concatCalls = append(p.concatCalls, concatCall{videoURIs: append([]string(nil), videoURIs...), destURI: destURI})
 	if p.concatResult != "" {
 		return p.concatResult, nil
+	}
+	return destURI, nil
+}
+
+func (p *recordingVideoProcessor) ColorMatchSaturation(_ context.Context, videoURI, referenceImageURI, destURI string) (string, error) {
+	p.colorMatchCalls = append(p.colorMatchCalls, colorMatchCall{videoURI: videoURI, referenceImageURI: referenceImageURI, destURI: destURI})
+	if p.colorMatchResult != "" {
+		return p.colorMatchResult, nil
 	}
 	return destURI, nil
 }
