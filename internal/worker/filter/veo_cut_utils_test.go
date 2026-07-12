@@ -16,7 +16,7 @@ func TestExpandCutsToSupportedDurationsUsePreviousVideo(t *testing.T) {
 		{CutIndex: 3, StartSec: 106, DurationSec: 8},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil)
+	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
 
 	if len(got) != 3 {
 		t.Fatalf("cuts = %d, want 3", len(got))
@@ -44,7 +44,7 @@ func TestExpandCutsToSupportedDurationsSkipsGeneratedCuts(t *testing.T) {
 		{CutIndex: 2, StartSec: 98, DurationSec: 8},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil)
+	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
 
 	if got[0].DurationSec != 8 {
 		t.Errorf("generated cut[0] duration = %v, want unchanged 8", got[0].DurationSec)
@@ -62,7 +62,7 @@ func TestExpandCutsToSupportedDurationsDisabled(t *testing.T) {
 		{CutIndex: 2, StartSec: 8, DurationSec: 8},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, false, nil)
+	got := expandCutsToSupportedDurations(cuts, false, nil, nil, false)
 
 	for i, cut := range got {
 		if cut.DurationSec != 8 {
@@ -92,7 +92,7 @@ func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *t
 	// VideoGenerationFilter.Execute does on every resumption), then "generate" the next
 	// pending cut, marking IsChainStart exactly as runDirect does.
 	for next := 0; next < len(cuts); next++ {
-		cuts = expandCutsToSupportedDurations(cuts, true, nil)
+		cuts = expandCutsToSupportedDurations(cuts, true, nil, nil, false)
 		if cuts[next].DurationSec != veoVideoExtensionDurationSec {
 			cuts[next].IsChainStart = true
 		}
@@ -128,7 +128,7 @@ func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) 
 		{CutIndex: 4, StartSec: 24, DurationSec: 8}, // still Chorus, continuation
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, sections)
+	got := expandCutsToSupportedDurations(cuts, true, sections, nil, false)
 
 	wantSectionStart := []bool{false, false, true, false}
 	for i := range got {
@@ -155,7 +155,7 @@ func TestExpandCutsToSupportedDurationsNoSectionsIsNoop(t *testing.T) {
 		{CutIndex: 2, StartSec: 8, DurationSec: 8},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil)
+	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
 
 	for i, cut := range got {
 		if cut.IsSectionStart {

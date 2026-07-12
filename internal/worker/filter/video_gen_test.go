@@ -353,6 +353,83 @@ func TestVideoSeedFallsBackToCharacterSeed(t *testing.T) {
 	}
 }
 
+// TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo reproduces job
+// short-20260711-225010-d12ddd0479ed's failure: a cut whose character has reference art was
+// submitted to Veo's reference_to_video (referenceImages) with a snapped image_to_video duration
+// (6s), which Vertex AI rejects with "Unsupported output video duration 6 seconds, supported
+// durations are [8] for feature reference_to_video". A cut naturally 6s long (from the recipe's
+// section timing) must instead be forced to Veo's only reference_to_video duration, 8s.
+func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T) {
+	characters := &characterkit.Characters{
+		ByID: map[string]*characterkit.Character{
+			"tsumugi": {ID: "tsumugi", ReferenceURL: "gs://bucket/characters/tsumugi.png"},
+		},
+	}
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 5, StartSec: 30, DurationSec: 6, VisualAnchor: "a", CharacterID: "tsumugi"},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	runner := &durationCaptureRunner{supportsReferenceImages: true}
+	flt := VideoGenerationFilter{Runner: runner}
+
+	if err := flt.Execute(context.Background(), &Context{
+		Task:        task,
+		VideoRecipe: recipe,
+		Characters:  characters,
+	}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner.durations) != 1 || runner.durations[0] != 8 {
+		t.Errorf("durations = %v, want [8] (reference_to_video only supports 8s)", runner.durations)
+	}
+
+	// A character without reference art, or a runner that doesn't support referenceImages,
+	// must keep the ordinary image_to_video snapping ({4,6,8}) and leave 6s untouched.
+	recipe2 := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 5, StartSec: 30, DurationSec: 6, VisualAnchor: "a"},
+		},
+	}
+	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}
+	runner2 := &durationCaptureRunner{supportsReferenceImages: true}
+	flt2 := VideoGenerationFilter{Runner: runner2}
+
+	if err := flt2.Execute(context.Background(), &Context{
+		Task:        task2,
+		VideoRecipe: recipe2,
+		Characters:  characters,
+	}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner2.durations) != 1 || runner2.durations[0] != 6 {
+		t.Errorf("durations = %v, want [6] (no reference art, image_to_video keeps 6s)", runner2.durations)
+	}
+}
+
+type durationCaptureRunner struct {
+	supportsReferenceImages bool
+	durations               []float64
+}
+
+// Run records each request's duration and returns a fixed successful response.
+func (r *durationCaptureRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
+	r.durations = append(r.durations, req.DurationSec)
+	return &ports.VideoResponse{
+		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
+		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		CutIndex: req.CutIndex,
+	}, nil
+}
+
+// SupportsReferenceImages implements ports.ReferenceImagesSupporter.
+func (r *durationCaptureRunner) SupportsReferenceImages() bool {
+	return r.supportsReferenceImages
+}
+
 type seedCaptureRunner struct {
 	seeds []int64
 }

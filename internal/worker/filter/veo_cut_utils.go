@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -11,6 +12,11 @@ import (
 
 // veoSupportedDurationsSec は Veo image_to_video が受け付けるカット尺（秒）の昇順リストです。
 var veoSupportedDurationsSec = []float64{4, 6, 8}
+
+// veoReferenceToVideoDurationsSec は Veo reference_to_video（referenceImages）が受け付ける
+// 唯一のカット尺（秒）です。image_to_video の {4,6,8} とは異なるサポート値のため、
+// 個別に定義しています。
+var veoReferenceToVideoDurationsSec = []float64{8}
 
 // veoMaxCutDurationSec は Veo image_to_video の最大カット尺（秒）です。
 const veoMaxCutDurationSec = 8.0
@@ -50,15 +56,21 @@ const veoContinuationMaxDurationSec = 30.0
 // 直前セクションの絵をそのまま引き継ぐべきではないため、そのカット自身に割り当てられた
 // キーフレーム参照をそのまま使う）。
 //
+// characters と referenceImagesSupported は、各カットが reference_to_video（referenceImages、
+// 8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかを判定するために使います。
+// 判定は 3_video_gen.go の buildReferenceImages と同じ規則（キャラクターに参照アートがある、
+// またはカットにキーフレーム参照がある）に、使用モデルが referenceImages に対応しているかを
+// 掛け合わせたものです（詳細は cutUsesReferenceImages）。
+//
 // SectionSelectFilter（ショート動画）と VideoGenerationFilter（フルMV）の両方から使われます。
-func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool, sections []orchestrator.Section) []orchestrator.Cut {
+func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool, sections []orchestrator.Section, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
 	// sectionAt[i] は expanded[i] の元になった分割前カットの所属セクション index です。
 	// 1つの長いカットが複数のサブカットへ分割されても、分割自体はセクション境界とは
 	// 見なしません（サブカット群はすべて同じ元カットのセクションを引き継ぎます）。
 	sectionAt := make([]int, 0, len(cuts))
 	for _, cut := range cuts {
-		subCuts := splitCutBySupportedDurations(cut)
+		subCuts := splitCutBySupportedDurations(cut, allowedDurationsFor(cut, characters, referenceImagesSupported))
 		sIdx := sectionIndexForStartSec(sections, cut.StartSec)
 		for range subCuts {
 			sectionAt = append(sectionAt, sIdx)
@@ -91,7 +103,8 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 		}
 		if cumulative == 0 || cumulative+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
 			// 新規チェーンの先頭（曲頭、セクション境界、またはリセット直後）。
-			// splitCutBySupportedDurations が既に割り当てた {4,6,8} 秒の尺をそのまま使う。
+			// splitCutBySupportedDurations が既に割り当てた尺（image_to_videoなら{4,6,8}秒、
+			// reference_to_videoなら8秒固定）をそのまま使う。
 			cumulative = expanded[i].DurationSec
 			if isSectionStart {
 				expanded[i].IsSectionStart = true
@@ -123,9 +136,40 @@ func sectionIndexForStartSec(sections []orchestrator.Section, startSec float64) 
 	return bestIndex
 }
 
+// allowedDurationsFor は、指定されたカットが reference_to_video（referenceImages）と
+// image_to_video のどちらで生成されるかに応じて、Veo がそのカットに対して受け付ける尺
+// （秒）の候補リストを返します。判定規則は 3_video_gen.go の buildReferenceImages と
+// 揃えています（referenceImagesSupported が false の場合、モデルが referenceImages に
+// 対応していないため image_to_video 用の {4,6,8} を返します）。
+func allowedDurationsFor(cut orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []float64 {
+	if cutUsesReferenceImages(cut, characters, referenceImagesSupported) {
+		return veoReferenceToVideoDurationsSec
+	}
+	return veoSupportedDurationsSec
+}
+
+// cutUsesReferenceImages は、このカットが Veo の referenceImages（reference_to_video）で
+// 生成されるかを返します。3_video_gen.go の buildReferenceImages と同じ規則（キャラクターに
+// 参照アートがある、またはカット自体にキーフレーム参照がある）を使い、それに加えて使用
+// モデルが referenceImages に対応しているかを掛け合わせます（Fast モデル等、非対応の場合は
+// image_to_video へフォールバックするため、常に image_to_video 用の {4,6,8} を使ってよい）。
+func cutUsesReferenceImages(cut orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) bool {
+	if !referenceImagesSupported {
+		return false
+	}
+	if characters != nil {
+		if char := characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil && strings.TrimSpace(char.ReferenceURL) != "" {
+			return true
+		}
+	}
+	return strings.TrimSpace(cut.KeyframeReference) != ""
+}
+
 // splitCutBySupportedDurations は1カットをサポート尺のサブカット列へ分割します。
 // 生成済みカットは実動画の尺と metadata がずれないよう、そのまま返します。
-func splitCutBySupportedDurations(cut orchestrator.Cut) []orchestrator.Cut {
+// allowedDurations は使用する尺の候補リストで、allowedDurationsFor が呼び出し元で
+// 事前に決定します（reference_to_videoなら{8}、image_to_videoなら{4,6,8}）。
+func splitCutBySupportedDurations(cut orchestrator.Cut, allowedDurations []float64) []orchestrator.Cut {
 	if cut.IsGenerated() {
 		return []orchestrator.Cut{cut}
 	}
@@ -134,7 +178,7 @@ func splitCutBySupportedDurations(cut orchestrator.Cut) []orchestrator.Cut {
 		duration = cut.EndSec - cut.StartSec
 	}
 	if duration <= veoMaxCutDurationSec {
-		cut.DurationSec = snapToSupportedDuration(duration)
+		cut.DurationSec = snapToSupportedDuration(duration, allowedDurations)
 		cut.EndSec = cut.StartSec + cut.DurationSec
 		return []orchestrator.Cut{cut}
 	}
@@ -144,7 +188,7 @@ func splitCutBySupportedDurations(cut orchestrator.Cut) []orchestrator.Cut {
 	for remaining := duration; remaining > 0; {
 		d := veoMaxCutDurationSec
 		if remaining < veoMaxCutDurationSec {
-			d = snapToSupportedDuration(remaining)
+			d = snapToSupportedDuration(remaining, allowedDurations)
 		}
 		sub := cut
 		sub.StartSec = cut.StartSec + offset
@@ -165,10 +209,10 @@ func splitCutBySupportedDurations(cut orchestrator.Cut) []orchestrator.Cut {
 	return subCuts
 }
 
-// snapToSupportedDuration は尺を Veo のサポート値のうち最も近いものへ丸めます（同距離なら長い方）。
-func snapToSupportedDuration(duration float64) float64 {
-	best := veoSupportedDurationsSec[0]
-	for _, candidate := range veoSupportedDurationsSec {
+// snapToSupportedDuration は尺を candidates のうち最も近いものへ丸めます（同距離なら長い方）。
+func snapToSupportedDuration(duration float64, candidates []float64) float64 {
+	best := candidates[0]
+	for _, candidate := range candidates {
 		if math.Abs(duration-candidate) <= math.Abs(duration-best) {
 			best = candidate
 		}

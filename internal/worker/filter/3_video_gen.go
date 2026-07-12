@@ -36,12 +36,12 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
-	// Veo がサポートしない尺（4/6/8秒以外）のカットは生成前に分割・丸めする。
-	// 生成済みカットは実動画の尺と metadata がずれないよう変更しない。
-	// usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
+	// Veo がサポートしない尺（reference_to_videoなら8秒以外、image_to_videoなら4/6/8秒以外）の
+	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
+	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
 	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
 	// （詳細は expandCutsToSupportedDurations のコメント参照）。
-	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.VideoRecipe.MusicRecipe.Sections)
+	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.VideoRecipe.MusicRecipe.Sections, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
 	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
@@ -54,6 +54,24 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return f.runWithWorkflow(ctx, fc)
 	}
 	return f.runDirect(ctx, fc)
+}
+
+// resolvedVideoRunner returns the VideoRunner that will actually be used for generation:
+// f.Runner takes priority, falling back to fc.VideoRunner.
+func (f VideoGenerationFilter) resolvedVideoRunner(fc *Context) ports.VideoRunner {
+	if f.Runner != nil {
+		return f.Runner
+	}
+	return fc.VideoRunner
+}
+
+// referenceImagesSupported は、実際に使われる VideoRunner が Veo の referenceImages
+// （reference_to_video、8秒固定）に対応しているかを返します。Runner が
+// ports.ReferenceImagesSupporter を実装していない場合（テストダブル等）は false を返し、
+// image_to_video 用の {4,6,8} 秒での丸めにフォールバックします。
+func referenceImagesSupported(runner ports.VideoRunner) bool {
+	rs, ok := runner.(ports.ReferenceImagesSupporter)
+	return ok && rs.SupportsReferenceImages()
 }
 
 func (f VideoGenerationFilter) hasVideoRunner(fc *Context) bool {
@@ -80,10 +98,7 @@ func (f VideoGenerationFilter) runWithWorkflow(ctx context.Context, fc *Context)
 func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error {
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 	fc.VideoRecipe.Normalize()
-	runner := f.Runner
-	if runner == nil {
-		runner = fc.VideoRunner
-	}
+	runner := f.resolvedVideoRunner(fc)
 	if runner == nil {
 		return fmt.Errorf("video runner is not configured")
 	}

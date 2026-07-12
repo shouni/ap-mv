@@ -57,13 +57,14 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	if len(cuts) == 0 {
 		return fmt.Errorf("no cuts found in section %d (%s)", sectionIndex, sections[sectionIndex].Name)
 	}
-	// Veo の image_to_video はカット尺 4/6/8 秒しか受け付けないため、セクション尺のまま
-	// 保存された長いカット（キーフレームのみ生成したレシピ等）は 8 秒以下のサブカットへ
-	// 分割し、各尺をサポート値に丸めてから動画生成へ渡す。さらに YouTube ショートの
-	// 上限（60秒）に収まるよう、超過分のカットは切り詰める。
+	// Veo は image_to_video ならカット尺 4/6/8 秒、reference_to_video（referenceImages）なら
+	// 8 秒しか受け付けないため、セクション尺のまま保存された長いカット（キーフレームのみ
+	// 生成したレシピ等）は 8 秒以下のサブカットへ分割し、各尺をサポート値に丸めてから動画
+	// 生成へ渡す。さらに YouTube ショートの上限（60秒）に収まるよう、超過分のカットは切り詰める。
 	// video_extension 用の 7 秒固定への正規化は、後続の VideoGenerationFilter が
-	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video 用の {4,6,8} で分割・丸めるだけでよい。
-	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, sections), youtubeShortMaxDurationSec)
+	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video/reference_to_video 用の
+	// 尺で分割・丸めるだけでよい。
+	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, sections, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {

@@ -21,13 +21,11 @@
                 {{end}}
             </div>
             <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{.HistoryDetail.JobID}}', this)">Copy MV Job ID</button>
                 {{if .HistoryDetail.SignedURL}}
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
                 <a class="btn btn-outline-success" href="/web/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
-                {{if .HistoryDetail.KeyframeZipURI}}
-                <button class="btn btn-outline-secondary" onclick="copyZipURI('{{.HistoryDetail.KeyframeZipURI}}', this)">Copy GCS URL</button>
-                {{end}}
                 <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/regenerate-zip" class="d-flex align-items-center gap-2">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <div class="d-flex align-items-center gap-1">
@@ -72,9 +70,7 @@
                 </video>
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
                     <a class="btn btn-outline-primary btn-sm" href="{{.HistoryDetail.FinalVideoSignedURL}}" target="_blank" rel="noopener">動画を開く</a>
-                    {{if .HistoryDetail.FinalVideoURL}}
-                    <button class="btn btn-outline-secondary btn-sm" onclick="copyZipURI('{{.HistoryDetail.FinalVideoURL}}', this)">Copy GCS URL</button>
-                    {{end}}
+                    <button class="btn btn-outline-secondary btn-sm" onclick="copyToClipboard('{{.HistoryDetail.JobID}}', this)">Copy MV Job ID</button>
                 </div>
                 <p class="small text-muted mb-0 mt-2">複数の継続チェーンをハードカットで結合した完成版です。</p>
             </div>
@@ -205,7 +201,7 @@ async function deleteHistory(jobID, csrfToken) {
     }
 }
 
-async function copyZipURI(uri, btn) {
+async function copyToClipboard(uri, btn) {
     try {
         await navigator.clipboard.writeText(uri);
         const original = btn.textContent;

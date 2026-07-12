@@ -22,6 +22,14 @@ type VideoRunnerConfigurator interface {
 	WithVideoOptions(model, aspectRatio string) VideoRunner
 }
 
+// ReferenceImagesSupporter は、reference_to_video（referenceImages、Veo 3系の非Fastモデルのみ
+// 対応で8秒固定）を使えるかを問い合わせられる VideoRunner のオプションインターフェースです。
+// カットの尺をVeoのサポート値へ正規化する処理が、モデル判定ロジックを重複実装せずに
+// 「このカットは8秒固定になるか」を判断するために使います。
+type ReferenceImagesSupporter interface {
+	SupportsReferenceImages() bool
+}
+
 // DeriveVideoRunner は、runner が VideoRunnerConfigurator を実装していれば
 // モデル・アスペクト比を差し替えた派生 Runner を返します。指定が両方空、
 // または runner が差し替えに対応しない場合は runner をそのまま返します。
