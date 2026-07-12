@@ -444,6 +444,55 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 	}
 }
 
+// TestHistoryDetailAppliesAspectRatioClass verifies that a 9:16 job's cut thumbnails and the
+// completed-video player get the vertical aspect-ratio treatment (CSS class / inline
+// aspect-ratio), instead of always assuming the default 16:9 box — a 9:16 keyframe rendered
+// into a forced 16:9 box gets cropped by object-fit: cover.
+func TestHistoryDetailAppliesAspectRatioClass(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:               "job-1",
+				Title:               "Test Short",
+				AspectRatio:         "9:16",
+				FinalVideoURL:       "gs://bucket/jobs/job-1/videos/final.mp4",
+				FinalVideoSignedURL: "https://signed.example/final.mp4",
+			},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, KeyframeURL: "https://signed.example/cut1.png"},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`class="card-img-top history-keyframe history-keyframe--9x16"`,
+		"aspect-ratio: 9 / 16",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("HistoryDetail body missing %q for a 9:16 job: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "aspect-ratio: 16 / 9") {
+		t.Fatalf("HistoryDetail body unexpectedly used the default 16:9 aspect ratio for a 9:16 job: %s", body)
+	}
+}
+
 // TestHistoryDetailRendersFinalVideo verifies the history detail page shows the chain-finalize
 // result (final_video_url) as a prominent player, distinct from the per-cut cards.
 func TestHistoryDetailRendersFinalVideo(t *testing.T) {

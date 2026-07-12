@@ -69,6 +69,13 @@ footer hr {
     background-color: #f1f3f5;
 }
 
+/* ジョブの VideoRecipe.AspectRatio が 9:16（ショート）の場合に適用します。
+   history-keyframe のデフォルト値（16/9）を上書きし、縦長カットが object-fit: cover で
+   横長枠に切り取られるのを防ぎます。 */
+.history-keyframe--9x16 {
+    aspect-ratio: 9 / 16;
+}
+
 .history-keyframe-empty {
     min-height: 180px;
 }
