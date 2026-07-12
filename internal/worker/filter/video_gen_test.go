@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	characterkit "github.com/shouni/go-character-kit/character"
@@ -289,6 +290,79 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 	}
 	if recipe.Cuts[2].KeyframeReference != "gs://bucket/chorus.png" {
 		t.Errorf("cut[2] KeyframeReference = %q, want unchanged section keyframe", recipe.Cuts[2].KeyframeReference)
+	}
+}
+
+// TestVideoPromptAppendsModeGuidance verifies every non-empty video prompt carries the
+// mode-specific guidance loaded from assets/prompts/video_gen/ — accurate premises per Veo
+// feature (starting keyframe for image_to_video, design-sheet handling for reference_to_video,
+// seamless continuation for video_extension, and the shared no-burned-in-text rule) — and that
+// an empty anchor+cue still yields an empty prompt so request validation keeps rejecting
+// broken recipes. Failing lookups here also catch missing/renamed prompt asset files.
+func TestVideoPromptAppendsModeGuidance(t *testing.T) {
+	cut := orchestrator.Cut{VisualAnchor: "anchor scene", AudioCue: "bass drop at 0:10"}
+	prefix := "anchor scene\nSynchronize motion and camera timing with audio cue: bass drop at 0:10\n"
+
+	tests := []struct {
+		mode veoGenerationMode
+		want []string
+	}{
+		{veoModeImageToVideo, []string{"starting keyframe image", "exactly one character", "No text"}},
+		{veoModeReferenceToVideo, []string{"reference images", "design sheet", "never depict multiple people", "No text"}},
+		{veoModeVideoExtension, []string{"Continue seamlessly", "previous video clip", "no hard cut", "No text"}},
+	}
+	for _, tt := range tests {
+		got := videoPrompt(cut, tt.mode)
+		if !strings.HasPrefix(got, prefix) {
+			t.Errorf("videoPrompt(%s) = %q, want prefix %q", tt.mode, got, prefix)
+		}
+		guidance := strings.TrimPrefix(got, prefix)
+		if guidance == "" {
+			t.Errorf("videoPrompt(%s) has no guidance (prompt asset missing?)", tt.mode)
+		}
+		for _, want := range tt.want {
+			if !strings.Contains(guidance, want) {
+				t.Errorf("videoPrompt(%s) guidance missing %q:\n%s", tt.mode, want, guidance)
+			}
+		}
+	}
+
+	if got := videoPrompt(orchestrator.Cut{}, veoModeImageToVideo); got != "" {
+		t.Errorf("videoPrompt(empty) = %q, want empty (keeps validation failing on broken recipes)", got)
+	}
+}
+
+// TestVideoGenModeForMirrorsAdapterBranches verifies mode selection matches
+// adapters.VertexVeoRunner.buildGenerateBody: video context (usePreviousVideo + gs:// previous
+// video) wins and drops image references; otherwise referenceImages with a supporting runner
+// means reference_to_video; everything else (no refs, unsupported model, non-gs:// video ID,
+// or a runner without the optional interface) is image_to_video.
+func TestVideoGenModeForMirrorsAdapterBranches(t *testing.T) {
+	refs := []string{"gs://bucket/char.png", "gs://bucket/keyframe.png"}
+	supporting := &durationCaptureRunner{supportsReferenceImages: true}
+	nonSupporting := &durationCaptureRunner{supportsReferenceImages: false}
+	plain := sequenceRunner{} // does not implement ports.ReferenceImagesSupporter
+
+	tests := []struct {
+		name             string
+		usePreviousVideo bool
+		lastVideoID      string
+		refs             []string
+		runner           ports.VideoRunner
+		want             veoGenerationMode
+	}{
+		{"video context wins over refs", true, "gs://bucket/prev.mp4", refs, supporting, veoModeVideoExtension},
+		{"previous video disabled", false, "gs://bucket/prev.mp4", refs, supporting, veoModeReferenceToVideo},
+		{"non-gs previous video id", true, "operation-id-123", refs, supporting, veoModeReferenceToVideo},
+		{"refs with supporting runner", false, "", refs, supporting, veoModeReferenceToVideo},
+		{"refs with non-supporting model", false, "", refs, nonSupporting, veoModeImageToVideo},
+		{"refs with plain runner", false, "", refs, plain, veoModeImageToVideo},
+		{"no refs", false, "", nil, supporting, veoModeImageToVideo},
+	}
+	for _, tt := range tests {
+		if got := videoGenModeFor(tt.usePreviousVideo, tt.lastVideoID, tt.refs, tt.runner); got != tt.want {
+			t.Errorf("%s: videoGenModeFor() = %s, want %s", tt.name, got, tt.want)
+		}
 	}
 }
 

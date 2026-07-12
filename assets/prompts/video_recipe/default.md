@@ -31,6 +31,7 @@ Every cut must be specific enough for both keyframe image generation and Veo vid
 
 - Derive the timeline from the song's emotional progression, especially lyrics, repeated phrases, section changes, and musical peaks.
 - For each cut, make `visual_anchor` a concrete scene that can be drawn as a keyframe: subject, action, expression, camera framing, background, lighting, and motion cues.
+- Every `visual_anchor` must depict the single protagonist alone. Never introduce other people, crowds, band members, or background figures — downstream keyframe and video generation enforce exactly one character per cut, and an anchor describing multiple people will conflict with that constraint.
 - For each cut, make `audio_cue` describe the musical or lyrical moment: intro, verse, pre-chorus, chorus, drop, bridge, climax, silence, vocal phrase, beat accent, or instrumental change.
 - Let `audio_cue` and the lyric meaning influence the character's pose, facial expression, camera distance, weather, particles, light intensity, and movement direction.
 - Use the selected visual mode as style guidance, but do not let it replace the concrete scene implied by the lyrics or source recipe.

@@ -136,6 +136,32 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 	}
 }
 
+// TestScriptPromptRequiresSingleProtagonistAnchors verifies the bundled script prompt forbids
+// multi-person visual_anchor scenes. Anchors flow verbatim into both keyframe generation
+// ("Scene: ...") and the Veo video prompt, and both downstream layers enforce exactly one
+// character per cut — so an anchor describing classmates/crowds would produce a
+// self-contradicting prompt (the other entry point of the same failure class as the
+// multi-view reference sheet regression below).
+func TestScriptPromptRequiresSingleProtagonistAnchors(t *testing.T) {
+	prompt, err := newScriptPrompt()
+	if err != nil {
+		t.Fatalf("newScriptPrompt() error = %v", err)
+	}
+
+	got, err := prompt.Build("compose", scriptPromptTestData("source"))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	for _, want := range []string{
+		"single protagonist alone",
+		"exactly one character per cut",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prompt does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
 // TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets is a regression test: character
 // reference images are often multi-pose turnaround sheets (front/side/back in one image), and
 // without an explicit instruction the image model sometimes reproduces that multi-figure layout
