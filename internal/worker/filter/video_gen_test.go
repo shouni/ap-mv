@@ -238,8 +238,11 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	if len(vp.extractCalls) != 1 {
 		t.Fatalf("ExtractLastFrame calls = %d, want 1 (only for the mid-job reset)", len(vp.extractCalls))
 	}
-	if vp.extractCalls[0].videoURI != "gs://bucket/cut_3.mp4" {
-		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's video URL", vp.extractCalls[0].videoURI)
+	// cut3 is a video_extension continuation, so it goes through colorCorrectExtensionCut
+	// before becoming lastVideoID — the reset's frame extraction must read from that
+	// corrected video, not the raw (possibly color-drifted) Veo output.
+	if vp.extractCalls[0].videoURI != "gs://bucket/jobs/job-1/videos/cut_03_color_corrected.mp4" {
+		t.Errorf("ExtractLastFrame videoURI = %q, want previous cut's color-corrected video URL", vp.extractCalls[0].videoURI)
 	}
 	if vp.extractCalls[0].destURI != "gs://bucket/jobs/job-1/images/chain_frame_cut_04.png" {
 		t.Errorf("ExtractLastFrame destURI = %q", vp.extractCalls[0].destURI)
@@ -251,23 +254,26 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 
 // TestRunDirectColorCorrectsVideoExtensionCuts verifies that only video_extension cuts (the
 // ones that reuse the previous generation as Veo's video-to-video conditioning input) get
-// color-matched against the character's reference art, and that the corrected VideoURL/VideoID
-// — not the raw Veo output — is what chains forward as the next cut's PreviousVideoID. Repeated
-// video_extension rounds drift in saturation (confirmed on a real job: +20% after the first
-// continuation, climbing further each round), so leaving the raw output uncorrected would let
-// the drift compound round over round instead of being pulled back each time.
+// color-matched against the cut's own scene keyframe image, and that the corrected
+// VideoURL/VideoID — not the raw Veo output — is what chains forward as the next cut's
+// PreviousVideoID. Repeated video_extension rounds drift in saturation (confirmed on a real
+// job: +20% after the first continuation, climbing further each round), so leaving the raw
+// output uncorrected would let the drift compound round over round instead of being pulled
+// back each time.
+//
+// The correction target is deliberately cut.KeyframeReference, not the character's
+// ReferenceURL — that regressed on a real job (short-20260712-044229-211cbcb414ac): the
+// character reference art is a white-background turnaround design sheet (measured
+// SATAVG=5.2), and correcting toward it desaturated the video into a washed-out look. The
+// scene keyframe (a fully rendered "Cinematic anime style" image, SATAVG~28.6) is the
+// correct target.
 func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
-	characters := &characterkit.Characters{
-		ByID: map[string]*characterkit.Character{
-			"tsumugi": {ID: "tsumugi", ReferenceURL: "gs://bucket/characters/tsumugi.png"},
-		},
-	}
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
-			{CutIndex: 3, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
+			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
+			{CutIndex: 2, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
+			{CutIndex: 3, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -277,7 +283,6 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	err := flt.Execute(context.Background(), &Context{
 		Task:        task,
 		VideoRecipe: recipe,
-		Characters:  characters,
 		OutputPath:  "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
@@ -299,8 +304,8 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 		if call.videoURI != wantVideoURIs[i] {
 			t.Errorf("colorMatchCalls[%d].videoURI = %q, want %q", i, call.videoURI, wantVideoURIs[i])
 		}
-		if call.referenceImageURI != "gs://bucket/characters/tsumugi.png" {
-			t.Errorf("colorMatchCalls[%d].referenceImageURI = %q, want character reference art", i, call.referenceImageURI)
+		if call.referenceImageURI != "gs://bucket/keyframes/scene.png" {
+			t.Errorf("colorMatchCalls[%d].referenceImageURI = %q, want the cut's scene keyframe, not character art", i, call.referenceImageURI)
 		}
 		if call.destURI != wantDestURIs[i] {
 			t.Errorf("colorMatchCalls[%d].destURI = %q, want %q", i, call.destURI, wantDestURIs[i])

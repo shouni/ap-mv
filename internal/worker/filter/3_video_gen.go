@@ -186,21 +186,26 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 }
 
 // colorCorrectExtensionCut は、video_extension（video-to-video継続）で生成された直後のカットの
-// 彩度を、キャラクター参照アートへ引き戻します。Veo の video_extension は直前の生成結果を
-// 条件入力として再利用するため、継続を重ねるたびに彩度がドリフトして蓄積します（実運用で確認済み:
-// 継続1回目で彩度+20%、以降のラウンドでもコントラストが単調に増加し続けた）。補正後の
-// VideoURL/VideoIDを次カットのPreviousVideoIDとして使うことで、ドリフトが次世代へ複利的に
-// 蓄積するのを防ぎます。VideoProcessor未設定、またはキャラクターに参照アートが無い場合は
-// 何もしません（従来通り無補正のまま）。
+// 彩度を、そのカットのシーン用キーフレーム画像（cut.KeyframeReference）へ引き戻します。
+// Veo の video_extension は直前の生成結果を条件入力として再利用するため、継続を重ねるたびに
+// 彩度がドリフトして蓄積します（実運用で確認済み: 継続1回目で彩度+20%、以降のラウンドでも
+// コントラストが単調に増加し続けた）。補正後のVideoURL/VideoIDを次カットのPreviousVideoIDとして
+// 使うことで、ドリフトが次世代へ複利的に蓄積するのを防ぎます。
+//
+// 補正の基準には char.ReferenceURL（キャラクター立ち絵）を使わないこと。あれは白背景に
+// 3方向ターンアラウンドを並べたデザインシートで、背景の白が画像全体の平均彩度を大きく
+// 引き下げてしまう（実測: SATAVG=5.2、実際のシーンキーフレームは28.6前後）。これを基準にすると
+// 動画側が不自然に彩度不足（色褪せた見た目）になる回帰が実際に発生した。cut.KeyframeReference
+// は「Cinematic anime style」で描かれた実際のシーン画像で、image_to_video/reference_to_video
+// 生成時に使われたのと同じ色味の基準を持つため、こちらを使う。
+//
+// VideoProcessor未設定、またはカットにキーフレーム参照が無い場合は何もしません
+// （従来通り無補正のまま）。
 func (f VideoGenerationFilter) colorCorrectExtensionCut(ctx context.Context, fc *Context, cut *orchestrator.Cut) error {
-	if f.VideoProcessor == nil || fc.Characters == nil {
+	if f.VideoProcessor == nil {
 		return nil
 	}
-	char := fc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID))
-	if char == nil {
-		return nil
-	}
-	referenceURL := strings.TrimSpace(char.ReferenceURL)
+	referenceURL := strings.TrimSpace(cut.KeyframeReference)
 	if referenceURL == "" {
 		return nil
 	}
