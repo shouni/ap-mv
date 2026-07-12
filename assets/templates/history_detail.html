@@ -20,7 +20,8 @@
                 </div>
                 {{end}}
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <a class="btn btn-outline-secondary" href="/web/history">Back</a>
                 <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{.HistoryDetail.JobID}}', this)">Copy MV Job ID</button>
                 {{if .HistoryDetail.SignedURL}}
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
@@ -34,10 +35,9 @@
                         <label class="small text-muted mb-0" title="未歌唱文字の色">未歌唱</label>
                         <input type="color" name="secondary_color" value="#ffffff" class="form-control form-control-color p-0 border-0" style="width:28px;height:28px" title="未歌唱（Secondary）色">
                     </div>
-                    <button type="submit" class="btn btn-outline-primary btn-sm">ZIP再作成</button>
+                    <button type="submit" class="btn btn-outline-primary">ZIP再作成</button>
                 </form>
-                <button class="btn btn-outline-danger" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
-                <a class="btn btn-outline-secondary" href="/web/history">Back</a>
+                <button class="btn btn-outline-danger ms-auto" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
             </div>
         </div>
 
@@ -120,73 +120,34 @@
 
         {{if .HistoryDetail.Cuts}}
         <h2 class="h6 fw-bold mb-3">カット別詳細</h2>
+        {{if .HistoryDetail.SectionGroups}}
+        {{range .HistoryDetail.SectionGroups}}
+        <div data-section-group="{{if .Section.Name}}{{.Section.SectionIndex}}{{else}}unassigned{{end}}">
+            <h3 class="h6 text-muted mb-3">
+                {{if .Section.Name}}{{.Section.Name}}{{else if .Cuts}}未分類のカット{{end}}
+                {{if .Section.Name}}<span class="small">({{.Section.StartSeconds}}s–{{.Section.EndSeconds}}s)</span>{{end}}
+            </h3>
+            <div class="row g-4 mb-4">
+                {{range .Cuts}}
+                {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail)}}
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+        {{else}}
         <div class="row g-4">
             {{range .HistoryDetail.Cuts}}
-            <div class="col-md-6 col-xl-4">
-                <div class="card h-100 history-cut-card">
-                    {{if .VideoSignedURL}}
-                    <video class="card-img-top history-keyframe{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" controls preload="metadata" {{if .KeyframeURL}}poster="{{.KeyframeURL}}"{{end}}>
-                        <source src="{{.VideoSignedURL}}" type="video/mp4">
-                    </video>
-                    {{else if .KeyframeURL}}
-                    <img src="{{.KeyframeURL}}" class="card-img-top history-keyframe{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" alt="Cut {{.CutIndex}} keyframe" loading="lazy">
-                    {{else}}
-                    <div class="history-keyframe history-keyframe-empty{{if eq $.HistoryDetail.AspectRatio "9:16"}} history-keyframe--9x16{{end}} d-flex align-items-center justify-content-center text-muted">
-                        No keyframe
-                    </div>
-                    {{end}}
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                            <h2 class="h6 fw-bold mb-0">Cut {{.CutIndex}}</h2>
-                            <div class="d-flex align-items-center gap-2">
-                                {{if .Status}}<span class="badge text-bg-light border">{{.Status}}</span>{{end}}
-                                <a href="/web/history/{{$.HistoryDetail.JobID}}/cuts/{{.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
-                            </div>
-                        </div>
-                        {{if .VisualAnchor}}<p class="mb-2">{{.VisualAnchor}}</p>{{end}}
-                        {{if .Dialogue}}<p class="small text-muted mb-2">{{.Dialogue}}</p>{{end}}
-                        <dl class="row small mb-0">
-                            {{if .DurationSec}}
-                            <dt class="col-5 text-muted fw-normal">Duration</dt>
-                            <dd class="col-7 mb-1">{{printf "%.1f" .DurationSec}} sec</dd>
-                            {{end}}
-                            {{if .CharacterID}}
-                            <dt class="col-5 text-muted fw-normal">Character</dt>
-                            <dd class="col-7 mb-1">{{.CharacterID}}</dd>
-                            {{end}}
-                            {{if .AudioCue}}
-                            <dt class="col-5 text-muted fw-normal">Audio Cue</dt>
-                            <dd class="col-7 mb-1">{{.AudioCue}}</dd>
-                            {{end}}
-                            {{if .KeyframeReference}}
-                            <dt class="col-5 text-muted fw-normal">Keyframe</dt>
-                            <dd class="col-7 mb-1 text-break">
-                                {{if .KeyframeURL}}
-                                <a href="{{.KeyframeURL}}" target="_blank" rel="noopener">Open image</a>
-                                {{else}}
-                                <code>{{.KeyframeReference}}</code>
-                                {{end}}
-                            </dd>
-                            {{end}}
-                            {{if .VideoSignedURL}}
-                            <dt class="col-5 text-muted fw-normal">Video</dt>
-                            <dd class="col-7 mb-1 text-break"><a href="{{.VideoSignedURL}}" target="_blank" rel="noopener">Open video</a></dd>
-                            {{else if .VideoURL}}
-                            <dt class="col-5 text-muted fw-normal">Video</dt>
-                            <dd class="col-7 mb-1 text-break"><code>{{.VideoURL}}</code></dd>
-                            {{end}}
-                        </dl>
-                    </div>
-                </div>
-            </div>
+            {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail)}}
             {{end}}
         </div>
+        {{end}}
         {{else}}
         <p class="text-muted mb-0">No cuts in this history.</p>
         {{end}}
         {{end}}
     </div>
 </div>
+
 <script>
 async function deleteHistory(jobID, csrfToken) {
     if (!confirm('Delete job ' + jobID + '?')) return;
@@ -212,5 +173,92 @@ async function copyToClipboard(uri, btn) {
         alert('Copy failed. Please copy manually:\n' + uri);
     }
 }
+
+document.getElementById('gen-target')?.addEventListener('change', function () {
+    const target = this.value;
+    document.querySelectorAll('[data-section-group]').forEach(function (group) {
+        group.classList.toggle('d-none', target !== 'full' && group.dataset.sectionGroup !== target);
+    });
+});
 </script>
+{{end}}
+
+{{define "historyCutCard"}}
+{{$cut := .Cut}}
+{{$detail := .Detail}}
+<div class="col-md-6 col-xl-4">
+    <div class="card h-100 history-cut-card">
+        {{if $cut.VideoSignedURL}}
+        <video class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" controls preload="metadata" {{if $cut.KeyframeURL}}poster="{{$cut.KeyframeURL}}"{{end}}>
+            <source src="{{$cut.VideoSignedURL}}" type="video/mp4">
+        </video>
+        {{else if $cut.KeyframeURL}}
+        <img src="{{$cut.KeyframeURL}}" class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" alt="Cut {{$cut.CutIndex}} keyframe" loading="lazy">
+        {{else}}
+        <div class="history-keyframe history-keyframe-empty{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}} d-flex align-items-center justify-content-center text-muted">
+            No keyframe
+        </div>
+        {{end}}
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <h2 class="h6 fw-bold mb-0">Cut {{$cut.CutIndex}}</h2>
+                <div class="d-flex align-items-center gap-2">
+                    {{if $cut.Status}}<span class="badge text-bg-light border">{{$cut.Status}}</span>{{end}}
+                    <a href="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
+                </div>
+            </div>
+            <dl class="row small mb-2">
+                {{if $cut.KeyframeReference}}
+                <dt class="col-5 text-muted fw-normal">Keyframe</dt>
+                <dd class="col-7 mb-1 text-break">
+                    {{if $cut.KeyframeURL}}
+                    <a href="{{$cut.KeyframeURL}}" target="_blank" rel="noopener">Open image</a>
+                    {{else}}
+                    <code>{{$cut.KeyframeReference}}</code>
+                    {{end}}
+                </dd>
+                {{end}}
+                {{if $cut.CharacterID}}
+                <dt class="col-5 text-muted fw-normal">Character</dt>
+                <dd class="col-7 mb-1">{{$cut.CharacterID}}</dd>
+                {{end}}
+                {{if $cut.DurationSec}}
+                <dt class="col-5 text-muted fw-normal">Duration</dt>
+                <dd class="col-7 mb-1">{{printf "%.1f" $cut.DurationSec}} sec</dd>
+                {{end}}
+                {{if $cut.AudioCue}}
+                {{$audioCue := $cut.AudioCueParts}}
+                {{if and $audioCue.Vocal (not $cut.Dialogue)}}
+                <!-- Dialogue is the same lyric line with real newlines, so only show this
+                     AudioCue-derived Vocal text when Dialogue isn't already rendering it below. -->
+                <dt class="col-5 text-muted fw-normal">Vocal</dt>
+                <dd class="col-7 mb-1">{{$audioCue.Vocal}}</dd>
+                {{end}}
+                {{if $audioCue.Description}}
+                <dt class="col-5 text-muted fw-normal">Audio Cue</dt>
+                <dd class="col-7 mb-1">{{$audioCue.Description}}</dd>
+                {{end}}
+                {{if $audioCue.SceneBeat}}
+                <dt class="col-5 text-muted fw-normal">Scene Beat</dt>
+                <dd class="col-7 mb-1">{{$audioCue.SceneBeat}}</dd>
+                {{end}}
+                {{end}}
+                {{if $cut.VideoSignedURL}}
+                <dt class="col-5 text-muted fw-normal">Video</dt>
+                <dd class="col-7 mb-1 text-break"><a href="{{$cut.VideoSignedURL}}" target="_blank" rel="noopener">Open video</a></dd>
+                {{else if $cut.VideoURL}}
+                <dt class="col-5 text-muted fw-normal">Video</dt>
+                <dd class="col-7 mb-1 text-break"><code>{{$cut.VideoURL}}</code></dd>
+                {{end}}
+            </dl>
+            {{if $cut.Dialogue}}<p class="small text-muted mb-2">{{$cut.Dialogue}}</p>{{end}}
+            {{if $cut.VisualAnchor}}
+            <details class="small">
+                <summary class="text-muted">Visual Anchor</summary>
+                <p class="mb-0 mt-1">{{$cut.VisualAnchor}}</p>
+            </details>
+            {{end}}
+        </div>
+    </div>
+</div>
 {{end}}
