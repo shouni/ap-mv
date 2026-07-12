@@ -93,8 +93,13 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut) []orchestrator.Cut
 			sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
 			sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
 			sub.Dialogue = domain.DistributeLines(lines, i, len(durations))
+			// resetCutForSceneKeyframe already forced IsSectionStart=false above, so this is
+			// the only place it gets set: sub-block 2+ becomes a fresh keyframe/chain base that
+			// downstream video-gen must not treat as a video_extension continuation of block 1.
 			if i > 0 {
 				sub.IsSectionStart = true
+			} else {
+				sub.IsSectionStart = false
 			}
 			expanded = append(expanded, sub)
 			offset += d
@@ -114,47 +119,59 @@ func balancedVideoToVideoSceneDurations(duration float64) []float64 {
 		return []float64{snapToSupportedDuration(duration, veoSupportedDurationsSec)}
 	}
 
-	candidates := []float64{8, 15, 22}
-	count := int(math.Ceil(duration / 22))
-	if count < 1 {
-		count = 1
-	}
+	count := max(int(math.Ceil(duration/22)), 1)
 
+	// Only the *count* of each candidate value matters for sum/overage/imbalance, so instead of
+	// enumerating all 3^count ordered sequences (which blows up badly past count~15, confirmed by
+	// benchmark: ~1.7s at count=17, worse than exponentially beyond that), enumerate the O(count^2)
+	// (c8, c15) combinations directly (c22 is derived). Ties are broken by filling ascending
+	// (8s, then 15s, then 22s) to match the smallest-first sequence the old DFS would have found
+	// first (DFS tried candidates in {8,15,22} order at each position, so the lexicographically
+	// smallest, i.e. ascending-sorted, permutation of any winning multiset was always found first).
 	best := make([]float64, count)
+	for i := range best {
+		best[i] = 22
+	}
 	bestOverage := math.Inf(1)
 	bestImbalance := math.Inf(1)
-	current := make([]float64, count)
-	var search func(pos int)
-	search = func(pos int) {
-		if pos == count {
-			sum, minValue, maxValue := 0.0, current[0], current[0]
-			for _, value := range current {
-				sum += value
-				if value < minValue {
-					minValue = value
-				}
-				if value > maxValue {
-					maxValue = value
-				}
-			}
+	for c8 := 0; c8 <= count; c8++ {
+		for c15 := 0; c15 <= count-c8; c15++ {
+			c22 := count - c8 - c15
+			sum := float64(c8)*8 + float64(c15)*15 + float64(c22)*22
 			if sum < duration {
-				return
+				continue
 			}
 			overage := sum - duration
+			minValue, maxValue := 22.0, 8.0
+			if c8 > 0 {
+				minValue, maxValue = math.Min(minValue, 8), math.Max(maxValue, 8)
+			}
+			if c15 > 0 {
+				minValue, maxValue = math.Min(minValue, 15), math.Max(maxValue, 15)
+			}
+			if c22 > 0 {
+				minValue, maxValue = math.Min(minValue, 22), math.Max(maxValue, 22)
+			}
 			imbalance := maxValue - minValue
 			if overage < bestOverage || (overage == bestOverage && imbalance < bestImbalance) {
-				copy(best, current)
 				bestOverage = overage
 				bestImbalance = imbalance
+				idx := 0
+				for range c8 {
+					best[idx] = 8
+					idx++
+				}
+				for range c15 {
+					best[idx] = 15
+					idx++
+				}
+				for range c22 {
+					best[idx] = 22
+					idx++
+				}
 			}
-			return
-		}
-		for _, candidate := range candidates {
-			current[pos] = candidate
-			search(pos + 1)
 		}
 	}
-	search(0)
 	return best
 }
 
