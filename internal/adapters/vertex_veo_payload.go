@@ -32,6 +32,11 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 			instance["referenceImages"] = refs
 		} else if media := imageMedia(req); media != nil {
 			instance["image"] = media
+			// lastFrame（first/last frame 補間）は image（開始フレーム）とセットのときのみ
+			// 有効なため、この分岐の中でだけ送る。
+			if lf := lastFrameMedia(req); lf != nil && r.modelSupportsLastFrame() {
+				instance["lastFrame"] = lf
+			}
 		}
 	}
 	if media := audioMedia(req); media != nil {
@@ -62,6 +67,21 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 func (r *VertexVeoRunner) modelSupportsReferenceImages() bool {
 	model := strings.ToLower(r.model)
 	return strings.HasPrefix(model, "veo-3") && !strings.Contains(model, "fast")
+}
+
+// modelSupportsLastFrame は使用モデルが lastFrame（first/last frame 補間）に対応するかを
+// 返します。Vertex AI で対応するのは veo-2.0-generate-001 / veo-3.1-generate-001 /
+// veo-3.1-fast-generate-001 で、Veo 3.0 系は非対応です（referenceImages と違い Fast も対応）。
+func (r *VertexVeoRunner) modelSupportsLastFrame() bool {
+	model := strings.ToLower(r.model)
+	return strings.HasPrefix(model, "veo-2") || strings.HasPrefix(model, "veo-3.1")
+}
+
+// SupportsLastFrame は modelSupportsLastFrame を公開し、ports.LastFrameSupporter を満たします。
+// video_gen フィルタが、次カットのキーフレームを lastFrame（frames_to_video 補間）として
+// 渡すかを、モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
+func (r *VertexVeoRunner) SupportsLastFrame() bool {
+	return r.modelSupportsLastFrame()
 }
 
 // SupportsReferenceImages は modelSupportsReferenceImages を公開し、ports.ReferenceImagesSupporter を
@@ -128,6 +148,18 @@ func imageMedia(req ports.VideoGenerationRequest) map[string]any {
 	return map[string]any{
 		"bytesBase64Encoded": base64.StdEncoding.EncodeToString(req.InputImage),
 		"mimeType":           detectedImageMimeType(req.InputImage),
+	}
+}
+
+// lastFrameMedia は LastFrameReference から Veo の lastFrame（終了フレーム）payload を組み立てます。
+func lastFrameMedia(req ports.VideoGenerationRequest) map[string]any {
+	ref := strings.TrimSpace(req.LastFrameReference)
+	if ref == "" {
+		return nil
+	}
+	return map[string]any{
+		"gcsUri":   ref,
+		"mimeType": mimeTypeFromURI(ref, "image/png"),
 	}
 }
 

@@ -388,6 +388,7 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 		want []string
 	}{
 		{veoModeImageToVideo, []string{"starting keyframe image", "exactly one character", "gradually and continuously", "No text"}},
+		{veoModeFramesToVideo, []string{"starting keyframe image", "final frame image", "exactly one character", "gradually and continuously", "No text"}},
 		{veoModeReferenceToVideo, []string{"reference images", "design sheet", "never depict multiple people", "gradually and continuously", "No text"}},
 		{veoModeVideoExtension, []string{"Continue seamlessly", "previous video clip", "no hard cut", "pose, or gesture", "No text"}},
 	}
@@ -415,34 +416,114 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 // TestVideoGenModeForMirrorsAdapterBranches verifies mode selection matches
 // adapters.VertexVeoRunner.buildGenerateBody: video context (usePreviousVideo + gs:// previous
 // video) wins and drops image references; otherwise referenceImages with a supporting runner
-// means reference_to_video; everything else (no refs, unsupported model, non-gs:// video ID,
-// or a runner without the optional interface) is image_to_video.
+// means reference_to_video; an image-input cut with a last-frame reference and a supporting
+// runner means frames_to_video; everything else (no refs, unsupported model, non-gs:// video ID,
+// or a runner without the optional interfaces) is image_to_video.
 func TestVideoGenModeForMirrorsAdapterBranches(t *testing.T) {
 	refs := []string{"gs://bucket/char.png", "gs://bucket/keyframe.png"}
-	supporting := &durationCaptureRunner{supportsReferenceImages: true}
-	nonSupporting := &durationCaptureRunner{supportsReferenceImages: false}
-	plain := sequenceRunner{} // does not implement ports.ReferenceImagesSupporter
+	lastFrame := "gs://bucket/next_keyframe.png"
+	supporting := &durationCaptureRunner{supportsReferenceImages: true, supportsLastFrame: true}
+	nonSupporting := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: false}
+	lastFrameOnly := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: true}
+	plain := sequenceRunner{} // implements neither optional interface
 
 	tests := []struct {
 		name             string
 		usePreviousVideo bool
 		lastVideoID      string
 		refs             []string
+		lastFrameRef     string
 		runner           ports.VideoRunner
 		want             veoGenerationMode
 	}{
-		{"video context wins over refs", true, "gs://bucket/prev.mp4", refs, supporting, veoModeVideoExtension},
-		{"previous video disabled", false, "gs://bucket/prev.mp4", refs, supporting, veoModeReferenceToVideo},
-		{"non-gs previous video id", true, "operation-id-123", refs, supporting, veoModeReferenceToVideo},
-		{"refs with supporting runner", false, "", refs, supporting, veoModeReferenceToVideo},
-		{"refs with non-supporting model", false, "", refs, nonSupporting, veoModeImageToVideo},
-		{"refs with plain runner", false, "", refs, plain, veoModeImageToVideo},
-		{"no refs", false, "", nil, supporting, veoModeImageToVideo},
+		{"video context wins over refs", true, "gs://bucket/prev.mp4", refs, "", supporting, veoModeVideoExtension},
+		{"video context wins over last frame", true, "gs://bucket/prev.mp4", nil, lastFrame, supporting, veoModeVideoExtension},
+		{"previous video disabled", false, "gs://bucket/prev.mp4", refs, "", supporting, veoModeReferenceToVideo},
+		{"non-gs previous video id", true, "operation-id-123", refs, "", supporting, veoModeReferenceToVideo},
+		{"refs with supporting runner", false, "", refs, "", supporting, veoModeReferenceToVideo},
+		{"refs win over last frame", false, "", refs, lastFrame, supporting, veoModeReferenceToVideo},
+		{"refs with non-supporting model", false, "", refs, "", nonSupporting, veoModeImageToVideo},
+		{"refs with plain runner", false, "", refs, "", plain, veoModeImageToVideo},
+		{"no refs", false, "", nil, "", supporting, veoModeImageToVideo},
+		{"last frame on image input", false, "", nil, lastFrame, lastFrameOnly, veoModeFramesToVideo},
+		{"last frame on ref fallback", false, "", refs, lastFrame, lastFrameOnly, veoModeFramesToVideo},
+		{"last frame with non-supporting model", false, "", nil, lastFrame, nonSupporting, veoModeImageToVideo},
+		{"last frame with plain runner", false, "", nil, lastFrame, plain, veoModeImageToVideo},
 	}
 	for _, tt := range tests {
-		if got := videoGenModeFor(tt.usePreviousVideo, tt.lastVideoID, tt.refs, tt.runner); got != tt.want {
+		if got := videoGenModeFor(tt.usePreviousVideo, tt.lastVideoID, tt.refs, tt.lastFrameRef, tt.runner); got != tt.want {
 			t.Errorf("%s: videoGenModeFor() = %s, want %s", tt.name, got, tt.want)
 		}
+	}
+}
+
+// TestNextCutLastFrameReference verifies the guards for choosing the next cut's keyframe as
+// the current cut's ending frame: it must exist, be non-empty, stay within the same section
+// (a section boundary is an intentional scene change), match the current cut's character
+// (interpolating across characters would morph them), and differ from the current cut's own
+// keyframe (duration-split cuts share one keyframe; forcing end == start kills motion).
+func TestNextCutLastFrameReference(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png"},
+		{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png"},
+		{CutIndex: 2, CharacterID: "metan", KeyframeReference: "gs://bucket/kf2.png"},
+		{CutIndex: 3, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png", IsSectionStart: true},
+		{CutIndex: 4, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png"},
+		{CutIndex: 5, CharacterID: "metan", KeyframeReference: ""},
+	}
+
+	tests := []struct {
+		name string
+		i    int
+		want string
+	}{
+		{"same character and section", 0, "gs://bucket/kf1.png"},
+		{"different character", 1, ""},
+		{"next is section start", 2, ""},
+		{"next shares the same keyframe", 3, ""},
+		{"next keyframe empty", 4, ""},
+		{"last cut", 5, ""},
+	}
+	for _, tt := range tests {
+		if got := nextCutLastFrameReference(cuts, tt.i); got != tt.want {
+			t.Errorf("%s: nextCutLastFrameReference(cuts, %d) = %q, want %q", tt.name, tt.i, got, tt.want)
+		}
+	}
+}
+
+// TestRunDirectPassesNextKeyframeAsLastFrame verifies the end-to-end wiring: on a runner that
+// supports lastFrame but not referenceImages (e.g. veo-3.1-fast), each image-input cut receives
+// the next same-section/same-character cut's keyframe as LastFrameReference, and the final cut
+// receives none. The prompt must carry the frames_to_video guidance for exactly those requests.
+func TestRunDirectPassesNextKeyframeAsLastFrame(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png", DurationSec: 8, VisualAnchor: "a"},
+			{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png", DurationSec: 8, VisualAnchor: "b"},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	runner := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: true}
+	flt := VideoGenerationFilter{Runner: runner}
+
+	if err := flt.Execute(context.Background(), &Context{Task: task, VideoRecipe: recipe}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(runner.requests))
+	}
+	if got := runner.requests[0].LastFrameReference; got != "gs://bucket/kf1.png" {
+		t.Errorf("cut 0 LastFrameReference = %q, want next cut's keyframe", got)
+	}
+	if !strings.Contains(runner.requests[0].Prompt, "final frame image") {
+		t.Errorf("cut 0 prompt missing frames_to_video guidance:\n%s", runner.requests[0].Prompt)
+	}
+	if got := runner.requests[1].LastFrameReference; got != "" {
+		t.Errorf("cut 1 LastFrameReference = %q, want empty (no next cut)", got)
+	}
+	if strings.Contains(runner.requests[1].Prompt, "final frame image") {
+		t.Errorf("cut 1 prompt must not carry frames_to_video guidance:\n%s", runner.requests[1].Prompt)
 	}
 }
 
@@ -549,12 +630,15 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 
 type durationCaptureRunner struct {
 	supportsReferenceImages bool
+	supportsLastFrame       bool
 	durations               []float64
+	requests                []ports.VideoGenerationRequest
 }
 
-// Run records each request's duration and returns a fixed successful response.
+// Run records each request and returns a fixed successful response.
 func (r *durationCaptureRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	r.durations = append(r.durations, req.DurationSec)
+	r.requests = append(r.requests, req)
 	return &ports.VideoResponse{
 		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
 		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
@@ -565,6 +649,11 @@ func (r *durationCaptureRunner) Run(_ context.Context, req ports.VideoGeneration
 // SupportsReferenceImages implements ports.ReferenceImagesSupporter.
 func (r *durationCaptureRunner) SupportsReferenceImages() bool {
 	return r.supportsReferenceImages
+}
+
+// SupportsLastFrame implements ports.LastFrameSupporter.
+func (r *durationCaptureRunner) SupportsLastFrame() bool {
+	return r.supportsLastFrame
 }
 
 type seedCaptureRunner struct {

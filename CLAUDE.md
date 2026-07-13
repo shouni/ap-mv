@@ -58,6 +58,7 @@ Veo's biggest failure mode is characters/context breaking across cuts. Four mech
 
 - **Seed-based determinism** — a per-character seed is reused across cuts.
 - **Keyframe anchor (image-to-video / reference-to-video)** — a keyframe image generated from character seed + reference image anchors each cut. When the cut's character has reference art, [character art, keyframe] are sent as Veo's `referenceImages` (asset type, max 3); otherwise the keyframe is sent as the `image` input (image-to-video). `referenceImages` is only supported by non-Fast Veo 3 models (the adapter falls back to `image` otherwise), and Veo rejects `video` + `referenceImages`/`image` together, so when `VEO_USE_PREVIOUS_VIDEO` provides video-to-video context the image references are omitted for that cut.
+- **Last-frame interpolation (frames-to-video)** — when a cut resolves to the `image` input path and the model supports `lastFrame` (Veo 2 / Veo 3.1 incl. Fast; not Veo 3.0), the next cut's keyframe is sent as this cut's `lastFrame` so the cut ends exactly on the next cut's opening composition. Guards in `nextCutLastFrameReference` skip it across section boundaries, across different characters, and for duration-split cuts sharing one keyframe.
 - **Audio-driven prompting** — each cut's `audio_cue` (e.g. "synchronized with the heavy bass drop at 0:10") is injected into the Veo prompt.
 - **Context chain (video-to-video)** — the previous cut's `VideoID` is passed as `PreviousVideoID` to the next cut's request, chaining context.
 
