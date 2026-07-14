@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -156,80 +154,6 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 	return nil
 }
 
-// applyChainResetKeyframe は、チェーンリセット後の新規ベースカットの参照画像を、静的な
-// 立ち絵ではなく直前チェーンの実際の生成結果の最終フレームへ差し替えます。VideoProcessor
-// が未設定、または直前動画のURLが空の場合は何もしません（従来通り静的な立ち絵のまま生成）。
-func (f VideoGenerationFilter) applyChainResetKeyframe(ctx context.Context, fc *Context, cut *orchestrator.Cut, previousVideoURL string) error {
-	if f.VideoProcessor == nil || strings.TrimSpace(previousVideoURL) == "" {
-		return nil
-	}
-	destURI := chainFrameDestURI(fc.OutputPath, cut.CutIndex)
-	if destURI == "" {
-		return nil
-	}
-	frameURI, err := f.VideoProcessor.ExtractLastFrame(ctx, previousVideoURL, destURI)
-	if err != nil {
-		return fmt.Errorf("extract last frame for chain reset at cut %d: %w", cut.CutIndex, err)
-	}
-	cut.KeyframeReference = frameURI
-	return nil
-}
-
-// chainFrameDestURI はチェーンリセット時に抽出する最終フレーム画像の保存先URIを組み立てます。
-func chainFrameDestURI(outputPath string, cutIndex int) string {
-	outputPath = strings.TrimRight(strings.TrimSpace(outputPath), "/")
-	if outputPath == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s/images/chain_frame_cut_%02d.png", outputPath, cutIndex)
-}
-
-// colorCorrectExtensionCut は、video_extension（video-to-video継続）で生成された直後のカットの
-// 彩度を、そのカットのシーン用キーフレーム画像（cut.KeyframeReference）へ引き戻します。
-// Veo の video_extension は直前の生成結果を条件入力として再利用するため、継続を重ねるたびに
-// 彩度がドリフトして蓄積します（実運用で確認済み: 継続1回目で彩度+20%、以降のラウンドでも
-// コントラストが単調に増加し続けた）。補正後のVideoURL/VideoIDを次カットのPreviousVideoIDとして
-// 使うことで、ドリフトが次世代へ複利的に蓄積するのを防ぎます。
-//
-// 補正の基準には char.ReferenceURL（キャラクター立ち絵）を使わないこと。あれは白背景に
-// 3方向ターンアラウンドを並べたデザインシートで、背景の白が画像全体の平均彩度を大きく
-// 引き下げてしまう（実測: SATAVG=5.2、実際のシーンキーフレームは28.6前後）。これを基準にすると
-// 動画側が不自然に彩度不足（色褪せた見た目）になる回帰が実際に発生した。cut.KeyframeReference
-// は「Cinematic anime style」で描かれた実際のシーン画像で、image_to_video/reference_to_video
-// 生成時に使われたのと同じ色味の基準を持つため、こちらを使う。
-//
-// VideoProcessor未設定、またはカットにキーフレーム参照が無い場合は何もしません
-// （従来通り無補正のまま）。
-func (f VideoGenerationFilter) colorCorrectExtensionCut(ctx context.Context, fc *Context, cut *orchestrator.Cut) error {
-	if f.VideoProcessor == nil {
-		return nil
-	}
-	referenceURL := strings.TrimSpace(cut.KeyframeReference)
-	if referenceURL == "" {
-		return nil
-	}
-	destURI := colorCorrectedVideoDestURI(fc.OutputPath, cut.CutIndex)
-	if destURI == "" {
-		return nil
-	}
-	correctedURI, err := f.VideoProcessor.ColorMatchSaturation(ctx, cut.VideoURL, referenceURL, destURI)
-	if err != nil {
-		return fmt.Errorf("color match saturation for cut %d: %w", cut.CutIndex, err)
-	}
-	cut.VideoURL = correctedURI
-	cut.VideoID = correctedURI
-	return nil
-}
-
-// colorCorrectedVideoDestURI は彩度補正済み動画の保存先URIを組み立てます。
-func colorCorrectedVideoDestURI(outputPath string, cutIndex int) string {
-	outputPath = strings.TrimRight(strings.TrimSpace(outputPath), "/")
-	if outputPath == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s/videos/cut_%02d_color_corrected.mp4", outputPath, cutIndex)
-}
-
 // videoSeed は Veo 動画生成へ渡すシードを解決します。カットのキャラクターに紐づくシード
 // （キーフレーム画像生成と同じ値、go-veo-orchestrator@v1.6.0/keyframe/generator.go が
 // 常に char.Seed のみを使うのと揃えています）を返します。シード無し（0 = Veoリクエストから
@@ -334,70 +258,4 @@ func hasPendingCuts(recipe *orchestrator.VideoRecipe) bool {
 		}
 	}
 	return false
-}
-
-// videoGenGuidance は Veo 生成モード別のプロンプトガイダンスを保持します。
-// 埋め込みアセット（コンパイル時に存在が保証される）のため実行時の読み込み失敗は
-// 事実上起こらないが、万一欠けてもガイダンス無しで生成を続行する（テストで全モードの
-// 存在を検証しているため、欠落はCIで検出される）。
-var videoGenGuidance = sync.OnceValue(func() map[string]string {
-	prompts, err := assets.LoadVideoGenPrompts()
-	if err != nil {
-		return map[string]string{}
-	}
-	return prompts
-})
-
-// nextCutLastFrameReference は、cuts[i] の終了フレーム（frames_to_video 補間の lastFrame）
-// として使う「次カットのキーフレーム参照」を返します。次カットの開始フレームでこのカットを
-// 終えることで、カット境界の繋ぎ（構図・キャラの見た目）を滑らかにします。以下の場合は
-// 空文字を返し、従来どおり終了フレーム指定なしで生成します:
-//   - 次カットが無い、または次カットにキーフレームが無い
-//   - 次カットがセクション境界（意図的な場面転換なので、現カットの絵を次セクションの構図へ
-//     寄せない。applyChainResetKeyframe が境界で絵を引き継がないのと同じ判断）
-//   - キャラクターが異なる（補間中にキャラ同士がモーフィングしてしまう）
-//   - 現カットと同一のキーフレーム（尺分割で同じキーフレームを共有するカット等。
-//     終了フレーム = 開始フレームを強制すると動きが殺される）
-func nextCutLastFrameReference(cuts []orchestrator.Cut, i int) string {
-	if i+1 >= len(cuts) {
-		return ""
-	}
-	cur := cuts[i]
-	next := cuts[i+1]
-	ref := strings.TrimSpace(next.KeyframeReference)
-	if ref == "" || next.IsSectionStart {
-		return ""
-	}
-	if !strings.EqualFold(strings.TrimSpace(cur.CharacterID), strings.TrimSpace(next.CharacterID)) {
-		return ""
-	}
-	if ref == strings.TrimSpace(cur.KeyframeReference) {
-		return ""
-	}
-	return ref
-}
-
-// videoPrompt builds the prompt used for video generation, appending the guidance that matches
-// how Veo will actually interpret the request (ports.ClassifyVeoRequest の判定結果)。
-// 生成モードごとに正しい前提（開始フレームあり・参照画像あり・前クリップ継続）を伝える
-// ことで、存在しない入力への言及（例: video_extension で「参照画像に合わせろ」）を
-// 避けます。VisualAnchor と AudioCue が両方空の場合は従来通り空文字を返し、
-// validateVertexVeoRequest の「prompt is required」検証で壊れたレシピを検出できるままにします。
-func videoPrompt(cut orchestrator.Cut, mode ports.VeoGenerationMode) string {
-	anchor := strings.TrimSpace(cut.VisualAnchor)
-	cue := strings.TrimSpace(cut.AudioCue)
-	if anchor == "" && cue == "" {
-		return ""
-	}
-	parts := make([]string, 0, 3)
-	if anchor != "" {
-		parts = append(parts, anchor)
-	}
-	if cue != "" {
-		parts = append(parts, "Synchronize motion and camera timing with audio cue: "+cue)
-	}
-	if guidance := strings.TrimSpace(videoGenGuidance()[string(mode)]); guidance != "" {
-		parts = append(parts, guidance)
-	}
-	return strings.Join(parts, "\n")
 }

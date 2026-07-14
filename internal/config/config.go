@@ -10,12 +10,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-const (
-	defaultGeminiModel = "gemini-3.5-flash"
-	defaultImageModel  = "gemini-3-pro-image-preview"
-	defaultVeoModel    = "veo-3.1-generate-001"
-	taskGeneratePath   = "/tasks/generate"
-)
+const taskGeneratePath = "/tasks/generate"
 
 // Config はアプリ設定です。
 type Config struct {
@@ -92,12 +87,12 @@ func (c *Config) normalize() error {
 
 // NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
-	c.GeminiModels = domain.NormalizeModelList(c.GeminiModels, c.GeminiModel, defaultGeminiModel)
-	c.ImageModels = domain.NormalizeModelList(c.ImageModels, c.ImageModel, defaultImageModel)
-	c.VeoModels = domain.NormalizeModelList(c.VeoModels, c.VeoModel, defaultVeoModel)
-	c.GeminiModel = domain.NormalizeDefaultModel(c.GeminiModel, c.GeminiModels, defaultGeminiModel)
-	c.ImageModel = domain.NormalizeDefaultModel(c.ImageModel, c.ImageModels, defaultImageModel)
-	c.VeoModel = domain.NormalizeDefaultModel(c.VeoModel, c.VeoModels, defaultVeoModel)
+	c.GeminiModels = domain.NormalizeModelList(c.GeminiModels, c.GeminiModel, domain.DefaultGeminiModel)
+	c.ImageModels = domain.NormalizeModelList(c.ImageModels, c.ImageModel, domain.DefaultImageModel)
+	c.VeoModels = domain.NormalizeModelList(c.VeoModels, c.VeoModel, domain.DefaultVeoModel)
+	c.GeminiModel = domain.NormalizeDefaultModel(c.GeminiModel, c.GeminiModels, domain.DefaultGeminiModel)
+	c.ImageModel = domain.NormalizeDefaultModel(c.ImageModel, c.ImageModels, domain.DefaultImageModel)
+	c.VeoModel = domain.NormalizeDefaultModel(c.VeoModel, c.VeoModels, domain.DefaultVeoModel)
 }
 
 // LoadConfig は環境変数から設定を読み込みます。
