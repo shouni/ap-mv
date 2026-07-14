@@ -12,31 +12,26 @@ import (
 )
 
 // buildGenerateBody は内部の動画生成リクエストを Vertex AI Veo のリクエスト本文へ変換します。
+// どの生成機能（video / referenceImages / image+lastFrame / image）でリクエストを組むかは
+// ports.ClassifyVeoRequest に一本化されており、filter 側のプロンプト・尺選択と構造的に
+// 一致します（Veo は video / referenceImages / image を同一リクエストで併用できません）。
 func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.VideoGenerationRequest) map[string]any {
 	instance := map[string]any{
 		"prompt": strings.TrimSpace(req.Prompt),
 	}
-	hasVideoContext := false
-	if r.usePreviousVideo {
-		if media := previousVideoMedia(req.PreviousVideoID); media != nil {
-			instance["video"] = media
-			hasVideoContext = true
-		}
-	}
-	// Veo は video / referenceImages / image を同一リクエストで併用できないため、
-	// video-to-video 文脈がある場合は画像参照を送らない。referenceImages は
-	// 対応モデル（Veo 3 系、Fast を除く）のみで使い、非対応モデルはキーフレームの
-	// image 入力（image-to-video）へフォールバックする。
-	if !hasVideoContext {
-		if refs := referenceImagesMedia(req); refs != nil && r.modelSupportsReferenceImages() {
-			instance["referenceImages"] = refs
-		} else if media := imageMedia(req); media != nil {
+	switch ports.ClassifyVeoRequest(req, r.usePreviousVideo, r.capabilities()) {
+	case ports.VeoModeVideoExtension:
+		instance["video"] = previousVideoMedia(req.PreviousVideoID)
+	case ports.VeoModeReferenceToVideo:
+		instance["referenceImages"] = referenceImagesMedia(req)
+	case ports.VeoModeFramesToVideo:
+		instance["image"] = imageMedia(req)
+		instance["lastFrame"] = lastFrameMedia(req)
+	case ports.VeoModeImageToVideo:
+		// 画像参照が一切ないリクエスト（テキストのみ）も image_to_video に分類される
+		// ため、image は存在するときだけ送る。
+		if media := imageMedia(req); media != nil {
 			instance["image"] = media
-			// lastFrame（first/last frame 補間）は image（開始フレーム）とセットのときのみ
-			// 有効なため、この分岐の中でだけ送る。
-			if lf := lastFrameMedia(req); lf != nil && r.modelSupportsLastFrame() {
-				instance["lastFrame"] = lf
-			}
 		}
 	}
 	if media := audioMedia(req); media != nil {
@@ -59,6 +54,15 @@ func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.Video
 	return map[string]any{
 		"instances":  []any{instance},
 		"parameters": parameters,
+	}
+}
+
+// capabilities は使用モデルの Veo オプション機能対応状況を ports.VeoCapabilities として
+// 返します（ports.ClassifyVeoRequest の入力）。
+func (r *VertexVeoRunner) capabilities() ports.VeoCapabilities {
+	return ports.VeoCapabilities{
+		ReferenceImages: r.modelSupportsReferenceImages(),
+		LastFrame:       r.modelSupportsLastFrame(),
 	}
 }
 

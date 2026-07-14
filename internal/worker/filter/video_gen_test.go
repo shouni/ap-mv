@@ -384,13 +384,13 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 	prefix := "anchor scene\nSynchronize motion and camera timing with audio cue: bass drop at 0:10\n"
 
 	tests := []struct {
-		mode veoGenerationMode
+		mode ports.VeoGenerationMode
 		want []string
 	}{
-		{veoModeImageToVideo, []string{"starting keyframe image", "exactly one character", "gradually and continuously", "No text"}},
-		{veoModeFramesToVideo, []string{"starting keyframe image", "final frame image", "exactly one character", "gradually and continuously", "No text"}},
-		{veoModeReferenceToVideo, []string{"reference images", "design sheet", "never depict multiple people", "gradually and continuously", "No text"}},
-		{veoModeVideoExtension, []string{"Continue seamlessly", "previous video clip", "no hard cut", "pose, or gesture", "No text"}},
+		{ports.VeoModeImageToVideo, []string{"starting keyframe image", "exactly one character", "gradually and continuously", "No text"}},
+		{ports.VeoModeFramesToVideo, []string{"starting keyframe image", "final frame image", "exactly one character", "gradually and continuously", "No text"}},
+		{ports.VeoModeReferenceToVideo, []string{"reference images", "design sheet", "never depict multiple people", "gradually and continuously", "No text"}},
+		{ports.VeoModeVideoExtension, []string{"Continue seamlessly", "previous video clip", "no hard cut", "pose, or gesture", "No text"}},
 	}
 	for _, tt := range tests {
 		got := videoPrompt(cut, tt.mode)
@@ -408,52 +408,8 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 		}
 	}
 
-	if got := videoPrompt(orchestrator.Cut{}, veoModeImageToVideo); got != "" {
+	if got := videoPrompt(orchestrator.Cut{}, ports.VeoModeImageToVideo); got != "" {
 		t.Errorf("videoPrompt(empty) = %q, want empty (keeps validation failing on broken recipes)", got)
-	}
-}
-
-// TestVideoGenModeForMirrorsAdapterBranches verifies mode selection matches
-// adapters.VertexVeoRunner.buildGenerateBody: video context (usePreviousVideo + gs:// previous
-// video) wins and drops image references; otherwise referenceImages with a supporting runner
-// means reference_to_video; an image-input cut with a last-frame reference and a supporting
-// runner means frames_to_video; everything else (no refs, unsupported model, non-gs:// video ID,
-// or a runner without the optional interfaces) is image_to_video.
-func TestVideoGenModeForMirrorsAdapterBranches(t *testing.T) {
-	refs := []string{"gs://bucket/char.png", "gs://bucket/keyframe.png"}
-	lastFrame := "gs://bucket/next_keyframe.png"
-	supporting := &durationCaptureRunner{supportsReferenceImages: true, supportsLastFrame: true}
-	nonSupporting := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: false}
-	lastFrameOnly := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: true}
-	plain := sequenceRunner{} // implements neither optional interface
-
-	tests := []struct {
-		name             string
-		usePreviousVideo bool
-		lastVideoID      string
-		refs             []string
-		lastFrameRef     string
-		runner           ports.VideoRunner
-		want             veoGenerationMode
-	}{
-		{"video context wins over refs", true, "gs://bucket/prev.mp4", refs, "", supporting, veoModeVideoExtension},
-		{"video context wins over last frame", true, "gs://bucket/prev.mp4", nil, lastFrame, supporting, veoModeVideoExtension},
-		{"previous video disabled", false, "gs://bucket/prev.mp4", refs, "", supporting, veoModeReferenceToVideo},
-		{"non-gs previous video id", true, "operation-id-123", refs, "", supporting, veoModeReferenceToVideo},
-		{"refs with supporting runner", false, "", refs, "", supporting, veoModeReferenceToVideo},
-		{"refs win over last frame", false, "", refs, lastFrame, supporting, veoModeReferenceToVideo},
-		{"refs with non-supporting model", false, "", refs, "", nonSupporting, veoModeImageToVideo},
-		{"refs with plain runner", false, "", refs, "", plain, veoModeImageToVideo},
-		{"no refs", false, "", nil, "", supporting, veoModeImageToVideo},
-		{"last frame on image input", false, "", nil, lastFrame, lastFrameOnly, veoModeFramesToVideo},
-		{"last frame on ref fallback", false, "", refs, lastFrame, lastFrameOnly, veoModeFramesToVideo},
-		{"last frame with non-supporting model", false, "", nil, lastFrame, nonSupporting, veoModeImageToVideo},
-		{"last frame with plain runner", false, "", nil, lastFrame, plain, veoModeImageToVideo},
-	}
-	for _, tt := range tests {
-		if got := videoGenModeFor(tt.usePreviousVideo, tt.lastVideoID, tt.refs, tt.lastFrameRef, tt.runner); got != tt.want {
-			t.Errorf("%s: videoGenModeFor() = %s, want %s", tt.name, got, tt.want)
-		}
 	}
 }
 

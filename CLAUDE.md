@@ -62,6 +62,8 @@ Veo's biggest failure mode is characters/context breaking across cuts. Four mech
 - **Audio-driven prompting** — each cut's `audio_cue` (e.g. "synchronized with the heavy bass drop at 0:10") is injected into the Veo prompt.
 - **Context chain (video-to-video)** — the previous cut's `VideoID` is passed as `PreviousVideoID` to the next cut's request, chaining context.
 
+Which Veo feature a request resolves to (`video` / `referenceImages` / `image`+`lastFrame` / `image`) is decided in exactly one place — `ports.ClassifyVeoRequest` (`internal/ports/veo_mode.go`) — consumed by the adapter's request-body construction, the filter's prompt-guidance selection, and the cut-duration normalization. When adding a new Veo input mode, extend the classifier (and its capability struct `ports.VeoCapabilities`) rather than adding branches at call sites.
+
 Resumability depends on per-cut `status`/`video_id`/`video_url` in `video_music_meta.json`: cuts already `status=generated` are skipped by `VideoTimelineRunner` and their `video_id` is reused as the next cut's `PreviousVideoID`, so re-submitting a recipe resumes rather than restarts.
 
 ### Auth model
