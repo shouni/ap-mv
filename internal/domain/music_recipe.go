@@ -201,6 +201,14 @@ func ValidateVideoRecipe(r *VideoRecipe) error {
 	if len(r.Cuts) == 0 {
 		return fmt.Errorf("video recipe requires cuts")
 	}
+	numSections := len(r.MusicRecipe.Sections)
+	for _, cut := range r.Cuts {
+		// SectionIndex は1始まりで、0は「未割り当て」を意味する正当な値。
+		// 範囲外の非ゼロ値だけを不正とする。
+		if cut.SectionIndex < 0 || cut.SectionIndex > numSections {
+			return fmt.Errorf("cut %d has out-of-range section_index %d (recipe has %d sections)", cut.CutIndex, cut.SectionIndex, numSections)
+		}
+	}
 	return nil
 }
 
