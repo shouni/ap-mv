@@ -118,15 +118,15 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `AP_MV_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
 | `AP_MUSIC_BUCKET` | `ap-music` | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/<jobID>.json`（ap-comp/lyric-videoと同じ規則）を解決するための GCS bucket |
 | `GEMINI_MODEL` | `gemini-3.5-flash` | 台本生成などのテキスト生成モデル。未設定時は `GEMINI_MODELS` の先頭を使います |
-| `GEMINI_MODELS` | `gemini-3.5-flash,gemini-3.1-pro-preview` | Web UI の Gemini Model 選択肢 |
+| `GEMINI_MODELS` | `gemini-3.5-flash` | Web UI の Gemini Model 選択肢 |
 | `IMAGE_MODEL` | `gemini-3.1-flash-image` | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |
-| `IMAGE_MODELS` | `gemini-3.1-flash-image,gemini-3-pro-image` | Web UI の Image Model 選択肢 |
+| `IMAGE_MODELS` | `gemini-3.1-flash-image` | Web UI の Image Model 選択肢 |
 | `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `SERVICE_ACCOUNT_EMAIL` | なし | Cloud Tasks OIDC token を発行する service account |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
-| `VEO_MODELS` | `veo-3.1-generate-001,veo-3.1-fast-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |
+| `VEO_MODELS` | `veo-3.1-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |
 | `VEO_LOCATION_ID` | `GCP_LOCATION_ID` の値 | Veo API を呼び出す Vertex AI location。`global` も指定可能（グローバルエンドポイント `aiplatform.googleapis.com` を使用）。Veo は提供リージョンが限られるため、データ所在地の要件がなければ `global` を、リージョン固定が必要なら `us-central1` 等を指定します |
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
 | `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16`。タスク側の指定（ショート動画生成の `veo_aspect_ratio`）があればそちらを優先 |

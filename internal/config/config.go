@@ -34,10 +34,10 @@ type Config struct {
 	SlackWebhookURL        string        `env:"SLACK_WEBHOOK_URL"`
 	GeminiModel            string        `env:"GEMINI_MODEL"`
 	ImageModel             string        `env:"IMAGE_MODEL"`
-	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash,gemini-3.1-pro-preview"`
-	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image,gemini-3-pro-image"`
+	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash"`
+	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
 	VeoModel               string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoModels              []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001,veo-3.1-fast-generate-001"`
+	VeoModels              []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
 	VeoLocationID          string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio         string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
