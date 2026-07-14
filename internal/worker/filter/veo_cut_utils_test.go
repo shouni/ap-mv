@@ -16,7 +16,7 @@ func TestExpandCutsToSupportedDurationsUsePreviousVideo(t *testing.T) {
 		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 106, DurationSec: 8}},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
 
 	if len(got) != 3 {
 		t.Fatalf("cuts = %d, want 3", len(got))
@@ -48,7 +48,7 @@ func TestExpandCutsToSupportedDurationsSkipsGeneratedCuts(t *testing.T) {
 		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 98, DurationSec: 8}},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
 
 	if got[0].DurationSec != 8 {
 		t.Errorf("generated cut[0] duration = %v, want unchanged 8", got[0].DurationSec)
@@ -66,7 +66,7 @@ func TestExpandCutsToSupportedDurationsDisabled(t *testing.T) {
 		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, false, nil, nil, false)
+	got := expandCutsToSupportedDurations(cuts, false, nil, false)
 
 	for i, cut := range got {
 		if cut.DurationSec != 8 {
@@ -96,7 +96,7 @@ func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *t
 	// VideoGenerationFilter.Execute does on every resumption), then "generate" the next
 	// pending cut, marking IsChainStart exactly as runDirect does.
 	for next := 0; next < len(cuts); next++ {
-		cuts = expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+		cuts = expandCutsToSupportedDurations(cuts, true, nil, false)
 		if cuts[next].DurationSec != veoVideoExtensionDurationSec {
 			cuts[next].IsChainStart = true
 		}
@@ -121,20 +121,18 @@ func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *t
 // TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset verifies that a section change
 // resets the cumulative-duration chain even though the technical cap hasn't been reached, and
 // that only the section-boundary cut is marked IsSectionStart (not ordinary technical resets).
+// Section membership comes directly from cut.SectionIndex (as VideoRecipe.Normalize would set
+// it from StartSec), not from a separately-passed sections list.
 // Note: IsChainStart itself is set later by runDirect (video_gen.go), not by this function.
 func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) {
-	sections := []orchestrator.Section{
-		{Name: "Verse", StartSeconds: 0, EndSeconds: 16},
-		{Name: "Chorus", StartSeconds: 16, EndSeconds: 32},
-	}
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},  // Verse start (i==0, not a "section boundary")
-		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},  // still Verse, would continue (cumulative 8+7=15<=30)
-		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 16, DurationSec: 8}}, // Chorus start: section boundary despite cumulative headroom
-		{CutIndex: 4, AudioSync: orchestrator.AudioSync{StartSec: 24, DurationSec: 8}}, // still Chorus, continuation
+		{CutIndex: 1, SectionIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},  // Verse start (i==0, not a "section boundary")
+		{CutIndex: 2, SectionIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},  // still Verse, would continue (cumulative 8+7=15<=30)
+		{CutIndex: 3, SectionIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 16, DurationSec: 8}}, // Chorus start: section boundary despite cumulative headroom
+		{CutIndex: 4, SectionIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 24, DurationSec: 8}}, // still Chorus, continuation
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, sections, nil, false)
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
 
 	wantSectionStart := []bool{false, false, true, false}
 	for i := range got {
@@ -153,19 +151,20 @@ func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) 
 	}
 }
 
-// TestExpandCutsToSupportedDurationsNoSectionsIsNoop verifies that omitting sections (nil)
-// behaves exactly like before section-boundary detection existed.
-func TestExpandCutsToSupportedDurationsNoSectionsIsNoop(t *testing.T) {
+// TestExpandCutsToSupportedDurationsZeroSectionIndexIsNoop verifies that cuts without a
+// SectionIndex (the zero value, e.g. recipes predating this field) behave exactly like before
+// section-boundary detection existed: no section-start resets are inferred.
+func TestExpandCutsToSupportedDurationsZeroSectionIndexIsNoop(t *testing.T) {
 	cuts := []orchestrator.Cut{
 		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},
 		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
 
 	for i, cut := range got {
 		if cut.IsSectionStart {
-			t.Errorf("cut[%d] IsSectionStart = true, want false when sections is nil", i)
+			t.Errorf("cut[%d] IsSectionStart = true, want false when SectionIndex is unset", i)
 		}
 	}
 }
@@ -194,7 +193,7 @@ func TestExpandCutsToSupportedDurationsRespectsSceneSplitReset(t *testing.T) {
 		},
 	}
 
-	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
 
 	wantDurations := []float64{8, 7, 8, 7, 8, 7, 7}
 	wantSectionStart := []bool{false, false, true, false, true, false, false}
@@ -204,6 +203,33 @@ func TestExpandCutsToSupportedDurationsRespectsSceneSplitReset(t *testing.T) {
 	for i := range got {
 		if got[i].DurationSec != wantDurations[i] {
 			t.Errorf("cut[%d].DurationSec = %v, want %v", i, got[i].DurationSec, wantDurations[i])
+		}
+		if got[i].IsSectionStart != wantSectionStart[i] {
+			t.Errorf("cut[%d].IsSectionStart = %v, want %v", i, got[i].IsSectionStart, wantSectionStart[i])
+		}
+	}
+}
+
+// TestExpandCutsToSupportedDurationsPreservesSectionIndexAcrossSplit verifies that a long cut
+// split into multiple sub-cuts (splitCutBySupportedDurations) carries its SectionIndex to every
+// sub-cut, so the split itself is never mistaken for a section boundary.
+func TestExpandCutsToSupportedDurationsPreservesSectionIndexAcrossSplit(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, SectionIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 20}},
+		{CutIndex: 2, SectionIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 20, DurationSec: 8}},
+	}
+
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
+
+	// cut 1 (20s) splits into 3 sub-cuts (8,8,4), all SectionIndex=1; cut 2 stays SectionIndex=2.
+	wantSectionIndex := []int{1, 1, 1, 2}
+	wantSectionStart := []bool{false, false, false, true}
+	if len(got) != len(wantSectionIndex) {
+		t.Fatalf("cuts = %d, want %d", len(got), len(wantSectionIndex))
+	}
+	for i := range got {
+		if got[i].SectionIndex != wantSectionIndex[i] {
+			t.Errorf("cut[%d].SectionIndex = %d, want %d", i, got[i].SectionIndex, wantSectionIndex[i])
 		}
 		if got[i].IsSectionStart != wantSectionStart[i] {
 			t.Errorf("cut[%d].IsSectionStart = %v, want %v", i, got[i].IsSectionStart, wantSectionStart[i])

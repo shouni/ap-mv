@@ -214,9 +214,9 @@ func firstNonEmpty(values ...string) string {
 }
 
 // ApplyLyricsToVideoRecipeCuts は music_recipe の歌詞テキストをセクション単位に分解し、
-// 各カットの StartSec が属するセクションの歌詞行を cut.Dialogue に書き込みます。
-// すでに Dialogue が設定済みのカットはスキップします。
-// DownloadKeyframes など、保存済みレシピを読んで処理する経路でも呼び出せます。
+// 各カットの所属セクション（cut.SectionIndex、1始まり。VideoRecipe.Normalize が StartSec から
+// 自動補完）の歌詞行を cut.Dialogue に書き込みます。すでに Dialogue が設定済みのカットは
+// スキップします。DownloadKeyframes など、保存済みレシピを読んで処理する経路でも呼び出せます。
 func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	if recipe == nil || recipe.MusicRecipe.Lyrics == nil {
 		return
@@ -225,18 +225,19 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	if lyricsText == "" {
 		return
 	}
+	// cut.SectionIndex を使ってセクションの所属を判定するため、（呼び出し元がまだ
+	// Normalize していない可能性に備えて）ここで確実に補完しておく。Normalize は
+	// 冪等なので、既に呼ばれていても無害。
+	recipe.Normalize()
 	sectionLines := parseLyricsSections(lyricsText)
 
 	secCutsMap := make(map[string][]int)
 	for i, cut := range recipe.Cuts {
-		for _, sec := range recipe.MusicRecipe.Sections {
-			sStart := float64(sec.StartSeconds)
-			sEnd := float64(SectionEndSeconds(sec.StartSeconds, sec.EndSeconds, sec.Duration))
-			if cut.StartSec >= sStart && cut.StartSec < sEnd {
-				secCutsMap[sec.Name] = append(secCutsMap[sec.Name], i)
-				break
-			}
+		if cut.SectionIndex < 1 || cut.SectionIndex > len(recipe.MusicRecipe.Sections) {
+			continue
 		}
+		secName := recipe.MusicRecipe.Sections[cut.SectionIndex-1].Name
+		secCutsMap[secName] = append(secCutsMap[secName], i)
 	}
 
 	for secName, cutIndices := range secCutsMap {

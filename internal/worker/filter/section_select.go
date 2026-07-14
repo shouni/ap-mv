@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
-
-	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // SectionSelectFilter は、レシピを fc.Task.SectionIndex で指定されたセクションに属する
@@ -35,7 +33,8 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	if sectionIndex < 0 || sectionIndex >= len(sections) {
 		return fmt.Errorf("section_index %d is out of range (recipe has %d sections)", sectionIndex, len(sections))
 	}
-	start, end := sectionTimeRange(sections, sectionIndex)
+	// cut.SectionIndex は1始まりなので、0始まりの sectionIndex と比較する際は +1 する。
+	wantSectionIndex := sectionIndex + 1
 
 	// 保存済みメタデータの keyframe_reference は元ジョブ相対パスの場合があるため、
 	// 新ジョブの出力パスで動画化する前に元ジョブのルートで絶対URI化する。
@@ -43,7 +42,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 
 	cuts := make([]orchestrator.Cut, 0, len(fc.VideoRecipe.Cuts))
 	for _, cut := range fc.VideoRecipe.Cuts {
-		if cut.StartSec < start || cut.StartSec >= end {
+		if cut.SectionIndex != wantSectionIndex {
 			continue
 		}
 		// 元ジョブで生成済みのカットも、ショート動画はタスク指定のモデル・アスペクト比で
@@ -64,7 +63,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	// video_extension 用の 7 秒固定への正規化は、後続の VideoGenerationFilter が
 	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video/reference_to_video 用の
 	// 尺で分割・丸めるだけでよい。
-	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, sections, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
+	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {
@@ -72,16 +71,6 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	}
 	fc.Recipe = recipe
 	return nil
-}
-
-// sectionTimeRange はセクションの正規化済み時間範囲 [start, end) を返します。
-// EndSeconds が未設定のセクションは Duration から補完します
-// （domain.ApplyLyricsToVideoRecipeCuts のカット割り当てと同じ規則）。
-func sectionTimeRange(sections []orchestrator.Section, index int) (float64, float64) {
-	sec := sections[index]
-	start := float64(sec.StartSeconds)
-	end := float64(domain.SectionEndSeconds(sec.StartSeconds, sec.EndSeconds, sec.Duration))
-	return start, end
 }
 
 // youtubeShortMaxDurationSec は YouTube ショート動画の最大尺（秒）です。
