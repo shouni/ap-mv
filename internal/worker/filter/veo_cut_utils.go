@@ -8,6 +8,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // veoSupportedDurationsSec は Veo image_to_video が受け付けるカット尺（秒）の昇順リストです。
@@ -144,9 +145,8 @@ func sectionIndexForStartSec(sections []orchestrator.Section, startSec float64) 
 
 // allowedDurationsFor は、指定されたカットが reference_to_video（referenceImages）と
 // image_to_video のどちらで生成されるかに応じて、Veo がそのカットに対して受け付ける尺
-// （秒）の候補リストを返します。判定規則は 3_video_gen.go の buildReferenceImages と
-// 揃えています（referenceImagesSupported が false の場合、モデルが referenceImages に
-// 対応していないため image_to_video 用の {4,6,8} を返します）。
+// （秒）の候補リストを返します（referenceImagesSupported が false の場合、モデルが
+// referenceImages に対応していないため image_to_video 用の {4,6,8} を返します）。
 func allowedDurationsFor(cut orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []float64 {
 	if cutUsesReferenceImages(cut, characters, referenceImagesSupported) {
 		return veoReferenceToVideoDurationsSec
@@ -155,20 +155,34 @@ func allowedDurationsFor(cut orchestrator.Cut, characters *characterkit.Characte
 }
 
 // cutUsesReferenceImages は、このカットが Veo の referenceImages（reference_to_video）で
-// 生成されるかを返します。3_video_gen.go の buildReferenceImages と同じ規則（キャラクターに
-// 参照アートがある、またはカット自体にキーフレーム参照がある）を使い、それに加えて使用
-// モデルが referenceImages に対応しているかを掛け合わせます（Fast モデル等、非対応の場合は
-// image_to_video へフォールバックするため、常に image_to_video 用の {4,6,8} を使ってよい）。
+// 生成されるかを返します。generateCut が実際に組むのと同じ参照画像リスト
+// （cutReferenceImages）でリクエストを分類する（ports.ClassifyVeoRequest）ため、
+// 尺の正規化と実際の生成が使う判定は構造的に一致します。
 func cutUsesReferenceImages(cut orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) bool {
-	if !referenceImagesSupported {
-		return false
+	req := ports.VideoGenerationRequest{
+		ImageReference:  cut.KeyframeReference,
+		ReferenceImages: cutReferenceImages(cut, characters),
 	}
+	caps := ports.VeoCapabilities{ReferenceImages: referenceImagesSupported}
+	return ports.ClassifyVeoRequest(req, false, caps) == ports.VeoModeReferenceToVideo
+}
+
+// cutReferenceImages はキャラクター立ち絵とキーフレームから referenceImages 用 URI リストを
+// 組み立てます。generateCut（動画生成リクエスト）と cutUsesReferenceImages（尺の正規化）の
+// 両方がこの1つの規則を共有します。
+func cutReferenceImages(cut orchestrator.Cut, characters *characterkit.Characters) []string {
+	var refs []string
 	if characters != nil {
-		if char := characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil && strings.TrimSpace(char.ReferenceURL) != "" {
-			return true
+		if char := characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil {
+			if ref := strings.TrimSpace(char.ReferenceURL); ref != "" {
+				refs = append(refs, ref)
+			}
 		}
 	}
-	return strings.TrimSpace(cut.KeyframeReference) != ""
+	if ref := strings.TrimSpace(cut.KeyframeReference); ref != "" {
+		refs = append(refs, ref)
+	}
+	return refs
 }
 
 // splitCutBySupportedDurations は1カットをサポート尺のサブカット列へ分割します。
