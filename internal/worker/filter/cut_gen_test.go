@@ -22,7 +22,16 @@ func TestCutKeyframeFilterStampsTaskAspectRatio(t *testing.T) {
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate, VeoAspectRatio: "9:16"}
 	flt := CutKeyframeFilter{}
 
-	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}, Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}}}})
+	err := flt.Execute(context.Background(), &Context{
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
+		Services: Services{
+			Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -43,7 +52,16 @@ func TestCutKeyframeFilterDefaultsAspectRatioWhenTaskHasNone(t *testing.T) {
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate}
 	flt := CutKeyframeFilter{}
 
-	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}, Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}}}})
+	err := flt.Execute(context.Background(), &Context{
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
+		Services: Services{
+			Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
+		},
+	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -87,7 +105,16 @@ func TestCutKeyframeFilterSetsAspectRatioBeforeRunAndSave(t *testing.T) {
 	runner := &aspectRatioCapturingRunner{}
 	flt := CutKeyframeFilter{}
 
-	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}, Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}}})
+	err := flt.Execute(context.Background(), &Context{
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
+		Services: Services{
+			Workflows: &orchestrator.Workflows{CutKeyframe: runner},
+		},
+	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

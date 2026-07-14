@@ -153,11 +153,8 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 			HistoryRepository: r.deps.HistoryRepository,
 		},
 	}
-	planner := r.deps.Planner
-	if planner == nil {
-		planner = DefaultPlanner{}
-	}
-	filters, err := planner.Plan(task, videoRunner)
+	// deps.Planner は New が DefaultPlanner{} で補完済みのため、ここでは nil になりません。
+	filters, err := r.deps.Planner.Plan(task, videoRunner)
 	if err != nil {
 		return nil, err
 	}

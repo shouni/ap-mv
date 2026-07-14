@@ -17,12 +17,18 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 			{"name": "intro", "duration_seconds": 8, "prompt": "blue light"}
 		]
 	}`}
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:     "job-1",
-		Command:   domain.CommandMVFromKeyframeVideoRecipe,
-		RecipeURL: "gs://bucket/recipe.json",
-		AudioURL:  "gs://bucket/music.mp3",
-	}}, Services: Services{Reader: reader},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:     "job-1",
+				Command:   domain.CommandMVFromKeyframeVideoRecipe,
+				RecipeURL: "gs://bucket/recipe.json",
+				AudioURL:  "gs://bucket/music.mp3",
+			},
+		},
+		Services: Services{
+			Reader: reader,
+		},
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -47,11 +53,17 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 			{"cut_index": 1, "duration_sec": 8, "visual_anchor": "blue light", "keyframe_reference": "gs://bucket/keyframe.png"}
 		]
 	}`}
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:     "job-1",
-		Command:   domain.CommandMVFromKeyframeVideoRecipe,
-		RecipeURL: "gs://bucket/video_music_meta.json",
-	}}, Services: Services{Reader: reader},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:     "job-1",
+				Command:   domain.CommandMVFromKeyframeVideoRecipe,
+				RecipeURL: "gs://bucket/video_music_meta.json",
+			},
+		},
+		Services: Services{
+			Reader: reader,
+		},
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -70,16 +82,20 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 
 // TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:       "job-1",
-		Command:     domain.CommandMVFromKeyframeVideoRecipe,
-		CharacterID: "zundamon",
-	}, Recipe: &domain.MusicRecipe{
-		Title: "recipe",
-		Sections: []domain.MusicSection{
-			{Name: "intro", Duration: 8, Prompt: "blue light"},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:       "job-1",
+				Command:     domain.CommandMVFromKeyframeVideoRecipe,
+				CharacterID: "zundamon",
+			},
+			Recipe: &domain.MusicRecipe{
+				Title: "recipe",
+				Sections: []domain.MusicSection{
+					{Name: "intro", Duration: 8, Prompt: "blue light"},
+				},
+			},
 		},
-	}},
 	}
 
 	if err := (CutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {

@@ -51,7 +51,12 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
 	flt := ChainFinalizeFilter{VideoProcessor: vp}
 
-	err := flt.Execute(context.Background(), &Context{State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}})
+	err := flt.Execute(context.Background(), &Context{
+		State: State{
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
+	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

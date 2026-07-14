@@ -51,12 +51,16 @@ func newSectionSelectRecipe() *orchestrator.VideoRecipe {
 // split into 8s + 4s sub-cuts sharing the same keyframe).
 func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 	sectionIndex := 1
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:        "short-1",
-		Command:      domain.CommandShortVideoFromSection,
-		SectionIndex: &sectionIndex,
-		RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
-	}, VideoRecipe: newSectionSelectRecipe()},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+				RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
+			},
+			VideoRecipe: newSectionSelectRecipe(),
+		},
 	}
 
 	if err := (SectionSelectFilter{}).Execute(context.Background(), fc); err != nil {
@@ -202,11 +206,15 @@ func TestResolveRecipeObjectURI(t *testing.T) {
 // TestSectionSelectFilterRejectsOutOfRangeSection verifies out-of-range section indexes fail.
 func TestSectionSelectFilterRejectsOutOfRangeSection(t *testing.T) {
 	sectionIndex := 5
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:        "short-1",
-		Command:      domain.CommandShortVideoFromSection,
-		SectionIndex: &sectionIndex,
-	}, VideoRecipe: newSectionSelectRecipe()},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+			},
+			VideoRecipe: newSectionSelectRecipe(),
+		},
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)
@@ -221,11 +229,15 @@ func TestSectionSelectFilterRejectsEmptySection(t *testing.T) {
 	sectionIndex := 1
 	recipe := newSectionSelectRecipe()
 	recipe.Cuts = recipe.Cuts[:1] // サビのカットを取り除く
-	fc := &Context{State: State{Task: &domain.Task{
-		JobID:        "short-1",
-		Command:      domain.CommandShortVideoFromSection,
-		SectionIndex: &sectionIndex,
-	}, VideoRecipe: recipe},
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+			},
+			VideoRecipe: recipe,
+		},
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)
