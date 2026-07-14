@@ -225,6 +225,10 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	if lyricsText == "" {
 		return
 	}
+	// cut.SectionIndex を使ってセクションの所属を判定するため、（呼び出し元がまだ
+	// Normalize していない可能性に備えて）ここで確実に補完しておく。Normalize は
+	// 冪等なので、既に呼ばれていても無害。
+	recipe.Normalize()
 	sectionLines := parseLyricsSections(lyricsText)
 
 	secCutsMap := make(map[string][]int)
