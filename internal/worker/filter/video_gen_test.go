@@ -30,11 +30,7 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	queue := &captureQueue{}
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}, Services: Services{TaskQueue: queue}})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
 	}
@@ -74,12 +70,7 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	workflow := &recordingVideoWorkflow{}
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
-		Workflows:   &orchestrator.Workflows{Video: workflow},
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}, Services: Services{TaskQueue: queue, Workflows: &orchestrator.Workflows{Video: workflow}}})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
 	}
@@ -113,11 +104,7 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 	queue := &captureQueue{}
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}, Services: Services{TaskQueue: queue}})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
 	}
@@ -145,11 +132,7 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	runner := &contextCaptureRunner{}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/ap-mv/veo/jobs/job-1/"}})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -174,10 +157,7 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 	}
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -225,11 +205,7 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	runner := &seedCaptureRunner{}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		Characters:  characters,
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}, Services: Services{Characters: characters}})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -260,11 +236,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	runner := &durationCaptureRunner{supportsReferenceImages: true}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	if err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		Characters:  characters,
-	}); err != nil {
+	if err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}, Services: Services{Characters: characters}}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if len(runner.durations) != 1 || runner.durations[0] != 8 {
@@ -283,11 +255,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	runner2 := &durationCaptureRunner{supportsReferenceImages: true}
 	flt2 := VideoGenerationFilter{Runner: runner2}
 
-	if err := flt2.Execute(context.Background(), &Context{
-		Task:        task2,
-		VideoRecipe: recipe2,
-		Characters:  characters,
-	}); err != nil {
+	if err := flt2.Execute(context.Background(), &Context{State: State{Task: task2, VideoRecipe: recipe2}, Services: Services{Characters: characters}}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if len(runner2.durations) != 1 || runner2.durations[0] != 6 {

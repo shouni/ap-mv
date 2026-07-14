@@ -10,7 +10,7 @@ import (
 
 // このファイルは video_extension（video-to-video 継続）チェーンの品質維持処理を集めています:
 // チェーンリセット時の最終フレーム引き継ぎと、継続生成で蓄積する彩度ドリフトの補正です。
-// 生成ループ本体は 3_video_gen.go、プロンプト・lastFrame 選択は 3_video_gen_prompt.go を
+// 生成ループ本体は video_gen.go、プロンプト・lastFrame 選択は video_gen_prompt.go を
 // 参照してください。
 
 // applyChainResetKeyframe は、チェーンリセット後の新規ベースカットの参照画像を、静的な

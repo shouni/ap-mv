@@ -117,7 +117,7 @@ func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *t
 // TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset verifies that a section change
 // resets the cumulative-duration chain even though the technical cap hasn't been reached, and
 // that only the section-boundary cut is marked IsSectionStart (not ordinary technical resets).
-// Note: IsChainStart itself is set later by runDirect (3_video_gen.go), not by this function.
+// Note: IsChainStart itself is set later by runDirect (video_gen.go), not by this function.
 func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) {
 	sections := []orchestrator.Section{
 		{Name: "Verse", StartSeconds: 0, EndSeconds: 16},

@@ -51,10 +51,7 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
 	flt := ChainFinalizeFilter{VideoProcessor: vp}
 
-	err := flt.Execute(context.Background(), &Context{
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/jobs/job-1/",
-	})
+	err := flt.Execute(context.Background(), &Context{State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -81,7 +78,7 @@ func TestChainFinalizeFilterNoopWithoutVideoProcessor(t *testing.T) {
 		Cuts: []orchestrator.Cut{{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4"}},
 	}
 	flt := ChainFinalizeFilter{}
-	err := flt.Execute(context.Background(), &Context{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"})
+	err := flt.Execute(context.Background(), &Context{State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

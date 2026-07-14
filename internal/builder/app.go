@@ -55,17 +55,11 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
-	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
-	}
 	notifier, err := adapters.NewSlackAdapter(httpClient, cfg.SlackWebhookURL, cfg.ServiceURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
 	}
-	pipe.Notifier = notifier
 	queue := taskQueueAdapter{enqueuer: enqueuer}
-	pipe.TaskQueue = queue
 	historyRepository := repository.NewVideoHistoryRepository(
 		workflowOutputBaseURI(cfg),
 		rio.Reader,
@@ -73,7 +67,14 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		rio.Signer,
 		nil,
 	)
-	pipe.HistoryRepository = historyRepository
+	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, pipelineExternals{
+		notifier:          notifier,
+		taskQueue:         queue,
+		historyRepository: historyRepository,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
+	}
 
 	return &app.Container{
 		Config:            cfg,

@@ -101,7 +101,7 @@ func TestRunDirectPassesNextKeyframeAsLastFrame(t *testing.T) {
 	runner := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: true}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	if err := flt.Execute(context.Background(), &Context{Task: task, VideoRecipe: recipe}); err != nil {
+	if err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if len(runner.requests) != 2 {
