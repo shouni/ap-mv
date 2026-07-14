@@ -66,15 +66,17 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 実行するフィルター列はコマンドごとに `internal/worker/pipeline/planner.go` の `DefaultPlanner.Plan` が決定します:
 
-| コマンド | フィルター列 |
-| --- | --- |
-| `compose` | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
-| `mv_from_keyframe_video_recipe` / `generate_from_recipe` | Recipe Load → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
-| `video_recipe_create` / `compose_to_keyframe` | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload（キーフレームまでで停止） |
-| `short_video_from_section` | Recipe Load → Section Select → Video Gen → Chain Finalize → Publishing |
-| `regenerate_cut_keyframe` | Recipe Load → Regen Cut Keyframe → Zip Upload |
-| `regenerate_zip` | Recipe Load → Zip Upload |
-| `video_gen_continuation`（内部コマンド） | Video Gen → Chain Finalize → Publishing |
+| コマンド | 主な投入元 | フィルター列 |
+| --- | --- | --- |
+| `video_recipe_create` | `/web/video-recipe-create`（`/web/compose` も同じフォーム）、ap-mcp | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload（キーフレームまでで停止） |
+| `mv_from_keyframe_video_recipe` | `/web/mv-from-keyframe-video-recipe`（M2M）、履歴詳細の動画生成フォーム（`target=full`） | Recipe Load → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
+| `short_video_from_section` | 履歴詳細の動画生成フォーム（`target=<セクション>`） | Recipe Load → Section Select → Video Gen → Chain Finalize → Publishing |
+| `regenerate_cut_keyframe` | 履歴詳細の Regenerate 画面 | Recipe Load → Regen Cut Keyframe → Zip Upload |
+| `regenerate_zip` | `POST /web/history/{jobID}/regenerate-zip` | Recipe Load → Zip Upload |
+| `video_gen_continuation` | `VideoGenerationFilter` が内部的に enqueue | Video Gen → Chain Finalize → Publishing |
+| `compose`（レガシー互換） | アプリ内からは投入されない（OIDC 済み M2M からの直接投入のみ） | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
+| `compose_to_keyframe`（レガシー互換） | 同上 | `video_recipe_create` と同一 |
+| `generate_from_recipe`（レガシー互換） | 同上 | `mv_from_keyframe_video_recipe` と同一 |
 
 各フィルターの役割は次のとおりです（表の並びはフルMVチェーンの実行順。末尾2つはコマンド専用フィルター）:
 
@@ -220,10 +222,10 @@ sequenceDiagram
     participant Queue as Cloud Tasks
     participant Worker as Worker Handler
     participant Pipeline as MV Pipeline
-    participant F1 as Filter 1: Scripting
-    participant F2 as Filter 2: CutGen
-    participant F3 as Filter 3: VideoGen (Veo)
-    participant F4 as Filter 4: Publishing
+    participant F1 as Scripting
+    participant F2 as CutGen
+    participant F3 as VideoGen (Veo)
+    participant F4 as Publishing
     participant WF as go-veo-orchestrator/workflow
     participant GCS as Cloud Storage (remote-io)
 
@@ -244,7 +246,7 @@ sequenceDiagram
     Worker->>Pipeline: Execute(ctx, task)
 
     rect rgb(240, 255, 240)
-        Note over Pipeline, F1: [command == video_recipe_create / compose / compose_to_keyframe のみ実行]
+        Note over Pipeline, F1: [command == video_recipe_create（と compose 系レガシー）のみ実行]
         Pipeline->>F1: Execute(task)
         F1->>WF: Script.Run(source, mode)
         WF-->>F1: *ports.VideoRecipe
@@ -258,7 +260,7 @@ sequenceDiagram
 
     alt command == video_recipe_create
         Pipeline-->>Worker: nil (VideoRecipe saved)
-    else command == mv_from_keyframe_video_recipe / generate_from_recipe / compose
+    else command == mv_from_keyframe_video_recipe（短縮版。実際は Scene Split / Zip Upload / Chain Finalize も実行）
         Pipeline->>F3: Execute(recipe, keyframes)
         F3->>WF: Video.Run(recipe)
         WF->>WF: BuildVideoRequest(lastVideoID, keyframe_reference, audio_cue)
@@ -279,13 +281,13 @@ sequenceDiagram
 
 1. Google OAuthで安全にログインします。
 2. `/web/video-recipe-create` から `MusicRecipe GCS URL`、Visual Mode、Character、利用モデルを選んで送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。POST handler は互換入力として `text` / `image_url` も受け付けますが、現在のフォームに表示される主入力は `music_recipe_url` です。
-3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`video_recipe_create` では `Scripting -> CutKeyframe` の順に進み、セクション単位の keyframe を含む VideoRecipe を `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。
+3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`video_recipe_create` では `Scripting -> Scene Split -> Cut Keyframe Gen -> Zip Upload` の順に進み、セクション単位の keyframe を含む VideoRecipe を `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。
 
 ### 2. Keyframe VideoRecipe からの MV 作成 / レジューム
 
 1. `/web/mv-from-keyframe-video-recipe` 画面を開きます。
 2. `keyframe_reference` を含む `VideoRecipe` JSON データをフォームに直接貼り付けるか、Keyframe VideoRecipe GCS URL に `gs://.../video_music_meta.json` を指定して送信します。必要に応じて `Music Audio GCS URL` に `gs://.../music.mp3` を指定します。
-3. Web handler または worker の `RecipeLoadFilter` が VideoRecipe JSON を読み込み、`Filter 1 (Scripting)` をスキップして MV 生成を実行します。従来の `MusicRecipe` JSON / GCS URL も互換入力として受け付け、VideoRecipe に変換してから処理します。既に `status=generated`、`video_id`、`video_url` を持つカットは `VideoTimelineRunner` 側でスキップされます。
+3. Web handler または worker の `RecipeLoadFilter` が VideoRecipe JSON を読み込み、`Scripting` をスキップして MV 生成を実行します。従来の `MusicRecipe` JSON / GCS URL も互換入力として受け付け、VideoRecipe に変換してから処理します。既に `status=generated`、`video_id`、`video_url` を持つカットは `VideoTimelineRunner` 側でスキップされます。
 
 ### 3. 履歴画面
 
@@ -319,6 +321,7 @@ sequenceDiagram
 | `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
 | `GET` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
 | `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット |
+| `POST` | `/web/history/{jobID}/regenerate-zip` | 保存済みレシピから `keyframes.zip` を再生成して元ジョブの出力パスへ上書き |
 | `POST` | `/web/history/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
