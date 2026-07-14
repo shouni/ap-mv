@@ -97,11 +97,25 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 			}
 			continue
 		}
-		// SectionIndex は cut.SectionIndex（1始まり、0は未割り当て）。分割前カットの
-		// SectionIndex はサブカットへコピーされるため（splitCutBySupportedDurations の
-		// sub := cut）、分割自体はセクション境界とは見なされません。
-		isSectionStart := expanded[i].IsSectionStart ||
-			(i > 0 && expanded[i].SectionIndex != 0 && expanded[i].SectionIndex != expanded[i-1].SectionIndex)
+		// IsSectionStart（cut.ChainControl）は2つの異なる理由で立つ、意味が重なった
+		// フラグです。ここではその2つを別々に判定してから合成し、どちらの理由で
+		// リセットになったかをコードとして追跡できるようにしています。
+		//
+		//   isSceneReset: scene_split.go がこの関数より前に立てた値です。1つの音楽
+		//   セクション内で複数シーンに分割された際の「シーン内リセット」で、
+		//   SectionIndex は前後で変わりません（SectionIndex 比較では検出できない）。
+		//
+		//   isRealSectionBoundary: cut.SectionIndex（1始まり、0は未割り当て）が
+		//   前カットと異なる、実際の曲のセクション境界です。分割前カットの
+		//   SectionIndex はサブカットへコピーされるため（splitCutBySupportedDurations
+		//   の sub := cut）、分割自体はセクション境界とは見なされません。
+		//
+		// 両者とも「直前チェーンの最終フレームを引き継がない」という同じ下流の
+		// 挙動（video_gen.go の runDirect）を必要とするため、最終的には同じ
+		// IsSectionStart へ合成して書き戻します。
+		isSceneReset := expanded[i].IsSectionStart
+		isRealSectionBoundary := i > 0 && expanded[i].SectionIndex != 0 && expanded[i].SectionIndex != expanded[i-1].SectionIndex
+		isSectionStart := isSceneReset || isRealSectionBoundary
 		if isSectionStart {
 			cumulative = 0
 		}

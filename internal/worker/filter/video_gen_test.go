@@ -57,6 +57,53 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	if queue.tasks[0].VideoRecipe.Cuts[0].VideoID == "" {
 		t.Fatalf("continuation task did not include generated cut state")
 	}
+	if want := "job-1-cont-cut-1"; queue.taskIDs[0] != want {
+		t.Fatalf("continuation taskID = %q, want %q (deterministic, so a redelivered outer task can't fan out a duplicate)", queue.taskIDs[0], want)
+	}
+}
+
+// TestEnqueueContinuationUsesDeterministicTaskIDPerCut verifies continuationTaskID's exact
+// format and that it varies by cutIndex (so consecutive continuations for the same job get
+// distinct names) but is identical for repeated calls with the same job/cut (so a redelivered
+// outer task computes the same name and gets rejected as a duplicate by Cloud Tasks).
+func TestEnqueueContinuationUsesDeterministicTaskIDPerCut(t *testing.T) {
+	if got, want := continuationTaskID("job-1", 3), "job-1-cont-cut-3"; got != want {
+		t.Errorf("continuationTaskID() = %q, want %q", got, want)
+	}
+	if got := continuationTaskID("job-1", 3); got != continuationTaskID("job-1", 3) {
+		t.Errorf("continuationTaskID() is not deterministic: %q vs repeat call", got)
+	}
+	if continuationTaskID("job-1", 3) == continuationTaskID("job-1", 4) {
+		t.Error("continuationTaskID() must differ across cutIndex")
+	}
+	// Cloud Tasks task IDs must match [A-Za-z0-9_-]{1,500}; sanitize unsafe jobID characters.
+	if got, want := continuationTaskID("job/1:short", 1), "job_1_short-cont-cut-1"; got != want {
+		t.Errorf("continuationTaskID() = %q, want %q (unsafe characters replaced)", got, want)
+	}
+}
+
+// TestVideoGenerationFilterPropagatesContinuationEnqueueFailure verifies that a genuine
+// EnqueueWithName failure (not a duplicate-name rejection, which the TaskQueue implementation
+// already treats as success) surfaces as an error from Execute.
+func TestVideoGenerationFilterPropagatesContinuationEnqueueFailure(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+		},
+	}
+	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
+	queue := &captureQueue{nameErrs: map[string]error{"job-1-cont-cut-1": fmt.Errorf("cloud tasks unavailable")}}
+	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
+
+	err := flt.Execute(context.Background(), &Context{
+		State:    State{Task: task, VideoRecipe: recipe},
+		Services: Services{TaskQueue: queue},
+	})
+	if err == nil || errors.Is(err, ErrPipelineDeferred) {
+		t.Fatalf("Execute() error = %v, want a non-deferred enqueue failure", err)
+	}
 }
 
 // TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists verifies the production
@@ -408,13 +455,31 @@ func (r *contextCaptureRunner) Run(ctx context.Context, req ports.VideoGeneratio
 }
 
 type captureQueue struct {
-	tasks []*domain.Task
+	tasks    []*domain.Task
+	taskIDs  []string
+	nameErrs map[string]error
 }
 
 // Enqueue adds a task to the queue.
 func (q *captureQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	copied := *task
 	q.tasks = append(q.tasks, &copied)
+	q.taskIDs = append(q.taskIDs, "")
+	return nil
+}
+
+// EnqueueWithName adds a task to the queue under taskID, recording it for assertions. If
+// nameErrs[taskID] is set, that error is returned instead (simulating Cloud Tasks rejecting a
+// duplicate name) and no task is recorded, mirroring EnqueueWithName's real idempotent contract.
+func (q *captureQueue) EnqueueWithName(_ context.Context, taskID string, task *domain.Task) error {
+	if q.nameErrs != nil {
+		if err, ok := q.nameErrs[taskID]; ok {
+			return err
+		}
+	}
+	copied := *task
+	q.tasks = append(q.tasks, &copied)
+	q.taskIDs = append(q.taskIDs, taskID)
 	return nil
 }
 

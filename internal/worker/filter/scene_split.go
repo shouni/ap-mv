@@ -98,6 +98,12 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut) []orchestrator.Cut
 			// resetCutForSceneKeyframe already forced IsSectionStart=false above, so this is
 			// the only place it gets set: sub-block 2+ becomes a fresh keyframe/chain base that
 			// downstream video-gen must not treat as a video_extension continuation of block 1.
+			// This is a "scene reset" (isSceneReset in veo_cut_utils.go's
+			// expandCutsToSupportedDurations), not necessarily a real musical section boundary —
+			// SectionIndex does not change between these sub-blocks, since they all belong to the
+			// same source section-level cut. Both trigger the same downstream behavior (no
+			// last-frame inheritance), so they share this field, but the two reasons are kept
+			// distinguishable where the flag is read (see expandCutsToSupportedDurations).
 			if i > 0 {
 				sub.IsSectionStart = true
 			} else {

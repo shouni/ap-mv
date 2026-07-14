@@ -37,3 +37,15 @@ func (q taskQueueAdapter) Enqueue(ctx context.Context, task *domain.Task) error 
 	}
 	return q.enqueuer.Enqueue(ctx, *task)
 }
+
+// EnqueueWithName adds a task to the queue under a deterministic name, so retried calls with
+// the same taskID do not create duplicate tasks.
+func (q taskQueueAdapter) EnqueueWithName(ctx context.Context, taskID string, task *domain.Task) error {
+	if task == nil {
+		return fmt.Errorf("task is nil")
+	}
+	if q.enqueuer == nil {
+		return fmt.Errorf("cloud tasks enqueuer is not configured")
+	}
+	return q.enqueuer.EnqueueWithName(ctx, taskID, *task)
+}

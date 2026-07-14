@@ -22,6 +22,12 @@ func (q *recordingQueue) Enqueue(_ context.Context, task *domain.Task) error {
 	return nil
 }
 
+// EnqueueWithName adds a task to the queue, ignoring taskID (tests don't need idempotency).
+func (q *recordingQueue) EnqueueWithName(_ context.Context, _ string, task *domain.Task) error {
+	q.task = task
+	return nil
+}
+
 type fakeHistoryRepository struct {
 	detail domain.VideoHistoryDetail
 }

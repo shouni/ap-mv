@@ -132,8 +132,10 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成された
 			// チェーンが存在することを意味する。その最終フレームを次チェーンの
 			// 参照画像として引き継ぎ、静的な立ち絵からの独立生成による見た目の
-			// ブレ（衣装ズレ等）を抑える。ただしセクション境界（IsSectionStart）は
-			// 意図的な場面転換なので、直前セクションの絵を引き継がず、そのカット
+			// ブレ（衣装ズレ等）を抑える。ただし IsSectionStart は「意図的な場面転換」
+			// （実際の曲のセクション境界、または scene_split.go によるシーン内リセット
+			// のどちらか。詳細は veo_cut_utils.go の expandCutsToSupportedDurations
+			// コメント参照）なので、どちらの理由でも直前の絵を引き継がず、そのカット
 			// 自身に割り当てられたキーフレーム参照のまま生成する。
 			if i > 0 && !cut.IsSectionStart {
 				if err := f.applyChainResetKeyframe(ctx, fc, cut, fc.VideoRecipe.Cuts[i-1].VideoURL); err != nil {
@@ -217,6 +219,14 @@ func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.Vid
 // enqueueContinuation persists the in-progress VideoRecipe and enqueues a
 // CommandVideoGenContinuation task to resume generation of the remaining pending cuts, then
 // returns ErrPipelineDeferred so the pipeline stops here instead of treating this run as complete.
+//
+// The continuation task is enqueued under a deterministic name derived from job ID + cutIndex
+// (see continuationTaskID), so that if Cloud Tasks redelivers the current task (at-least-once
+// delivery) and this function runs again for the same completed cut, the second enqueue attempt
+// is rejected by Cloud Tasks as a duplicate instead of creating a second continuation task. This
+// does not by itself prevent the redelivered execution from re-generating cutIndex's video (that
+// would require checking persisted, authoritative state before generating each cut) — it only
+// keeps a redelivery from fanning out into duplicate downstream tasks.
 func enqueueContinuation(ctx context.Context, fc *Context, cutIndex int) error {
 	domainRecipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {
@@ -228,10 +238,25 @@ func enqueueContinuation(ctx context.Context, fc *Context, cutIndex int) error {
 	nextTask.Recipe = fc.Recipe
 	nextTask.VideoRecipe = fc.VideoRecipe
 	nextTask.CreatedAt = time.Now().UTC()
-	if err := fc.TaskQueue.Enqueue(ctx, &nextTask); err != nil {
+	if err := fc.TaskQueue.EnqueueWithName(ctx, continuationTaskID(fc.Task.JobID, cutIndex), &nextTask); err != nil {
 		return fmt.Errorf("enqueue continuation after cut %d: %w", cutIndex, err)
 	}
 	return ErrPipelineDeferred
+}
+
+// continuationTaskID builds a deterministic Cloud Tasks task ID for the continuation enqueued
+// after cutIndex finishes generating. Cloud Tasks task IDs must match [A-Za-z0-9_-]{1,500}, so
+// any other character in jobID is replaced with "_" defensively.
+func continuationTaskID(jobID string, cutIndex int) string {
+	safeJobID := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+			return r
+		default:
+			return '_'
+		}
+	}, jobID)
+	return fmt.Sprintf("%s-cont-cut-%d", safeJobID, cutIndex)
 }
 
 // ensureVideoRecipe converts fc.Recipe to fc.VideoRecipe when it is not already set.

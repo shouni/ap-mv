@@ -24,6 +24,8 @@ type inlineTaskQueue struct{}
 
 func (inlineTaskQueue) Enqueue(context.Context, *domain.Task) error { return nil }
 
+func (inlineTaskQueue) EnqueueWithName(context.Context, string, *domain.Task) error { return nil }
+
 var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 
 // TestVideoRecipeCreatePostRequiresSessionCSRFToken verifies that video recipe creation POST requests require a session CSRF token.
