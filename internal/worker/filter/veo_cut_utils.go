@@ -56,12 +56,13 @@ const veoContinuationMaxDurationSec = 24.0
 // 生成済みカットは実動画の尺と metadata がずれないよう変更しませんが、累積尺の計算には
 // 含めます（再開時にチェーン状態を正しく引き継ぐため）。
 //
-// sections が与えられている場合、曲のセクションが変わる境目でも（技術的な累積尺上限に
-// 達していなくても）チェーンをリセットします。技術的リセットとの違いは IsSectionStart
-// フラグで示され、runDirect はこのフラグが立っているカットについて直前チェーンの最終
-// フレーム引き継ぎ（applyChainResetKeyframe）をスキップします（セクションが変わる以上、
-// 直前セクションの絵をそのまま引き継ぐべきではないため、そのカット自身に割り当てられた
-// キーフレーム参照をそのまま使う）。
+// カットの所属セクションは cut.SectionIndex（go-veo-orchestrator v1.7.0 で追加、
+// VideoRecipe.Normalize が StartSec から自動補完）をそのまま使います。曲のセクションが
+// 変わる境目では（技術的な累積尺上限に達していなくても）チェーンをリセットします。
+// 技術的リセットとの違いは IsSectionStart フラグで示され、runDirect はこのフラグが立っている
+// カットについて直前チェーンの最終フレーム引き継ぎ（applyChainResetKeyframe）をスキップします
+// （セクションが変わる以上、直前セクションの絵をそのまま引き継ぐべきではないため、そのカット
+// 自身に割り当てられたキーフレーム参照をそのまま使う）。
 //
 // characters と referenceImagesSupported は、各カットが reference_to_video（referenceImages、
 // 8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかを判定するために使います。
@@ -70,18 +71,10 @@ const veoContinuationMaxDurationSec = 24.0
 // 掛け合わせたものです（詳細は cutUsesReferenceImages）。
 //
 // SectionSelectFilter（ショート動画）と VideoGenerationFilter（フルMV）の両方から使われます。
-func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool, sections []orchestrator.Section, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
+func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
-	// sectionAt[i] は expanded[i] の元になった分割前カットの所属セクション index です。
-	// 1つの長いカットが複数のサブカットへ分割されても、分割自体はセクション境界とは
-	// 見なしません（サブカット群はすべて同じ元カットのセクションを引き継ぎます）。
-	sectionAt := make([]int, 0, len(cuts))
 	for _, cut := range cuts {
 		subCuts := splitCutBySupportedDurations(cut, allowedDurationsFor(cut, characters, referenceImagesSupported))
-		sIdx := sectionIndexForStartSec(sections, cut.StartSec)
-		for range subCuts {
-			sectionAt = append(sectionAt, sIdx)
-		}
 		expanded = append(expanded, subCuts...)
 	}
 	cumulative := 0.0
@@ -104,7 +97,11 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 			}
 			continue
 		}
-		isSectionStart := expanded[i].IsSectionStart || (i > 0 && sectionAt[i] >= 0 && sectionAt[i] != sectionAt[i-1])
+		// SectionIndex は cut.SectionIndex（1始まり、0は未割り当て）。分割前カットの
+		// SectionIndex はサブカットへコピーされるため（splitCutBySupportedDurations の
+		// sub := cut）、分割自体はセクション境界とは見なされません。
+		isSectionStart := expanded[i].IsSectionStart ||
+			(i > 0 && expanded[i].SectionIndex != 0 && expanded[i].SectionIndex != expanded[i-1].SectionIndex)
 		if isSectionStart {
 			cumulative = 0
 		}
@@ -123,24 +120,6 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 		cumulative += veoVideoExtensionDurationSec
 	}
 	return expanded
-}
-
-// sectionIndexForStartSec は startSec が属するセクションの index を返します。
-// 各セクションの StartSeconds のうち startSec 以下で最大のものを採用するため、
-// duration正規化による数秒のズレ（EndSecondsとの間の隙間）があっても頑健に判定できます。
-// sections の並び順（StartSeconds昇順であるはず、という暗黙の前提）には依存せず、
-// 常にStartSeconds自体の大小で判定します。一致するセクションが無い場合は -1 を返します。
-func sectionIndexForStartSec(sections []orchestrator.Section, startSec float64) int {
-	bestIndex := -1
-	bestStart := -1.0
-	for i, s := range sections {
-		start := float64(s.StartSeconds)
-		if start <= startSec && start >= bestStart {
-			bestIndex = i
-			bestStart = start
-		}
-	}
-	return bestIndex
 }
 
 // allowedDurationsFor は、指定されたカットが reference_to_video（referenceImages）と

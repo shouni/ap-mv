@@ -2,6 +2,7 @@ package filter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -52,6 +53,14 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 	if editPrompt != "" {
 		// 編集モード: 既存キーフレームを構図はそのまま保ちつつ editPrompt の指示だけ反映する。
 		updatedTemp, err = fc.Workflows.CutKeyframe.EditAndSave(ctx, tempRecipe, editPrompt, regenOutputPath)
+		if errors.Is(err, orchestrator.ErrEditingNotSupported) {
+			// 設定済みの画像生成エンジンが編集（EditCut）に対応していない場合、
+			// editPrompt を VisualAnchor に追記した上で全体再生成にフォールバックする。
+			// 構図・ポーズの保持は失われるが、編集指示自体は反映を試みる。
+			tempRecipe.Cuts[0].KeyframeReference = ""
+			tempRecipe.Cuts[0].VisualAnchor = strings.TrimSpace(tempRecipe.Cuts[0].VisualAnchor + "\n" + editPrompt)
+			updatedTemp, err = fc.Workflows.CutKeyframe.RunAndSave(ctx, tempRecipe, regenOutputPath)
+		}
 		if err != nil {
 			return fmt.Errorf("edit cut %d keyframe: %w", cutIndex, err)
 		}

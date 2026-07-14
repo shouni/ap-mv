@@ -2,6 +2,7 @@ package filter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,21 +37,28 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	// expandCutsToSupportedDurations はカットの所属セクションを cut.SectionIndex から直接
+	// 判定するため、（呼び出し元がまだ Normalize していない可能性に備えて）ここで確実に
+	// 補完しておく。Normalize は冪等なので、既に呼ばれていても無害。
+	fc.VideoRecipe.Normalize()
 	// Veo がサポートしない尺（reference_to_videoなら8秒以外、image_to_videoなら4/6/8秒以外）の
 	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
 	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
 	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
 	// （詳細は expandCutsToSupportedDurations のコメント参照）。
-	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.VideoRecipe.MusicRecipe.Sections, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
+	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
 	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
-	// （resumable ではなく、内部で全カットをまとめて処理する）。
-	// (3) どちらもなければ runDirect を呼び、runner未設定のエラーを返す。
+	// （resumable ではなく、内部で全カットをまとめて処理する）。Workflows.Video は
+	// go-veo-orchestrator v1.7.0 以降、VideoRunner 未設定でも nil にならず常に非nilの
+	// runner（未設定時は ErrVideoRunnerNotConfigured を返すダミー実装）が入るため、
+	// nilチェックでは判定できない。実際に呼び出してエラーを見る。
+	// (3) orchestrator workflow 自体がなければ runDirect を呼び、runner未設定のエラーを返す。
 	if f.hasVideoRunner(fc) {
 		return f.runDirect(ctx, fc)
 	}
-	if fc.Workflows != nil && fc.Workflows.Video != nil {
+	if fc.Workflows != nil {
 		return f.runWithWorkflow(ctx, fc)
 	}
 	return f.runDirect(ctx, fc)
@@ -84,6 +92,9 @@ func (f VideoGenerationFilter) hasVideoRunner(fc *Context) bool {
 // The workflow handles all cuts internally, so deferred continuation is not required.
 func (f VideoGenerationFilter) runWithWorkflow(ctx context.Context, fc *Context) error {
 	if _, err := fc.Workflows.Video.Run(ctx, fc.VideoRecipe); err != nil {
+		if errors.Is(err, orchestrator.ErrVideoRunnerNotConfigured) {
+			return fmt.Errorf("video generation requires a VideoRunner (neither a direct runner nor an orchestrator workflow VideoRunner is configured): %w", err)
+		}
 		return err
 	}
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
