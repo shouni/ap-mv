@@ -19,11 +19,11 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
-			{CutIndex: 3, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
-			{CutIndex: 4, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
-			{CutIndex: 5, DurationSec: 8, VisualAnchor: "a", KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 1, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 2, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 3, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 4, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 5, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -88,9 +88,9 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
-			{CutIndex: 3, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi", KeyframeReference: "gs://bucket/keyframes/scene.png"},
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+			{CutIndex: 2, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+			{CutIndex: 3, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -159,10 +159,10 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 			},
 		},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, StartSec: 0, DurationSec: 8, VisualAnchor: "verse", KeyframeReference: "gs://bucket/verse.png"},
-			{CutIndex: 2, StartSec: 8, DurationSec: 8, VisualAnchor: "verse", KeyframeReference: "gs://bucket/verse.png"},
-			{CutIndex: 3, StartSec: 16, DurationSec: 8, VisualAnchor: "chorus", KeyframeReference: "gs://bucket/chorus.png"},
-			{CutIndex: 4, StartSec: 24, DurationSec: 8, VisualAnchor: "chorus", KeyframeReference: "gs://bucket/chorus.png"},
+			{CutIndex: 1, VisualAnchor: "verse", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
+			{CutIndex: 2, VisualAnchor: "verse", AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
+			{CutIndex: 3, VisualAnchor: "chorus", AudioSync: orchestrator.AudioSync{StartSec: 16, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
+			{CutIndex: 4, VisualAnchor: "chorus", AudioSync: orchestrator.AudioSync{StartSec: 24, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}

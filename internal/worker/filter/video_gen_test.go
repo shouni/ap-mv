@@ -18,8 +18,8 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -65,8 +65,8 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -108,8 +108,8 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
-			{CutIndex: 2, DurationSec: 8, VisualAnchor: "second"},
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -146,7 +146,7 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "first"},
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -178,7 +178,12 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 10, VisualAnchor: "long cut", KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
+			{
+				CutIndex:       1,
+				VisualAnchor:   "long cut",
+				AudioSync:      orchestrator.AudioSync{DurationSec: 10},
+				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
+			},
 		},
 	}
 	task := &domain.Task{
@@ -230,7 +235,7 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "a", CharacterID: "tsumugi"},
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
@@ -273,7 +278,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 5, StartSec: 30, DurationSec: 6, VisualAnchor: "a", CharacterID: "tsumugi"},
+			{CutIndex: 5, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 6}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -300,7 +305,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	recipe2 := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 5, StartSec: 30, DurationSec: 6, VisualAnchor: "a"},
+			{CutIndex: 5, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 6}},
 		},
 	}
 	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}

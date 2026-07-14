@@ -12,11 +12,11 @@ import (
 // IsChainStart markers rather than duration_sec, matching how runDirect marks resets.
 func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
-		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
-		{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4"},
-		{CutIndex: 4, VideoURL: "gs://bucket/cut_4.mp4"},
-		{CutIndex: 5, VideoURL: "gs://bucket/cut_5.mp4", IsChainStart: true},
+		{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
+		{CutIndex: 3, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_3.mp4"}},
+		{CutIndex: 4, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_4.mp4"}},
+		{CutIndex: 5, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_5.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
 	}
 	got := chainEndVideoURLs(cuts)
 	want := []string{"gs://bucket/cut_4.mp4", "gs://bucket/cut_5.mp4"}
@@ -28,8 +28,8 @@ func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 // TestChainEndVideoURLsSingleChain verifies a job with no chain reset returns exactly the last cut.
 func TestChainEndVideoURLsSingleChain(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
-		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
+		{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
 	}
 	got := chainEndVideoURLs(cuts)
 	want := []string{"gs://bucket/cut_2.mp4"}
@@ -43,9 +43,9 @@ func TestChainEndVideoURLsSingleChain(t *testing.T) {
 func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
-			{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
-			{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4", IsChainStart: true},
+			{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+			{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
+			{CutIndex: 3, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_3.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
 		},
 	}
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
@@ -80,7 +80,7 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 // pipelines that never include this filter in the first place, or a nil default.
 func TestChainFinalizeFilterNoopWithoutVideoProcessor(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
-		Cuts: []orchestrator.Cut{{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4"}},
+		Cuts: []orchestrator.Cut{{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}}},
 	}
 	flt := ChainFinalizeFilter{}
 	err := flt.Execute(context.Background(), &Context{State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}})

@@ -20,10 +20,10 @@ func TestHistorySectionsFromRecipeMarksFullyGeneratedSections(t *testing.T) {
 			},
 		},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, StartSec: 0, EndSec: 5, Status: orchestrator.CutStatusGenerated},
-			{CutIndex: 2, StartSec: 5, EndSec: 10, Status: orchestrator.CutStatusGenerated},
-			{CutIndex: 3, StartSec: 10, EndSec: 15, Status: orchestrator.CutStatusGenerated},
-			{CutIndex: 4, StartSec: 15, EndSec: 20, Status: orchestrator.CutStatusPending},
+			{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, EndSec: 5}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
+			{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 5, EndSec: 10}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
+			{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 10, EndSec: 15}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
+			{CutIndex: 4, AudioSync: orchestrator.AudioSync{StartSec: 15, EndSec: 20}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusPending}},
 			// セクション3（Bridge, 20-30s）にはこのレシピ上カットが存在しない
 			// （例: short_video_from_section で作られたジョブの保存済みレシピ）。
 		},

@@ -106,12 +106,14 @@ func recipeOutputSchema() (string, error) {
 		},
 		Cuts: []orchestrator.Cut{
 			{
-				CutIndex:       1,
-				DurationSec:    8,
-				AudioCue:       "musical timing cue",
-				AudioReference: "optional gs:// audio segment or full music file",
-				VisualAnchor:   "visual scene prompt for keyframe and video",
-				CharacterID:    "",
+				CutIndex:     1,
+				VisualAnchor: "visual scene prompt for keyframe and video",
+				CharacterID:  "",
+				AudioSync: orchestrator.AudioSync{
+					DurationSec:    8,
+					AudioCue:       "musical timing cue",
+					AudioReference: "optional gs:// audio segment or full music file",
+				},
 			},
 		},
 	}
