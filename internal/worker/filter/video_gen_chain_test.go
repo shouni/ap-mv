@@ -31,9 +31,11 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/jobs/job-1/",
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -96,9 +98,11 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/jobs/job-1/",
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -166,9 +170,11 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/jobs/job-1/",
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/jobs/job-1/",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

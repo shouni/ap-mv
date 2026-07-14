@@ -31,9 +31,13 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
+		Services: Services{
+			TaskQueue: queue,
+		},
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -75,10 +79,14 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
-		Workflows:   &orchestrator.Workflows{Video: workflow},
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
+		Services: Services{
+			TaskQueue: queue,
+			Workflows: &orchestrator.Workflows{Video: workflow},
+		},
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -114,9 +122,13 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		TaskQueue:   queue,
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
+		Services: Services{
+			TaskQueue: queue,
+		},
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -146,9 +158,11 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: runner}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+			OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -175,8 +189,10 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -226,9 +242,13 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: runner}
 
 	err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		Characters:  characters,
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
+		Services: Services{
+			Characters: characters,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -261,9 +281,13 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	flt := VideoGenerationFilter{Runner: runner}
 
 	if err := flt.Execute(context.Background(), &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		Characters:  characters,
+		State: State{
+			Task:        task,
+			VideoRecipe: recipe,
+		},
+		Services: Services{
+			Characters: characters,
+		},
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -284,9 +308,13 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	flt2 := VideoGenerationFilter{Runner: runner2}
 
 	if err := flt2.Execute(context.Background(), &Context{
-		Task:        task2,
-		VideoRecipe: recipe2,
-		Characters:  characters,
+		State: State{
+			Task:        task2,
+			VideoRecipe: recipe2,
+		},
+		Services: Services{
+			Characters: characters,
+		},
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

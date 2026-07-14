@@ -46,7 +46,7 @@ func (f ChainFinalizeFilter) Execute(ctx context.Context, fc *Context) error {
 
 // chainEndVideoURLs は各継続チェーンの最終カットのVideoURLを、チェーンの登場順に返します。
 // 「次のカットがチェーンの新規起点(IsChainStart)、または自身が最終カット」の位置を
-// チェーン境界として判定します（3_video_gen.goのIsChainStartマーキングと対）。
+// チェーン境界として判定します（video_gen.goのIsChainStartマーキングと対）。
 func chainEndVideoURLs(cuts []orchestrator.Cut) []string {
 	var urls []string
 	for i, cut := range cuts {

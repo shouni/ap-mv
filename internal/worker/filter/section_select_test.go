@@ -52,13 +52,15 @@ func newSectionSelectRecipe() *orchestrator.VideoRecipe {
 func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 	sectionIndex := 1
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:        "short-1",
-			Command:      domain.CommandShortVideoFromSection,
-			SectionIndex: &sectionIndex,
-			RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+				RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
+			},
+			VideoRecipe: newSectionSelectRecipe(),
 		},
-		VideoRecipe: newSectionSelectRecipe(),
 	}
 
 	if err := (SectionSelectFilter{}).Execute(context.Background(), fc); err != nil {
@@ -205,12 +207,14 @@ func TestResolveRecipeObjectURI(t *testing.T) {
 func TestSectionSelectFilterRejectsOutOfRangeSection(t *testing.T) {
 	sectionIndex := 5
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:        "short-1",
-			Command:      domain.CommandShortVideoFromSection,
-			SectionIndex: &sectionIndex,
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+			},
+			VideoRecipe: newSectionSelectRecipe(),
 		},
-		VideoRecipe: newSectionSelectRecipe(),
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)
@@ -226,12 +230,14 @@ func TestSectionSelectFilterRejectsEmptySection(t *testing.T) {
 	recipe := newSectionSelectRecipe()
 	recipe.Cuts = recipe.Cuts[:1] // サビのカットを取り除く
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:        "short-1",
-			Command:      domain.CommandShortVideoFromSection,
-			SectionIndex: &sectionIndex,
+		State: State{
+			Task: &domain.Task{
+				JobID:        "short-1",
+				Command:      domain.CommandShortVideoFromSection,
+				SectionIndex: &sectionIndex,
+			},
+			VideoRecipe: recipe,
 		},
-		VideoRecipe: recipe,
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)

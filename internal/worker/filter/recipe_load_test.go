@@ -18,13 +18,17 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 		]
 	}`}
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:     "job-1",
-			Command:   domain.CommandMVFromKeyframeVideoRecipe,
-			RecipeURL: "gs://bucket/recipe.json",
-			AudioURL:  "gs://bucket/music.mp3",
+		State: State{
+			Task: &domain.Task{
+				JobID:     "job-1",
+				Command:   domain.CommandMVFromKeyframeVideoRecipe,
+				RecipeURL: "gs://bucket/recipe.json",
+				AudioURL:  "gs://bucket/music.mp3",
+			},
 		},
-		Reader: reader,
+		Services: Services{
+			Reader: reader,
+		},
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -50,12 +54,16 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 		]
 	}`}
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:     "job-1",
-			Command:   domain.CommandMVFromKeyframeVideoRecipe,
-			RecipeURL: "gs://bucket/video_music_meta.json",
+		State: State{
+			Task: &domain.Task{
+				JobID:     "job-1",
+				Command:   domain.CommandMVFromKeyframeVideoRecipe,
+				RecipeURL: "gs://bucket/video_music_meta.json",
+			},
 		},
-		Reader: reader,
+		Services: Services{
+			Reader: reader,
+		},
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -75,15 +83,17 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 // TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	fc := &Context{
-		Task: &domain.Task{
-			JobID:       "job-1",
-			Command:     domain.CommandMVFromKeyframeVideoRecipe,
-			CharacterID: "zundamon",
-		},
-		Recipe: &domain.MusicRecipe{
-			Title: "recipe",
-			Sections: []domain.MusicSection{
-				{Name: "intro", Duration: 8, Prompt: "blue light"},
+		State: State{
+			Task: &domain.Task{
+				JobID:       "job-1",
+				Command:     domain.CommandMVFromKeyframeVideoRecipe,
+				CharacterID: "zundamon",
+			},
+			Recipe: &domain.MusicRecipe{
+				Title: "recipe",
+				Sections: []domain.MusicSection{
+					{Name: "intro", Duration: 8, Prompt: "blue light"},
+				},
 			},
 		},
 	}

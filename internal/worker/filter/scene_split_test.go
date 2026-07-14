@@ -37,8 +37,10 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 	}
 
 	err := (SceneSplitFilter{}).Execute(context.Background(), &Context{
-		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-		VideoRecipe: recipe,
+		State: State{
+			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+			VideoRecipe: recipe,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -83,8 +85,10 @@ func TestSceneSplitFilterBalancesVideoToVideoSceneBlocks(t *testing.T) {
 	}
 
 	err := (SceneSplitFilter{UsePreviousVideo: true}).Execute(context.Background(), &Context{
-		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-		VideoRecipe: recipe,
+		State: State{
+			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+			VideoRecipe: recipe,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

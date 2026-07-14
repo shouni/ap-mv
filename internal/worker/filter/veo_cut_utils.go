@@ -65,7 +65,7 @@ const veoContinuationMaxDurationSec = 24.0
 //
 // characters と referenceImagesSupported は、各カットが reference_to_video（referenceImages、
 // 8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかを判定するために使います。
-// 判定は 3_video_gen.go の buildReferenceImages と同じ規則（キャラクターに参照アートがある、
+// 判定は video_gen.go の buildReferenceImages と同じ規則（キャラクターに参照アートがある、
 // またはカットにキーフレーム参照がある）に、使用モデルが referenceImages に対応しているかを
 // 掛け合わせたものです（詳細は cutUsesReferenceImages）。
 //

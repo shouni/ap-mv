@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -61,133 +62,29 @@ func (n *contextRecordingNotifier) NotifyTaskError(ctx context.Context, _ error,
 	return nil
 }
 
-// TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe verifies the video recipe creation filter chain.
-func TestDefaultFiltersForVideoRecipeCreateStopsAfterCutKeyframe(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoRecipeCreate, nil, false, nil)
-
-	got := make([]string, 0, len(filters))
-	for _, flt := range filters {
-		got = append(got, flt.Name())
+// TestNewReportsMissingDependencies verifies that construction fails fast, naming every
+// missing required dependency instead of deferring the failure to task execution.
+func TestNewReportsMissingDependencies(t *testing.T) {
+	_, err := New(Dependencies{})
+	if err == nil {
+		t.Fatal("New() error = nil, want error for missing dependencies")
 	}
-	want := []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"}
-	if len(got) != len(want) {
-		t.Fatalf("filters = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("filters = %v, want %v", got, want)
+	for _, name := range []string{"VideoRunner", "TaskQueue", "Reader", "Writer", "Characters", "HistoryRepository", "WorkflowResolver"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("New() error = %q, want mention of %s", err, name)
 		}
-	}
-}
-
-// TestDefaultFiltersForLegacyComposeStillRunsFullPipeline verifies the legacy compose default filter chain.
-func TestDefaultFiltersForLegacyComposeStillRunsFullPipeline(t *testing.T) {
-	filters := defaultFilters(domain.CommandCompose, nil, false, nil)
-
-	got := make([]string, 0, len(filters))
-	for _, flt := range filters {
-		got = append(got, flt.Name())
-	}
-	want := []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"}
-	if len(got) != len(want) {
-		t.Fatalf("filters = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("filters = %v, want %v", got, want)
-		}
-	}
-}
-
-// TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages verifies that the
-// internal continuation command only resumes video generation and publishing, since the
-// carried VideoRecipe already reflects scripting/keyframe/section-select/zip-upload results
-// from the original command that deferred it.
-func TestDefaultFiltersForVideoGenContinuationSkipsRecipeAndKeyframeStages(t *testing.T) {
-	filters := defaultFilters(domain.CommandVideoGenContinuation, nil, false, nil)
-
-	got := make([]string, 0, len(filters))
-	for _, flt := range filters {
-		got = append(got, flt.Name())
-	}
-	want := []string{"video_gen", "chain_finalize", "publishing"}
-	if len(got) != len(want) {
-		t.Fatalf("filters = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("filters = %v, want %v", got, want)
-		}
-	}
-}
-
-// TestRunUsesWorkflowFactoryForSelectedModels verifies workflow creation for custom selected models.
-func TestRunUsesWorkflowFactoryForSelectedModels(t *testing.T) {
-	calls := 0
-	runner := &Runner{
-		OrchestratorConfig: orchestrator.Config{
-			GeminiModel: "gemini-default",
-			ImageModel:  "image-default",
-		},
-		Filters: []filter.Filter{noopFilter{}},
-		WorkflowFactory: func(context.Context, *domain.Task) (*orchestrator.Workflows, error) {
-			calls++
-			return &orchestrator.Workflows{}, nil
-		},
-	}
-
-	_, err := runner.Run(context.Background(), &domain.Task{
-		JobID:    "job-1",
-		Command:  domain.CommandCompose,
-		Text:     "source",
-		AIModels: domain.AIModels{TextModel: "gemini-alt", ImageModel: "image-default"},
-	})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if calls != 1 {
-		t.Fatalf("workflow factory calls = %d, want 1", calls)
-	}
-}
-
-// TestRunSkipsWorkflowFactoryForDefaultModels verifies default models reuse the runner workflows.
-func TestRunSkipsWorkflowFactoryForDefaultModels(t *testing.T) {
-	calls := 0
-	runner := &Runner{
-		OrchestratorConfig: orchestrator.Config{
-			GeminiModel: "gemini-default",
-			ImageModel:  "image-default",
-		},
-		Filters: []filter.Filter{noopFilter{}},
-		WorkflowFactory: func(context.Context, *domain.Task) (*orchestrator.Workflows, error) {
-			calls++
-			return &orchestrator.Workflows{}, nil
-		},
-	}
-
-	_, err := runner.Run(context.Background(), &domain.Task{
-		JobID:    "job-1",
-		Command:  domain.CommandCompose,
-		Text:     "source",
-		AIModels: domain.AIModels{TextModel: "gemini-default", ImageModel: "image-default"},
-	})
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if calls != 0 {
-		t.Fatalf("workflow factory calls = %d, want 0", calls)
 	}
 }
 
 // TestExecuteNotifiesCompletion verifies worker execution sends a completion notification.
 func TestExecuteNotifiesCompletion(t *testing.T) {
 	notifier := &recordingNotifier{}
-	runner := &Runner{
-		Filters:       []filter.Filter{noopFilter{}},
-		Workflows:     &orchestrator.Workflows{},
-		OutputBaseURI: "gs://bucket/ap-mv/veo/jobs",
-		Notifier:      notifier,
-	}
+	runner := &Runner{deps: Dependencies{
+		Planner:          StaticPlanner{noopFilter{}},
+		WorkflowResolver: StaticWorkflowResolver{Workflows: &orchestrator.Workflows{}},
+		OutputBaseURI:    "gs://bucket/ap-mv/veo/jobs",
+		Notifier:         notifier,
+	}}
 
 	err := runner.Execute(context.Background(), domain.Task{
 		JobID:      "job-1",
@@ -212,10 +109,10 @@ func TestExecuteNotifiesCompletion(t *testing.T) {
 // TestExecuteNotifiesError verifies worker execution sends an error notification.
 func TestExecuteNotifiesError(t *testing.T) {
 	notifier := &recordingNotifier{}
-	runner := &Runner{
-		Filters:  []filter.Filter{errorFilter{}},
+	runner := &Runner{deps: Dependencies{
+		Planner:  StaticPlanner{errorFilter{}},
 		Notifier: notifier,
-	}
+	}}
 
 	err := runner.Execute(context.Background(), domain.Task{
 		JobID:     "job-1",
@@ -236,10 +133,10 @@ func TestExecuteNotifiesError(t *testing.T) {
 // TestExecuteNotifiesErrorWithDetachedContext verifies cancellation of the worker request does not cancel notification delivery.
 func TestExecuteNotifiesErrorWithDetachedContext(t *testing.T) {
 	notifier := &contextRecordingNotifier{}
-	runner := &Runner{
-		Filters:  []filter.Filter{errorFilter{}},
+	runner := &Runner{deps: Dependencies{
+		Planner:  StaticPlanner{errorFilter{}},
 		Notifier: notifier,
-	}
+	}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -259,10 +156,10 @@ func TestExecuteNotifiesErrorWithDetachedContext(t *testing.T) {
 // TestExecuteSkipsCompletionNotificationWhenDeferred verifies continuation tasks do not emit completion.
 func TestExecuteSkipsCompletionNotificationWhenDeferred(t *testing.T) {
 	notifier := &recordingNotifier{}
-	runner := &Runner{
-		Filters:  []filter.Filter{deferredFilter{}},
+	runner := &Runner{deps: Dependencies{
+		Planner:  StaticPlanner{deferredFilter{}},
 		Notifier: notifier,
-	}
+	}}
 
 	err := runner.Execute(context.Background(), domain.Task{
 		JobID:     "job-1",

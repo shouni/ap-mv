@@ -21,36 +21,60 @@ import (
 
 const notificationTimeout = 10 * time.Second
 
+// Dependencies は Runner の実行に必要な依存の束です。New が必須依存の欠落を
+// 生成時に検証するため、実行時まで依存不足が分からない状態を防ぎます。
+type Dependencies struct {
+	VideoRunner       ports.VideoRunner
+	TaskQueue         ports.TaskQueue
+	Reader            orchestrator.ContentReader
+	Writer            remoteio.OutputWriter
+	Characters        *characterkit.Characters
+	HistoryRepository ports.HistoryRepository
+	// WorkflowResolver はタスクに応じた orchestrator Workflows を解決します。
+	WorkflowResolver WorkflowResolver
+	// Planner はタスクごとの実行計画（フィルター列）を決定します。
+	// 未設定の場合はゼロ値の DefaultPlanner を使います（任意）。
+	Planner FilterPlanner
+	// Notifier は完了・エラー通知を送ります。未設定の場合は通知しません（任意）。
+	Notifier ports.Notifier
+	// OutputBaseURI はタスク成果物のベース URI です。空の場合はフィルター側で
+	// 保存先を指定しません（任意）。
+	OutputBaseURI string
+}
+
 // Runner は domain.Task を MusicRecipe 生成、キーフレーム生成、動画生成、公開の
 // 各フィルターへ順番に流す worker パイプラインです。
 type Runner struct {
-	VideoRunner        ports.VideoRunner
-	TaskQueue          ports.TaskQueue
-	Filters            []filter.Filter
-	OrchestratorConfig orchestrator.Config
-	Workflows          *orchestrator.Workflows
-	WorkflowFactory    func(context.Context, *domain.Task) (*orchestrator.Workflows, error)
-	Reader             orchestrator.ContentReader
-	Writer             remoteio.OutputWriter
-	OutputBaseURI      string
-	Notifier           ports.Notifier
-	Characters         *characterkit.Characters
-	HistoryRepository  ports.HistoryRepository
-	// VideoProcessor は、継続チェーンのフレーム引き継ぎ・ハードカット結合に使います。
-	VideoProcessor ports.VideoProcessor
-	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
-	UsePreviousVideo bool
+	deps Dependencies
 }
 
-// New は VideoRunner と任意の orchestrator 設定から Runner を生成します。
-//
-// cfg が指定された場合は、タスクで選択されたモデルが既定値と異なるかを判定するために使われます。
-func New(videoRunner ports.VideoRunner, cfg ...orchestrator.Config) *Runner {
-	r := &Runner{VideoRunner: videoRunner}
-	if len(cfg) > 0 {
-		r.OrchestratorConfig = cfg[0]
+// New は依存を検証して Runner を生成します。必須依存が欠けている場合はエラーを返し、
+// 実行時ではなく起動時に構成ミスを検出します。
+func New(deps Dependencies) (*Runner, error) {
+	var missing []string
+	for _, dep := range []struct {
+		name string
+		ok   bool
+	}{
+		{"VideoRunner", deps.VideoRunner != nil},
+		{"TaskQueue", deps.TaskQueue != nil},
+		{"Reader", deps.Reader != nil},
+		{"Writer", deps.Writer != nil},
+		{"Characters", deps.Characters != nil},
+		{"HistoryRepository", deps.HistoryRepository != nil},
+		{"WorkflowResolver", deps.WorkflowResolver != nil},
+	} {
+		if !dep.ok {
+			missing = append(missing, dep.name)
+		}
 	}
-	return r
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("pipeline runner missing required dependencies: %s", strings.Join(missing, ", "))
+	}
+	if deps.Planner == nil {
+		deps.Planner = DefaultPlanner{}
+	}
+	return &Runner{deps: deps}, nil
 }
 
 // Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。
@@ -71,11 +95,14 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 }
 
 // Close は Runner が保持する実行時リソースを解放します。
+//
+// 構築成功後の VideoRunner のライフサイクルは Runner が所有します（app.Container.Close →
+// Pipeline.Close 経由で解放される。構築途中の失敗時のみ builder.BuildContainer が解放する）。
 func (r *Runner) Close() error {
-	if r == nil || r.VideoRunner == nil {
+	if r == nil || r.deps.VideoRunner == nil {
 		return nil
 	}
-	if closer, ok := r.VideoRunner.(io.Closer); ok {
+	if closer, ok := r.deps.VideoRunner.(io.Closer); ok {
 		return closer.Close()
 	}
 	return nil
@@ -104,66 +131,77 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
-	workflows, err := r.workflowsForTask(ctx, task)
+	workflows, err := r.resolveWorkflows(ctx, task)
 	if err != nil {
 		return nil, err
 	}
-	videoRunner := ports.DeriveVideoRunner(r.VideoRunner, task.VeoModel, task.VeoAspectRatio)
+	videoRunner := ports.DeriveVideoRunner(r.deps.VideoRunner, task.VeoModel, task.VeoAspectRatio)
 	fc := &filter.Context{
-		Task:              task,
-		Recipe:            task.Recipe,
-		VideoRecipe:       task.VideoRecipe,
-		VideoRunner:       videoRunner,
-		TaskQueue:         r.TaskQueue,
-		Workflows:         workflows,
-		Reader:            r.Reader,
-		Writer:            r.Writer,
-		Characters:        r.Characters,
-		OutputPath:        r.outputPath(task),
-		HistoryRepository: r.HistoryRepository,
+		State: filter.State{
+			Task:        task,
+			Recipe:      task.Recipe,
+			VideoRecipe: task.VideoRecipe,
+			OutputPath:  r.outputPath(task),
+		},
+		Services: filter.Services{
+			VideoRunner:       videoRunner,
+			TaskQueue:         r.deps.TaskQueue,
+			Workflows:         workflows,
+			Reader:            r.deps.Reader,
+			Writer:            r.deps.Writer,
+			Characters:        r.deps.Characters,
+			HistoryRepository: r.deps.HistoryRepository,
+		},
 	}
-	filters := r.Filters
-	if len(filters) == 0 {
-		filters = defaultFilters(task.Command, videoRunner, r.UsePreviousVideo, r.VideoProcessor)
+	// deps.Planner は New が DefaultPlanner{} で補完済みのため、ここでは nil になりません。
+	filters, err := r.deps.Planner.Plan(task, videoRunner)
+	if err != nil {
+		return nil, err
 	}
 	for _, flt := range filters {
 		if err := flt.Execute(ctx, fc); err != nil {
 			if errors.Is(err, filter.ErrPipelineDeferred) {
-				return &runResult{
-					recipe:      fc.Recipe,
-					videoRecipe: fc.VideoRecipe,
-					outputPath:  fc.OutputPath,
-					deferred:    true,
-				}, nil
+				return newRunResult(fc, true), nil
 			}
 			return nil, fmt.Errorf("filter %s: %w", flt.Name(), err)
 		}
+	}
+	return newRunResult(fc, false), nil
+}
+
+// newRunResult はフィルター実行後の Context から結果を組み立てます。
+// VideoRecipe の正規化はここ（パイプライン実行の一部）で済ませ、通知データ作成
+// （notificationRequest）が実行結果を変更する副作用を持たないようにします。
+func newRunResult(fc *filter.Context, deferred bool) *runResult {
+	if fc.VideoRecipe != nil {
+		fc.VideoRecipe.Normalize()
 	}
 	return &runResult{
 		recipe:      fc.Recipe,
 		videoRecipe: fc.VideoRecipe,
 		outputPath:  fc.OutputPath,
-	}, nil
+		deferred:    deferred,
+	}
 }
 
 func (r *Runner) notifyComplete(ctx context.Context, req domain.NotificationRequest) {
-	if r == nil || r.Notifier == nil {
+	if r == nil || r.deps.Notifier == nil {
 		return
 	}
 	notifyCtx, cancel := notificationContext(ctx)
 	defer cancel()
-	if err := r.Notifier.NotifyTaskComplete(notifyCtx, req); err != nil {
+	if err := r.deps.Notifier.NotifyTaskComplete(notifyCtx, req); err != nil {
 		slog.ErrorContext(ctx, "failed to send completion notification", "job_id", req.JobID, "error", err)
 	}
 }
 
 func (r *Runner) notifyError(ctx context.Context, errDetail error, req domain.NotificationRequest) {
-	if r == nil || r.Notifier == nil {
+	if r == nil || r.deps.Notifier == nil {
 		return
 	}
 	notifyCtx, cancel := notificationContext(ctx)
 	defer cancel()
-	if err := r.Notifier.NotifyTaskError(notifyCtx, errDetail, req); err != nil {
+	if err := r.deps.Notifier.NotifyTaskError(notifyCtx, errDetail, req); err != nil {
 		slog.ErrorContext(ctx, "failed to send error notification", "job_id", req.JobID, "error", err)
 	}
 }
@@ -195,8 +233,8 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 	}
 	if result != nil {
 		req.OutputURI = result.outputPath
+		// videoRecipe は newRunResult で正規化済み。ここでは読み取りのみ行います。
 		if result.videoRecipe != nil {
-			result.videoRecipe.Normalize()
 			req.Title = result.videoRecipe.MusicRecipe.Title
 			req.CutCount = len(result.videoRecipe.Cuts)
 		}
@@ -207,120 +245,21 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 	return req
 }
 
-// workflowsForTask はタスクで選択されたモデルに対応する Workflows を返します。
-//
-// タスクのモデル指定が Runner の既定設定と同じ場合は共有済み Workflows を使い、
-// 異なる場合、またはキャラクターシードの一時的な上書きが指定されている場合のみ
-// WorkflowFactory でタスク専用の Workflows を構築します。
-func (r *Runner) workflowsForTask(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
-	if r == nil {
+// resolveWorkflows は WorkflowResolver へタスクに応じた Workflows の解決を委譲します。
+// Resolver が未設定の場合は Workflows なし（VideoRunner 直接実行のみ）で実行します。
+func (r *Runner) resolveWorkflows(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
+	if r == nil || r.deps.WorkflowResolver == nil {
 		return nil, nil
 	}
-	if r.WorkflowFactory == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
-		return r.Workflows, nil
-	}
-	workflows, err := r.WorkflowFactory(ctx, task)
-	if err != nil {
-		return nil, fmt.Errorf("build workflow for selected models: %w", err)
-	}
-	return workflows, nil
-}
-
-// usesCustomModels はタスクが Runner の既定モデル以外を指定しているかを判定します。
-func (r *Runner) usesCustomModels(task *domain.Task) bool {
-	if task == nil {
-		return false
-	}
-	return !r.OrchestratorConfig.UsesModels(task.TextModel, task.ImageModel)
-}
-
-// usesSeedOverride はタスクがキャラクターシードの一時的な上書きを指定しているかを判定します。
-func usesSeedOverride(task *domain.Task) bool {
-	return task != nil && task.SeedOverride != nil && task.SeedOverrideCharacterID != ""
-}
-
-// usesVeoOptions はタスクが Veo モデルまたはアスペクト比の差し替えを指定しているかを判定します。
-// 指定がある場合は、共有 Workflows ではなく差し替え済み VideoRunner を持つ
-// タスク専用 Workflows を構築する必要があります。
-func usesVeoOptions(task *domain.Task) bool {
-	if task == nil {
-		return false
-	}
-	return strings.TrimSpace(task.VeoModel) != "" || strings.TrimSpace(task.VeoAspectRatio) != ""
+	return r.deps.WorkflowResolver.Resolve(ctx, task)
 }
 
 // outputPath はタスク成果物を配置するベースパスを返します。
 //
 // OutputBaseURI が未設定の場合は、フィルター側で保存先を指定しないため空文字を返します。
 func (r *Runner) outputPath(task *domain.Task) string {
-	if task == nil || strings.TrimSpace(r.OutputBaseURI) == "" {
+	if task == nil || strings.TrimSpace(r.deps.OutputBaseURI) == "" {
 		return ""
 	}
-	return strings.TrimRight(r.OutputBaseURI, "/") + "/" + task.JobID + "/"
-}
-
-// defaultFilters はタスクコマンドに応じた標準フィルター列を返します。各ケースがその
-// コマンドの完全なフィルター列を返すため、コマンドごとの違いは1箇所を見れば分かります。
-//
-// compose/video_recipe_create 系はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
-// video_recipe_create/compose_to_keyframe はキーフレーム生成までで停止し、動画生成と公開は実行しません。
-// regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
-// video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
-// enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
-func defaultFilters(command domain.TaskCommand, videoRunner ports.VideoRunner, usePreviousVideo bool, videoProcessor ports.VideoProcessor) []filter.Filter {
-	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: usePreviousVideo, VideoProcessor: videoProcessor}
-	sceneSplit := filter.SceneSplitFilter{UsePreviousVideo: usePreviousVideo}
-	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
-	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
-	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: videoProcessor}
-	switch command {
-	case domain.CommandVideoGenContinuation:
-		return []filter.Filter{videoGen, chainFinalize, filter.PublishingFilter{}}
-	case domain.CommandRegenerateCutKeyframe:
-		return []filter.Filter{
-			filter.RecipeLoadFilter{},
-			filter.RegenerateCutKeyframeFilter{},
-			filter.ZipUploadFilter{},
-		}
-	case domain.CommandRegenerateZip:
-		return []filter.Filter{
-			filter.RecipeLoadFilter{},
-			filter.ZipUploadFilter{},
-		}
-	case domain.CommandShortVideoFromSection:
-		return []filter.Filter{
-			filter.RecipeLoadFilter{},
-			filter.SectionSelectFilter{},
-			videoGen,
-			chainFinalize,
-			filter.PublishingFilter{},
-		}
-	case domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
-		return []filter.Filter{
-			filter.ScriptingFilter{},
-			sceneSplit,
-			filter.CutKeyframeFilter{},
-			filter.ZipUploadFilter{},
-		}
-	case domain.CommandCompose:
-		return []filter.Filter{
-			filter.ScriptingFilter{},
-			sceneSplit,
-			filter.CutKeyframeFilter{},
-			filter.ZipUploadFilter{},
-			videoGen,
-			chainFinalize,
-			filter.PublishingFilter{},
-		}
-	default: // domain.CommandMVFromKeyframeVideoRecipe, domain.CommandGenerateFromRecipe
-		return []filter.Filter{
-			filter.RecipeLoadFilter{},
-			sceneSplit,
-			filter.CutKeyframeFilter{},
-			filter.ZipUploadFilter{},
-			videoGen,
-			chainFinalize,
-			filter.PublishingFilter{},
-		}
-	}
+	return strings.TrimRight(r.deps.OutputBaseURI, "/") + "/" + task.JobID + "/"
 }

@@ -51,10 +51,8 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 		},
 	}
 	return &Context{
-		Task:        task,
-		VideoRecipe: recipe,
-		Workflows:   &orchestrator.Workflows{CutKeyframe: runner},
-		OutputPath:  "gs://bucket/jobs/regen-1/",
+		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
+		Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}},
 	}
 }
 
