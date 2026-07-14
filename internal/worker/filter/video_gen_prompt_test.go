@@ -18,7 +18,7 @@ import (
 // an empty anchor+cue still yields an empty prompt so request validation keeps rejecting
 // broken recipes. Failing lookups here also catch missing/renamed prompt asset files.
 func TestVideoPromptAppendsModeGuidance(t *testing.T) {
-	cut := orchestrator.Cut{VisualAnchor: "anchor scene", AudioCue: "bass drop at 0:10"}
+	cut := orchestrator.Cut{VisualAnchor: "anchor scene", AudioSync: orchestrator.AudioSync{AudioCue: "bass drop at 0:10"}}
 	prefix := "anchor scene\nSynchronize motion and camera timing with audio cue: bass drop at 0:10\n"
 
 	tests := []struct {
@@ -58,12 +58,12 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 // keyframe (duration-split cuts share one keyframe; forcing end == start kills motion).
 func TestNextCutLastFrameReference(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png"},
-		{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png"},
-		{CutIndex: 2, CharacterID: "metan", KeyframeReference: "gs://bucket/kf2.png"},
-		{CutIndex: 3, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png", IsSectionStart: true},
-		{CutIndex: 4, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png"},
-		{CutIndex: 5, CharacterID: "metan", KeyframeReference: ""},
+		{CutIndex: 0, CharacterID: "zunda", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
+		{CutIndex: 1, CharacterID: "zunda", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
+		{CutIndex: 2, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf2.png"}},
+		{CutIndex: 3, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}, ChainControl: orchestrator.ChainControl{IsSectionStart: true}},
+		{CutIndex: 4, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}},
+		{CutIndex: 5, CharacterID: "metan"},
 	}
 
 	tests := []struct {
@@ -93,8 +93,8 @@ func TestRunDirectPassesNextKeyframeAsLastFrame(t *testing.T) {
 	recipe := &orchestrator.VideoRecipe{
 		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
-			{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png", DurationSec: 8, VisualAnchor: "a"},
-			{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png", DurationSec: 8, VisualAnchor: "b"},
+			{CutIndex: 0, CharacterID: "zunda", VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
+			{CutIndex: 1, CharacterID: "zunda", VisualAnchor: "b", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -117,7 +119,7 @@ func TestVideoRecipeCreateDoesNotApplyTaskAudioURL(t *testing.T) {
 	recipe := &domain.VideoRecipe{
 		MusicRecipe: domain.MusicRecipe{Title: "recipe"},
 		Cuts: []domain.VideoCut{
-			{CutIndex: 1, DurationSec: 8, VisualAnchor: "blue light"},
+			{CutIndex: 1, VisualAnchor: "blue light", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{

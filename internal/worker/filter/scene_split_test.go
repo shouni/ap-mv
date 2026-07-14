@@ -24,15 +24,16 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 			}},
 		},
 		Cuts: []orchestrator.Cut{{
-			CutIndex:          1,
-			DurationSec:       20,
-			AudioCue:          "chorus lift",
-			VisualAnchor:      "protagonist on a glowing rooftop",
-			Dialogue:          "line one\nline two\nline three",
-			KeyframeReference: "gs://bucket/old.png",
-			VideoID:           "old-video",
-			VideoURL:          "gs://bucket/old.mp4",
-			Status:            orchestrator.CutStatusGenerated,
+			CutIndex:       1,
+			VisualAnchor:   "protagonist on a glowing rooftop",
+			Dialogue:       "line one\nline two\nline three",
+			AudioSync:      orchestrator.AudioSync{DurationSec: 20, AudioCue: "chorus lift"},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/old.png"},
+			VideoResult: orchestrator.VideoResult{
+				VideoID:  "old-video",
+				VideoURL: "gs://bucket/old.mp4",
+				Status:   orchestrator.CutStatusGenerated,
+			},
 		}},
 	}
 
@@ -77,10 +78,9 @@ func TestSceneSplitFilterBalancesVideoToVideoSceneBlocks(t *testing.T) {
 		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{{
 			CutIndex:     1,
-			DurationSec:  50,
-			AudioCue:     "long chorus",
 			VisualAnchor: "protagonist crossing a luminous city stage",
 			Dialogue:     "a\nb\nc\nd\ne",
+			AudioSync:    orchestrator.AudioSync{DurationSec: 50, AudioCue: "long chorus"},
 		}},
 	}
 

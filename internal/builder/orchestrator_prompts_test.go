@@ -117,7 +117,7 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 			}},
 		},
 		Cuts: []orchestrator.Cut{{
-			DurationSec: 8,
+			AudioSync: orchestrator.AudioSync{DurationSec: 8},
 		}},
 	}
 

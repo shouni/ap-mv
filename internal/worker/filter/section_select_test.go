@@ -22,24 +22,24 @@ func newSectionSelectRecipe() *orchestrator.VideoRecipe {
 		},
 		Cuts: []orchestrator.Cut{
 			{
-				CutIndex:          1,
-				StartSec:          0,
-				EndSec:            10,
-				DurationSec:       10,
-				KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png",
-				Status:            orchestrator.CutStatusGenerated,
-				VideoID:           "video-1",
-				VideoURL:          "gs://bucket/jobs/orig-job/videos/cut_1.mp4",
+				CutIndex:       1,
+				AudioSync:      orchestrator.AudioSync{StartSec: 0, EndSec: 10, DurationSec: 10},
+				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png"},
+				VideoResult: orchestrator.VideoResult{
+					Status:   orchestrator.CutStatusGenerated,
+					VideoID:  "video-1",
+					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_1.mp4",
+				},
 			},
 			{
-				CutIndex:          2,
-				StartSec:          10,
-				EndSec:            20,
-				DurationSec:       10,
-				KeyframeReference: "images/cut_2.png",
-				Status:            orchestrator.CutStatusGenerated,
-				VideoID:           "video-2",
-				VideoURL:          "gs://bucket/jobs/orig-job/videos/cut_2.mp4",
+				CutIndex:       2,
+				AudioSync:      orchestrator.AudioSync{StartSec: 10, EndSec: 20, DurationSec: 10},
+				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "images/cut_2.png"},
+				VideoResult: orchestrator.VideoResult{
+					Status:   orchestrator.CutStatusGenerated,
+					VideoID:  "video-2",
+					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_2.mp4",
+				},
 			},
 		},
 	}
@@ -100,12 +100,10 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 // and dialogue lines are distributed across the sub-cuts.
 func TestSplitCutBySupportedDurations(t *testing.T) {
 	cut := orchestrator.Cut{
-		CutIndex:          3,
-		StartSec:          40,
-		EndSec:            75,
-		DurationSec:       35,
-		KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png",
-		Dialogue:          "line1\nline2\nline3\nline4\nline5",
+		CutIndex:       3,
+		Dialogue:       "line1\nline2\nline3\nline4\nline5",
+		AudioSync:      orchestrator.AudioSync{StartSec: 40, EndSec: 75, DurationSec: 35},
+		KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png"},
 	}
 
 	subCuts := splitCutBySupportedDurations(cut, veoSupportedDurationsSec)
@@ -137,7 +135,7 @@ func TestSplitCutBySupportedDurations(t *testing.T) {
 func TestCapCutsTotalDuration(t *testing.T) {
 	cuts := make([]orchestrator.Cut, 9)
 	for i := range cuts {
-		cuts[i] = orchestrator.Cut{CutIndex: i + 1, DurationSec: 8}
+		cuts[i] = orchestrator.Cut{CutIndex: i + 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}}
 	}
 	capped := capCutsTotalDuration(cuts, 60)
 	if len(capped) != 7 {
@@ -145,14 +143,14 @@ func TestCapCutsTotalDuration(t *testing.T) {
 	}
 
 	// 56s + 4s = 60s ちょうどは収まる。
-	cuts = append(cuts[:7], orchestrator.Cut{CutIndex: 8, DurationSec: 4})
+	cuts = append(cuts[:7], orchestrator.Cut{CutIndex: 8, AudioSync: orchestrator.AudioSync{DurationSec: 4}})
 	capped = capCutsTotalDuration(cuts, 60)
 	if len(capped) != 8 {
 		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
 	}
 
 	// 上限超えの単独カットでも先頭は必ず残す。
-	capped = capCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, DurationSec: 90}}, 60)
+	capped = capCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 90}}}, 60)
 	if len(capped) != 1 {
 		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
 	}

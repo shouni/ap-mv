@@ -47,7 +47,11 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 	recipe := &orchestrator.VideoRecipe{
 		ProjectTitle: "test",
 		Cuts: []orchestrator.Cut{
-			{CutIndex: *task.CutIndex, VisualAnchor: "original anchor", KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
+			{
+				CutIndex:       *task.CutIndex,
+				VisualAnchor:   "original anchor",
+				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
+			},
 		},
 	}
 	return &Context{

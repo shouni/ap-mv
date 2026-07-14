@@ -15,7 +15,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
 		AspectRatio:  "9:16",
-		Cuts:         []orchestrator.Cut{{CutIndex: 1, Status: orchestrator.CutStatusGenerated}},
+		Cuts:         []orchestrator.Cut{{CutIndex: 1, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
@@ -32,7 +32,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
-		Cuts:         []orchestrator.Cut{{CutIndex: 1, Status: orchestrator.CutStatusGenerated}},
+		Cuts:         []orchestrator.Cut{{CutIndex: 1, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)

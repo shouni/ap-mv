@@ -11,9 +11,9 @@ import (
 // instead of the image_to_video set ({4,6,8}), since those cuts carry a PreviousVideoID.
 func TestExpandCutsToSupportedDurationsUsePreviousVideo(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 90, DurationSec: 8},
-		{CutIndex: 2, StartSec: 98, DurationSec: 8},
-		{CutIndex: 3, StartSec: 106, DurationSec: 8},
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 90, DurationSec: 8}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 98, DurationSec: 8}},
+		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 106, DurationSec: 8}},
 	}
 
 	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
@@ -40,8 +40,12 @@ func TestExpandCutsToSupportedDurationsUsePreviousVideo(t *testing.T) {
 // rewrites metadata for cuts whose video already exists.
 func TestExpandCutsToSupportedDurationsSkipsGeneratedCuts(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 90, DurationSec: 8, Status: orchestrator.CutStatusGenerated, VideoID: "gs://bucket/cut_01.mp4"},
-		{CutIndex: 2, StartSec: 98, DurationSec: 8},
+		{
+			CutIndex:    1,
+			AudioSync:   orchestrator.AudioSync{StartSec: 90, DurationSec: 8},
+			VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated, VideoID: "gs://bucket/cut_01.mp4"},
+		},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 98, DurationSec: 8}},
 	}
 
 	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
@@ -58,8 +62,8 @@ func TestExpandCutsToSupportedDurationsSkipsGeneratedCuts(t *testing.T) {
 // unchanged when usePreviousVideo is false (e.g. SectionSelectFilter's initial split/cap pass).
 func TestExpandCutsToSupportedDurationsDisabled(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 0, DurationSec: 8},
-		{CutIndex: 2, StartSec: 8, DurationSec: 8},
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},
 	}
 
 	got := expandCutsToSupportedDurations(cuts, false, nil, nil, false)
@@ -79,13 +83,13 @@ func TestExpandCutsToSupportedDurationsDisabled(t *testing.T) {
 // duration forever instead of restarting from a generated cut that was itself a chain start.
 func TestExpandCutsToSupportedDurationsResumedGenerationDoesNotCascadeReset(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 40, DurationSec: 8},
-		{CutIndex: 2, StartSec: 48, DurationSec: 8},
-		{CutIndex: 3, StartSec: 56, DurationSec: 8},
-		{CutIndex: 4, StartSec: 64, DurationSec: 8},
-		{CutIndex: 5, StartSec: 72, DurationSec: 8},
-		{CutIndex: 6, StartSec: 80, DurationSec: 8},
-		{CutIndex: 7, StartSec: 88, DurationSec: 8},
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 40, DurationSec: 8}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 48, DurationSec: 8}},
+		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 56, DurationSec: 8}},
+		{CutIndex: 4, AudioSync: orchestrator.AudioSync{StartSec: 64, DurationSec: 8}},
+		{CutIndex: 5, AudioSync: orchestrator.AudioSync{StartSec: 72, DurationSec: 8}},
+		{CutIndex: 6, AudioSync: orchestrator.AudioSync{StartSec: 80, DurationSec: 8}},
+		{CutIndex: 7, AudioSync: orchestrator.AudioSync{StartSec: 88, DurationSec: 8}},
 	}
 
 	// Simulate one Cloud Tasks invocation per cut: re-expand the whole list (as
@@ -124,10 +128,10 @@ func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) 
 		{Name: "Chorus", StartSeconds: 16, EndSeconds: 32},
 	}
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 0, DurationSec: 8},  // Verse start (i==0, not a "section boundary")
-		{CutIndex: 2, StartSec: 8, DurationSec: 8},  // still Verse, would continue (cumulative 8+7=15<=30)
-		{CutIndex: 3, StartSec: 16, DurationSec: 8}, // Chorus start: section boundary despite cumulative headroom
-		{CutIndex: 4, StartSec: 24, DurationSec: 8}, // still Chorus, continuation
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},  // Verse start (i==0, not a "section boundary")
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},  // still Verse, would continue (cumulative 8+7=15<=30)
+		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 16, DurationSec: 8}}, // Chorus start: section boundary despite cumulative headroom
+		{CutIndex: 4, AudioSync: orchestrator.AudioSync{StartSec: 24, DurationSec: 8}}, // still Chorus, continuation
 	}
 
 	got := expandCutsToSupportedDurations(cuts, true, sections, nil, false)
@@ -153,8 +157,8 @@ func TestExpandCutsToSupportedDurationsSectionBoundaryForcesReset(t *testing.T) 
 // behaves exactly like before section-boundary detection existed.
 func TestExpandCutsToSupportedDurationsNoSectionsIsNoop(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 0, DurationSec: 8},
-		{CutIndex: 2, StartSec: 8, DurationSec: 8},
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}},
 	}
 
 	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
@@ -168,9 +172,26 @@ func TestExpandCutsToSupportedDurationsNoSectionsIsNoop(t *testing.T) {
 
 func TestExpandCutsToSupportedDurationsRespectsSceneSplitReset(t *testing.T) {
 	cuts := []orchestrator.Cut{
-		{CutIndex: 1, StartSec: 0, DurationSec: 15, VisualAnchor: "scene 1", KeyframeReference: "gs://bucket/scene1.png"},
-		{CutIndex: 2, StartSec: 15, DurationSec: 15, VisualAnchor: "scene 2", KeyframeReference: "gs://bucket/scene2.png", IsSectionStart: true},
-		{CutIndex: 3, StartSec: 30, DurationSec: 22, VisualAnchor: "scene 3", KeyframeReference: "gs://bucket/scene3.png", IsSectionStart: true},
+		{
+			CutIndex:       1,
+			VisualAnchor:   "scene 1",
+			AudioSync:      orchestrator.AudioSync{StartSec: 0, DurationSec: 15},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/scene1.png"},
+		},
+		{
+			CutIndex:       2,
+			VisualAnchor:   "scene 2",
+			AudioSync:      orchestrator.AudioSync{StartSec: 15, DurationSec: 15},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/scene2.png"},
+			ChainControl:   orchestrator.ChainControl{IsSectionStart: true},
+		},
+		{
+			CutIndex:       3,
+			VisualAnchor:   "scene 3",
+			AudioSync:      orchestrator.AudioSync{StartSec: 30, DurationSec: 22},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/scene3.png"},
+			ChainControl:   orchestrator.ChainControl{IsSectionStart: true},
+		},
 	}
 
 	got := expandCutsToSupportedDurations(cuts, true, nil, nil, false)
