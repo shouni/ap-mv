@@ -25,12 +25,101 @@ type scriptPrompt struct {
 	visualMode       string
 	sharedVisualTmpl *template.Template
 	characters       *characterkit.Characters
+	outputSchema     string
 }
 
 type scriptPromptData struct {
 	Mode             string
 	SourceRecipeJSON string
 	VisualPrompt     string
+	OutputSchema     string
+}
+
+// musicRecipeSchemaExample mirrors lyria.MusicRecipe's own fields (title, theme, mood, tempo,
+// key, vocal_profile, instruments, sections, lyrics) for the script-generation output schema.
+// It deliberately does not reuse orchestrator.MusicRecipe (= lyria.MusicRecipe) directly: that
+// type embeds AIModels (TextModel/AudioModel/LyricsMode/ComposeMode/Seed), which has no json
+// tags, so marshaling it always leaks those Lyria generation-config fields into the schema even
+// at zero value. AIModels is config for music/lyrics generation calls, not something the
+// script-generation LLM should read or fill in.
+type musicRecipeSchemaExample struct {
+	Title        string                 `json:"title"`
+	Theme        string                 `json:"theme"`
+	Mood         string                 `json:"mood"`
+	Tempo        int                    `json:"tempo"`
+	Key          string                 `json:"key,omitempty"`
+	VocalProfile string                 `json:"vocal_profile,omitempty"`
+	Instruments  []string               `json:"instruments"`
+	Sections     []orchestrator.Section `json:"sections"`
+	Lyrics       *orchestrator.Lyrics   `json:"lyrics,omitempty"`
+}
+
+// videoRecipeSchemaExample mirrors the script-generation-relevant fields of ports.VideoRecipe
+// (project_title, description, music_recipe, cuts). final_video_url and aspect_ratio are
+// populated later in the pipeline and intentionally omitted here. Cuts reuses orchestrator.Cut
+// directly (no leakage issue there — it has no embedded, untagged fields), so a rename or
+// removal of a Cut field breaks this build instead of silently drifting from a copy-pasted
+// schema in the prompt template.
+type videoRecipeSchemaExample struct {
+	ProjectTitle string                   `json:"project_title,omitempty"`
+	Description  string                   `json:"description,omitempty"`
+	MusicRecipe  musicRecipeSchemaExample `json:"music_recipe"`
+	Cuts         []orchestrator.Cut       `json:"cuts"`
+}
+
+// recipeOutputSchema builds the example JSON schema shown to the script-generation LLM by
+// marshaling a filled example instead of hand-writing a JSON block in the prompt template.
+// Cut fields only meaningful after this pipeline stage (keyframe_reference, video_id, status,
+// start_sec, end_sec, is_chain_start, is_section_start) are left at their zero value; all of
+// them are `omitempty` in ports.Cut, so they are dropped from the marshaled example rather than
+// confusing the model into thinking it should populate them.
+func recipeOutputSchema() (string, error) {
+	example := videoRecipeSchemaExample{
+		ProjectTitle: "short title",
+		Description:  "short description of the video concept",
+		MusicRecipe: musicRecipeSchemaExample{
+			Title:        "song or video title",
+			Theme:        "main theme",
+			Mood:         "music and visual mood",
+			Tempo:        120,
+			Key:          "optional musical key",
+			VocalProfile: "optional vocal profile",
+			Instruments:  []string{"instrument names"},
+			Sections: []orchestrator.Section{
+				{
+					Name:         "Verse",
+					Duration:     8,
+					StartSeconds: 0,
+					EndSeconds:   8,
+					Prompt:       "section-level musical and lyrical cue",
+				},
+			},
+			Lyrics: &orchestrator.Lyrics{
+				Title:     "lyrics title",
+				Theme:     "lyrics theme",
+				Hook:      "main hook phrase",
+				Lyrics:    "lyrics or source-derived lyric draft",
+				Keywords:  []string{"keyword"},
+				Mood:      "lyrical mood",
+				Narrative: "lyrical narrative",
+			},
+		},
+		Cuts: []orchestrator.Cut{
+			{
+				CutIndex:       1,
+				DurationSec:    8,
+				AudioCue:       "musical timing cue",
+				AudioReference: "optional gs:// audio segment or full music file",
+				VisualAnchor:   "visual scene prompt for keyframe and video",
+				CharacterID:    "",
+			},
+		},
+	}
+	schemaBytes, err := json.MarshalIndent(example, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("format recipe output schema: %w", err)
+	}
+	return string(schemaBytes), nil
 }
 
 // visualModeData はビジュアルモードテンプレートに渡すレシピ情報のフラット表現です。
@@ -118,11 +207,16 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 	if err != nil {
 		return nil, err
 	}
+	outputSchema, err := recipeOutputSchema()
+	if err != nil {
+		return nil, err
+	}
 	return &scriptPrompt{
 		builder:          builder,
 		templates:        templates,
 		visualTemplates:  selectedVisualTemplates,
 		sharedVisualTmpl: sharedTmpl,
+		outputSchema:     outputSchema,
 	}, nil
 }
 
@@ -166,6 +260,7 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 		Mode:             mode,
 		SourceRecipeJSON: sourceRecipeJSON,
 		VisualPrompt:     visualPrompt,
+		OutputSchema:     p.outputSchema,
 	})
 }
 

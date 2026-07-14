@@ -33,8 +33,8 @@ var (
 	visualModeFiles embed.FS
 
 	// videoGenPromptFiles は Veo 動画生成モード別のプロンプトガイダンスです。
-	// ファイル名（拡張子なし）が Veo の生成モード（image_to_video / reference_to_video /
-	// video_extension）に対応します。
+	// ファイル名（拡張子なし）が Veo の生成モード（image_to_video / frames_to_video /
+	// reference_to_video / video_extension）に対応します。
 	//go:embed prompts/video_gen/*.md
 	videoGenPromptFiles embed.FS
 
@@ -48,7 +48,8 @@ func LoadVisualModeFiles() (map[string]string, error) {
 }
 
 // LoadVideoGenPrompts は埋め込まれた Veo 動画生成モード別プロンプトを読み込みます。
-// キーはファイル名（拡張子なし）: image_to_video / reference_to_video / video_extension。
+// キーはファイル名（拡張子なし）: image_to_video / frames_to_video / reference_to_video /
+// video_extension。
 func LoadVideoGenPrompts() (map[string]string, error) {
 	return resource.Load(videoGenPromptFiles, videoGenPromptDir, "")
 }

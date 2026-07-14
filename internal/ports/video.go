@@ -30,6 +30,14 @@ type ReferenceImagesSupporter interface {
 	SupportsReferenceImages() bool
 }
 
+// LastFrameSupporter は、frames_to_video（image + lastFrame の first/last frame 補間、
+// Veo 2 / Veo 3.1 系のみ対応）を使えるかを問い合わせられる VideoRunner のオプション
+// インターフェースです。video_gen フィルタが、次カットのキーフレームを lastFrame として
+// 渡すかを、モデル判定ロジックを重複実装せずに判断するために使います。
+type LastFrameSupporter interface {
+	SupportsLastFrame() bool
+}
+
 // DeriveVideoRunner は、runner が VideoRunnerConfigurator を実装していれば
 // モデル・アスペクト比を差し替えた派生 Runner を返します。指定が両方空、
 // または runner が差し替えに対応しない場合は runner をそのまま返します。

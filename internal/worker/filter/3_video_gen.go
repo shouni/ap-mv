@@ -133,7 +133,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				}
 			}
 		}
-		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID); err != nil {
+		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, nextCutLastFrameReference(fc.VideoRecipe.Cuts, i)); err != nil {
 			return err
 		}
 		if f.UsePreviousVideo && cut.DurationSec == veoVideoExtensionDurationSec {
@@ -248,19 +248,26 @@ func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
 
 // generateCut runs a single cut through the video runner and updates its status, VideoID, and
 // VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoID
-// context (video-to-video continuation).
-func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID string) error {
+// context (video-to-video continuation). lastFrameRef is the next cut's keyframe used as this
+// cut's ending frame (frames_to_video interpolation); it is only sent when the request actually
+// resolves to the image input path (mode == frames_to_video), keeping the request consistent
+// with how the adapter builds the Veo body.
+func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID, lastFrameRef string) error {
 	referenceImages := buildReferenceImages(fc, *cut)
-	mode := videoGenModeFor(f.UsePreviousVideo, lastVideoID, referenceImages, runner)
+	mode := videoGenModeFor(f.UsePreviousVideo, lastVideoID, referenceImages, lastFrameRef, runner)
+	if mode != veoModeFramesToVideo {
+		lastFrameRef = ""
+	}
 	res, err := runner.Run(ctx, ports.VideoGenerationRequest{
-		CutIndex:        cut.CutIndex,
-		Prompt:          videoPrompt(*cut, mode),
-		DurationSec:     cut.DurationSec,
-		Seed:            videoSeed(fc, cut),
-		PreviousVideoID: lastVideoID,
-		ImageReference:  cut.KeyframeReference,
-		ReferenceImages: referenceImages,
-		AudioReference:  cut.AudioReference,
+		CutIndex:           cut.CutIndex,
+		Prompt:             videoPrompt(*cut, mode),
+		DurationSec:        cut.DurationSec,
+		Seed:               videoSeed(fc, cut),
+		PreviousVideoID:    lastVideoID,
+		ImageReference:     cut.KeyframeReference,
+		LastFrameReference: lastFrameRef,
+		ReferenceImages:    referenceImages,
+		AudioReference:     cut.AudioReference,
 	})
 	if err != nil {
 		return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
@@ -351,6 +358,9 @@ type veoGenerationMode string
 const (
 	// veoModeImageToVideo はキーフレーム画像を image 入力とする image_to_video です。
 	veoModeImageToVideo veoGenerationMode = "image_to_video"
+	// veoModeFramesToVideo はキーフレーム画像を image 入力、次カットのキーフレームを
+	// lastFrame 入力とする first/last frame 補間です（Veo 2 / Veo 3.1 系のみ、Fast も対応）。
+	veoModeFramesToVideo veoGenerationMode = "frames_to_video"
 	// veoModeReferenceToVideo は [キャラ立ち絵, キーフレーム] を referenceImages とする
 	// reference_to_video です（Veo 3系の非Fastモデルのみ、8秒固定）。
 	veoModeReferenceToVideo veoGenerationMode = "reference_to_video"
@@ -374,9 +384,10 @@ var videoGenGuidance = sync.OnceValue(func() map[string]string {
 // videoGenModeFor は、このカットのリクエストが Veo のどの生成機能で解釈されるかを判定します。
 // 分岐は adapters.VertexVeoRunner.buildGenerateBody と揃えています:
 // video 入力があれば画像参照は送られず video_extension、referenceImages が使えるなら
-// reference_to_video、それ以外は image_to_video。runner が ports.ReferenceImagesSupporter を
-// 実装しない場合（テストダブル等）は image_to_video 側へ倒します。
-func videoGenModeFor(usePreviousVideo bool, lastVideoID string, referenceImages []string, runner ports.VideoRunner) veoGenerationMode {
+// reference_to_video、image 入力になるカットで lastFrame（次カットのキーフレーム）が使えるなら
+// frames_to_video、それ以外は image_to_video。runner が ports.ReferenceImagesSupporter /
+// ports.LastFrameSupporter を実装しない場合（テストダブル等）は image_to_video 側へ倒します。
+func videoGenModeFor(usePreviousVideo bool, lastVideoID string, referenceImages []string, lastFrameRef string, runner ports.VideoRunner) veoGenerationMode {
 	// adapters.previousVideoMedia は gs:// スキームの PreviousVideoID のみ video 入力にする。
 	if usePreviousVideo && strings.HasPrefix(strings.TrimSpace(lastVideoID), "gs://") {
 		return veoModeVideoExtension
@@ -384,7 +395,47 @@ func videoGenModeFor(usePreviousVideo bool, lastVideoID string, referenceImages 
 	if len(referenceImages) > 0 && referenceImagesSupported(runner) {
 		return veoModeReferenceToVideo
 	}
+	if strings.TrimSpace(lastFrameRef) != "" && lastFrameSupported(runner) {
+		return veoModeFramesToVideo
+	}
 	return veoModeImageToVideo
+}
+
+// lastFrameSupported は、実際に使われる VideoRunner が Veo の lastFrame
+// （first/last frame 補間）に対応しているかを返します。Runner が ports.LastFrameSupporter を
+// 実装していない場合（テストダブル等）は false を返し、従来どおり image_to_video で生成します。
+func lastFrameSupported(runner ports.VideoRunner) bool {
+	ls, ok := runner.(ports.LastFrameSupporter)
+	return ok && ls.SupportsLastFrame()
+}
+
+// nextCutLastFrameReference は、cuts[i] の終了フレーム（frames_to_video 補間の lastFrame）
+// として使う「次カットのキーフレーム参照」を返します。次カットの開始フレームでこのカットを
+// 終えることで、カット境界の繋ぎ（構図・キャラの見た目）を滑らかにします。以下の場合は
+// 空文字を返し、従来どおり終了フレーム指定なしで生成します:
+//   - 次カットが無い、または次カットにキーフレームが無い
+//   - 次カットがセクション境界（意図的な場面転換なので、現カットの絵を次セクションの構図へ
+//     寄せない。applyChainResetKeyframe が境界で絵を引き継がないのと同じ判断）
+//   - キャラクターが異なる（補間中にキャラ同士がモーフィングしてしまう）
+//   - 現カットと同一のキーフレーム（尺分割で同じキーフレームを共有するカット等。
+//     終了フレーム = 開始フレームを強制すると動きが殺される）
+func nextCutLastFrameReference(cuts []orchestrator.Cut, i int) string {
+	if i+1 >= len(cuts) {
+		return ""
+	}
+	cur := cuts[i]
+	next := cuts[i+1]
+	ref := strings.TrimSpace(next.KeyframeReference)
+	if ref == "" || next.IsSectionStart {
+		return ""
+	}
+	if !strings.EqualFold(strings.TrimSpace(cur.CharacterID), strings.TrimSpace(next.CharacterID)) {
+		return ""
+	}
+	if ref == strings.TrimSpace(cur.KeyframeReference) {
+		return ""
+	}
+	return ref
 }
 
 // videoPrompt builds the prompt used for video generation, appending the guidance that matches

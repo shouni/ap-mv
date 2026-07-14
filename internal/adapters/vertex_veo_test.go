@@ -80,6 +80,79 @@ func TestVertexVeoRunnerBuildGenerateBodyReferenceImages(t *testing.T) {
 	}
 }
 
+// TestVertexVeoRunnerBuildGenerateBodyLastFrame verifies lastFrame (first/last frame
+// interpolation) handling: it is sent only alongside the image input on supporting models
+// (veo-2 / veo-3.1 series, Fast included), and never with referenceImages or video context.
+func TestVertexVeoRunnerBuildGenerateBodyLastFrame(t *testing.T) {
+	req := ports.VideoGenerationRequest{
+		Prompt:             "scene",
+		CutIndex:           1,
+		DurationSec:        8,
+		ImageReference:     "gs://bucket/kf.png",
+		LastFrameReference: "gs://bucket/next_kf.jpg",
+	}
+
+	// image 入力 + 対応モデル (Fast含む): lastFrame を送る。
+	runner := &VertexVeoRunner{model: "veo-3.1-fast-generate-001", outputStorageURI: "gs://bucket/out/"}
+	instance := firstInstance(t, runner.buildGenerateBody(context.Background(), req))
+	lastFrame, ok := instance["lastFrame"].(map[string]any)
+	if !ok || lastFrame["gcsUri"] != "gs://bucket/next_kf.jpg" {
+		t.Fatalf("lastFrame = %v, want next keyframe reference", instance["lastFrame"])
+	}
+	if got := lastFrame["mimeType"]; got != "image/jpeg" {
+		t.Fatalf("lastFrame.mimeType = %v, want image/jpeg", got)
+	}
+	if _, hasImage := instance["image"]; !hasImage {
+		t.Fatalf("image (start frame) must accompany lastFrame")
+	}
+
+	// 非対応モデル (Veo 3.0系): lastFrame を送らない。
+	runner = &VertexVeoRunner{model: "veo-3.0-generate-preview", outputStorageURI: "gs://bucket/out/"}
+	instance = firstInstance(t, runner.buildGenerateBody(context.Background(), req))
+	if _, hasLastFrame := instance["lastFrame"]; hasLastFrame {
+		t.Fatalf("veo-3.0 must not send lastFrame")
+	}
+
+	// referenceImages 分岐: image を送らないため lastFrame も送らない。
+	refReq := req
+	refReq.ReferenceImages = []string{"gs://bucket/char.png", "gs://bucket/kf.png"}
+	runner = &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/"}
+	instance = firstInstance(t, runner.buildGenerateBody(context.Background(), refReq))
+	if _, hasLastFrame := instance["lastFrame"]; hasLastFrame {
+		t.Fatalf("lastFrame must not be sent together with referenceImages")
+	}
+
+	// video-to-video 文脈: 画像参照ごと送らない。
+	videoReq := req
+	videoReq.PreviousVideoID = "gs://bucket/prev.mp4"
+	runner = &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/", usePreviousVideo: true}
+	instance = firstInstance(t, runner.buildGenerateBody(context.Background(), videoReq))
+	if _, hasLastFrame := instance["lastFrame"]; hasLastFrame {
+		t.Fatalf("lastFrame must not be sent together with video context")
+	}
+}
+
+// TestVertexVeoRunnerSupportsLastFrame verifies the model gate for first/last frame
+// interpolation: Veo 2 and Veo 3.1 (Fast included) support it, Veo 3.0 does not.
+func TestVertexVeoRunnerSupportsLastFrame(t *testing.T) {
+	tests := []struct {
+		model string
+		want  bool
+	}{
+		{"veo-2.0-generate-001", true},
+		{"veo-3.1-generate-001", true},
+		{"veo-3.1-fast-generate-001", true},
+		{"veo-3.0-generate-preview", false},
+		{"veo-3.0-fast-generate-preview", false},
+	}
+	for _, tt := range tests {
+		runner := &VertexVeoRunner{model: tt.model}
+		if got := runner.SupportsLastFrame(); got != tt.want {
+			t.Errorf("SupportsLastFrame(%s) = %v, want %v", tt.model, got, tt.want)
+		}
+	}
+}
+
 func firstInstance(t *testing.T, body map[string]any) map[string]any {
 	t.Helper()
 	instances, ok := body["instances"].([]any)

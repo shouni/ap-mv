@@ -61,47 +61,7 @@ This is especially important because Veo video-to-video continuation cannot use 
 
 ## JSON schema
 
-{
-  "project_title": "short title",
-  "description": "short description of the video concept",
-  "music_recipe": {
-    "title": "song or video title",
-    "theme": "main theme",
-    "mood": "music and visual mood",
-    "tempo": 120,
-    "key": "optional musical key",
-    "vocal_profile": "optional vocal profile",
-    "instruments": ["instrument names"],
-    "lyrics": {
-      "title": "lyrics title",
-      "theme": "lyrics theme",
-      "hook": "main hook phrase",
-      "lyrics": "lyrics or source-derived lyric draft",
-      "keywords": ["keyword"],
-      "mood": "lyrical mood",
-      "narrative": "lyrical narrative"
-    },
-    "sections": [
-      {
-        "name": "Verse",
-        "duration_seconds": 8,
-        "start_seconds": 0,
-        "end_seconds": 8,
-        "prompt": "section-level musical and lyrical cue"
-      }
-    ]
-  },
-  "cuts": [
-    {
-      "cut_index": 1,
-      "duration_sec": 8,
-      "audio_cue": "musical timing cue",
-      "audio_reference": "optional gs:// audio segment or full music file",
-      "visual_anchor": "visual scene prompt for keyframe and video",
-      "character_id": ""
-    }
-  ]
-}
+{{.OutputSchema}}
 
 ## Rules
 
