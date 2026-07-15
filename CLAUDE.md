@@ -64,6 +64,8 @@ Veo's biggest failure mode is characters/context breaking across cuts. Four mech
 
 Which Veo feature a request resolves to (`video` / `referenceImages` / `image`+`lastFrame` / `image`) is decided in exactly one place — `ports.ClassifyVeoRequest` (`internal/ports/veo_mode.go`) — consumed by the adapter's request-body construction, the filter's prompt-guidance selection, and the cut-duration normalization. When adding a new Veo input mode, extend the classifier (and its capability struct `ports.VeoCapabilities`) rather than adding branches at call sites.
 
+Cut durations treat the song timeline as the source of truth: Veo only accepts discrete durations ({4,6,8}s bases, 7s extensions), so `SceneSplitFilter` allocates each cut's length from the achievable chain lengths (`videoToVideoChainDurations`, derived from the base durations and the 24s continuation cap — do not hardcode the set) with per-cut rounding error carried into the next cut's target (error diffusion), then re-bases `StartSec`/`EndSec` onto the concatenated-video timeline so cuts never overlap. Planned chain blocks are marked `IsChainStart` and `expandCutsToSupportedDurations` realizes them as `[base, 7s, ...]` without rewriting their durations; cuts without that flag (old recipes, `SectionSelectFilter`) fall back to greedy 8s splitting + cumulative chain formation.
+
 Resumability depends on per-cut `status`/`video_id`/`video_url` in `video_music_meta.json`: cuts already `status=generated` are skipped by `VideoTimelineRunner` and their `video_id` is reused as the next cut's `PreviousVideoID`, so re-submitting a recipe resumes rather than restarts.
 
 ### Auth model

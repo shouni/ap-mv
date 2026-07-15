@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -13,9 +15,14 @@ import (
 
 // SceneSplitFilter expands long cuts before keyframe generation so each sub-cut can receive its
 // own keyframe and video direction instead of sharing one section-level image.
-// UsePreviousVideo should match VideoGenerationFilter.UsePreviousVideo. When true, long cuts are
-// split into balanced scene blocks that each become a fresh video-to-video chain base instead of
+// UsePreviousVideo should match VideoGenerationFilter.UsePreviousVideo. When true, cuts are
+// re-allocated into chain blocks that each become a fresh video-to-video chain base instead of
 // generating a new keyframe for every 8-second video cut.
+//
+// Duration allocation treats the song timeline as the source of truth: Veo only supports a
+// discrete set of durations, so each cut's rounding error is carried into the next cut's target
+// (error diffusion) instead of being rounded up per cut, and StartSec/EndSec are re-based to the
+// concatenated video timeline so cuts never overlap.
 type SceneSplitFilter struct {
 	UsePreviousVideo bool
 }
@@ -34,7 +41,7 @@ func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
 	fc.VideoRecipe.Normalize()
 	applyLyricsToVideoRecipeCuts(fc.VideoRecipe)
 	if f.UsePreviousVideo {
-		fc.VideoRecipe.Cuts = expandCutsForVideoToVideoScenes(fc.VideoRecipe.Cuts)
+		fc.VideoRecipe.Cuts = expandCutsForVideoToVideoScenes(fc.VideoRecipe.Cuts, fc.Characters, referenceImagesSupported(fc.VideoRunner))
 	} else {
 		fc.VideoRecipe.Cuts = expandCutsForKeyframeScenes(fc.VideoRecipe.Cuts)
 	}
@@ -49,20 +56,30 @@ func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
 
 func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
+	videoEnd := 0.0
+	if len(cuts) > 0 {
+		videoEnd = cuts[0].StartSec
+	}
 	for _, cut := range cuts {
 		cut = resetCutForSceneKeyframe(cut)
+		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
+		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。StartSec/EndSec は
+		// 連結後の映像タイムラインで振り直すため、カット間のオーバーラップは発生しない。
+		target := cutMusicalEndSec(cut) - videoEnd
+		cut.StartSec = videoEnd
+		cut.DurationSec = target
+		cut.EndSec = videoEnd + target
 		subCuts := splitCutBySupportedDurations(cut, veoSupportedDurationsSec)
-		if len(subCuts) == 1 {
-			expanded = append(expanded, subCuts[0])
-			continue
-		}
-		lines := splitDialogueLines(cut.Dialogue)
-		for i := range subCuts {
-			subCuts[i].AudioCue = sceneAudioCue(cut.AudioCue, i, len(subCuts))
-			subCuts[i].VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(subCuts))
-			subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
+		if len(subCuts) > 1 {
+			lines := splitDialogueLines(cut.Dialogue)
+			for i := range subCuts {
+				subCuts[i].AudioCue = sceneAudioCue(cut.AudioCue, i, len(subCuts))
+				subCuts[i].VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(subCuts))
+				subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
+			}
 		}
 		expanded = append(expanded, subCuts...)
+		videoEnd = expanded[len(expanded)-1].EndSec
 	}
 	for i := range expanded {
 		expanded[i].CutIndex = i + 1
@@ -70,47 +87,70 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 	return expanded
 }
 
-func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
+// cutMusicalEndSec は、このカットが楽曲上で終わるべき時刻（秒）を返します。
+func cutMusicalEndSec(cut orchestrator.Cut) float64 {
+	if cut.EndSec > cut.StartSec {
+		return cut.EndSec
+	}
+	return cut.StartSec + cut.DurationSec
+}
+
+// expandCutsForVideoToVideoScenes は、UsePreviousVideo（継続チェーン）方式のカット列を
+// チェーンブロック列へ再割り当てします。各ブロックは1本の継続チェーン（ベース1カット +
+// video_extension の継続カット列、合計尺は videoToVideoChainDurations の候補値）として
+// まるごと生成され、ブロックごとに専用のキーフレームが作られます。ブロックには
+// IsChainStart を立て、下流の expandCutsToSupportedDurations がこれを見てブロックを
+// [ベース, 7秒, ...] の実生成カット列へ分割し、累積尺の判定でも新規チェーン起点として
+// 扱います（計画した尺が下流で書き換えられない）。
+//
+// 尺の割り当ては楽曲タイムラインを正とし、カットごとの丸め誤差（切り上げ・切り下げ両方向）
+// は次カットの目標尺へ持ち越して相殺します（誤差拡散）。割り当て後の StartSec/EndSec は
+// 連結後の映像タイムラインで振り直すため、カット間のオーバーラップは発生しません。
+// AudioCue のテキストに含まれる時刻表現（例 "0:28 to 0:37"）は歌詞由来の楽曲上の目安時刻
+// としてそのまま残します。
+//
+// characters と referenceImagesSupported は、各カットのチェーンベースが reference_to_video
+// （8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかの判定に使います
+// （expandCutsToSupportedDurations と同じ cutUsesReferenceImages の規則）。
+func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
+	videoEnd := 0.0
+	if len(cuts) > 0 {
+		videoEnd = cuts[0].StartSec
+	}
 	for _, cut := range cuts {
 		cut = resetCutForSceneKeyframe(cut)
-		duration := cut.DurationSec
-		if duration <= 0 {
-			duration = cut.EndSec - cut.StartSec
+		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
+		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
+		target := cutMusicalEndSec(cut) - videoEnd
+		bases := veoSupportedDurationsSec
+		if cutUsesReferenceImages(cut, characters, referenceImagesSupported) {
+			bases = veoReferenceToVideoDurationsSec
 		}
-		durations := balancedVideoToVideoSceneDurations(duration)
-		if len(durations) == 1 {
-			cut.DurationSec = durations[0]
-			cut.EndSec = cut.StartSec + cut.DurationSec
-			expanded = append(expanded, cut)
-			continue
-		}
+		durations := allocateChainDurations(target, videoToVideoChainDurations(bases))
 		lines := splitDialogueLines(cut.Dialogue)
-		offset := 0.0
 		for i, d := range durations {
 			sub := cut
-			sub.StartSec = cut.StartSec + offset
+			sub.StartSec = videoEnd
 			sub.DurationSec = d
-			sub.EndSec = sub.StartSec + d
-			sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
-			sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
-			sub.Dialogue = domain.DistributeLines(lines, i, len(durations))
-			// resetCutForSceneKeyframe already forced IsSectionStart=false above, so this is
-			// the only place it gets set: sub-block 2+ becomes a fresh keyframe/chain base that
-			// downstream video-gen must not treat as a video_extension continuation of block 1.
-			// This is a "scene reset" (isSceneReset in veo_cut_utils.go's
-			// expandCutsToSupportedDurations), not necessarily a real musical section boundary —
-			// SectionIndex does not change between these sub-blocks, since they all belong to the
-			// same source section-level cut. Both trigger the same downstream behavior (no
-			// last-frame inheritance), so they share this field, but the two reasons are kept
-			// distinguishable where the flag is read (see expandCutsToSupportedDurations).
-			if i > 0 {
-				sub.IsSectionStart = true
-			} else {
-				sub.IsSectionStart = false
+			sub.EndSec = videoEnd + d
+			sub.IsChainStart = true
+			if len(durations) > 1 {
+				sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
+				sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
+				sub.Dialogue = domain.DistributeLines(lines, i, len(durations))
 			}
+			// resetCutForSceneKeyframe already forced IsSectionStart=false above, so this is
+			// the only place it gets set: sub-block 2+ is a deliberate in-section scene change
+			// ("scene reset", isSceneReset in veo_cut_utils.go's expandCutsToSupportedDurations)
+			// that must start from its own keyframe instead of inheriting the previous chain's
+			// last frame. Block 1 (the start of a source cut / lyric line) keeps last-frame
+			// inheritance for visual continuity. SectionIndex does not change between these
+			// sub-blocks; real musical section boundaries are detected downstream from
+			// SectionIndex and marked IsSectionStart there.
+			sub.IsSectionStart = i > 0
 			expanded = append(expanded, sub)
-			offset += d
+			videoEnd += d
 		}
 	}
 	for i := range expanded {
@@ -119,68 +159,54 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut) []orchestrator.Cut
 	return expanded
 }
 
-func balancedVideoToVideoSceneDurations(duration float64) []float64 {
-	if duration <= 0 {
-		return []float64{veoMaxCutDurationSec}
+// allocateChainDurations は、目標尺 target（秒）をチェーン尺候補 candidates
+// （videoToVideoChainDurations の返り値、昇順・整数秒前提）の組み合わせへ割り当てます。
+// 優先順位は (1) 合計と目標の差の絶対値が最小（切り上げ・切り下げの両方を許す）、
+// (2) ブロック数が少ない（キーフレーム生成とチェーン数の節約）、(3) 合計が短い、です。
+// 過不足分は呼び出し元が誤差拡散で次カットの目標へ持ち越すため、ここではこのカット単体の
+// 誤差だけを最小化すればよい。返り値は昇順（短いブロックが先）です。
+func allocateChainDurations(target float64, candidates []float64) []float64 {
+	smallest := candidates[0]
+	if target <= smallest {
+		return []float64{smallest}
 	}
-	if duration <= veoMaxCutDurationSec {
-		return []float64{snapToSupportedDuration(duration, veoSupportedDurationsSec)}
-	}
-
-	count := max(int(math.Ceil(duration/22)), 1)
-
-	// Only the *count* of each candidate value matters for sum/overage/imbalance, so instead of
-	// enumerating all 3^count ordered sequences (which blows up badly past count~15, confirmed by
-	// benchmark: ~1.7s at count=17, worse than exponentially beyond that), enumerate the O(count^2)
-	// (c8, c15) combinations directly (c22 is derived). Ties are broken by filling ascending
-	// (8s, then 15s, then 22s) to match the smallest-first sequence the old DFS would have found
-	// first (DFS tried candidates in {8,15,22} order at each position, so the lexicographically
-	// smallest, i.e. ascending-sorted, permutation of any winning multiset was always found first).
-	best := make([]float64, count)
-	for i := range best {
-		best[i] = 22
-	}
-	bestOverage := math.Inf(1)
-	bestImbalance := math.Inf(1)
-	for c8 := 0; c8 <= count; c8++ {
-		for c15 := 0; c15 <= count-c8; c15++ {
-			c22 := count - c8 - c15
-			sum := float64(c8)*8 + float64(c15)*15 + float64(c22)*22
-			if sum < duration {
-				continue
-			}
-			overage := sum - duration
-			minValue, maxValue := 22.0, 8.0
-			if c8 > 0 {
-				minValue, maxValue = math.Min(minValue, 8), math.Max(maxValue, 8)
-			}
-			if c15 > 0 {
-				minValue, maxValue = math.Min(minValue, 15), math.Max(maxValue, 15)
-			}
-			if c22 > 0 {
-				minValue, maxValue = math.Min(minValue, 22), math.Max(maxValue, 22)
-			}
-			imbalance := maxValue - minValue
-			if overage < bestOverage || (overage == bestOverage && imbalance < bestImbalance) {
-				bestOverage = overage
-				bestImbalance = imbalance
-				idx := 0
-				for range c8 {
-					best[idx] = 8
-					idx++
-				}
-				for range c15 {
-					best[idx] = 15
-					idx++
-				}
-				for range c22 {
-					best[idx] = 22
-					idx++
-				}
+	largest := candidates[len(candidates)-1]
+	limit := int(math.Ceil(target + largest))
+	const unreachable = math.MaxInt32
+	// blockCounts[s] = 合計 s 秒を作る最小ブロック数、choice[s] = そのとき最後に使う候補。
+	blockCounts := make([]int, limit+1)
+	choice := make([]int, limit+1)
+	for s := 1; s <= limit; s++ {
+		blockCounts[s] = unreachable
+		choice[s] = -1
+		for ci, c := range candidates {
+			prev := s - int(math.Round(c))
+			if prev >= 0 && blockCounts[prev] != unreachable && blockCounts[prev]+1 < blockCounts[s] {
+				blockCounts[s] = blockCounts[prev] + 1
+				choice[s] = ci
 			}
 		}
 	}
-	return best
+	best := -1
+	for s := 1; s <= limit; s++ {
+		if blockCounts[s] == unreachable {
+			continue
+		}
+		if best == -1 {
+			best = s
+			continue
+		}
+		diff, bestDiff := math.Abs(float64(s)-target), math.Abs(float64(best)-target)
+		if diff < bestDiff || (diff == bestDiff && blockCounts[s] < blockCounts[best]) {
+			best = s
+		}
+	}
+	var out []float64
+	for s := best; s > 0; s -= int(math.Round(candidates[choice[s]])) {
+		out = append(out, candidates[choice[s]])
+	}
+	sort.Float64s(out)
+	return out
 }
 
 func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
