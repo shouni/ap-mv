@@ -2,6 +2,7 @@ package filter
 
 import (
 	"math"
+	"sort"
 	"strings"
 
 	characterkit "github.com/shouni/go-character-kit/character"
@@ -41,6 +42,31 @@ const veoVideoExtensionDurationSec = 7.0
 // 継続回数（＝ドリフトの蓄積量）を抑える。
 const veoContinuationMaxDurationSec = 24.0
 
+// videoToVideoChainDurations は、1本の継続チェーン（ベース1カット + video_extension の
+// 継続カット列）として生成できる合計尺（秒）の候補を昇順で返します。baseDurations は
+// チェーン先頭カットに許される尺（image_to_video なら {4,6,8}、reference_to_video なら
+// {8}）です。各候補は「ベース尺 + 7秒 × 継続回数」で、累積尺が
+// veoContinuationMaxDurationSec を超える手前まで（expandCutsToSupportedDurations の
+// リセット判定と同じ規則）伸ばした値です。既定の設定では {4,6,8,11,13,15,18,20,22}
+// になります。scene_split がチェーンブロックの尺を計画する際の候補として使います。
+func videoToVideoChainDurations(baseDurations []float64) []float64 {
+	seen := make(map[float64]bool)
+	var out []float64
+	for _, base := range baseDurations {
+		for d := base; ; d += veoVideoExtensionDurationSec {
+			if !seen[d] {
+				seen[d] = true
+				out = append(out, d)
+			}
+			if d+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
+				break
+			}
+		}
+	}
+	sort.Float64s(out)
+	return out
+}
+
 // expandCutsToSupportedDurations は各カットの尺を Veo のサポート値へ正規化します。
 // 8 秒を超えるカットは同じキーフレーム・プロンプトを引き継いだサブカット列へ分割し、
 // 歌詞（Dialogue）は行単位でサブカットへ均等配分します。分割後は CutIndex を 1 から振り直します。
@@ -70,11 +96,24 @@ const veoContinuationMaxDurationSec = 24.0
 // またはカットにキーフレーム参照がある）に、使用モデルが referenceImages に対応しているかを
 // 掛け合わせたものです（詳細は cutUsesReferenceImages）。
 //
+// usePreviousVideo が true のとき、scene_split（expandCutsForVideoToVideoScenes）が事前計画
+// したチェーンブロック（IsChainStart 付きの未生成カット、尺は videoToVideoChainDurations の
+// 候補値）は splitChainCutIntoSupportedDurations で [ベース, 7秒, ...] へ分割し、累積尺の
+// 判定でも常に新規チェーンの起点として扱います。ブロック尺は計画時点で累積上限内に収まる
+// 候補値なので、ブロック途中で技術的リセットが発生することはありません。IsChainStart を
+// 持たない未生成カット（旧レシピ、SectionSelectFilter 経由など）は従来どおり貪欲な分割と
+// 累積尺ベースのチェーン形成で処理します。
+//
 // SectionSelectFilter（ショート動画）と VideoGenerationFilter（フルMV）の両方から使われます。
 func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bool, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
 	expanded := make([]orchestrator.Cut, 0, len(cuts))
 	for _, cut := range cuts {
-		subCuts := splitCutBySupportedDurations(cut, allowedDurationsFor(cut, characters, referenceImagesSupported))
+		var subCuts []orchestrator.Cut
+		if usePreviousVideo && cut.IsChainStart && !cut.IsGenerated() {
+			subCuts = splitChainCutIntoSupportedDurations(cut, allowedDurationsFor(cut, characters, referenceImagesSupported))
+		} else {
+			subCuts = splitCutBySupportedDurations(cut, allowedDurationsFor(cut, characters, referenceImagesSupported))
+		}
 		expanded = append(expanded, subCuts...)
 	}
 	cumulative := 0.0
@@ -119,10 +158,10 @@ func expandCutsToSupportedDurations(cuts []orchestrator.Cut, usePreviousVideo bo
 		if isSectionStart {
 			cumulative = 0
 		}
-		if cumulative == 0 || cumulative+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
-			// 新規チェーンの先頭（曲頭、セクション境界、またはリセット直後）。
-			// splitCutBySupportedDurations が既に割り当てた尺（image_to_videoなら{4,6,8}秒、
-			// reference_to_videoなら8秒固定）をそのまま使う。
+		if expanded[i].IsChainStart || cumulative == 0 || cumulative+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
+			// 新規チェーンの先頭（曲頭、セクション境界、リセット直後、または scene_split が
+			// 事前計画したチェーンブロックの起点）。分割時に既に割り当てた尺
+			// （image_to_videoなら{4,6,8}秒、reference_to_videoなら8秒固定）をそのまま使う。
 			cumulative = expanded[i].DurationSec
 			if isSectionStart {
 				expanded[i].IsSectionStart = true
@@ -219,6 +258,52 @@ func splitCutBySupportedDurations(cut orchestrator.Cut, allowedDurations []float
 		remaining -= d
 	}
 
+	lines := splitDialogueLines(cut.Dialogue)
+	for i := range subCuts {
+		subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
+	}
+	return subCuts
+}
+
+// splitChainCutIntoSupportedDurations は、scene_split が事前計画したチェーンブロック
+// （IsChainStart 付き、尺は videoToVideoChainDurations の候補値）を実際の生成カット列
+// [ベース, 7秒, 7秒, ...] へ分割します。先頭サブカットがチェーンの起点（ブロックの
+// IsChainStart / IsSectionStart を引き継ぐ）で、尺は allowedBases（image_to_video なら
+// {4,6,8}、reference_to_video なら {8}）から選びます。以降のサブカットは video_extension
+// の7秒固定です。歌詞（Dialogue）は行単位でサブカットへ均等配分します。
+//
+// reference_to_video のカット（ベース8秒固定）に {4,6} ベース前提のブロック尺（11秒など）が
+// 計画されていた場合、ベースは allowedBases へ丸められるため実現尺が計画と数秒ずれますが、
+// scene_split 側も同じ cutUsesReferenceImages 判定で候補を選ぶため通常は一致します。
+func splitChainCutIntoSupportedDurations(cut orchestrator.Cut, allowedBases []float64) []orchestrator.Cut {
+	duration := cut.DurationSec
+	if duration <= 0 {
+		duration = cut.EndSec - cut.StartSec
+	}
+	if duration <= veoMaxCutDurationSec {
+		cut.DurationSec = snapToSupportedDuration(duration, allowedBases)
+		cut.EndSec = cut.StartSec + cut.DurationSec
+		return []orchestrator.Cut{cut}
+	}
+	extensions := int(math.Ceil((duration - veoMaxCutDurationSec) / veoVideoExtensionDurationSec))
+	base := snapToSupportedDuration(duration-float64(extensions)*veoVideoExtensionDurationSec, allowedBases)
+
+	subCuts := make([]orchestrator.Cut, 0, extensions+1)
+	offset := 0.0
+	for i := 0; i <= extensions; i++ {
+		d := base
+		sub := cut
+		if i > 0 {
+			d = veoVideoExtensionDurationSec
+			sub.IsChainStart = false
+			sub.IsSectionStart = false
+		}
+		sub.StartSec = cut.StartSec + offset
+		sub.DurationSec = d
+		sub.EndSec = sub.StartSec + d
+		subCuts = append(subCuts, sub)
+		offset += d
+	}
 	lines := splitDialogueLines(cut.Dialogue)
 	for i := range subCuts {
 		subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))

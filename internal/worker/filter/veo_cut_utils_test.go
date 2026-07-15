@@ -210,6 +210,89 @@ func TestExpandCutsToSupportedDurationsRespectsSceneSplitReset(t *testing.T) {
 	}
 }
 
+// TestVideoToVideoChainDurations verifies the achievable chain lengths derived from the base
+// durations and the continuation cap: base + 7s per extension while cumulative+7 <= 24.
+func TestVideoToVideoChainDurations(t *testing.T) {
+	assertEqual := func(name string, got, want []float64) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("%s = %v, want %v", name, got, want)
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Fatalf("%s = %v, want %v", name, got, want)
+			}
+		}
+	}
+	assertEqual("image_to_video chains", videoToVideoChainDurations(veoSupportedDurationsSec), []float64{4, 6, 8, 11, 13, 15, 18, 20, 22})
+	assertEqual("reference_to_video chains", videoToVideoChainDurations(veoReferenceToVideoDurationsSec), []float64{8, 15, 22})
+}
+
+// TestExpandCutsToSupportedDurationsPlannedChainBlocks verifies that chain blocks pre-planned by
+// scene_split (pending cuts marked IsChainStart with a videoToVideoChainDurations length) are
+// realized as [base, 7s, 7s...] and never rewritten by the cumulative-duration chain logic, so
+// the durations scene_split allocated against the song timeline survive to actual generation.
+func TestExpandCutsToSupportedDurationsPlannedChainBlocks(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 11}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 19, DurationSec: 20}, ChainControl: orchestrator.ChainControl{IsChainStart: true, IsSectionStart: true}},
+	}
+
+	got := expandCutsToSupportedDurations(cuts, true, nil, false)
+
+	// Block 8 -> [8]; block 11 -> [4,7]; block 20 -> [6,7,7]. Without the IsChainStart handling
+	// the second block's 4s base would be forced to a 7s continuation of the first chain.
+	wantDurations := []float64{8, 4, 7, 6, 7, 7}
+	wantChainStart := []bool{true, true, false, true, false, false}
+	wantSectionStart := []bool{false, false, false, true, false, false}
+	if len(got) != len(wantDurations) {
+		t.Fatalf("cuts = %d, want %d", len(got), len(wantDurations))
+	}
+	for i := range got {
+		if got[i].DurationSec != wantDurations[i] {
+			t.Errorf("cut[%d].DurationSec = %v, want %v", i, got[i].DurationSec, wantDurations[i])
+		}
+		if got[i].IsChainStart != wantChainStart[i] {
+			t.Errorf("cut[%d].IsChainStart = %v, want %v", i, got[i].IsChainStart, wantChainStart[i])
+		}
+		if got[i].IsSectionStart != wantSectionStart[i] {
+			t.Errorf("cut[%d].IsSectionStart = %v, want %v", i, got[i].IsSectionStart, wantSectionStart[i])
+		}
+		if i > 0 && got[i].StartSec != got[i-1].EndSec {
+			t.Errorf("cut[%d].StartSec = %v, want %v (contiguous timeline)", i, got[i].StartSec, got[i-1].EndSec)
+		}
+	}
+}
+
+// TestExpandCutsToSupportedDurationsPlannedChainBlocksStableOnResume simulates runDirect's
+// resumption pattern over planned chain blocks: after each cut generates, the FULL cut list
+// (already expanded to [base, 7s...]) is re-expanded on the next Cloud Tasks invocation.
+// Durations must be stable across re-expansion — a 7s extension must not be re-snapped to 8s,
+// and a 4s/6s base must keep its planned duration.
+func TestExpandCutsToSupportedDurationsPlannedChainBlocksStableOnResume(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 11}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+	}
+	cuts = expandCutsToSupportedDurations(cuts, true, nil, false)
+	wantDurations := []float64{8, 4, 7}
+
+	for next := 0; next < len(cuts); next++ {
+		cuts = expandCutsToSupportedDurations(cuts, true, nil, false)
+		if len(cuts) != len(wantDurations) {
+			t.Fatalf("resume %d: cuts = %d, want %d", next, len(cuts), len(wantDurations))
+		}
+		for i := range cuts {
+			if cuts[i].DurationSec != wantDurations[i] {
+				t.Errorf("resume %d: cut[%d].DurationSec = %v, want %v", next, i, cuts[i].DurationSec, wantDurations[i])
+			}
+		}
+		cuts[next].Status = orchestrator.CutStatusGenerated
+		cuts[next].VideoID = "gs://bucket/video.mp4"
+	}
+}
+
 // TestExpandCutsToSupportedDurationsPreservesSectionIndexAcrossSplit verifies that a long cut
 // split into multiple sub-cuts (splitCutBySupportedDurations) carries its SectionIndex to every
 // sub-cut, so the split itself is never mistaken for a section boundary.
