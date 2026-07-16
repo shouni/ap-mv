@@ -54,6 +54,7 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
+      - '--memory=4Gi'
       - '--update-env-vars'
       - '^|^GCP_PROJECT_ID=${PROJECT_ID}|GCP_LOCATION_ID=${_REGION}|GEMINI_MODELS=${_GEMINI_MODELS}|IMAGE_MODELS=${_IMAGE_MODELS}|VEO_MODEL=${_VEO_MODEL}|VEO_MODELS=${_VEO_MODELS}|VEO_OUTPUT_PREFIX=${_VEO_OUTPUT_PREFIX}'
 
