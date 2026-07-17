@@ -307,7 +307,7 @@ sequenceDiagram
 
 | メソッド | パス | 用途 |
 | --- | --- | --- |
-| `GET` | `/healthz` | ヘルスチェック |
+| `GET` | `/health` | ヘルスチェック |
 | `GET` | `/static/*` | embed.FS の静的ファイル配信 |
 | `GET` | `/auth/login` | Google OAuth ログイン開始 |
 | `GET` | `/auth/callback` | OAuth コールバック |

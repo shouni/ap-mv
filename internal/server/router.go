@@ -36,7 +36,9 @@ func setupCommonMiddleware(r *chi.Mux) {
 
 // setupRoutes configures routes.
 func setupRoutes(r chi.Router, h *builder.AppHandlers) {
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	// "/healthz" is intercepted by Cloud Run's default domain (*.run.app) at the GFE layer
+	// before reaching the container (replaced with a generic 404), so avoid it.
+	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
