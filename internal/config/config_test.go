@@ -82,38 +82,38 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if cfg.ServiceURL != "http://localhost:8080" {
-		t.Fatalf("ServiceURL = %q, want localhost default", cfg.ServiceURL)
+	if cfg.Server.ServiceURL != "http://localhost:8080" {
+		t.Fatalf("ServiceURL = %q, want localhost default", cfg.Server.ServiceURL)
 	}
-	if cfg.Port != "8080" {
-		t.Fatalf("Port = %q, want 8080", cfg.Port)
+	if cfg.Server.Port != "8080" {
+		t.Fatalf("Port = %q, want 8080", cfg.Server.Port)
 	}
-	if cfg.TaskAudienceURL != cfg.ServiceURL {
-		t.Fatalf("TaskAudienceURL = %q, want ServiceURL %q", cfg.TaskAudienceURL, cfg.ServiceURL)
+	if cfg.Tasks.TaskAudienceURL != cfg.Server.ServiceURL {
+		t.Fatalf("TaskAudienceURL = %q, want ServiceURL %q", cfg.Tasks.TaskAudienceURL, cfg.Server.ServiceURL)
 	}
-	if cfg.WorkerURL != "http://localhost:8080/tasks/generate" {
-		t.Fatalf("WorkerURL = %q, want localhost worker URL", cfg.WorkerURL)
+	if cfg.Tasks.WorkerURL != "http://localhost:8080/tasks/generate" {
+		t.Fatalf("WorkerURL = %q, want localhost worker URL", cfg.Tasks.WorkerURL)
 	}
-	if cfg.VeoPollInterval != 10*time.Second {
-		t.Fatalf("VeoPollInterval = %s, want 10s", cfg.VeoPollInterval)
+	if cfg.AI.VeoPollInterval != 10*time.Second {
+		t.Fatalf("VeoPollInterval = %s, want 10s", cfg.AI.VeoPollInterval)
 	}
-	if cfg.VeoOperationTimeout != 20*time.Minute {
-		t.Fatalf("VeoOperationTimeout = %s, want 20m", cfg.VeoOperationTimeout)
+	if cfg.AI.VeoOperationTimeout != 20*time.Minute {
+		t.Fatalf("VeoOperationTimeout = %s, want 20m", cfg.AI.VeoOperationTimeout)
 	}
-	if cfg.KeyframeMaxConcurrency != 1 {
-		t.Fatalf("KeyframeMaxConcurrency = %d, want 1", cfg.KeyframeMaxConcurrency)
+	if cfg.AI.KeyframeMaxConcurrency != 1 {
+		t.Fatalf("KeyframeMaxConcurrency = %d, want 1", cfg.AI.KeyframeMaxConcurrency)
 	}
-	if cfg.KeyframeRateInterval != 60*time.Second {
-		t.Fatalf("KeyframeRateInterval = %s, want 60s", cfg.KeyframeRateInterval)
+	if cfg.AI.KeyframeRateInterval != 60*time.Second {
+		t.Fatalf("KeyframeRateInterval = %s, want 60s", cfg.AI.KeyframeRateInterval)
 	}
-	if cfg.ImageModel != "gemini-3.1-flash-image" {
-		t.Fatalf("ImageModel = %q", cfg.ImageModel)
+	if cfg.AI.ImageModel != "gemini-3.1-flash-image" {
+		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
 	}
-	if len(cfg.GeminiModels) != 1 || cfg.GeminiModels[0] != "gemini-3.5-flash" {
-		t.Fatalf("GeminiModels = %#v", cfg.GeminiModels)
+	if len(cfg.AI.GeminiModels) != 1 || cfg.AI.GeminiModels[0] != "gemini-3.5-flash" {
+		t.Fatalf("GeminiModels = %#v", cfg.AI.GeminiModels)
 	}
-	if len(cfg.ImageModels) != 1 || cfg.ImageModels[0] != "gemini-3.1-flash-image" {
-		t.Fatalf("ImageModels = %#v", cfg.ImageModels)
+	if len(cfg.AI.ImageModels) != 1 || cfg.AI.ImageModels[0] != "gemini-3.1-flash-image" {
+		t.Fatalf("ImageModels = %#v", cfg.AI.ImageModels)
 	}
 }
 
@@ -141,44 +141,44 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if cfg.TaskAudienceURL != "https://tasks.example.com" {
-		t.Fatalf("TaskAudienceURL = %q", cfg.TaskAudienceURL)
+	if cfg.Tasks.TaskAudienceURL != "https://tasks.example.com" {
+		t.Fatalf("TaskAudienceURL = %q", cfg.Tasks.TaskAudienceURL)
 	}
-	if cfg.WorkerURL != "https://worker.example.com/tasks/generate" {
-		t.Fatalf("WorkerURL = %q", cfg.WorkerURL)
+	if cfg.Tasks.WorkerURL != "https://worker.example.com/tasks/generate" {
+		t.Fatalf("WorkerURL = %q", cfg.Tasks.WorkerURL)
 	}
-	if cfg.GCSBucket != "music-bucket/output" {
-		t.Fatalf("GCSBucket = %q", cfg.GCSBucket)
+	if cfg.Storage.GCSBucket != "music-bucket/output" {
+		t.Fatalf("GCSBucket = %q", cfg.Storage.GCSBucket)
 	}
-	if !cfg.VeoGenerateAudio {
+	if !cfg.AI.VeoGenerateAudio {
 		t.Fatal("VeoGenerateAudio = false, want true")
 	}
-	if cfg.ImageModel != "image-standard" {
-		t.Fatalf("ImageModel = %q", cfg.ImageModel)
+	if cfg.AI.ImageModel != "image-standard" {
+		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
 	}
-	if len(cfg.GeminiModels) != 3 || cfg.GeminiModels[0] != "gemini-selected" || cfg.GeminiModels[1] != "gemini-a" {
-		t.Fatalf("GeminiModels = %#v", cfg.GeminiModels)
+	if len(cfg.AI.GeminiModels) != 3 || cfg.AI.GeminiModels[0] != "gemini-selected" || cfg.AI.GeminiModels[1] != "gemini-a" {
+		t.Fatalf("GeminiModels = %#v", cfg.AI.GeminiModels)
 	}
-	if len(cfg.ImageModels) != 3 || cfg.ImageModels[0] != "image-standard" || cfg.ImageModels[1] != "image-a" {
-		t.Fatalf("ImageModels = %#v", cfg.ImageModels)
+	if len(cfg.AI.ImageModels) != 3 || cfg.AI.ImageModels[0] != "image-standard" || cfg.AI.ImageModels[1] != "image-a" {
+		t.Fatalf("ImageModels = %#v", cfg.AI.ImageModels)
 	}
-	if cfg.VeoPollInterval != 7*time.Second {
-		t.Fatalf("VeoPollInterval = %s, want 7s", cfg.VeoPollInterval)
+	if cfg.AI.VeoPollInterval != 7*time.Second {
+		t.Fatalf("VeoPollInterval = %s, want 7s", cfg.AI.VeoPollInterval)
 	}
-	if cfg.VeoOperationTimeout != 30*time.Second {
-		t.Fatalf("VeoOperationTimeout = %s, want 30s", cfg.VeoOperationTimeout)
+	if cfg.AI.VeoOperationTimeout != 30*time.Second {
+		t.Fatalf("VeoOperationTimeout = %s, want 30s", cfg.AI.VeoOperationTimeout)
 	}
-	if cfg.KeyframeMaxConcurrency != 3 {
-		t.Fatalf("KeyframeMaxConcurrency = %d, want 3", cfg.KeyframeMaxConcurrency)
+	if cfg.AI.KeyframeMaxConcurrency != 3 {
+		t.Fatalf("KeyframeMaxConcurrency = %d, want 3", cfg.AI.KeyframeMaxConcurrency)
 	}
-	if cfg.KeyframeRateInterval != 10*time.Second {
-		t.Fatalf("KeyframeRateInterval = %s, want 10s", cfg.KeyframeRateInterval)
+	if cfg.AI.KeyframeRateInterval != 10*time.Second {
+		t.Fatalf("KeyframeRateInterval = %s, want 10s", cfg.AI.KeyframeRateInterval)
 	}
-	if len(cfg.AllowedEmails) != 2 || cfg.AllowedEmails[1] != "b@example.com" {
-		t.Fatalf("AllowedEmails = %#v", cfg.AllowedEmails)
+	if len(cfg.Auth.AllowedEmails) != 2 || cfg.Auth.AllowedEmails[1] != "b@example.com" {
+		t.Fatalf("AllowedEmails = %#v", cfg.Auth.AllowedEmails)
 	}
-	if len(cfg.AllowedDomains) != 2 || cfg.AllowedDomains[1] != "example.jp" {
-		t.Fatalf("AllowedDomains = %#v", cfg.AllowedDomains)
+	if len(cfg.Auth.AllowedDomains) != 2 || cfg.Auth.AllowedDomains[1] != "example.jp" {
+		t.Fatalf("AllowedDomains = %#v", cfg.Auth.AllowedDomains)
 	}
 }
 
@@ -195,14 +195,14 @@ func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if cfg.VeoModel != "veo-selected" {
-		t.Fatalf("VeoModel = %q", cfg.VeoModel)
+	if cfg.AI.VeoModel != "veo-selected" {
+		t.Fatalf("VeoModel = %q", cfg.AI.VeoModel)
 	}
-	if len(cfg.VeoModels) != 3 || cfg.VeoModels[0] != "veo-selected" || cfg.VeoModels[1] != "veo-a" || cfg.VeoModels[2] != "veo-b" {
-		t.Fatalf("VeoModels = %v, want selected model prepended", cfg.VeoModels)
+	if len(cfg.AI.VeoModels) != 3 || cfg.AI.VeoModels[0] != "veo-selected" || cfg.AI.VeoModels[1] != "veo-a" || cfg.AI.VeoModels[2] != "veo-b" {
+		t.Fatalf("VeoModels = %v, want selected model prepended", cfg.AI.VeoModels)
 	}
-	if cfg.VeoLocationID != "asia-northeast1" {
-		t.Fatalf("VeoLocationID = %q, want fallback to GCP_LOCATION_ID", cfg.VeoLocationID)
+	if cfg.AI.VeoLocationID != "asia-northeast1" {
+		t.Fatalf("VeoLocationID = %q, want fallback to GCP_LOCATION_ID", cfg.AI.VeoLocationID)
 	}
 }
 
@@ -217,11 +217,11 @@ func TestLoadConfigFromEnvVeoLocationOverride(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if cfg.VeoLocationID != "us-central1" {
-		t.Fatalf("VeoLocationID = %q, want us-central1", cfg.VeoLocationID)
+	if cfg.AI.VeoLocationID != "us-central1" {
+		t.Fatalf("VeoLocationID = %q, want us-central1", cfg.AI.VeoLocationID)
 	}
-	if cfg.LocationID != "asia-northeast1" {
-		t.Fatalf("LocationID = %q, want asia-northeast1", cfg.LocationID)
+	if cfg.GCP.LocationID != "asia-northeast1" {
+		t.Fatalf("LocationID = %q, want asia-northeast1", cfg.GCP.LocationID)
 	}
 }
 

@@ -14,8 +14,10 @@ import (
 // orchestrator config into the workflow resolver's decision logic.
 func TestNewWorkflowResolverPassesOrchestratorConfig(t *testing.T) {
 	cfg := &config.Config{
-		GeminiModel: "gemini-text",
-		ImageModel:  "gemini-image",
+		AI: config.AIConfig{
+			GeminiModel: "gemini-text",
+			ImageModel:  "gemini-image",
+		},
 	}
 
 	resolver := newWorkflowResolver(cfg, nil, nil, nil, &orchestrator.Workflows{})

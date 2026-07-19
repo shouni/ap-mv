@@ -12,21 +12,37 @@ import (
 
 const taskGeneratePath = "/tasks/generate"
 
-// Config はアプリ設定です。
-type Config struct {
-	ServiceURL          string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	Port                string `env:"PORT" envDefault:"8080"`
+// ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
+type ServerConfig struct {
+	ServiceURL      string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	Port            string        `env:"PORT" envDefault:"8080"`
+	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
+}
+
+// GCPConfig は Vertex AI / Cloud Tasks 呼び出しに使う GCP プロジェクト情報です。
+type GCPConfig struct {
 	ProjectID           string `env:"GCP_PROJECT_ID"`
 	LocationID          string `env:"GCP_LOCATION_ID"`
-	QueueID             string `env:"CLOUD_TASKS_QUEUE_ID"`
-	WorkerURL           string `env:"WORKER_URL"`
-	TaskAudienceURL     string `env:"TASK_AUDIENCE_URL"`
 	ServiceAccountEmail string `env:"SERVICE_ACCOUNT_EMAIL"`
-	GCSBucket           string `env:"AP_MV_BUCKET"`
+}
+
+// TasksConfig は Cloud Tasks キューへのエンキュー設定です。
+type TasksConfig struct {
+	QueueID         string `env:"CLOUD_TASKS_QUEUE_ID"`
+	WorkerURL       string `env:"WORKER_URL"`
+	TaskAudienceURL string `env:"TASK_AUDIENCE_URL"`
+}
+
+// StorageConfig は GCS バケットの設定です。
+type StorageConfig struct {
+	GCSBucket string `env:"AP_MV_BUCKET"`
 	// MusicBucket は、Video Recipe Create の Music Job ID からレシピJSON
 	// （gs://<MusicBucket>/<jobID>.json、ap-comp/lyric-videoと同じ規則）を解決するために使う。
-	MusicBucket            string        `env:"AP_MUSIC_BUCKET" envDefault:"ap-music"`
-	SlackWebhookURL        string        `env:"SLACK_WEBHOOK_URL"`
+	MusicBucket string `env:"AP_MUSIC_BUCKET" envDefault:"ap-music"`
+}
+
+// AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
+type AIConfig struct {
 	GeminiModel            string        `env:"GEMINI_MODEL"`
 	ImageModel             string        `env:"IMAGE_MODEL"`
 	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash"`
@@ -43,43 +59,58 @@ type Config struct {
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
 	KeyframeRateInterval   time.Duration `env:"KEYFRAME_RATE_INTERVAL" envDefault:"60s"`
-	ShutdownTimeout        time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
+}
 
-	// OAuth & Session Settings
+// NotificationConfig は外部通知先の設定です。
+type NotificationConfig struct {
+	SlackWebhookURL string `env:"SLACK_WEBHOOK_URL"`
+}
+
+// AuthConfig は OAuth・セッション・認可の設定です。
+type AuthConfig struct {
 	GoogleClientID     string `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `env:"GOOGLE_CLIENT_SECRET"`
 	// SessionSecret はセッションデータのHMAC署名用シークレットキーです。
 	SessionSecret string `env:"SESSION_SECRET"`
 	// SessionEncryptKey はセッションデータのAES暗号化用シークレットキーです。 16, 24, 32 バイトのいずれかである必要があります。
-	SessionEncryptKey string `env:"SESSION_ENCRYPT_KEY"`
-
-	// Authz Settings
-	AllowedEmails  []string `env:"ALLOWED_EMAILS"`
-	AllowedDomains []string `env:"ALLOWED_DOMAINS"`
+	SessionEncryptKey string   `env:"SESSION_ENCRYPT_KEY"`
+	AllowedEmails     []string `env:"ALLOWED_EMAILS"`
+	AllowedDomains    []string `env:"ALLOWED_DOMAINS"`
 	// AllowedM2MServiceAccounts は、Web APIをサーバー間通信（OIDC Bearerトークン）で
 	// 呼び出せるサービスアカウントのメールアドレスです。空ならM2M認証は無効です。
 	AllowedM2MServiceAccounts []string `env:"ALLOWED_M2M_SERVICE_ACCOUNTS"`
 }
 
+// Config はアプリ設定です。
+type Config struct {
+	Server       ServerConfig
+	GCP          GCPConfig
+	Tasks        TasksConfig
+	Storage      StorageConfig
+	AI           AIConfig
+	Notification NotificationConfig
+	Auth         AuthConfig
+}
+
 // normalize normalizes the provided values.
 func (c *Config) normalize() error {
-	workerURL, err := normalizeWorkerURL(c.ServiceURL, c.WorkerURL)
+	workerURL, err := normalizeWorkerURL(c.Server.ServiceURL, c.Tasks.WorkerURL)
 	if err != nil {
 		return err
 	}
-	c.WorkerURL = workerURL
-	if c.TaskAudienceURL == "" {
-		c.TaskAudienceURL = c.ServiceURL
+	c.Tasks.WorkerURL = workerURL
+	if c.Tasks.TaskAudienceURL == "" {
+		c.Tasks.TaskAudienceURL = c.Server.ServiceURL
 	}
-	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
-	c.MusicBucket = normalizeGCSBucket(c.MusicBucket)
-	c.AllowedEmails = normalizeStringSlice(c.AllowedEmails)
-	c.AllowedDomains = normalizeStringSlice(c.AllowedDomains)
-	c.AllowedM2MServiceAccounts = normalizeStringSlice(c.AllowedM2MServiceAccounts)
+	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
+	c.Storage.MusicBucket = normalizeGCSBucket(c.Storage.MusicBucket)
+	c.Auth.AllowedEmails = normalizeStringSlice(c.Auth.AllowedEmails)
+	c.Auth.AllowedDomains = normalizeStringSlice(c.Auth.AllowedDomains)
+	c.Auth.AllowedM2MServiceAccounts = normalizeStringSlice(c.Auth.AllowedM2MServiceAccounts)
 	// Veo は提供リージョンが限られる（例: us-central1）ため、Cloud Tasks 等と共有する
 	// GCP_LOCATION_ID とは別に VEO_LOCATION_ID で上書きできる。未設定なら共通値を使う。
-	if strings.TrimSpace(c.VeoLocationID) == "" {
-		c.VeoLocationID = c.LocationID
+	if strings.TrimSpace(c.AI.VeoLocationID) == "" {
+		c.AI.VeoLocationID = c.GCP.LocationID
 	}
 	c.NormalizeModels()
 	return nil
@@ -87,12 +118,12 @@ func (c *Config) normalize() error {
 
 // NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
-	c.GeminiModels = domain.NormalizeModelList(c.GeminiModels, c.GeminiModel, domain.DefaultGeminiModel)
-	c.ImageModels = domain.NormalizeModelList(c.ImageModels, c.ImageModel, domain.DefaultImageModel)
-	c.VeoModels = domain.NormalizeModelList(c.VeoModels, c.VeoModel, domain.DefaultVeoModel)
-	c.GeminiModel = domain.NormalizeDefaultModel(c.GeminiModel, c.GeminiModels, domain.DefaultGeminiModel)
-	c.ImageModel = domain.NormalizeDefaultModel(c.ImageModel, c.ImageModels, domain.DefaultImageModel)
-	c.VeoModel = domain.NormalizeDefaultModel(c.VeoModel, c.VeoModels, domain.DefaultVeoModel)
+	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, c.AI.GeminiModel, domain.DefaultGeminiModel)
+	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, c.AI.ImageModel, domain.DefaultImageModel)
+	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, c.AI.VeoModel, domain.DefaultVeoModel)
+	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels, domain.DefaultGeminiModel)
+	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels, domain.DefaultImageModel)
+	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels, domain.DefaultVeoModel)
 }
 
 // LoadConfig は環境変数から設定を読み込みます。

@@ -51,7 +51,7 @@ func buildPipeline(
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
 	}
-	planner := &pipeline.DefaultPlanner{UsePreviousVideo: cfg.VeoUsePreviousVideo}
+	planner := &pipeline.DefaultPlanner{UsePreviousVideo: cfg.AI.VeoUsePreviousVideo}
 	deps.Planner = planner
 	if rio != nil {
 		deps.Reader = workflowReader{delegate: rio.Reader}

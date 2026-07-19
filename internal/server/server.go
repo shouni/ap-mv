@@ -41,7 +41,7 @@ func Run(ctx context.Context, cfg *config.Config, templates fs.FS, staticFiles f
 	srv := NewHTTPServer(cfg, NewRouter(h))
 	serverErrors := make(chan error, 1)
 	go func() {
-		slog.Info("HTTP server started", "port", cfg.Port, "service_url", cfg.ServiceURL)
+		slog.Info("HTTP server started", "port", cfg.Server.Port, "service_url", cfg.Server.ServiceURL)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}
@@ -52,14 +52,14 @@ func Run(ctx context.Context, cfg *config.Config, templates fs.FS, staticFiles f
 		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
 		slog.Info("shutdown signal received, starting graceful shutdown")
-		return gracefulShutdown(srv, cfg.ShutdownTimeout)
+		return gracefulShutdown(srv, cfg.Server.ShutdownTimeout)
 	}
 }
 
 // NewHTTPServer はアプリケーション用の http.Server を構築します。
 func NewHTTPServer(cfg *config.Config, handler http.Handler) *http.Server {
 	return &http.Server{
-		Addr:              ":" + cfg.Port,
+		Addr:              ":" + cfg.Server.Port,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -92,8 +92,8 @@ func gracefulShutdown(srv *http.Server, cfgTimeout time.Duration) error {
 
 // writeTimeout returns the server write timeout.
 func writeTimeout(cfg *config.Config) time.Duration {
-	if cfg == nil || cfg.VeoOperationTimeout <= 0 {
+	if cfg == nil || cfg.AI.VeoOperationTimeout <= 0 {
 		return 21 * time.Minute
 	}
-	return cfg.VeoOperationTimeout + time.Minute
+	return cfg.AI.VeoOperationTimeout + time.Minute
 }

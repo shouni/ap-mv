@@ -10,10 +10,12 @@ import (
 // TestBuildOrchestratorConfigMapsModels verifies that configured model names map into orchestrator config.
 func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	cfg := &config.Config{
-		GeminiModel:            "gemini-text",
-		ImageModel:             "gemini-image",
-		KeyframeMaxConcurrency: 4,
-		KeyframeRateInterval:   10 * time.Second,
+		AI: config.AIConfig{
+			GeminiModel:            "gemini-text",
+			ImageModel:             "gemini-image",
+			KeyframeMaxConcurrency: 4,
+			KeyframeRateInterval:   10 * time.Second,
+		},
 	}
 
 	got := buildOrchestratorConfig(cfg)

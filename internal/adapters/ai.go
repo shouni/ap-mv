@@ -22,12 +22,12 @@ const (
 
 // NewVertexAIAdapter は GCP Vertex AI クライアントを初期化します。
 func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client, error) {
-	if ai.ProjectID == "" {
+	if ai.GCP.ProjectID == "" {
 		return nil, fmt.Errorf("GCP_PROJECT_ID が設定されていません")
 	}
 
 	clientConfig := gemini.Config{
-		ProjectID:    ai.ProjectID,
+		ProjectID:    ai.GCP.ProjectID,
 		LocationID:   vertexLocationID(ai),
 		InitialDelay: defaultVertexInitialDelay,
 	}
@@ -45,10 +45,10 @@ func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 // 場合のみ defaultVertexLocationID にフォールバックします。テキスト/画像生成用の
 // Vertex AI クライアントを、実際に動画生成で使うリージョンとなるべく揃えるためです。
 func vertexLocationID(ai *config.Config) string {
-	if locationID := strings.TrimSpace(ai.VeoLocationID); locationID != "" {
+	if locationID := strings.TrimSpace(ai.AI.VeoLocationID); locationID != "" {
 		return locationID
 	}
-	if locationID := strings.TrimSpace(ai.LocationID); locationID != "" {
+	if locationID := strings.TrimSpace(ai.GCP.LocationID); locationID != "" {
 		return locationID
 	}
 	return defaultVertexLocationID

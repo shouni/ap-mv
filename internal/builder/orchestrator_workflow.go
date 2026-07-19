@@ -143,8 +143,8 @@ func withCharacterSeedOverride(base *character.Characters, characterID string, s
 
 // workflowOutputBaseURI returns the GCS base URI for workflow outputs.
 func workflowOutputBaseURI(cfg *config.Config) string {
-	if cfg == nil || strings.TrimSpace(cfg.GCSBucket) == "" {
+	if cfg == nil || strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
 		return ""
 	}
-	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.VeoOutputPrefix), "jobs"))
+	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.AI.VeoOutputPrefix), "jobs"))
 }

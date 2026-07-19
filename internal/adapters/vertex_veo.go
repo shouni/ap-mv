@@ -55,17 +55,17 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
-	if strings.TrimSpace(cfg.ProjectID) == "" {
+	if strings.TrimSpace(cfg.GCP.ProjectID) == "" {
 		return nil, fmt.Errorf("GCP_PROJECT_ID is required")
 	}
-	locationID := strings.TrimSpace(cfg.VeoLocationID)
+	locationID := strings.TrimSpace(cfg.AI.VeoLocationID)
 	if locationID == "" {
-		locationID = strings.TrimSpace(cfg.LocationID)
+		locationID = strings.TrimSpace(cfg.GCP.LocationID)
 	}
 	if locationID == "" {
 		return nil, fmt.Errorf("VEO_LOCATION_ID or GCP_LOCATION_ID is required")
 	}
-	if strings.TrimSpace(cfg.GCSBucket) == "" {
+	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
 		return nil, fmt.Errorf("GCS_MUSIC_BUCKET is required")
 	}
 	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
@@ -77,31 +77,31 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		return nil, fmt.Errorf("create GCS client: %w", err)
 	}
 
-	pollInterval := cfg.VeoPollInterval
-	operationTimeout := cfg.VeoOperationTimeout
-	model := strings.TrimSpace(cfg.VeoModel)
-	aspectRatio := strings.TrimSpace(cfg.VeoAspectRatio)
+	pollInterval := cfg.AI.VeoPollInterval
+	operationTimeout := cfg.AI.VeoOperationTimeout
+	model := strings.TrimSpace(cfg.AI.VeoModel)
+	aspectRatio := strings.TrimSpace(cfg.AI.VeoAspectRatio)
 
 	baseClient := &http.Client{Timeout: veoHTTPTimeout}
 	ctxWithClient := context.WithValue(ctx, oauth2.HTTPClient, baseClient)
 
-	maxPollConsecutiveErrors := cfg.VeoPollMaxErrors
+	maxPollConsecutiveErrors := cfg.AI.VeoPollMaxErrors
 	if maxPollConsecutiveErrors <= 0 {
 		maxPollConsecutiveErrors = 10
 	}
 	return &VertexVeoRunner{
 		client:                   oauth2.NewClient(ctxWithClient, ts),
 		videoCopier:              &gcsVideoCopier{client: storageClient},
-		projectID:                strings.TrimSpace(cfg.ProjectID),
+		projectID:                strings.TrimSpace(cfg.GCP.ProjectID),
 		locationID:               locationID,
 		model:                    model,
-		outputStorageURI:         buildVeoOutputStorageURI(cfg.GCSBucket, cfg.VeoOutputPrefix),
+		outputStorageURI:         buildVeoOutputStorageURI(cfg.Storage.GCSBucket, cfg.AI.VeoOutputPrefix),
 		aspectRatio:              aspectRatio,
-		generateAudio:            cfg.VeoGenerateAudio,
+		generateAudio:            cfg.AI.VeoGenerateAudio,
 		pollInterval:             pollInterval,
 		operationTimeout:         operationTimeout,
 		maxPollConsecutiveErrors: maxPollConsecutiveErrors,
-		usePreviousVideo:         cfg.VeoUsePreviousVideo,
+		usePreviousVideo:         cfg.AI.VeoUsePreviousVideo,
 	}, nil
 }
 
