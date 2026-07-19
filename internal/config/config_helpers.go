@@ -11,12 +11,12 @@ import (
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
 func (c *Config) IsSecureServiceURL() bool {
-	return securenet.IsSecureServiceURL(c.ServiceURL)
+	return securenet.IsSecureServiceURL(c.Server.ServiceURL)
 }
 
 // IsSecureWorkerURL は、Cloud Tasks の配送先URLが安全なスキームを使用しているか確認します。
 func (c *Config) IsSecureWorkerURL() bool {
-	return securenet.IsSecureServiceURL(c.WorkerURL)
+	return securenet.IsSecureServiceURL(c.Tasks.WorkerURL)
 }
 
 // normalizeGCSBucket normalizes a GCS bucket name.
@@ -51,58 +51,58 @@ func joinWorkerPath(serviceURL string) (string, error) {
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
 func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
-		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.ServiceURL)
+		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
 	}
 	if !c.IsSecureWorkerURL() {
-		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.WorkerURL)
+		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
 	}
 
-	if c.GoogleClientID == "" || c.GoogleClientSecret == "" || c.SessionSecret == "" {
+	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {
 		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
 	}
 
-	if len(c.AllowedEmails) == 0 && len(c.AllowedDomains) == 0 {
+	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
 		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
 	}
 
-	if c.ProjectID == "" {
+	if c.GCP.ProjectID == "" {
 		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
 	}
-	if c.LocationID == "" {
+	if c.GCP.LocationID == "" {
 		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
 	}
-	if c.QueueID == "" {
+	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
 	}
-	if c.ServiceAccountEmail == "" {
+	if c.GCP.ServiceAccountEmail == "" {
 		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
-	c.GCSBucket = normalizeGCSBucket(c.GCSBucket)
-	if c.GCSBucket == "" {
+	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
+	if c.Storage.GCSBucket == "" {
 		return fmt.Errorf("GCS_MUSIC_BUCKET が設定されていません")
 	}
-	if c.VeoModel == "" {
+	if c.AI.VeoModel == "" {
 		return fmt.Errorf("VEO_MODEL が設定されていません")
 	}
-	if c.VeoOutputPrefix == "" {
+	if c.AI.VeoOutputPrefix == "" {
 		return fmt.Errorf("VEO_OUTPUT_PREFIX が設定されていません")
 	}
-	if c.VeoAspectRatio != "16:9" && c.VeoAspectRatio != "9:16" {
+	if c.AI.VeoAspectRatio != "16:9" && c.AI.VeoAspectRatio != "9:16" {
 		return fmt.Errorf("VEO_ASPECT_RATIO は 16:9 または 9:16 である必要があります")
 	}
-	if c.VeoPollInterval <= 0 {
+	if c.AI.VeoPollInterval <= 0 {
 		return fmt.Errorf("VEO_POLL_INTERVAL は正の duration である必要があります")
 	}
-	if c.VeoOperationTimeout <= 0 {
+	if c.AI.VeoOperationTimeout <= 0 {
 		return fmt.Errorf("VEO_OPERATION_TIMEOUT は正の duration である必要があります")
 	}
 
-	if c.SessionEncryptKey == "" {
+	if c.Auth.SessionEncryptKey == "" {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY が設定されていません。セキュアな運用のために必須です")
 	}
 
 	// SessionEncryptKey の長さチェック (AES要件: 16, 24, 32 bytes)
-	keyLen := len(c.SessionEncryptKey)
+	keyLen := len(c.Auth.SessionEncryptKey)
 	if keyLen != 16 && keyLen != 24 && keyLen != 32 {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY の長さが不正です (%d バイト)。16, 24, 32 バイトのいずれかにしてください", keyLen)
 	}
@@ -112,5 +112,5 @@ func (c *Config) ValidateEssentialConfig() error {
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
 func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(normalizeGCSBucket(c.GCSBucket), path)
+	return remoteio.BuildGCSURI(normalizeGCSBucket(c.Storage.GCSBucket), path)
 }

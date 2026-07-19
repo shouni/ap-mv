@@ -32,7 +32,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	if appCtx == nil || appCtx.Config == nil {
 		return nil, fmt.Errorf("app container and config are required")
 	}
-	if appCtx.Config.ServiceURL == "" {
+	if appCtx.Config.Server.ServiceURL == "" {
 		return nil, fmt.Errorf("認証リダイレクトのために ServiceURL の設定が必要です")
 	}
 	if appCtx.Pipeline == nil {
@@ -54,22 +54,22 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	}
 
 	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
-		GeminiModels:       appCtx.Config.GeminiModels,
-		ImageModels:        appCtx.Config.ImageModels,
-		VeoModels:          appCtx.Config.VeoModels,
-		DefaultGeminiModel: appCtx.Config.GeminiModel,
-		DefaultImageModel:  appCtx.Config.ImageModel,
-		DefaultVeoModel:    appCtx.Config.VeoModel,
+		GeminiModels:       appCtx.Config.AI.GeminiModels,
+		ImageModels:        appCtx.Config.AI.ImageModels,
+		VeoModels:          appCtx.Config.AI.VeoModels,
+		DefaultGeminiModel: appCtx.Config.AI.GeminiModel,
+		DefaultImageModel:  appCtx.Config.AI.ImageModel,
+		DefaultVeoModel:    appCtx.Config.AI.VeoModel,
 	}, characterOptions, visualOptions)
 	if err != nil {
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
 	webHandler.HistoryRepository = appCtx.HistoryRepository
-	webHandler.MusicBucket = appCtx.Config.MusicBucket
+	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 
 	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)
 
-	m2mVerifier := auth.NewM2MVerifier(appCtx.Config.ServiceURL, appCtx.Config.AllowedM2MServiceAccounts)
+	m2mVerifier := auth.NewM2MVerifier(appCtx.Config.Server.ServiceURL, appCtx.Config.Auth.AllowedM2MServiceAccounts)
 
 	return &AppHandlers{
 		Auth:        authHandler,
@@ -142,21 +142,21 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 
 // createAuthHandler は、認証ハンドラーを初期化して返します。
 func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
-	redirectURL, err := url.JoinPath(cfg.ServiceURL, "/auth/callback")
+	redirectURL, err := url.JoinPath(cfg.Server.ServiceURL, "/auth/callback")
 	if err != nil {
 		return nil, fmt.Errorf("リダイレクトURLの構築に失敗しました: %w", err)
 	}
 
 	return auth.NewHandler(auth.Config{
-		ClientID:          cfg.GoogleClientID,
-		ClientSecret:      cfg.GoogleClientSecret,
+		ClientID:          cfg.Auth.GoogleClientID,
+		ClientSecret:      cfg.Auth.GoogleClientSecret,
 		RedirectURL:       redirectURL,
-		SessionAuthKey:    cfg.SessionSecret,
-		SessionEncryptKey: cfg.SessionEncryptKey,
+		SessionAuthKey:    cfg.Auth.SessionSecret,
+		SessionEncryptKey: cfg.Auth.SessionEncryptKey,
 		SessionName:       defaultSessionName,
 		IsSecureCookie:    cfg.IsSecureServiceURL(),
-		AllowedEmails:     cfg.AllowedEmails,
-		AllowedDomains:    cfg.AllowedDomains,
-		TaskAudienceURL:   cfg.TaskAudienceURL,
+		AllowedEmails:     cfg.Auth.AllowedEmails,
+		AllowedDomains:    cfg.Auth.AllowedDomains,
+		TaskAudienceURL:   cfg.Tasks.TaskAudienceURL,
 	})
 }

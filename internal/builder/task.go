@@ -13,12 +13,12 @@ import (
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer[domain.Task], error) {
 	taskCfg := tasks.Config{
-		ProjectID:           cfg.ProjectID,
-		LocationID:          cfg.LocationID,
-		QueueID:             cfg.QueueID,
-		WorkerURL:           cfg.WorkerURL,
-		ServiceAccountEmail: cfg.ServiceAccountEmail,
-		Audience:            cfg.TaskAudienceURL,
+		ProjectID:           cfg.GCP.ProjectID,
+		LocationID:          cfg.GCP.LocationID,
+		QueueID:             cfg.Tasks.QueueID,
+		WorkerURL:           cfg.Tasks.WorkerURL,
+		ServiceAccountEmail: cfg.GCP.ServiceAccountEmail,
+		Audience:            cfg.Tasks.TaskAudienceURL,
 	}
 	return tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 }
