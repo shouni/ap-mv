@@ -133,8 +133,8 @@ github.com/shouni/go-remote-io v1.6.1 h1:4zwhXoisTl58j12q0o0oUp2npNbMJ7N96GclgJk
 github.com/shouni/go-remote-io v1.6.1/go.mod h1:KIeWWiBD1vVGYEGcZEOysV57M9sm2x6qJVk4nRwDDY4=
 github.com/shouni/go-utils v1.1.0 h1:e7J6QbtNnHKQbi8qJozVWh7uKxqmPWyqYg+HGGbUtAc=
 github.com/shouni/go-utils v1.1.0/go.mod h1:IGMDiCaF1QlkT/roB0YTrNCUTcfcMhtnOUjG0e3AR8w=
-github.com/shouni/go-veo-orchestrator v1.7.5 h1:Cs7clkSzqGbN3GKY8+wVGFV6Fh0WDqeBG6VVZ77MPgE=
-github.com/shouni/go-veo-orchestrator v1.7.5/go.mod h1:vJ4QkJGTgbVEu98qMhI+/h7Uta7oiiAlxyiSKEhClHY=
+github.com/shouni/go-veo-orchestrator v1.7.6 h1:V1cgvn+4n5nRhoyDfZclD6W8KVzD06wr0RXUWfeKSsE=
+github.com/shouni/go-veo-orchestrator v1.7.6/go.mod h1:vJ4QkJGTgbVEu98qMhI+/h7Uta7oiiAlxyiSKEhClHY=
 github.com/shouni/netarmor v1.1.0 h1:PNgmnY7sFvIBKtE8TqjO2IUguwyNISRt4x13fhhIm4w=
 github.com/shouni/netarmor v1.1.0/go.mod h1:SOrb359QPM599FUJQ2GsRcUFOvJTaQ+L98Wo9Vr7xMk=
 github.com/slack-go/slack v0.26.0 h1:hx5Iy1t89tSw2zLEHu5YFFTDDFGmvhYCUh73ptHQ2Ls=

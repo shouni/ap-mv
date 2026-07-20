@@ -35,31 +35,16 @@ type scriptPromptData struct {
 	OutputSchema     string
 }
 
-// musicRecipeSchemaExample mirrors lyria.MusicRecipe's own fields (title, theme, mood, tempo,
-// key, vocal_profile, instruments, sections, lyrics) for the script-generation output schema.
-// It deliberately does not reuse orchestrator.MusicRecipe (= lyria.MusicRecipe) directly: that
-// type embeds AIModels (TextModel/AudioModel/LyricsMode/ComposeMode/Seed), which has no json
-// tags, so marshaling it always leaks those Lyria generation-config fields into the schema even
-// at zero value. AIModels is config for music/lyrics generation calls, not something the
-// script-generation LLM should read or fill in.
-type musicRecipeSchemaExample struct {
-	Title        string                 `json:"title"`
-	Theme        string                 `json:"theme"`
-	Mood         string                 `json:"mood"`
-	Tempo        int                    `json:"tempo"`
-	Key          string                 `json:"key,omitempty"`
-	VocalProfile string                 `json:"vocal_profile,omitempty"`
-	Instruments  []string               `json:"instruments"`
-	Sections     []orchestrator.Section `json:"sections"`
-	Lyrics       *orchestrator.Lyrics   `json:"lyrics,omitempty"`
-}
-
-// videoRecipeSchemaExample mirrors the script-generation-relevant fields of ports.VideoRecipe
-// (project_title, description, music_recipe, cuts). final_video_url and aspect_ratio are
-// populated later in the pipeline and intentionally omitted here. Cuts reuses orchestrator.Cut
-// directly (no leakage issue there — it has no embedded, untagged fields), so a rename or
-// removal of a Cut field breaks this build instead of silently drifting from a copy-pasted
-// schema in the prompt template.
+// videoRecipeSchemaExample mirrors the fields the script-generation LLM is actually asked to
+// produce (project_title, description, location_anchor, cuts). music_recipe, final_video_url,
+// and aspect_ratio are intentionally omitted: go-veo-orchestrator's VideoScriptRunner (>= v1.7.5)
+// constrains the Gemini response with ports.VideoRecipeSchema, which excludes music_recipe (the
+// runner always carries it over from the source recipe instead) and cut_index (computed by
+// VideoRecipe.Normalize) from the grammar the model is allowed to emit. Showing them here would
+// instruct the model to fill in a shape it is structurally prevented from outputting. Cuts reuses
+// orchestrator.Cut directly (no leakage issue there — it has no embedded, untagged fields), so a
+// rename or removal of a Cut field breaks this build instead of silently drifting from a
+// copy-pasted schema in the prompt template.
 type videoRecipeSchemaExample struct {
 	ProjectTitle string `json:"project_title,omitempty"`
 	Description  string `json:"description,omitempty"`
@@ -67,52 +52,23 @@ type videoRecipeSchemaExample struct {
 	// orchestrator.VideoRecipe.Normalize (see ports/recipe.go in go-veo-orchestrator); it grounds
 	// each cut's keyframe prompt in the same persistent setting so a cut whose own VisualAnchor
 	// omits the location doesn't leave the image model free to hallucinate an unrelated one.
-	LocationAnchor string                   `json:"location_anchor,omitempty"`
-	MusicRecipe    musicRecipeSchemaExample `json:"music_recipe"`
-	Cuts           []orchestrator.Cut       `json:"cuts"`
+	LocationAnchor string             `json:"location_anchor,omitempty"`
+	Cuts           []orchestrator.Cut `json:"cuts"`
 }
 
 // recipeOutputSchema builds the example JSON schema shown to the script-generation LLM by
 // marshaling a filled example instead of hand-writing a JSON block in the prompt template.
-// Cut fields only meaningful after this pipeline stage (keyframe_reference, video_id, status,
-// start_sec, end_sec, is_chain_start, is_section_start) are left at their zero value; all of
-// them are `omitempty` in ports.Cut, so they are dropped from the marshaled example rather than
-// confusing the model into thinking it should populate them.
+// Cut fields only meaningful after this pipeline stage (cut_index, keyframe_reference, video_id,
+// status, start_sec, end_sec, is_chain_start, is_section_start) are left at their zero value; all
+// of them are `omitempty` in ports.Cut, so they are dropped from the marshaled example rather
+// than confusing the model into thinking it should populate them.
 func recipeOutputSchema() (string, error) {
 	example := videoRecipeSchemaExample{
 		ProjectTitle:   "short title",
 		Description:    "short description of the video concept",
 		LocationAnchor: "the single persistent core setting for the whole video: location plus any recurring prop, e.g. 'a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her'",
-		MusicRecipe: musicRecipeSchemaExample{
-			Title:        "song or video title",
-			Theme:        "main theme",
-			Mood:         "music and visual mood",
-			Tempo:        120,
-			Key:          "optional musical key",
-			VocalProfile: "optional vocal profile",
-			Instruments:  []string{"instrument names"},
-			Sections: []orchestrator.Section{
-				{
-					Name:         "Verse",
-					Duration:     8,
-					StartSeconds: 0,
-					EndSeconds:   8,
-					Prompt:       "section-level musical and lyrical cue",
-				},
-			},
-			Lyrics: &orchestrator.Lyrics{
-				Title:     "lyrics title",
-				Theme:     "lyrics theme",
-				Hook:      "main hook phrase",
-				Lyrics:    "lyrics or source-derived lyric draft",
-				Keywords:  []string{"keyword"},
-				Mood:      "lyrical mood",
-				Narrative: "lyrical narrative",
-			},
-		},
 		Cuts: []orchestrator.Cut{
 			{
-				CutIndex:     1,
 				VisualAnchor: "visual scene prompt for keyframe and video",
 				CharacterID:  "",
 				AudioSync: orchestrator.AudioSync{

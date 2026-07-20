@@ -88,7 +88,7 @@ moves the story to a new place, every cut happens in this same core setting.
 
 - Create enough cuts to cover the musical sections as scene beats; 4 to 12 cuts is normal for a short MV, and longer source recipes may require more.
 - Set `location_anchor` once at the top level, describing the persistent core setting (location plus any recurring prop) for the whole video; only override it on individual cuts that explicitly move to a new place.
-- Put song-level metadata, lyrics, instruments, and section information inside `music_recipe`.
+- Do not output a `music_recipe` field: it is carried over automatically from the Source Recipe JSON above, and your response is not allowed to contain it. Use its song-level metadata, lyrics, instruments, and section information only as narrative context for writing the cuts.
 - Use Veo-friendly `duration_sec` values. Prefer 4, 6, or 8 seconds for ordinary image/reference cuts; use 15 or 22 seconds only when the cut is a video-to-video scene block.
 - Do not output a cut longer than 22 seconds. Split the section into balanced scene blocks instead.
 - Leave character_id empty unless the source clearly names an available character; the default character will be selected by the character definition.
