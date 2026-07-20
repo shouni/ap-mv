@@ -188,6 +188,32 @@ func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T
 	}
 }
 
+// TestKeyframePromptBuildCutGroundsPromptInLocationAnchor is a regression test: keyframes are
+// generated independently and in parallel per cut (see keyframe.Generator.Execute in
+// go-veo-orchestrator), and BuildCut only ever sees a single Cut, never the parent VideoRecipe.
+// Without a persistent location signal reinforcing a cut whose own VisualAnchor is a tight,
+// emotionally-focused close-up with no location wording, the image model has nothing grounding
+// its background and is free to hallucinate an unrelated one (observed in
+// video-recipe-20260720-062232-e468e3dd34f5 cut 9: a coastal-road bicycle-ride video anchor with
+// zero location wording rendered as an indoor school hallway, plus a backpack never in the
+// character's design). LocationAnchor must always be injected into the prompt when present.
+func TestKeyframePromptBuildCutGroundsPromptInLocationAnchor(t *testing.T) {
+	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
+	cut := orchestrator.Cut{
+		CutIndex:       9,
+		VisualAnchor:   "close-up shot, reaches out her hand towards the camera",
+		LocationAnchor: "a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her",
+	}
+
+	userPrompt, _ := p.BuildCut(cut, char)
+
+	want := "a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her"
+	if !strings.Contains(userPrompt, want) {
+		t.Fatalf("BuildCut() userPrompt missing location anchor %q:\n%s", want, userPrompt)
+	}
+}
+
 // TestKeyframePromptBuildEditReinforcesCharacterAndStyle verifies that editing an existing
 // keyframe still carries the character identity and style suffix reinforcement that BuildCut
 // gives full generation, plus an explicit "keep everything else the same" instruction and a

@@ -61,10 +61,15 @@ type musicRecipeSchemaExample struct {
 // removal of a Cut field breaks this build instead of silently drifting from a copy-pasted
 // schema in the prompt template.
 type videoRecipeSchemaExample struct {
-	ProjectTitle string                   `json:"project_title,omitempty"`
-	Description  string                   `json:"description,omitempty"`
-	MusicRecipe  musicRecipeSchemaExample `json:"music_recipe"`
-	Cuts         []orchestrator.Cut       `json:"cuts"`
+	ProjectTitle string `json:"project_title,omitempty"`
+	Description  string `json:"description,omitempty"`
+	// LocationAnchor is set once for the whole video and propagated onto every cut by
+	// orchestrator.VideoRecipe.Normalize (see ports/recipe.go in go-veo-orchestrator); it grounds
+	// each cut's keyframe prompt in the same persistent setting so a cut whose own VisualAnchor
+	// omits the location doesn't leave the image model free to hallucinate an unrelated one.
+	LocationAnchor string                   `json:"location_anchor,omitempty"`
+	MusicRecipe    musicRecipeSchemaExample `json:"music_recipe"`
+	Cuts           []orchestrator.Cut       `json:"cuts"`
 }
 
 // recipeOutputSchema builds the example JSON schema shown to the script-generation LLM by
@@ -75,8 +80,9 @@ type videoRecipeSchemaExample struct {
 // confusing the model into thinking it should populate them.
 func recipeOutputSchema() (string, error) {
 	example := videoRecipeSchemaExample{
-		ProjectTitle: "short title",
-		Description:  "short description of the video concept",
+		ProjectTitle:   "short title",
+		Description:    "short description of the video concept",
+		LocationAnchor: "the single persistent core setting for the whole video: location plus any recurring prop, e.g. 'a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her'",
 		MusicRecipe: musicRecipeSchemaExample{
 			Title:        "song or video title",
 			Theme:        "main theme",
@@ -372,6 +378,7 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 		fmt.Sprintf("Create a clean keyframe image for cut %d.", cut.CutIndex),
 		"Character: "+character,
 		"Character visual cues: "+cues,
+		"Persistent location & recurring prop (keep this exact setting in every cut unless the scene below explicitly describes arriving somewhere new): "+strings.TrimSpace(cut.LocationAnchor),
 		"Scene: "+strings.TrimSpace(cut.VisualAnchor),
 		"Music timing: "+strings.TrimSpace(cut.AudioCue),
 		p.visualPrompt(),
