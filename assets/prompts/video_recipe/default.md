@@ -48,11 +48,32 @@ This is especially important because Veo video-to-video continuation cannot use 
 - Around 24 to 30 seconds of accumulated continuation, plan a natural reset beat: a new composition,
   lighting shift, or section-aware establishing frame that can become a fresh keyframe.
 
+## Location & Prop Continuity
+
+Before writing any cuts, decide ONE persistent core setting for the entire video: the primary
+location (e.g. "a misty coastal cliffside road overlooking the ocean at dawn, with a guardrail
+along the road edge") and any persistent prop central to the concept (e.g. "her bicycle"). Write
+this once into the top-level `location_anchor` field. Unless a section's narrative explicitly
+moves the story to a new place, every cut happens in this same core setting.
+
+- Every single cut's `visual_anchor` must explicitly restate this core setting (location + any
+  persistent prop) in its own words, even in close-ups or emotionally-focused shots. Do not let a
+  cut's `visual_anchor` omit the location or drop the persistent prop just because the camera is
+  tighter or the moment is more emotional — vary the shot, not the world. `location_anchor` and
+  every cut's `visual_anchor` reinforce the same setting; treat them as two independent lines of
+  defense against a cut losing track of where it is, not as one being redundant with the other.
+- Camera framing, character pose, lighting, weather, particles, and emotional expression should
+  vary between cuts; the underlying location and persistent prop must not.
+- Only change the core setting when the section's lyrics or narrative explicitly describe arriving
+  somewhere new (e.g. a rooftop, a stage, a different room). When that happens, define the new
+  setting just as concretely, keep it consistent for every cut that belongs to that new place, and
+  set that cut's own `location_anchor` to the new setting instead of the video's default one.
+
 ## Dynamic Prompting Rules
 
 - Derive the timeline from the song's emotional progression, especially lyrics, repeated phrases, section changes, and musical peaks.
 - For each cut, make `visual_anchor` a concrete scene that can be drawn as a keyframe: subject, action, expression, camera framing, background, lighting, and motion cues.
-- When several cuts belong to the same section, make each `visual_anchor` visibly different. Do not repeat the same anchor with only minor wording changes.
+- When several cuts belong to the same section, make each `visual_anchor` visibly different in camera framing, pose, action, lighting, or motion — but always within the same persistent core setting defined above. Do not repeat the same anchor with only minor wording changes, and never achieve "different" by omitting the location or persistent prop.
 - Every `visual_anchor` must depict the single protagonist alone. Never introduce other people, crowds, band members, or background figures — downstream keyframe and video generation enforce exactly one character per cut, and an anchor describing multiple people will conflict with that constraint.
 - For each cut, make `audio_cue` describe the musical or lyrical moment: intro, verse, pre-chorus, chorus, drop, bridge, climax, silence, vocal phrase, beat accent, or instrumental change.
 - Let `audio_cue` and the lyric meaning influence the character's pose, facial expression, camera distance, weather, particles, light intensity, and movement direction.
@@ -66,6 +87,7 @@ This is especially important because Veo video-to-video continuation cannot use 
 ## Rules
 
 - Create enough cuts to cover the musical sections as scene beats; 4 to 12 cuts is normal for a short MV, and longer source recipes may require more.
+- Set `location_anchor` once at the top level, describing the persistent core setting (location plus any recurring prop) for the whole video; only override it on individual cuts that explicitly move to a new place.
 - Put song-level metadata, lyrics, instruments, and section information inside `music_recipe`.
 - Use Veo-friendly `duration_sec` values. Prefer 4, 6, or 8 seconds for ordinary image/reference cuts; use 15 or 22 seconds only when the cut is a video-to-video scene block.
 - Do not output a cut longer than 22 seconds. Split the section into balanced scene blocks instead.
