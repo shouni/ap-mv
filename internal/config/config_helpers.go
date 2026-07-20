@@ -79,7 +79,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
 	if c.Storage.GCSBucket == "" {
-		return fmt.Errorf("GCS_MUSIC_BUCKET が設定されていません")
+		return fmt.Errorf("AP_MV_BUCKET が設定されていません")
 	}
 	if c.AI.VeoModel == "" {
 		return fmt.Errorf("VEO_MODEL が設定されていません")

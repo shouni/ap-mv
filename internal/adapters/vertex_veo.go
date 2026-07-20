@@ -66,7 +66,7 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 		return nil, fmt.Errorf("VEO_LOCATION_ID or GCP_LOCATION_ID is required")
 	}
 	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
-		return nil, fmt.Errorf("GCS_MUSIC_BUCKET is required")
+		return nil, fmt.Errorf("AP_MV_BUCKET is required")
 	}
 	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
 	if err != nil {
