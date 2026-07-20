@@ -26,7 +26,7 @@ go vet ./...
 go run ./main.go
 ```
 
-There is no local-only mode: `internal/adapters.VertexVeoRunner` talks to real Vertex AI Veo, so exercising the Veo path requires valid GCP credentials, `GCP_PROJECT_ID`/`GCP_LOCATION_ID`, and `GCS_MUSIC_BUCKET`. `server.Run` calls `ValidateEssentialConfig()` at startup and will fail fast if required env vars (`SESSION_SECRET`, `SESSION_ENCRYPT_KEY`, OAuth, Cloud Tasks, GCS/Veo config) are missing.
+There is no local-only mode: `internal/adapters.VertexVeoRunner` talks to real Vertex AI Veo, so exercising the Veo path requires valid GCP credentials, `GCP_PROJECT_ID`/`GCP_LOCATION_ID`, and `AP_MV_BUCKET` (the GCS output bucket — note `ValidateEssentialConfig`'s error text still says `GCS_MUSIC_BUCKET`, a stale message left over from a rename; the actual env var is `AP_MV_BUCKET`). `server.Run` calls `ValidateEssentialConfig()` at startup and will fail fast if required env vars (`SESSION_SECRET`, `SESSION_ENCRYPT_KEY`, OAuth, Cloud Tasks, GCS/Veo config) are missing.
 
 Docker build is `FROM scratch` (see `Dockerfile`); `.dockerignore` must exclude `.gocache/` (local Go build cache, can exceed 1GB) or builds become extremely slow.
 
