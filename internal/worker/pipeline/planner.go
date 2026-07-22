@@ -36,7 +36,7 @@ type DefaultPlanner struct {
 // 実行計画が未登録の新コマンドが黙って既定のチェーンへ流れないよう）明示的にエラーを返します。
 func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) ([]filter.Filter, error) {
 	videoGen := filter.VideoGenerationFilter{Runner: videoRunner, UsePreviousVideo: p.UsePreviousVideo, VideoProcessor: p.VideoProcessor}
-	sceneSplit := filter.SceneSplitFilter{UsePreviousVideo: p.UsePreviousVideo}
+	sceneSplit := filter.SceneSplitFilter{UsePreviousVideo: p.UsePreviousVideo, Runner: videoRunner}
 	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
 	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
 	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: p.VideoProcessor}

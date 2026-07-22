@@ -11,6 +11,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // SceneSplitFilter expands long cuts before keyframe generation so each sub-cut can receive its
@@ -25,10 +26,25 @@ import (
 // concatenated video timeline so cuts never overlap.
 type SceneSplitFilter struct {
 	UsePreviousVideo bool
+	// Runner mirrors VideoGenerationFilter.Runner and must be wired from the same VideoRunner by
+	// the planner. Scene splitting decides each cut's chain base from the same reference_to_video /
+	// image_to_video classification VideoGenerationFilter uses, so both filters must resolve the
+	// runner (and thus its Veo capabilities) identically — see resolvedVideoRunner.
+	Runner ports.VideoRunner
 }
 
 // Name returns the receiver name.
 func (SceneSplitFilter) Name() string { return "scene_split" }
+
+// resolvedVideoRunner returns the VideoRunner that generation will actually use: f.Runner takes
+// priority, falling back to fc.VideoRunner. This mirrors VideoGenerationFilter.resolvedVideoRunner
+// so the two filters never disagree on whether referenceImages is supported.
+func (f SceneSplitFilter) resolvedVideoRunner(fc *Context) ports.VideoRunner {
+	if f.Runner != nil {
+		return f.Runner
+	}
+	return fc.VideoRunner
+}
 
 // Execute runs the receiver processing step.
 func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
@@ -41,7 +57,7 @@ func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
 	fc.VideoRecipe.Normalize()
 	applyLyricsToVideoRecipeCuts(fc.VideoRecipe)
 	if f.UsePreviousVideo {
-		fc.VideoRecipe.Cuts = expandCutsForVideoToVideoScenes(fc.VideoRecipe.Cuts, fc.Characters, referenceImagesSupported(fc.VideoRunner))
+		fc.VideoRecipe.Cuts = expandCutsForVideoToVideoScenes(fc.VideoRecipe.Cuts, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	} else {
 		fc.VideoRecipe.Cuts = expandCutsForKeyframeScenes(fc.VideoRecipe.Cuts)
 	}
