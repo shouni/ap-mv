@@ -320,16 +320,23 @@ type keyframePrompt struct {
 	visualTemplates map[string]string
 }
 
-// BuildCut builds prompts for a single keyframe cut.
-func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
-	character := "the main character"
+// resolveCharacterPromptFields returns the keyframe-prompt character name (falling back to a
+// generic label) and comma-joined visual cues for char. Shared by BuildCut and BuildEdit so both
+// ground the image model on character identity identically.
+func resolveCharacterPromptFields(char *characterkit.Character) (name, cues string) {
+	name = "the main character"
 	if char != nil {
-		character = char.Name
+		name = char.Name
 	}
-	cues := ""
 	if char != nil && len(char.VisualCues) > 0 {
 		cues = strings.Join(char.VisualCues, ", ")
 	}
+	return name, cues
+}
+
+// BuildCut builds prompts for a single keyframe cut.
+func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
+	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		fmt.Sprintf("Create a clean keyframe image for cut %d.", cut.CutIndex),
 		"Character: "+character,
@@ -352,14 +359,7 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 // character identity and art style the same way BuildCut does so the edited result doesn't
 // drift from the rest of the cuts.
 func (p keyframePrompt) BuildEdit(_ orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
-	character := "the main character"
-	if char != nil {
-		character = char.Name
-	}
-	cues := ""
-	if char != nil && len(char.VisualCues) > 0 {
-		cues = strings.Join(char.VisualCues, ", ")
-	}
+	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		"Edit the provided keyframe image. Keep the composition, pose, background, and art style exactly as they are; apply only this change.",
 		strings.TrimSpace(editPrompt),
