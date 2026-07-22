@@ -57,8 +57,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 // GenerateASS builds an ASS subtitle file from a slice of VideoHistoryCut.
 // Each newline-separated lyric line within a cut becomes its own Dialogue event,
-// with duration distributed equally across lines. Returns empty string if no dialogue exists.
-func GenerateASS(cuts []VideoHistoryCut, colors ASSColors) string {
+// with duration distributed equally across lines. Each Dialogue's text carries
+// per-character {\k} karaoke timing tags (so the Karaoke style's SecondaryColour
+// highlight can animate); when bpm > 0 the per-character durations are snapped to
+// half-beat units. Returns empty string if no dialogue exists.
+func GenerateASS(cuts []VideoHistoryCut, colors ASSColors, bpm int) string {
 	var lines []string
 	for _, cut := range cuts {
 		dialogue := strings.TrimSpace(cut.Dialogue)
@@ -86,13 +89,57 @@ func GenerateASS(cuts []VideoHistoryCut, colors ASSColors) string {
 		for i, text := range filtered {
 			lineStart := start + float64(i)*durPerLine
 			lineEnd := lineStart + durPerLine
-			lines = append(lines, fmt.Sprintf("Dialogue: 0,%s,%s,Karaoke,,0,0,0,,%s", assTime(lineStart), assTime(lineEnd), text))
+			karaoke := BuildKaraokeLine(text, durPerLine, bpm)
+			lines = append(lines, fmt.Sprintf("Dialogue: 0,%s,%s,Karaoke,,0,0,0,,%s", assTime(lineStart), assTime(lineEnd), karaoke))
 		}
 	}
 	if len(lines) == 0 {
 		return ""
 	}
 	return buildAssHeader(colors) + strings.Join(lines, "\n") + "\n"
+}
+
+// BuildKaraokeLine renders a single lyric line as ASS karaoke text with per-character
+// {\k<centiseconds>} timing tags. Without these tags the Karaoke style's SecondaryColour
+// highlight cannot animate. Each character is allotted an equal share of durationSec (in
+// centiseconds); when bpm > 0 that per-character duration is snapped to half-beat units
+// (3000/bpm cs) so the highlight advances on the beat, and the final character absorbs any
+// rounding remainder so the tag durations sum back to the line duration. Returns "" for an
+// empty line.
+func BuildKaraokeLine(dialogue string, durationSec float64, bpm int) string {
+	runes := []rune(dialogue)
+	if len(runes) == 0 {
+		return ""
+	}
+	totalCs := max(int(math.Round(durationSec*100)), len(runes))
+	csPerChar := totalCs / len(runes)
+
+	// BPM スナップ: ハーフビート単位（3000/bpm cs）に丸める
+	if bpm > 0 {
+		halfBeatCs := math.Round(3000.0 / float64(bpm))
+		if halfBeatCs >= 1 {
+			snapped := int(math.Round(float64(csPerChar)/halfBeatCs) * halfBeatCs)
+			if snapped >= 1 {
+				csPerChar = snapped
+			}
+		}
+	}
+
+	var sb strings.Builder
+	remaining := totalCs
+	for i, r := range runes {
+		cs := csPerChar
+		if i == len(runes)-1 {
+			// 最後の文字に残り時間を全て割り当てて合計を合わせる
+			cs = remaining
+		}
+		if cs < 1 {
+			cs = 1
+		}
+		fmt.Fprintf(&sb, "{\\k%d}%c", cs, r)
+		remaining -= csPerChar
+	}
+	return sb.String()
 }
 
 // assTime formats seconds as ASS timestamp H:MM:SS.cs

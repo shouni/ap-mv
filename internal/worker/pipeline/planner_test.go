@@ -15,23 +15,11 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 		want    []string
 	}{
 		{
-			command: domain.CommandCompose,
-			want:    []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"},
-		},
-		{
 			command: domain.CommandVideoRecipeCreate,
 			want:    []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"},
 		},
 		{
-			command: domain.CommandComposeToKeyframe,
-			want:    []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"},
-		},
-		{
 			command: domain.CommandMVFromKeyframeVideoRecipe,
-			want:    []string{"recipe_load", "scene_split", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"},
-		},
-		{
-			command: domain.CommandGenerateFromRecipe,
 			want:    []string{"recipe_load", "scene_split", "cut_keyframe_gen", "zip_upload", "video_gen", "chain_finalize", "publishing"},
 		},
 		{

@@ -126,7 +126,7 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
 		return
 	}
-	if assContent := domain.GenerateASS(history.Cuts, domain.ASSColors{}); assContent != "" {
+	if assContent := domain.GenerateASS(history.Cuts, domain.ASSColors{}, history.Tempo); assContent != "" {
 		fw, err := zw.Create("lyrics.ass")
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to create ass zip entry", "job_id", jobID, "error", err)

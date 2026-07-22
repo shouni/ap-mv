@@ -49,10 +49,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 		// 生成し直すため、生成状態を初期化する。IsChainStart は元ジョブの生成時（または
 		// scene_split の事前計画時）に付いたチェーン構造の名残なので、ここで消去して
 		// 後続の VideoGenerationFilter に従来どおり累積尺ベースでチェーンを組み直させる。
-		cut.Status = orchestrator.CutStatusPending
-		cut.VideoID = ""
-		cut.VideoURL = ""
-		cut.IsChainStart = false
+		resetCutGenerationState(&cut, true)
 		cut.KeyframeReference = resolveRecipeObjectURI(originalBase, cut.KeyframeReference)
 		cuts = append(cuts, cut)
 	}

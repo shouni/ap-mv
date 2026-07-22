@@ -130,48 +130,10 @@ func buildASSSubtitles(cuts []domain.VideoCut, bpm int) string {
 			}
 			start := cutStart + float64(i)*secPerLine
 			end := start + secPerLine
-			text := buildKaraokeLine(line, secPerLine, bpm)
+			text := domain.BuildKaraokeLine(line, secPerLine, bpm)
 			fmt.Fprintf(&sb, "Dialogue: 0,%s,%s,Karaoke,,0,0,0,,%s\n",
 				formatASSTime(start), formatASSTime(end), text)
 		}
-	}
-	return sb.String()
-}
-
-// buildKaraokeLine は {\k} タグ付きのカラオケテキストを生成します。
-// BPM が設定されている場合はハーフビート単位にスナップします。
-func buildKaraokeLine(dialogue string, durationSec float64, bpm int) string {
-	runes := []rune(dialogue)
-	if len(runes) == 0 {
-		return ""
-	}
-	totalCs := max(int(math.Round(durationSec*100)), len(runes))
-	csPerChar := totalCs / len(runes)
-
-	// BPM スナップ: ハーフビート単位（6000/bpm/2 cs）に丸める
-	if bpm > 0 {
-		halfBeatCs := math.Round(3000.0 / float64(bpm))
-		if halfBeatCs >= 1 {
-			snapped := int(math.Round(float64(csPerChar)/halfBeatCs) * halfBeatCs)
-			if snapped >= 1 {
-				csPerChar = snapped
-			}
-		}
-	}
-
-	var sb strings.Builder
-	remaining := totalCs
-	for i, r := range runes {
-		cs := csPerChar
-		if i == len(runes)-1 {
-			// 最後の文字に残り時間を全て割り当てて合計を合わせる
-			cs = remaining
-		}
-		if cs < 1 {
-			cs = 1
-		}
-		fmt.Fprintf(&sb, "{\\k%d}%c", cs, r)
-		remaining -= csPerChar
 	}
 	return sb.String()
 }

@@ -74,9 +74,6 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | `regenerate_cut_keyframe` | 履歴詳細の Regenerate 画面 | Recipe Load → Regen Cut Keyframe → Zip Upload |
 | `regenerate_zip` | `POST /web/history/{jobID}/regenerate-zip` | Recipe Load → Zip Upload |
 | `video_gen_continuation` | `VideoGenerationFilter` が内部的に enqueue | Video Gen → Chain Finalize → Publishing |
-| `compose`（レガシー互換） | アプリ内からは投入されない（OIDC 済み M2M からの直接投入のみ） | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
-| `compose_to_keyframe`（レガシー互換） | 同上 | `video_recipe_create` と同一 |
-| `generate_from_recipe`（レガシー互換） | 同上 | `mv_from_keyframe_video_recipe` と同一 |
 
 各フィルターの役割は次のとおりです（表の並びはフルMVチェーンの実行順。末尾2つはコマンド専用フィルター）:
 
