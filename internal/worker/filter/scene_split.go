@@ -209,13 +209,24 @@ func allocateChainDurations(target float64, candidates []float64) []float64 {
 	return out
 }
 
-func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
+// resetCutGenerationState clears a cut's per-generation state so it will be (re)generated:
+// Status returns to pending and VideoID/VideoURL/IsChainStart are cleared. When keepKeyframe is
+// false it additionally clears KeyframeReference and IsSectionStart (a fresh scene keyframe will
+// be generated for this cut); when true both are preserved because the caller reuses the cut's
+// stored keyframe reference (e.g. SectionSelectFilter re-generating an existing job's cuts).
+func resetCutGenerationState(cut *orchestrator.Cut, keepKeyframe bool) {
 	cut.Status = orchestrator.CutStatusPending
-	cut.KeyframeReference = ""
 	cut.VideoID = ""
 	cut.VideoURL = ""
 	cut.IsChainStart = false
-	cut.IsSectionStart = false
+	if !keepKeyframe {
+		cut.KeyframeReference = ""
+		cut.IsSectionStart = false
+	}
+}
+
+func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
+	resetCutGenerationState(&cut, false)
 	return cut
 }
 
