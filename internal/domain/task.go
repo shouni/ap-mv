@@ -22,8 +22,6 @@ type AIModels struct {
 type TaskCommand string
 
 const (
-	// CommandCompose は、歌詞・レシピの作曲を行うコマンドです。
-	CommandCompose TaskCommand = "compose"
 	// CommandVideoRecipeCreate は、VideoRecipeを作成するコマンドです。
 	CommandVideoRecipeCreate TaskCommand = "video_recipe_create"
 	// CommandMVFromKeyframeVideoRecipe は、VideoRecipeからMVを生成するコマンドです。
@@ -35,11 +33,6 @@ const (
 	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
 	// 動画化してショート動画を生成するコマンドです。
 	CommandShortVideoFromSection TaskCommand = "short_video_from_section"
-
-	// CommandComposeToKeyframe is a legacy task command name kept for existing queued tasks and clients.
-	CommandComposeToKeyframe TaskCommand = "compose_to_keyframe"
-	// CommandGenerateFromRecipe is a legacy task command name kept for existing queued tasks and clients.
-	CommandGenerateFromRecipe TaskCommand = "generate_from_recipe"
 
 	// CommandVideoGenContinuation is enqueued internally by VideoGenerationFilter to resume
 	// per-cut video generation after a prior cut. It is never issued by HTTP handlers. Unlike
@@ -139,14 +132,12 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandCompose, CommandVideoRecipeCreate, CommandComposeToKeyframe:
+	case CommandVideoRecipeCreate:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
 		}
-		if t.Command == CommandVideoRecipeCreate {
-			if err := validateOptionalGCSURI("source_url", t.SourceURL); err != nil {
-				return err
-			}
+		if err := validateOptionalGCSURI("source_url", t.SourceURL); err != nil {
+			return err
 		}
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
@@ -154,7 +145,7 @@ func (t *Task) Validate() error {
 		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
 			return err
 		}
-	case CommandMVFromKeyframeVideoRecipe, CommandGenerateFromRecipe, CommandVideoGenContinuation:
+	case CommandMVFromKeyframeVideoRecipe, CommandVideoGenContinuation:
 		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
 		}

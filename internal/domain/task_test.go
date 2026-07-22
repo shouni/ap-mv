@@ -32,10 +32,10 @@ func TestTaskValidateRequiresGCSURIForRecipeAndAudio(t *testing.T) {
 			want: "audio_url must be a valid GCS URI",
 		},
 		{
-			name: "compose rejects http audio url",
+			name: "video_recipe_create rejects http audio url",
 			task: Task{
 				JobID:    "job-1",
-				Command:  CommandCompose,
+				Command:  CommandVideoRecipeCreate,
 				Text:     "source",
 				AudioURL: "https://example.com/music.mp3",
 			},

@@ -26,8 +26,8 @@ type DefaultPlanner struct {
 // Plan はタスクコマンドに応じた標準フィルター列を返します。各ケースがそのコマンドの
 // 完全なフィルター列を返すため、コマンドごとの違いは1箇所を見れば分かります。
 //
-// compose/video_recipe_create 系はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
-// video_recipe_create/compose_to_keyframe はキーフレーム生成までで停止し、動画生成と公開は実行しません。
+// video_recipe_create はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
+// video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
 // regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
 // video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
 // enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
@@ -62,24 +62,14 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			chainFinalize,
 			filter.PublishingFilter{},
 		}, nil
-	case domain.CommandVideoRecipeCreate, domain.CommandComposeToKeyframe:
+	case domain.CommandVideoRecipeCreate:
 		return []filter.Filter{
 			filter.ScriptingFilter{},
 			sceneSplit,
 			filter.CutKeyframeFilter{},
 			filter.ZipUploadFilter{},
 		}, nil
-	case domain.CommandCompose:
-		return []filter.Filter{
-			filter.ScriptingFilter{},
-			sceneSplit,
-			filter.CutKeyframeFilter{},
-			filter.ZipUploadFilter{},
-			videoGen,
-			chainFinalize,
-			filter.PublishingFilter{},
-		}, nil
-	case domain.CommandMVFromKeyframeVideoRecipe, domain.CommandGenerateFromRecipe:
+	case domain.CommandMVFromKeyframeVideoRecipe:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			sceneSplit,
