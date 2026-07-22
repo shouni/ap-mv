@@ -28,9 +28,12 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc.VideoRecipe == nil {
 		fc.VideoRecipe = fc.Task.VideoRecipe
 	}
-	if fc.VideoRecipe != nil {
-		applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
-		applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
+	// レシピの入手経路は3通り（既存の VideoRecipe / ストレージからデコードした
+	// VideoRecipe / MusicRecipe からの変換）だが、いずれも最終的に fc.VideoRecipe を
+	// 確定させたうえで、末尾で一度だけタスク由来の audio_url / character_id を適用する。
+	switch {
+	case fc.VideoRecipe != nil:
+		// 既に VideoRecipe を持っている。ドメインレシピが未設定なら派生させる。
 		if fc.Recipe == nil {
 			recipe, err := toDomainRecipe(fc.VideoRecipe)
 			if err != nil {
@@ -38,9 +41,8 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 			}
 			fc.Recipe = recipe
 		}
-		return nil
-	}
-	if fc.Recipe == nil {
+	case fc.Recipe == nil:
+		// VideoRecipe も MusicRecipe も無いので RecipeURL から読み込む。
 		if strings.TrimSpace(fc.Task.RecipeURL) == "" {
 			return fmt.Errorf("recipe or recipe_url is required")
 		}
@@ -53,8 +55,6 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 		}
 		if videoRecipe != nil {
 			fc.VideoRecipe = videoRecipe
-			applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
-			applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 			if recipe == nil {
 				recipe, err = toDomainRecipe(fc.VideoRecipe)
 				if err != nil {
@@ -62,20 +62,24 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 				}
 			}
 			fc.Recipe = recipe
-			return nil
+		} else {
+			// MusicRecipe をデコードした。下の変換ブロックで VideoRecipe を組む。
+			fc.Recipe = recipe
 		}
-		fc.Recipe = recipe
 	}
-	if err := domain.NormalizeMusicRecipe(fc.Recipe); err != nil {
-		return err
+	// ここまでで VideoRecipe が未確定なら（MusicRecipe 経路）変換して確定させる。
+	if fc.VideoRecipe == nil {
+		if err := domain.NormalizeMusicRecipe(fc.Recipe); err != nil {
+			return err
+		}
+		recipe, err := toVideoRecipe(fc.Recipe)
+		if err != nil {
+			return err
+		}
+		fc.VideoRecipe = recipe
 	}
-	recipe, err := toVideoRecipe(fc.Recipe)
-	if err != nil {
-		return err
-	}
-	applyTaskAudioURLToVideoRecipe(fc.Task, recipe)
-	applyTaskCharacterIDToVideoRecipe(fc.Task, recipe)
-	fc.VideoRecipe = recipe
+	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
+	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
 	return nil
 }
 
