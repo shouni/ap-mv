@@ -121,8 +121,8 @@ github.com/shouni/gemini-image-kit v1.10.2 h1:ixliDgubLxgTN+sWBBlV50ceoL4Vm35Whi
 github.com/shouni/gemini-image-kit v1.10.2/go.mod h1:g+qzKa+jjHrRg3UMkImS4BxvOrk2HQKLBUoFTfjy3+I=
 github.com/shouni/go-character-kit v1.0.11 h1:c2E78azaCBRLk/KmKp7iAIWmmZS4NocwTXKldjQXhPU=
 github.com/shouni/go-character-kit v1.0.11/go.mod h1:P+RtKl6YoGQrEROnjpsFHw91cwXdO12wPFDsNUsNHfA=
-github.com/shouni/go-gemini-client v1.13.1 h1:d3MY91wpNcvnb6nC9tF2SiotevMSdWuobJNp+97hGzQ=
-github.com/shouni/go-gemini-client v1.13.1/go.mod h1:5WeTg3oLmo5KmelIxOj8Z/7gWcdE4FGX3nl//RRCrEM=
+github.com/shouni/go-gemini-client v1.13.2 h1:kxloe6A6szEe6Vlj9+w/c5PN1BQ8Nj39/U1Dg6pAD8k=
+github.com/shouni/go-gemini-client v1.13.2/go.mod h1:5WeTg3oLmo5KmelIxOj8Z/7gWcdE4FGX3nl//RRCrEM=
 github.com/shouni/go-http-kit v1.6.0 h1:ZE5X6cnoakIwKeXZj+Rr0fvN+GyuFGvUKwPGB4LsHNQ=
 github.com/shouni/go-http-kit v1.6.0/go.mod h1:AoqjbhDTfR2GV7Hgie59qm2Qe9m/icoJAIw0IVCOivU=
 github.com/shouni/go-notifier v1.3.0 h1:1h0I1jFqRKRwqZUQQhVzOjuNK76MlAswuf4iAdX5ntg=
@@ -133,8 +133,8 @@ github.com/shouni/go-remote-io v1.6.1 h1:4zwhXoisTl58j12q0o0oUp2npNbMJ7N96GclgJk
 github.com/shouni/go-remote-io v1.6.1/go.mod h1:KIeWWiBD1vVGYEGcZEOysV57M9sm2x6qJVk4nRwDDY4=
 github.com/shouni/go-utils v1.1.0 h1:e7J6QbtNnHKQbi8qJozVWh7uKxqmPWyqYg+HGGbUtAc=
 github.com/shouni/go-utils v1.1.0/go.mod h1:IGMDiCaF1QlkT/roB0YTrNCUTcfcMhtnOUjG0e3AR8w=
-github.com/shouni/go-veo-orchestrator v1.7.7 h1:NfmIxX6TddKmEo/F0wrQia83umK/7VxTvH94SjbwzdY=
-github.com/shouni/go-veo-orchestrator v1.7.7/go.mod h1:UDXt3jXkHxNWZn4Imb9tXmey20nBPNrpbK43FqtQVtk=
+github.com/shouni/go-veo-orchestrator v1.7.8 h1:rTLosMrIwsXylDF78kEiqPH8VZ2NOUrLFm3DxOq31Lk=
+github.com/shouni/go-veo-orchestrator v1.7.8/go.mod h1:y/kM2cRW98DGtLjIZ+1Fhu4k4SER5fhFQ6bqsb2meVw=
 github.com/shouni/netarmor v1.1.0 h1:PNgmnY7sFvIBKtE8TqjO2IUguwyNISRt4x13fhhIm4w=
 github.com/shouni/netarmor v1.1.0/go.mod h1:SOrb359QPM599FUJQ2GsRcUFOvJTaQ+L98Wo9Vr7xMk=
 github.com/slack-go/slack v0.26.0 h1:hx5Iy1t89tSw2zLEHu5YFFTDDFGmvhYCUh73ptHQ2Ls=
