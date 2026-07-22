@@ -235,29 +235,43 @@ func splitCutBySupportedDurations(cut orchestrator.Cut, allowedDurations []float
 		return []orchestrator.Cut{cut}
 	}
 
-	var subCuts []orchestrator.Cut
-	offset := 0.0
+	// 貪欲に8秒上限で分割し、末尾の端数のみサポート尺へ丸める。
+	// Note: 端数が切り上げ方向へ丸められた場合、最後のサブカットの EndSec は元の
+	// cut.EndSec を超過し、後続カットとタイムライン上でオーバーラップする可能性が
+	// ありますが、Veo の個別カット生成としては問題ないため仕様として許容しています。
+	var durations []float64
 	for remaining := duration; remaining > 0; {
 		d := veoMaxCutDurationSec
 		if remaining < veoMaxCutDurationSec {
 			d = snapToSupportedDuration(remaining, allowedDurations)
 		}
+		durations = append(durations, d)
+		remaining -= d
+	}
+	return buildSubCutsFromDurations(cut, durations)
+}
+
+// buildSubCutsFromDurations は1つの親カットを durations の各要素に対応するサブカット列へ
+// 展開します。各サブカットは親カットのフィールドを引き継ぎ、先頭以外は
+// IsChainStart / IsSectionStart をクリアし、StartSec / DurationSec / EndSec を親の StartSec
+// から順に連続配置し、親カットの歌詞（Dialogue）を行単位でサブカットへ均等配分します。
+// サブ尺リストの計算方法（貪欲な8秒上限 vs [ベース, 7秒, ...]）だけが呼び出し元ごとに
+// 異なり、そこから先の組み立ては共通です。
+func buildSubCutsFromDurations(cut orchestrator.Cut, durations []float64) []orchestrator.Cut {
+	subCuts := make([]orchestrator.Cut, 0, len(durations))
+	offset := 0.0
+	for i, d := range durations {
 		sub := cut
-		if len(subCuts) > 0 {
+		if i > 0 {
 			sub.IsChainStart = false
 			sub.IsSectionStart = false
 		}
 		sub.StartSec = cut.StartSec + offset
 		sub.DurationSec = d
-		// Note: d が切り上げ方向へ丸められた場合、sub.EndSec は元の cut.EndSec を超過し、
-		// 後続カットとタイムライン上でオーバーラップする可能性がありますが、
-		// Veo の個別カット生成としては問題ないため仕様として許容しています。
 		sub.EndSec = sub.StartSec + d
 		subCuts = append(subCuts, sub)
 		offset += d
-		remaining -= d
 	}
-
 	lines := splitDialogueLines(cut.Dialogue)
 	for i := range subCuts {
 		subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
@@ -288,27 +302,13 @@ func splitChainCutIntoSupportedDurations(cut orchestrator.Cut, allowedBases []fl
 	extensions := int(math.Ceil((duration - veoMaxCutDurationSec) / veoVideoExtensionDurationSec))
 	base := snapToSupportedDuration(duration-float64(extensions)*veoVideoExtensionDurationSec, allowedBases)
 
-	subCuts := make([]orchestrator.Cut, 0, extensions+1)
-	offset := 0.0
-	for i := 0; i <= extensions; i++ {
-		d := base
-		sub := cut
-		if i > 0 {
-			d = veoVideoExtensionDurationSec
-			sub.IsChainStart = false
-			sub.IsSectionStart = false
-		}
-		sub.StartSec = cut.StartSec + offset
-		sub.DurationSec = d
-		sub.EndSec = sub.StartSec + d
-		subCuts = append(subCuts, sub)
-		offset += d
+	// [ベース, 7秒 × extensions] のサブ尺列を組み立てる。
+	durations := make([]float64, 0, extensions+1)
+	durations = append(durations, base)
+	for i := 0; i < extensions; i++ {
+		durations = append(durations, veoVideoExtensionDurationSec)
 	}
-	lines := splitDialogueLines(cut.Dialogue)
-	for i := range subCuts {
-		subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
-	}
-	return subCuts
+	return buildSubCutsFromDurations(cut, durations)
 }
 
 // snapToSupportedDuration は尺を candidates のうち最も近いものへ丸めます（同距離なら長い方）。
