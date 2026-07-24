@@ -8,15 +8,15 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
-	github.com/shouni/gcp-kit v1.3.1
-	github.com/shouni/gemini-image-kit v1.10.2
+	github.com/shouni/gcp-kit v1.3.3
+	github.com/shouni/gemini-image-kit v1.10.3
 	github.com/shouni/go-character-kit v1.0.11
-	github.com/shouni/go-gemini-client v1.13.2
+	github.com/shouni/go-gemini-client v1.13.4
 	github.com/shouni/go-http-kit v1.6.0
 	github.com/shouni/go-notifier v1.3.0
 	github.com/shouni/go-prompt-kit v1.2.0
 	github.com/shouni/go-remote-io v1.6.1
-	github.com/shouni/go-veo-orchestrator v1.7.8
+	github.com/shouni/go-veo-orchestrator v1.7.9
 	github.com/shouni/netarmor v1.1.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
@@ -81,11 +81,11 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.289.0 // indirect
-	google.golang.org/genai v1.64.0 // indirect
+	google.golang.org/api v0.290.0 // indirect
+	google.golang.org/genai v1.65.0 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260630182238-925bb5da69e7 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
-	google.golang.org/grpc v1.82.0 // indirect
+	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
