@@ -6,7 +6,7 @@ substitutions:
   _SERVICE_NAME: 'ap-mv'
   _TAG: '${_ENV_PREFIX}-${SHORT_SHA}'
   _CACHE_TAG: '${_ENV_PREFIX}-latest'
-  _GEMINI_MODELS: 'gemini-3.5-flash,gemini-3.1-pro-preview'
+  _GEMINI_MODELS: 'gemini-3.6-flash,gemini-3.1-pro-preview'
   _IMAGE_MODELS: 'gemini-3.1-flash-image,gemini-3-pro-image'
   _VEO_MODELS: 'veo-3.1-generate-001,veo-3.1-fast-generate-001'
   _VEO_MODEL: 'veo-3.1-generate-001'

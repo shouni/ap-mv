@@ -109,7 +109,7 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.AI.ImageModel != "gemini-3.1-flash-image" {
 		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
 	}
-	if len(cfg.AI.GeminiModels) != 1 || cfg.AI.GeminiModels[0] != "gemini-3.5-flash" {
+	if len(cfg.AI.GeminiModels) != 1 || cfg.AI.GeminiModels[0] != "gemini-3.6-flash" {
 		t.Fatalf("GeminiModels = %#v", cfg.AI.GeminiModels)
 	}
 	if len(cfg.AI.ImageModels) != 1 || cfg.AI.ImageModels[0] != "gemini-3.1-flash-image" {

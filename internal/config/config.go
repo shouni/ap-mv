@@ -45,7 +45,7 @@ type StorageConfig struct {
 type AIConfig struct {
 	GeminiModel            string        `env:"GEMINI_MODEL"`
 	ImageModel             string        `env:"IMAGE_MODEL"`
-	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.5-flash"`
+	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.6-flash"`
 	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
 	VeoModel               string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
 	VeoModels              []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
