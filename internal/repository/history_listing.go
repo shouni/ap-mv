@@ -14,6 +14,8 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/shouni/go-utils/jobid"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -81,7 +83,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		if strings.HasPrefix(jobID, regenKeyframePrefix) {
 			return nil
 		}
-		if err := domain.ValidateJobID(jobID); err != nil {
+		if err := jobid.Validate(jobID); err != nil {
 			return nil
 		}
 		seen[jobID] = true
@@ -156,7 +158,7 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 	if r == nil || r.reader == nil || r.baseURI == "" {
 		return domain.VideoHistoryDetail{}, errors.New("history repository is not properly configured")
 	}
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		return domain.VideoHistoryDetail{}, err
 	}
 	recipe, err := r.fetchVideoRecipe(ctx, jobID)

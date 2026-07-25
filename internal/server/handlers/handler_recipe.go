@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shouni/go-utils/jobid"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -93,7 +95,7 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
-	jobID, err := domain.NewJobID("video-recipe")
+	jobID, err := jobid.New("video-recipe")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -127,7 +129,7 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	if musicJobID == "" {
 		return strings.TrimSpace(r.FormValue("url")), nil
 	}
-	if err := domain.ValidateJobID(musicJobID); err != nil {
+	if err := jobid.Validate(musicJobID); err != nil {
 		return "", fmt.Errorf("invalid music_job_id: %w", err)
 	}
 	if strings.TrimSpace(h.MusicBucket) == "" {
@@ -156,7 +158,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		recipe = parsedRecipe
 		videoRecipe = parsedVideoRecipe
 	}
-	jobID, err := domain.NewJobID("recipe")
+	jobID, err := jobid.New("recipe")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return

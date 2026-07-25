@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shouni/go-utils/jobid"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -71,6 +72,11 @@ func (r *VideoHistoryRepository) keyframeZipURI(jobID string) string {
 func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error) {
 	if r == nil || r.reader == nil || r.signer == nil {
 		return "", nil
+	}
+	// jobID はそのままオブジェクトパスへ埋め込まれるため、他の公開メソッドと同様に検証する。
+	// 呼び出し元のハンドラーでも検証しているが、リポジトリ単体で成立させておく。
+	if err := jobid.Validate(jobID); err != nil {
+		return "", err
 	}
 	uri := r.keyframeZipURI(jobID)
 	exists, err := r.reader.Exists(ctx, uri)
