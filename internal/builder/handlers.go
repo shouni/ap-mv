@@ -158,5 +158,9 @@ func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
 		AllowedEmails:     cfg.Auth.AllowedEmails,
 		AllowedDomains:    cfg.Auth.AllowedDomains,
 		TaskAudienceURL:   cfg.Tasks.TaskAudienceURL,
+		// Cloud Tasks の OIDC トークンに署名するサービスアカウント。audience は
+		// 誰でも指定できる文字列に過ぎず、それだけでは呼び出し元を認証できないため、
+		// 発行元サービスアカウントの照合まで行わせる（未設定だと起動時に失敗する）。
+		AllowedTaskServiceAccounts: []string{cfg.GCP.ServiceAccountEmail},
 	})
 }

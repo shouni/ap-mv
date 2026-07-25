@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
-	github.com/shouni/gcp-kit v1.3.3
+	github.com/shouni/gcp-kit v1.4.0
 	github.com/shouni/gemini-image-kit v1.11.0
 	github.com/shouni/go-character-kit v1.0.11
 	github.com/shouni/go-gemini-client v1.13.8
@@ -27,7 +27,7 @@ require (
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
-	cloud.google.com/go/cloudtasks v1.18.0 // indirect
+	cloud.google.com/go/cloudtasks v1.19.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.11.0 // indirect
 	cloud.google.com/go/monitoring v1.29.0 // indirect
