@@ -16,6 +16,7 @@ type fakeHistoryReader struct {
 	paths     []string
 	files     map[string]string
 	openCount map[string]int
+	listCount map[string]int
 }
 
 func (r *fakeHistoryReader) Open(_ context.Context, p string) (io.ReadCloser, error) {
@@ -28,13 +29,27 @@ func (r *fakeHistoryReader) Open(_ context.Context, p string) (io.ReadCloser, er
 	return io.NopCloser(strings.NewReader(r.files[p])), nil
 }
 
-func (r *fakeHistoryReader) List(_ context.Context, _ string, callback func(path string) error) error {
+func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error) error {
+	r.mu.Lock()
+	if r.listCount == nil {
+		r.listCount = map[string]int{}
+	}
+	r.listCount[prefix]++
+	r.mu.Unlock()
+
 	for _, p := range r.paths {
 		if err := callback(p); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// ListCount は指定プレフィックスに対する List 呼び出し回数を返します。
+func (r *fakeHistoryReader) ListCount(prefix string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.listCount[prefix]
 }
 
 func (r *fakeHistoryReader) Exists(context.Context, string) (bool, error) {

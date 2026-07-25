@@ -12,19 +12,23 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 
 	"github.com/shouni/ap-mv/internal/builder"
+	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
 // NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
-func NewRouter(h *builder.AppHandlers) http.Handler {
+// projectID は Cloud Logging のトレース相関にのみ使用し、空なら相関を行いません。
+func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 	r := chi.NewRouter()
-	setupCommonMiddleware(r)
+	setupCommonMiddleware(r, projectID)
 	setupRoutes(r, h)
 	return r
 }
 
 // setupCommonMiddleware configures common middleware.
-func setupCommonMiddleware(r *chi.Mux) {
+func setupCommonMiddleware(r *chi.Mux, projectID string) {
+	// トレース相関はログ出力より先に効かせる必要があるため最初に登録する。
+	r.Use(logging.TraceMiddleware(projectID))
 	r.Use(middleware.RequestID)
 	// middleware.RealIP は X-Forwarded-For を無条件に信頼するためIPスプーフィングの脆弱性がある
 	// (GHSA-3fxj-6jh8-hvhx 等）。RemoteAddr はログ出力にのみ使用しており、
@@ -106,6 +110,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		// M2M 呼び出しの互換性のために残している。
 		r.Post("/generate-from-recipe", h.PostRecipe)
 		r.Post("/mv-from-keyframe-video-recipe", h.PostRecipe)
+		r.Get("/jobs/{jobID}", h.JobStatusDetail)
 		r.Get("/history", h.History)
 		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)

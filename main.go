@@ -10,13 +10,14 @@ import (
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/server"
 )
 
 // main starts the application.
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	// ロガーの設定（LOG_LEVEL 対応・Cloud Logging 互換の構造化ログ）
+	logging.Setup()
 
 	if err := run(); err != nil {
 		os.Exit(1)

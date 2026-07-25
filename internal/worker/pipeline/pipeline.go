@@ -15,6 +15,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/ports"
 	"github.com/shouni/ap-mv/internal/worker/filter"
 )
@@ -40,6 +41,12 @@ type Dependencies struct {
 	// OutputBaseURI はタスク成果物のベース URI です。空の場合はフィルター側で
 	// 保存先を指定しません（任意）。
 	OutputBaseURI string
+	// Timeout はタスク 1 件の実行時間の上限です。0 以下は無制限を意味します（任意）。
+	// カット分割された継続タスクにはそれぞれ個別に適用されます。
+	Timeout time.Duration
+	// JobStatus はジョブ進行状況の記録先です。未設定の場合は状態記録と
+	// 再実行ガードが無効になります（任意）。
+	JobStatus ports.JobStatusStore
 }
 
 // Runner は domain.Task を MusicRecipe 生成、キーフレーム生成、動画生成、公開の
@@ -82,13 +89,45 @@ func New(deps Dependencies) (*Runner, error) {
 // worker は MusicRecipe の戻り値を使わないため、Run の結果から error だけを返します。
 // task は TaskExecutor のシグネチャに合わせて値で受け取り、Run へ渡す時点でポインタ化します。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
+	// 以降このジョブから出るログすべてに job_id / command を載せ、
+	// 各フィルターのログを 1 ジョブ単位で追えるようにする。
+	// 継続タスク（video_gen_continuation）は同じ job_id を引き継ぐため、
+	// カット分割されたチェーン全体が 1 本の job_id でまとまる。
+	ctx = logging.With(ctx,
+		slog.String("job_id", task.JobID),
+		slog.String("command", string(task.Command)),
+	)
+
+	// Veo の動画生成が応答しなくなった場合に Cloud Run のインスタンスを占有し続けないよう、
+	// タスク 1 件に上限を設ける。打ち切られたタスクは Cloud Tasks の再試行で作り直せる。
+	if r.deps.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
+		defer cancel()
+	}
+
+	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
+	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
+	// Veo の生成コストがそのまま二重に発生します。
+	status := statusRecorder{store: r.deps.JobStatus}
+	if status.alreadySucceeded(ctx, task.JobID) {
+		slog.InfoContext(ctx, "skipping already completed job")
+		return nil
+	}
+	status.markRunning(ctx, &task)
+
 	result, err := r.run(ctx, &task)
 	req := notificationRequest(&task, result)
 	if err != nil {
+		status.markFailed(ctx, &task, err)
 		r.notifyError(ctx, err, req)
 		return err
 	}
 	if result == nil || !result.deferred {
+		// deferred のときは継続タスクが同じ job_id で処理を引き継ぐため、
+		// ここで succeeded にすると再配信ガードが途中で発動して残りのカットが生成されなくなる。
+		// 完了通知を送らない条件とまったく同じ判定を使う。
+		status.markSucceeded(ctx, &task, req)
 		r.notifyComplete(ctx, req)
 	}
 	return err

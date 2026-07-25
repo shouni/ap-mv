@@ -43,18 +43,22 @@ type StorageConfig struct {
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
 type AIConfig struct {
-	GeminiModel            string        `env:"GEMINI_MODEL"`
-	ImageModel             string        `env:"IMAGE_MODEL"`
-	GeminiModels           []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.6-flash"`
-	ImageModels            []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
-	VeoModel               string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoModels              []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
-	VeoLocationID          string        `env:"VEO_LOCATION_ID"`
-	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
-	VeoAspectRatio         string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
-	VeoGenerateAudio       bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
-	VeoPollInterval        time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
-	VeoOperationTimeout    time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
+	GeminiModel         string        `env:"GEMINI_MODEL"`
+	ImageModel          string        `env:"IMAGE_MODEL"`
+	GeminiModels        []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.6-flash"`
+	ImageModels         []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
+	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
+	VeoModels           []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
+	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
+	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
+	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
+	VeoGenerateAudio    bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
+	VeoPollInterval     time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
+	VeoOperationTimeout time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
+	// PipelineTimeout はワーカータスク 1 件の実行時間の上限です。0 以下は無制限を意味します。
+	// VEO_OPERATION_TIMEOUT が Veo の 1 オペレーション単位の上限であるのに対し、
+	// こちらはフィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限です。
+	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
 	VeoPollMaxErrors       int           `env:"VEO_POLL_MAX_ERRORS" envDefault:"10"`
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`

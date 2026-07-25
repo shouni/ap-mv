@@ -22,6 +22,7 @@ type pipelineExternals struct {
 	notifier          ports.Notifier
 	taskQueue         ports.TaskQueue
 	historyRepository ports.HistoryRepository
+	jobStatus         ports.JobStatusStore
 }
 
 // buildPipeline は、パイプラインの実行に必要な境界実装を注入して返します。
@@ -50,6 +51,8 @@ func buildPipeline(
 		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
+		Timeout:           cfg.AI.PipelineTimeout,
+		JobStatus:         externals.jobStatus,
 	}
 	planner := &pipeline.DefaultPlanner{UsePreviousVideo: cfg.AI.VeoUsePreviousVideo}
 	deps.Planner = planner

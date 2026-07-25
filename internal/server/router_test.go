@@ -141,7 +141,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
-	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler, StaticFiles: assets.StaticFiles})
+	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler, StaticFiles: assets.StaticFiles}, "")
 	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
 }
 
