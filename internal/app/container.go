@@ -32,6 +32,7 @@ type Container struct {
 
 	// Data Access
 	HistoryRepository ports.HistoryRepository
+	JobStatus         ports.JobStatusStore
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。

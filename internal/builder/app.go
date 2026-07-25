@@ -67,10 +67,13 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		rio.Signer,
 		nil,
 	)
+	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
+	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
 	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, pipelineExternals{
 		notifier:          notifier,
 		taskQueue:         queue,
 		historyRepository: historyRepository,
+		jobStatus:         jobStatus,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
@@ -84,5 +87,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		TaskQueue:         queue,
 		Pipeline:          pipe,
 		HistoryRepository: historyRepository,
+		JobStatus:         jobStatus,
 	}, nil
 }

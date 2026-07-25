@@ -65,6 +65,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
 	webHandler.HistoryRepository = appCtx.HistoryRepository
+	webHandler.JobStatus = appCtx.JobStatus
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 
 	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)

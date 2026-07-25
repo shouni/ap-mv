@@ -16,8 +16,10 @@ require (
 	github.com/shouni/go-notifier v1.3.2
 	github.com/shouni/go-prompt-kit v1.2.0
 	github.com/shouni/go-remote-io v1.6.1
+	github.com/shouni/go-utils v1.1.1
 	github.com/shouni/go-veo-orchestrator v1.7.10
 	github.com/shouni/netarmor v1.2.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
 )
@@ -48,6 +50,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
@@ -63,8 +66,8 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/go-utils v1.1.1 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
@@ -88,4 +91,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260706201446-f0a921348800 // indirect
 	google.golang.org/grpc v1.82.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

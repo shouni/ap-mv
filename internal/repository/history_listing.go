@@ -38,6 +38,10 @@ type VideoHistoryRepository struct {
 	signer       remoteio.URLSigner
 	historyCache *ttlcache.Cache[string, domain.VideoHistory]
 	recipeCache  *ttlcache.Cache[string, domain.VideoRecipe]
+	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
+	// メタデータ本体のキャッシュと違い、これが無いと履歴画面を開くたびに
+	// baseURI 配下全体の List が走ります。
+	jobIDCache *ttlcache.Cache[string, []string]
 }
 
 // NewVideoHistoryRepository creates a generated MV history repository.
@@ -52,14 +56,13 @@ func NewVideoHistoryRepository(baseURI string, reader remoteio.InputReader, writ
 		signer:       signer,
 		historyCache: historyCache,
 		recipeCache:  NewVideoRecipeCache(),
+		jobIDCache:   NewJobIDListCache(),
 	}
 }
 
-// ListHistoryPage lists generated MV jobs with paging.
-func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int) (domain.VideoHistoryPage, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
-		return domain.VideoHistoryPage{}, nil
-	}
+// collectJobIDs は baseURI 直下を走査して MV ジョブの ID を集めます。
+// バケット全体の List になるため、呼び出しは listJobIDs のキャッシュ越しに行います。
+func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
 	prefix := r.baseURI + "/"
 	seen := map[string]bool{}
 	var jobIDs []string
@@ -91,7 +94,19 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		return nil
 	})
 	if err != nil {
-		return domain.VideoHistoryPage{}, fmt.Errorf("list history objects: %w", err)
+		return nil, fmt.Errorf("list history objects: %w", err)
+	}
+	return jobIDs, nil
+}
+
+// ListHistoryPage lists generated MV jobs with paging.
+func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int) (domain.VideoHistoryPage, error) {
+	if r == nil || r.reader == nil || r.baseURI == "" {
+		return domain.VideoHistoryPage{}, nil
+	}
+	jobIDs, err := r.listJobIDs(ctx, r.collectJobIDs)
+	if err != nil {
+		return domain.VideoHistoryPage{}, err
 	}
 
 	selectedIDs, meta := selectHistoryPageIDs(jobIDs, page, perPage)

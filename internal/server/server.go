@@ -38,7 +38,7 @@ func Run(ctx context.Context, cfg *config.Config, templates fs.FS, staticFiles f
 		return fmt.Errorf("failed to build handlers: %w", err)
 	}
 
-	srv := NewHTTPServer(cfg, NewRouter(h))
+	srv := NewHTTPServer(cfg, NewRouter(h, cfg.GCP.ProjectID))
 	serverErrors := make(chan error, 1)
 	go func() {
 		slog.Info("HTTP server started", "port", cfg.Server.Port, "service_url", cfg.Server.ServiceURL)

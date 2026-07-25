@@ -17,10 +17,12 @@ import (
 type Handler struct {
 	Queue             ports.TaskQueue
 	HistoryRepository ports.HistoryRepository
-	Templates         map[string]*template.Template
-	ModelOptions      ModelOptions
-	CharacterOptions  CharacterOptions
-	VisualOptions     VisualModeOptions
+	// JobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
+	JobStatus        ports.JobStatusStore
+	Templates        map[string]*template.Template
+	ModelOptions     ModelOptions
+	CharacterOptions CharacterOptions
+	VisualOptions    VisualModeOptions
 	// MusicBucket は、Video Recipe Create フォームの Music Job ID から
 	// レシピJSON（gs://<MusicBucket>/<jobID>.json）を解決するためのGCSバケット名です。
 	MusicBucket string
@@ -148,6 +150,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 			return
 		}
 	}
+	h.recordQueuedStatus(r, task)
 	if !wantsJSON(r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)

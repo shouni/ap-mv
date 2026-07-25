@@ -126,6 +126,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | 変数 | デフォルト | 用途 |
 | --- | --- | --- |
 | `PORT` | `8080` | HTTP server の listen port |
+| `LOG_LEVEL` | `INFO` | ログ出力レベル（`DEBUG` / `INFO` / `WARN` / `ERROR`）。ログは Cloud Logging が解釈する `severity` / `message` 形式で出力され、`X-Cloud-Trace-Context` があればリクエスト単位でトレースに紐付きます |
 | `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う公開URL |
 | `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
 | `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
@@ -147,6 +148,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
+| `PIPELINE_TIMEOUT` | `45m` | ワーカータスク1件の実行時間の上限。フィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され Cloud Tasks の再試行で作り直せます。カット分割された継続タスクにはそれぞれ個別に適用されます |
 | `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
 | `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoID` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
 | `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成の同時実行数（`errgroup.SetLimit`） |
@@ -312,6 +314,7 @@ sequenceDiagram
 | `GET` | `/web/video-recipe-create` | VideoRecipe 作成フォーム（`/web/compose` も同じ handler） |
 | `POST` | `/web/video-recipe-create` | VideoRecipe 作成サブミット（`/web/compose` も同じ handler） |
 | `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成（`/web/generate-from-recipe` も同じ handler）。フォーム画面は履歴詳細の動画生成フォームへ統合済みで、ap-mcp 等の M2M 呼び出し互換のために残している |
+| `GET` | `/web/jobs/{jobID}` | ジョブの進行状況（`queued` / `running` / `succeeded` / `failed`）を JSON で返します。失敗時は理由と試行回数も含みます。未記録のジョブは 404 |
 | `GET` | `/web/history` | 履歴一覧 |
 | `GET` | `/web/history/{jobID}` | 履歴詳細 |
 | `DELETE` | `/web/history/{jobID}` | 履歴削除 |
@@ -321,6 +324,14 @@ sequenceDiagram
 | `POST` | `/web/history/{jobID}/regenerate-zip` | 保存済みレシピから `keyframes.zip` を再生成して元ジョブの出力パスへ上書き |
 | `POST` | `/web/history/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
+
+### 7. 実装メモ
+
+* ジョブの進行状況は `{VEO 出力ベース}/{jobID}/status.json` に記録します。Web プロセスが投入時に `queued` を、Worker プロセスが `running` → `succeeded` / `failed` を書き込みます。履歴一覧は `video_music_meta.json` だけを拾うため一覧には混ざらず、履歴削除（プレフィックス一括削除）で自動的に片付きます。
+* Cloud Tasks は at-least-once 配信のため、`Runner.Execute` は開始時に完了済み（`succeeded`）のジョブを検出したら処理を打ち切ります。通知失敗などでワーカーが一度エラーを返しただけでも再配信されるため、このガードが無いと Veo の生成コストが二重に発生します。
+* カット分割された動画生成が継続タスクへ引き継がれる間（`ErrPipelineDeferred`）は `running` のままにします。ここで `succeeded` にすると、同じ `job_id` を引き継ぐ継続タスクが再実行ガードで打ち切られ、残りのカットが生成されなくなります。なお、このガードはジョブ単位のため、実行中（`running`）に再配信された場合のカット単位の重複生成までは防げません。
+* 履歴一覧のジョブ ID 走査は短い TTL（1分）でキャッシュし、履歴画面を開くたびに出力ディレクトリ全体を List しないようにしています（削除時は明示的に破棄）。
+* ジョブ ID の生成・検証・正規化は `go-utils/jobid` に集約しています。ap-comp が発行したジョブ ID（`music_job_id`）も同じ規則で検証されます。
 
 ---
 
