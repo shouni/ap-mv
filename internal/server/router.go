@@ -10,9 +10,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/cloudlog"
 
 	"github.com/shouni/ap-mv/internal/builder"
-	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
@@ -28,7 +28,7 @@ func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 // setupCommonMiddleware configures common middleware.
 func setupCommonMiddleware(r *chi.Mux, projectID string) {
 	// トレース相関はログ出力より先に効かせる必要があるため最初に登録する。
-	r.Use(logging.TraceMiddleware(projectID))
+	r.Use(cloudlog.TraceMiddleware(projectID))
 	r.Use(middleware.RequestID)
 	// middleware.RealIP は X-Forwarded-For を無条件に信頼するためIPスプーフィングの脆弱性がある
 	// (GHSA-3fxj-6jh8-hvhx 等）。RemoteAddr はログ出力にのみ使用しており、
