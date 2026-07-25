@@ -8,16 +8,25 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/shouni/gcp-kit/cloudlog"
+	"github.com/shouni/go-utils/slogctx"
+
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/config"
-	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/server"
 )
 
+// logLevelEnvKey はログ出力レベルを指定する環境変数名です。
+const logLevelEnvKey = "LOG_LEVEL"
+
 // main starts the application.
 func main() {
-	// ロガーの設定（LOG_LEVEL 対応・Cloud Logging 互換の構造化ログ）
-	logging.Setup()
+	// ロガーの設定（LOG_LEVEL 対応・Cloud Logging 互換の構造化ログ）。
+	// 出力フォーマットは cloudlog、context 属性の付与は slogctx が担い、
+	// 両者の組み立てだけをアプリ側で行う。
+	level := slogctx.ParseLevel(os.Getenv(logLevelEnvKey))
+	base := slog.NewJSONHandler(os.Stdout, cloudlog.HandlerOptions(level))
+	slog.SetDefault(slog.New(slogctx.NewHandler(base)))
 
 	if err := run(); err != nil {
 		os.Exit(1)

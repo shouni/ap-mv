@@ -14,8 +14,9 @@ import (
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
+	"github.com/shouni/go-utils/slogctx"
+
 	"github.com/shouni/ap-mv/internal/domain"
-	"github.com/shouni/ap-mv/internal/logging"
 	"github.com/shouni/ap-mv/internal/ports"
 	"github.com/shouni/ap-mv/internal/worker/filter"
 )
@@ -93,7 +94,7 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// 各フィルターのログを 1 ジョブ単位で追えるようにする。
 	// 継続タスク（video_gen_continuation）は同じ job_id を引き継ぐため、
 	// カット分割されたチェーン全体が 1 本の job_id でまとまる。
-	ctx = logging.With(ctx,
+	ctx = slogctx.With(ctx,
 		slog.String("job_id", task.JobID),
 		slog.String("command", string(task.Command)),
 	)
