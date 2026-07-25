@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shouni/go-utils/jobid"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -27,7 +29,7 @@ func findHistoryCutByIndex(cuts []domain.VideoHistoryCut, cutIndex int) (domain.
 // regenerate-keyframe form page and its submit handler.
 func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err error) {
 	jobID = strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err = domain.ValidateJobID(jobID); err != nil {
+	if err = jobid.Validate(jobID); err != nil {
 		return "", 0, err
 	}
 	cutIndexStr := strings.TrimSpace(chi.URLParam(r, "cutIndex"))
@@ -113,7 +115,7 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		writeError(w, r, http.StatusNotFound, "cut not found")
 		return
 	}
-	newJobID, err := domain.NewJobID("regen-keyframe")
+	newJobID, err := jobid.New("regen-keyframe")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -153,7 +155,7 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 // Optional form fields primary_color and secondary_color (CSS hex) override the default karaoke colors.
 func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -161,7 +163,7 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	newJobID, err := domain.NewJobID("regen-zip")
+	newJobID, err := jobid.New("regen-zip")
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -184,7 +186,7 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 // サーバー側で解決するため、フォーム入力は対象と Veo モデル・アスペクト比だけです。
 func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -213,7 +215,7 @@ func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Re
 	if command == domain.CommandShortVideoFromSection {
 		jobIDPrefix = "short"
 	}
-	task.JobID, err = domain.NewJobID(jobIDPrefix)
+	task.JobID, err = jobid.New(jobIDPrefix)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return

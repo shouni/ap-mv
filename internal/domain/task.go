@@ -1,12 +1,11 @@
 package domain
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/shouni/go-utils/jobid"
 )
 
 // AIModels は、テキスト・画像生成に使用するモデルとシード値を保持します。
@@ -94,41 +93,14 @@ type Task struct {
 	CreatedAt         time.Time    `json:"created_at"`
 }
 
-var jobIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
-
 const gcsURIPrefix = "gs://"
-
-// NewJobID constructs a valid job ID with the given prefix.
-func NewJobID(prefix string) (string, error) {
-	prefix = strings.Trim(strings.ToLower(prefix), "_- ")
-	if prefix == "" {
-		prefix = "job"
-	}
-	buf := make([]byte, 6)
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("job id entropy: %w", err)
-	}
-	id := fmt.Sprintf("%s-%s-%s", prefix, time.Now().UTC().Format("20060102-150405"), hex.EncodeToString(buf))
-	if err := ValidateJobID(id); err != nil {
-		return "", err
-	}
-	return id, nil
-}
-
-// ValidateJobID validates a job ID string.
-func ValidateJobID(jobID string) error {
-	if !jobIDPattern.MatchString(jobID) {
-		return fmt.Errorf("invalid job id: %q", jobID)
-	}
-	return nil
-}
 
 // Validate checks the receiver for invalid state.
 func (t *Task) Validate() error {
 	if t == nil {
 		return fmt.Errorf("task is nil")
 	}
-	if err := ValidateJobID(t.JobID); err != nil {
+	if err := jobid.Validate(t.JobID); err != nil {
 		return err
 	}
 	switch t.Command {

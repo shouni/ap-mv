@@ -117,6 +117,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		authKey     = "0123456789abcdef0123456789abcdef"
 		encryptKey  = "0123456789abcdef0123456789abcdef"
 		userEmail   = "user@example.com"
+		taskAccount = "tasks@example.iam.gserviceaccount.com"
 	)
 
 	authHandler, err := auth.NewHandler(auth.Config{
@@ -128,6 +129,8 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		SessionName:       sessionName,
 		AllowedEmails:     []string{userEmail},
 		TaskAudienceURL:   "http://localhost:8080/tasks/generate",
+		// TaskAudienceURL を設定する場合、許可サービスアカウントの指定は必須。
+		AllowedTaskServiceAccounts: []string{taskAccount},
 	})
 	if err != nil {
 		t.Fatalf("auth.NewHandler() error = %v", err)

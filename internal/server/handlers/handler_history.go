@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shouni/go-utils/jobid"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -42,7 +44,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -70,7 +72,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 // Falls back to on-demand zip generation for jobs that predate the pipeline change.
 func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -142,7 +144,7 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 // DeleteHistory handles history deletion requests.
 func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}

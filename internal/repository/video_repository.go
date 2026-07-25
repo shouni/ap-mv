@@ -8,6 +8,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/shouni/go-utils/jobid"
+
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -18,7 +20,7 @@ func (r *VideoHistoryRepository) DownloadKeyframes(ctx context.Context, jobID st
 	if r == nil || r.reader == nil || r.baseURI == "" {
 		return errors.New("history repository is not properly configured")
 	}
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		return err
 	}
 	recipe, err := r.fetchVideoRecipe(ctx, jobID)
@@ -168,7 +170,7 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 	if r == nil || r.reader == nil || r.writer == nil || r.baseURI == "" {
 		return nil
 	}
-	if err := domain.ValidateJobID(jobID); err != nil {
+	if err := jobid.Validate(jobID); err != nil {
 		return err
 	}
 	prefix := r.baseURI + "/" + jobID + "/"
