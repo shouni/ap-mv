@@ -60,13 +60,12 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
 	}
 	queue := taskQueueAdapter{enqueuer: enqueuer}
-	historyRepository := repository.NewVideoHistoryRepository(
-		workflowOutputBaseURI(cfg),
-		rio.Reader,
-		rio.Writer,
-		rio.Signer,
-		nil,
-	)
+	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
+		BaseURI: workflowOutputBaseURI(cfg),
+		Reader:  rio.Reader,
+		Writer:  rio.Writer,
+		Signer:  rio.Signer,
+	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
 	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, pipelineExternals{

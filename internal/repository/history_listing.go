@@ -44,16 +44,33 @@ type VideoHistoryRepository struct {
 	jobIDCache *ttlcache.Cache[string, []string]
 }
 
+// VideoHistoryRepositoryConfig は VideoHistoryRepository の依存関係です。
+//
+// reader / writer / signer は用途が近く、位置引数だと取り違えても型が同じ方向へ通って
+// しまう箇所があるため、名前で受けます。
+type VideoHistoryRepositoryConfig struct {
+	// BaseURI は履歴を走査する起点です（末尾のスラッシュは正規化します）。
+	BaseURI string
+	Reader  remoteio.InputReader
+	// Writer は履歴の削除・更新に使います。読み取り専用の用途では nil を許容します。
+	Writer remoteio.OutputWriter
+	// Signer は再生用の署名付き URL を発行します。発行しない用途では nil を許容します。
+	Signer remoteio.URLSigner
+	// HistoryCache は履歴メタデータのキャッシュです。nil なら既定の TTL キャッシュを作ります。
+	HistoryCache *ttlcache.Cache[string, domain.VideoHistory]
+}
+
 // NewVideoHistoryRepository creates a generated MV history repository.
-func NewVideoHistoryRepository(baseURI string, reader remoteio.InputReader, writer remoteio.OutputWriter, signer remoteio.URLSigner, historyCache *ttlcache.Cache[string, domain.VideoHistory]) *VideoHistoryRepository {
+func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRepository {
+	historyCache := cfg.HistoryCache
 	if historyCache == nil {
 		historyCache = NewHistoryCache()
 	}
 	return &VideoHistoryRepository{
-		baseURI:      strings.TrimRight(strings.TrimSpace(baseURI), "/"),
-		reader:       reader,
-		writer:       writer,
-		signer:       signer,
+		baseURI:      strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
+		reader:       cfg.Reader,
+		writer:       cfg.Writer,
+		signer:       cfg.Signer,
 		historyCache: historyCache,
 		recipeCache:  NewVideoRecipeCache(),
 		jobIDCache:   NewJobIDListCache(),

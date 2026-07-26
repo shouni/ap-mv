@@ -24,7 +24,7 @@ func TestListHistoryPageCachesJobIDList(t *testing.T) {
 	t.Parallel()
 
 	reader := jobListReaderFixture()
-	repo := NewVideoHistoryRepository(testBaseURI, reader, nil, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: reader, HistoryCache: NewHistoryCache()})
 
 	for range 3 {
 		if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
@@ -42,7 +42,7 @@ func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 	t.Parallel()
 
 	reader := jobListReaderFixture()
-	repo := NewVideoHistoryRepository(testBaseURI, reader, &fakeHistoryWriter{}, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: reader, Writer: &fakeHistoryWriter{}, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
@@ -64,7 +64,7 @@ func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 func TestListJobIDsIsSafeForConcurrentUse(t *testing.T) {
 	t.Parallel()
 
-	repo := NewVideoHistoryRepository(testBaseURI, jobListReaderFixture(), nil, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: jobListReaderFixture(), HistoryCache: NewHistoryCache()})
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}

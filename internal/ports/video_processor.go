@@ -21,4 +21,19 @@ type VideoProcessor interface {
 	// ドリフトが次世代へ複利的に蓄積するのを防ぎます。成功時、実際にアップロードされた
 	// URI を返します。
 	ColorMatchSaturation(ctx context.Context, videoURI, referenceImageURI, destURI string) (string, error)
+	// Probe は videoURI を解析し、実尺と音声トラックの有無を返します。
+	// 結合結果が台本どおりに仕上がったかを、生成物を再生せずに確かめるために使います。
+	Probe(ctx context.Context, videoURI string) (VideoStats, error)
+}
+
+// VideoStats は、生成された動画から実測した値です。
+//
+// 台本には各カットの尺が入っていますが、Veo が返すクリップの実尺がそれと一致する保証は
+// なく、結合結果を測るまで誰も確かめていませんでした。
+type VideoStats struct {
+	// DurationSeconds は動画全体の実尺です。
+	DurationSeconds float64
+	// HasAudio は音声トラックを持つかどうかです。ffmpeg に -c:a を指定しても、
+	// 入力に音声が無ければ出力は無音のまま成功します。
+	HasAudio bool
 }
