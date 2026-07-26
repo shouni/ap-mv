@@ -66,7 +66,7 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if queue.task.CharacterID != "zundamon" {
 		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
 	}
-	if queue.task.SourceURL != "gs://ap-music/20260711132823-256e9128.json" {
+	if queue.task.SourceURL != "gs://ap-music/music/20260711132823-256e9128/recipe.json" {
 		t.Fatalf("queued source URL = %q, want music recipe URL derived from music_job_id", queue.task.SourceURL)
 	}
 	if queue.task.VisualMode != "default" {

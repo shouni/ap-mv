@@ -131,7 +131,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
 | `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
 | `AP_MV_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
-| `AP_MUSIC_BUCKET` | `ap-music` | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/<jobID>.json`（ap-comp/lyric-videoと同じ規則）を解決するための GCS bucket |
+| `AP_MUSIC_BUCKET` | `ap-music` | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json`（ap-comp と同じ規則）を解決するための GCS bucket |
 | `GEMINI_MODEL` | `gemini-3.6-flash` | 台本生成などのテキスト生成モデル。未設定時は `GEMINI_MODELS` の先頭を使います |
 | `GEMINI_MODELS` | `gemini-3.6-flash` | Web UI の Gemini Model 選択肢 |
 | `IMAGE_MODEL` | `gemini-3.1-flash-image` | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |

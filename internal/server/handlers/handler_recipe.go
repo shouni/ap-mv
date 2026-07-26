@@ -121,7 +121,7 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 }
 
 // musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
-// submits music_job_id (ap-comp/lyric-videoと同じ規則で gs://<MusicBucket>/<jobID>.json を組み立てる)。
+// submits music_job_id (ap-comp と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
 // M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts
 // plain text/image sources unrelated to a music job.
 func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
@@ -135,7 +135,7 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	if strings.TrimSpace(h.MusicBucket) == "" {
 		return "", fmt.Errorf("AP_MUSIC_BUCKET is not configured")
 	}
-	return fmt.Sprintf("gs://%s/%s.json", strings.TrimSpace(h.MusicBucket), musicJobID), nil
+	return fmt.Sprintf("gs://%s/music/%s/recipe.json", strings.TrimSpace(h.MusicBucket), musicJobID), nil
 }
 
 // PostRecipe handles recipe submissions.
