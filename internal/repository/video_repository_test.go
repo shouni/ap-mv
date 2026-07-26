@@ -127,7 +127,7 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, HistoryCache: NewHistoryCache()})
 
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20)
 	if err != nil {
@@ -166,7 +166,7 @@ func TestGetHistoryLoadsCutKeyframeURLs(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, fakeHistorySigner{}, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
 
 	history, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc")
 	if err != nil {
@@ -212,7 +212,7 @@ func TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, fakeHistorySigner{}, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
@@ -248,7 +248,7 @@ func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testin
 			keyframeURI: "fake-image-bytes",
 		},
 	}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, fakeHistorySigner{}, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
@@ -277,7 +277,7 @@ func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
 		},
 	}
 	signer := &countingHistorySigner{}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, nil, signer, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: signer, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
 		t.Fatalf("first ListHistoryPage() error = %v", err)
@@ -296,7 +296,7 @@ func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
 func TestGetHistoryReturnsErrorWhenRepositoryMisconfigured(t *testing.T) {
 	t.Parallel()
 
-	repo := NewVideoHistoryRepository("", nil, nil, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "", Reader: nil, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc"); err == nil {
 		t.Fatal("GetHistory() error = nil, want configuration error")
@@ -314,7 +314,7 @@ func TestDeleteHistoryDeletesJobObjects(t *testing.T) {
 		files: map[string]string{},
 	}
 	writer := &fakeHistoryWriter{}
-	repo := NewVideoHistoryRepository("gs://bucket/ap-mv/veo/jobs", reader, writer, nil, NewHistoryCache())
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Writer: writer, HistoryCache: NewHistoryCache()})
 
 	if err := repo.DeleteHistory(context.Background(), "job-1"); err != nil {
 		t.Fatalf("DeleteHistory() error = %v", err)

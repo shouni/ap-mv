@@ -191,34 +191,11 @@ func ValidateMusicRecipe(r *MusicRecipe) error {
 }
 
 // ValidateVideoRecipe checks the receiver for invalid state.
+//
+// 実体は VideoRecipe（orchestrator の型）自身の Validate です。型の不変条件は型と同じ場所に
+// 置き、AI 生成の直後（VideoScriptRunner）と手入力の投入時の両方で同じ規則が効くようにします。
 func ValidateVideoRecipe(r *VideoRecipe) error {
-	if r == nil {
-		return fmt.Errorf("video recipe is nil")
-	}
-	if strings.TrimSpace(firstNonEmpty(r.ProjectTitle, r.MusicRecipe.Title)) == "" {
-		return fmt.Errorf("video recipe title is required")
-	}
-	if len(r.Cuts) == 0 {
-		return fmt.Errorf("video recipe requires cuts")
-	}
-	numSections := len(r.MusicRecipe.Sections)
-	for _, cut := range r.Cuts {
-		// SectionIndex は1始まりで、0は「未割り当て」を意味する正当な値。
-		// 範囲外の非ゼロ値だけを不正とする。
-		if cut.SectionIndex < 0 || cut.SectionIndex > numSections {
-			return fmt.Errorf("cut %d has out-of-range section_index %d (recipe has %d sections)", cut.CutIndex, cut.SectionIndex, numSections)
-		}
-	}
-	return nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+	return r.Validate()
 }
 
 // ApplyLyricsToVideoRecipeCuts は music_recipe の歌詞テキストをセクション単位に分解し、

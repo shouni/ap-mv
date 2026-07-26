@@ -2,10 +2,13 @@ package filter
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // TestChainEndVideoURLsFindsBoundaries verifies that chain boundaries are detected from
@@ -101,6 +104,10 @@ type recordingVideoProcessor struct {
 	extractResult    string
 	concatResult     string
 	colorMatchResult string
+
+	probeCalls  []string
+	probeResult ports.VideoStats
+	probeErr    error
 }
 
 type extractCall struct {
@@ -135,10 +142,85 @@ func (p *recordingVideoProcessor) ConcatHardCut(_ context.Context, videoURIs []s
 	return destURI, nil
 }
 
+func (p *recordingVideoProcessor) Probe(_ context.Context, videoURI string) (ports.VideoStats, error) {
+	p.probeCalls = append(p.probeCalls, videoURI)
+	return p.probeResult, p.probeErr
+}
+
 func (p *recordingVideoProcessor) ColorMatchSaturation(_ context.Context, videoURI, referenceImageURI, destURI string) (string, error) {
 	p.colorMatchCalls = append(p.colorMatchCalls, colorMatchCall{videoURI: videoURI, referenceImageURI: referenceImageURI, destURI: destURI})
 	if p.colorMatchResult != "" {
 		return p.colorMatchResult, nil
 	}
 	return destURI, nil
+}
+
+// TestChainFinalizeProbesTheFinalVideo verifies the concatenated result is measured. The recipe
+// carries per-cut durations, but nothing checked that the finished file matches them until now.
+func TestChainFinalizeProbesTheFinalVideo(t *testing.T) {
+	vp := &recordingVideoProcessor{probeResult: ports.VideoStats{DurationSeconds: 20, HasAudio: true}}
+	fc := &Context{State: State{
+		OutputPath: "gs://bucket/jobs/job-1/",
+		VideoRecipe: &orchestrator.VideoRecipe{
+			Cuts: []orchestrator.Cut{{
+				CutIndex:     1,
+				AudioSync:    orchestrator.AudioSync{EndSec: 20},
+				VideoResult:  orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"},
+				ChainControl: orchestrator.ChainControl{IsChainStart: true},
+			}},
+		},
+	}}
+
+	if err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(vp.probeCalls) != 1 {
+		t.Fatalf("probe calls = %d, want 1", len(vp.probeCalls))
+	}
+	if vp.probeCalls[0] != fc.VideoRecipe.FinalVideoURL {
+		t.Errorf("probed %q, want the final video %q", vp.probeCalls[0], fc.VideoRecipe.FinalVideoURL)
+	}
+}
+
+// TestChainFinalizeSucceedsWhenProbeFails verifies a probe failure does not fail the job. The
+// video is already generated and playable; measuring it is a check, not a gate.
+func TestChainFinalizeSucceedsWhenProbeFails(t *testing.T) {
+	vp := &recordingVideoProcessor{probeErr: errors.New("ffmpeg unavailable")}
+	fc := &Context{State: State{
+		OutputPath: "gs://bucket/jobs/job-1/",
+		VideoRecipe: &orchestrator.VideoRecipe{
+			Cuts: []orchestrator.Cut{{
+				CutIndex:     1,
+				AudioSync:    orchestrator.AudioSync{EndSec: 20},
+				VideoResult:  orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"},
+				ChainControl: orchestrator.ChainControl{IsChainStart: true},
+			}},
+		},
+	}}
+
+	if err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v, want nil", err)
+	}
+	if fc.VideoRecipe.FinalVideoURL == "" {
+		t.Error("FinalVideoURL should still be set when the probe fails")
+	}
+}
+
+// TestExpectedDurationSecondsUsesTheLastCutEnd verifies the expected total comes from the
+// normalized timeline rather than summing durations again.
+func TestExpectedDurationSecondsUsesTheLastCutEnd(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, AudioSync: orchestrator.AudioSync{EndSec: 8}},
+			{CutIndex: 2, AudioSync: orchestrator.AudioSync{EndSec: 21.5}},
+		},
+	}
+
+	if got := expectedDurationSeconds(recipe); got != 21.5 {
+		t.Errorf("expectedDurationSeconds() = %v, want 21.5", got)
+	}
+	if got := expectedDurationSeconds(&orchestrator.VideoRecipe{}); got != 0 {
+		t.Errorf("expectedDurationSeconds() with no cuts = %v, want 0", got)
+	}
 }

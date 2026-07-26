@@ -312,3 +312,51 @@ func writeConcatList(localPaths []string) (string, error) {
 	}
 	return listPath, nil
 }
+
+// probeStreamsPattern は ffmpeg のストリーム行から種別を拾います。
+var probeStreamsPattern = regexp.MustCompile(`Stream #\d+:\d+.*?: (Video|Audio):`)
+
+// probeDurationPattern は ffmpeg のヘッダ出力から総尺（HH:MM:SS.ss）を拾います。
+var probeDurationPattern = regexp.MustCompile(`Duration: (\d+):(\d+):(\d+\.\d+)`)
+
+// Probe は動画の実尺と音声トラックの有無を測ります。
+//
+// ffprobe ではなく ffmpeg を使うのは、このコンテナに置いているのが ffmpeg だけだからです。
+// 出力先を null にして解析だけ行わせ、標準エラーに出るヘッダ情報を読み取ります。
+func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (ports.VideoStats, error) {
+	if p == nil || p.Reader == nil {
+		return ports.VideoStats{}, fmt.Errorf("ffmpeg video processor is not configured")
+	}
+
+	localPath, err := p.downloadToTemp(ctx, videoURI, ".mp4")
+	if err != nil {
+		return ports.VideoStats{}, fmt.Errorf("probe: download %s: %w", videoURI, err)
+	}
+	defer func() { _ = os.Remove(localPath) }()
+
+	// 解析だけを行うため出力は捨てる。-i だけの実行は終了コードが 1 になるので、
+	// エラーではなく出力の中身で判断する。
+	cmd := exec.CommandContext(ctx, p.binary(), "-i", localPath, "-f", "null", "-")
+	out, _ := cmd.CombinedOutput()
+
+	stats := ports.VideoStats{}
+	for _, match := range probeStreamsPattern.FindAllSubmatch(out, -1) {
+		if string(match[1]) == "Audio" {
+			stats.HasAudio = true
+		}
+	}
+
+	match := probeDurationPattern.FindSubmatch(out)
+	if match == nil {
+		return ports.VideoStats{}, fmt.Errorf("probe: duration not found in ffmpeg output for %s", videoURI)
+	}
+	hours, _ := strconv.ParseFloat(string(match[1]), 64)
+	minutes, _ := strconv.ParseFloat(string(match[2]), 64)
+	seconds, err := strconv.ParseFloat(string(match[3]), 64)
+	if err != nil {
+		return ports.VideoStats{}, fmt.Errorf("probe: parse duration %q: %w", match[0], err)
+	}
+	stats.DurationSeconds = hours*3600 + minutes*60 + seconds
+
+	return stats, nil
+}
