@@ -37,7 +37,7 @@ type TasksConfig struct {
 type StorageConfig struct {
 	GCSBucket string `env:"AP_MV_BUCKET"`
 	// MusicBucket は、Video Recipe Create の Music Job ID からレシピJSON
-	// （gs://<MusicBucket>/<jobID>.json、ap-comp/lyric-videoと同じ規則）を解決するために使う。
+	// （gs://<MusicBucket>/music/<jobID>/recipe.json、ap-comp と同じ規則）を解決するために使う。
 	MusicBucket string `env:"AP_MUSIC_BUCKET" envDefault:"ap-music"`
 }
 
