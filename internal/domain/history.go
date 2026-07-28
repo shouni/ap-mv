@@ -54,6 +54,9 @@ type VideoHistoryCut struct {
 	// 単価は設定から表示時に解決するため、リポジトリではなくハンドラーが埋めます
 	// （domain.ApplyVeoCostEstimate）。
 	EstimatedCostUSD float64 `json:"estimated_cost_usd,omitempty"`
+	// GenerationCount は、このカットに対して実際に成功した Veo 生成の回数です。
+	// 2 以上なら焼き直されています。実績記録（veo_usage.json）がある場合のみ埋まります。
+	GenerationCount int `json:"generation_count,omitempty"`
 }
 
 // IsGenerated は、このカットが動画生成済みとして扱えるかを返します。

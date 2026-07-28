@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -321,5 +323,110 @@ func TestDeleteHistoryDeletesJobObjects(t *testing.T) {
 	}
 	if len(writer.deleted) != 2 {
 		t.Fatalf("deleted count = %d, want 2: %#v", len(writer.deleted), writer.deleted)
+	}
+}
+
+// notFoundReader serves a fixed set of objects and reports os.ErrNotExist for anything else,
+// matching how remoteio's GCS reader signals a missing object.
+type notFoundReader struct {
+	files map[string]string
+}
+
+func (r notFoundReader) Open(_ context.Context, p string) (io.ReadCloser, error) {
+	content, ok := r.files[p]
+	if !ok {
+		return nil, fmt.Errorf("open %s: %w", p, os.ErrNotExist)
+	}
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (r notFoundReader) List(context.Context, string, func(string) error) error { return nil }
+
+func (r notFoundReader) Exists(_ context.Context, p string) (bool, error) {
+	_, ok := r.files[p]
+	return ok, nil
+}
+
+const testUsageJobID = "video-recipe-20260618-081931-abc"
+
+func TestGetVeoUsageReadsRecordedTally(t *testing.T) {
+	t.Parallel()
+
+	usageURI := "gs://bucket/ap-mv/veo/jobs/" + testUsageJobID + "/veo_usage.json"
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Reader: notFoundReader{files: map[string]string{
+			usageURI: `{"schema_version":1,"job_id":"` + testUsageJobID + `","model":"veo-test","calls":3,"submitted_seconds":22,"cuts":[{"cut_index":1,"calls":2,"submitted_seconds":16}]}`,
+		}},
+		HistoryCache: NewHistoryCache(),
+	})
+
+	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
+	if err != nil {
+		t.Fatalf("GetVeoUsage() error = %v", err)
+	}
+	if usage == nil {
+		t.Fatal("GetVeoUsage() = nil, want a record")
+	}
+	if usage.Calls != 3 || usage.SubmittedSeconds != 22 || usage.Model != "veo-test" {
+		t.Fatalf("usage = %+v, want the recorded tally", usage)
+	}
+	if got := usage.CutCalls(1); got != 2 {
+		t.Fatalf("CutCalls(1) = %d, want 2", got)
+	}
+}
+
+// TestGetVeoUsageTreatsMissingRecordAsNoData verifies jobs that predate the tally (or stopped
+// after keyframes) don't surface as an error — the detail page falls back to the recipe-derived
+// estimate instead of failing to render.
+func TestGetVeoUsageTreatsMissingRecordAsNoData(t *testing.T) {
+	t.Parallel()
+
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
+		Reader:       notFoundReader{files: map[string]string{}},
+		HistoryCache: NewHistoryCache(),
+	})
+
+	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
+	if err != nil {
+		t.Fatalf("GetVeoUsage() error = %v, want nil for a missing record", err)
+	}
+	if usage != nil {
+		t.Fatalf("GetVeoUsage() = %+v, want nil", usage)
+	}
+}
+
+// TestGetVeoUsageTreatsEmptyObjectAsNoData covers a truncated write leaving a zero-byte object.
+func TestGetVeoUsageTreatsEmptyObjectAsNoData(t *testing.T) {
+	t.Parallel()
+
+	usageURI := "gs://bucket/ap-mv/veo/jobs/" + testUsageJobID + "/veo_usage.json"
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
+		Reader:       notFoundReader{files: map[string]string{usageURI: "  \n"}},
+		HistoryCache: NewHistoryCache(),
+	})
+
+	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
+	if err != nil {
+		t.Fatalf("GetVeoUsage() error = %v, want nil for an empty object", err)
+	}
+	if usage != nil {
+		t.Fatalf("GetVeoUsage() = %+v, want nil", usage)
+	}
+}
+
+func TestGetVeoUsageRejectsInvalidJobID(t *testing.T) {
+	t.Parallel()
+
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
+		Reader:       notFoundReader{files: map[string]string{}},
+		HistoryCache: NewHistoryCache(),
+	})
+
+	if _, err := repo.GetVeoUsage(context.Background(), "../escape"); err == nil {
+		t.Fatal("GetVeoUsage() error = nil, want a validation error for a traversal-style job ID")
 	}
 }

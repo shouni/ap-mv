@@ -33,10 +33,10 @@ func (p VeoPricing) RateFor(model string) float64 {
 
 // VideoCostEstimate は、1ジョブぶんの Veo 課金量の概算です。
 //
-// GeneratedSeconds は「完成品の尺」であって「実際に Veo へ投げた秒数」ではありません。
-// Cloud Tasks の再配信などで同じカットを焼き直しても、完成品の尺は変わらないためこの値は
-// 増えません。実投入量との差＝再生成で捨てた分を出すには、生成のたびに実績を記録する必要が
-// あります（未実装）。
+// 2つの秒数を並べて持ちます。GeneratedSeconds は「完成品の尺」で、レシピだけから算出できる
+// ため常に埋まります。SubmittedSeconds は「実際に Veo へ投げた尺」で、生成時に記録した
+// veo_usage.json がある場合だけ埋まります。Cloud Tasks の再配信などで同じカットを焼き直すと
+// 後者だけが増えるので、差（ExcessSeconds）が再生成で捨てた分になります。
 type VideoCostEstimate struct {
 	// Model は単価の解決に使ったモデル名です。VideoRecipe はジョブに使った Veo モデルを
 	// 保存していないため、表示時点で設定されている既定モデルを当てています。過去ジョブを
@@ -48,12 +48,47 @@ type VideoCostEstimate struct {
 	GeneratedSeconds float64 `json:"generated_seconds,omitempty"`
 	// EstimatedUSD は GeneratedSeconds × RateUSDPerSecond です。
 	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
+	// SubmittedSeconds は実際に Veo へ投げた尺の合計です。実績記録（veo_usage.json）が
+	// あるジョブでのみ埋まります。
+	SubmittedSeconds float64 `json:"submitted_seconds,omitempty"`
+	// SubmittedUSD は SubmittedSeconds × RateUSDPerSecond です。
+	SubmittedUSD float64 `json:"submitted_usd,omitempty"`
+	// SubmittedCalls は成功した Veo 生成の回数です。カット数より多ければ焼き直しがあります。
+	SubmittedCalls int `json:"submitted_calls,omitempty"`
+	// HasUsage は実績記録を読めたかを示します。記録が無い（実績記録の導入前に走った）
+	// ジョブと、実績ゼロのジョブを区別するために持ちます。
+	HasUsage bool `json:"has_usage,omitempty"`
 }
 
 // HasCost は、表示に値するコストがあるかを返します。キーフレームのみのジョブは
 // 生成済みカットが無いため false になります。
 func (e VideoCostEstimate) HasCost() bool {
-	return e.GeneratedSeconds > 0
+	return e.GeneratedSeconds > 0 || e.SubmittedSeconds > 0
+}
+
+// ExcessSeconds は、実際に投げた尺と完成品の尺の差です。再生成で捨てた分にあたります。
+// 実績記録が無いジョブでは 0 を返します（「無駄が無い」ではなく「分からない」を意味します。
+// HasUsage で区別してください）。
+func (e VideoCostEstimate) ExcessSeconds() float64 {
+	if !e.HasUsage {
+		return 0
+	}
+	// 記録は取りこぼしうる（VeoUsage のコメント参照）ので、実績が完成尺を下回ることがある。
+	// その場合に負の「無駄」を表示しても意味が無いため 0 に丸める。
+	if excess := e.SubmittedSeconds - e.GeneratedSeconds; excess > 0 {
+		return excess
+	}
+	return 0
+}
+
+// ExcessUSD は ExcessSeconds に単価を掛けた金額です。
+func (e VideoCostEstimate) ExcessUSD() float64 {
+	return e.ExcessSeconds() * e.RateUSDPerSecond
+}
+
+// HasExcess は、表示に値する再生成ロスがあるかを返します。
+func (e VideoCostEstimate) HasExcess() bool {
+	return e.ExcessSeconds() > 0
 }
 
 // GeneratedSecondsOfCuts は、生成済みカットの尺の合計を返します。
@@ -99,6 +134,23 @@ func ApplyVeoCostEstimate(detail *VideoHistoryDetail, model string, pricing VeoP
 	}
 	detail.Cost = EstimateVideoCost(total, model, pricing)
 	detail.GeneratedSeconds = total
+}
+
+// ApplyVeoUsage は、記録済みの実績を履歴詳細へ重ねます。usage が nil（実績記録の導入前に
+// 走ったジョブ）のときは何もしないので、完成尺ベースの概算だけが残ります。
+//
+// ApplyVeoCostEstimate の後に呼んでください。単価は前者が解決した値をそのまま使います。
+func ApplyVeoUsage(detail *VideoHistoryDetail, usage *VeoUsage) {
+	if detail == nil || usage == nil {
+		return
+	}
+	detail.Cost.HasUsage = true
+	detail.Cost.SubmittedCalls = usage.Calls
+	detail.Cost.SubmittedSeconds = usage.SubmittedSeconds
+	detail.Cost.SubmittedUSD = usage.SubmittedSeconds * detail.Cost.RateUSDPerSecond
+	for i := range detail.Cuts {
+		detail.Cuts[i].GenerationCount = usage.CutCalls(detail.Cuts[i].CutIndex)
+	}
 }
 
 // ApplyVeoCostEstimateToHistories は、履歴一覧の各項目に概算コストを埋めます。

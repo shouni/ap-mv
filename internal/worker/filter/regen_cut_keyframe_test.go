@@ -90,6 +90,10 @@ func (f *fakeInvalidatingHistoryRepository) DeleteHistory(context.Context, strin
 	return nil
 }
 
+func (f *fakeInvalidatingHistoryRepository) GetVeoUsage(context.Context, string) (*domain.VeoUsage, error) {
+	return nil, nil
+}
+
 func (f *fakeInvalidatingHistoryRepository) DownloadKeyframes(context.Context, string, ports.KeyframeSink) error {
 	return nil
 }

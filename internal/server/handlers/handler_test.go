@@ -31,6 +31,13 @@ func (q *recordingQueue) EnqueueWithName(_ context.Context, _ string, task *doma
 type fakeHistoryRepository struct {
 	detail domain.VideoHistoryDetail
 	page   domain.VideoHistoryPage
+	// usage は nil のままなら「実績記録なし」を表します（実績記録の導入前に走ったジョブ）。
+	usage    *domain.VeoUsage
+	usageErr error
+}
+
+func (r fakeHistoryRepository) GetVeoUsage(context.Context, string) (*domain.VeoUsage, error) {
+	return r.usage, r.usageErr
 }
 
 func (r fakeHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {

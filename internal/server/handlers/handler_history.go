@@ -59,7 +59,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
-	h.applyCostEstimate(&history)
+	h.applyCostEstimate(r.Context(), jobID, &history)
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, history)
 		return
