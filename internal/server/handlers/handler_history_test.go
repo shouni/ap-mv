@@ -162,3 +162,121 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 		}
 	}
 }
+
+// TestHistoryDetailRendersVeoCostEstimate verifies the detail page shows the job total and the
+// per-cut cost next to each duration, and that a cut that never reached Veo is not priced.
+// The rate is resolved at render time from the configured price table, so this also pins the
+// wiring between Handler.VeoPricing and the template.
+func TestHistoryDetailRendersVeoCostEstimate(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
+		VeoModels:       []string{"veo-test"},
+		DefaultVeoModel: "veo-test",
+	}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.VeoPricing = domain.VeoPricing{"veo-test": 0.50}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Cost MV", CutCount: 2},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, DurationSec: 8, Status: domain.CutStatusGenerated},
+				{CutIndex: 2, DurationSec: 6, Status: "pending"},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"Veo 概算コスト",
+		"$4.00",     // 8sec × $0.50 — 生成済みカットのみ
+		"8.0 sec",   // ジョブ合計の内訳
+		"$0.50/sec", // 適用単価
+		"veo-test",  // 単価の解決に使ったモデル
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
+		}
+	}
+	// 未生成カットは Veo を呼んでいないので、6sec × $0.50 = $3.00 は出てはいけない。
+	if strings.Contains(body, "$3.00") {
+		t.Fatalf("HistoryDetail priced a pending cut: %s", body)
+	}
+}
+
+// TestHistoryDetailOmitsCostForKeyframeOnlyJob verifies the cost block disappears entirely when
+// no cut has been generated, rather than showing a misleading $0.00 total.
+func TestHistoryDetailOmitsCostForKeyframeOnlyJob(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Keyframes only"},
+			Cuts:         []domain.VideoHistoryCut{{CutIndex: 1, DurationSec: 8, Status: "pending"}},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "Veo 概算コスト") {
+		t.Fatalf("HistoryDetail rendered a cost block for a keyframe-only job: %s", rec.Body.String())
+	}
+}
+
+// TestHistoryListRendersVeoCostColumn verifies the list page prices each row from the
+// GeneratedSeconds the repository computed, and shows "-" for keyframe-only jobs.
+func TestHistoryListRendersVeoCostColumn(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
+		VeoModels:       []string{"veo-test"},
+		DefaultVeoModel: "veo-test",
+	}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.VeoPricing = domain.VeoPricing{"veo-test": 0.50}
+	h.HistoryRepository = fakeHistoryRepository{
+		page: domain.VideoHistoryPage{
+			Items: []domain.VideoHistory{
+				{JobID: "job-1", Title: "Generated MV", GeneratedSeconds: 24, Generated: true},
+				{JobID: "job-2", Title: "Keyframes only"},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
+	rec := httptest.NewRecorder()
+
+	h.History(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("History status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Veo 概算", "$12.00", "24 sec"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("History body missing %q: %s", want, body)
+		}
+	}
+}

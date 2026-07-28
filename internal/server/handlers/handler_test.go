@@ -30,10 +30,11 @@ func (q *recordingQueue) EnqueueWithName(_ context.Context, _ string, task *doma
 
 type fakeHistoryRepository struct {
 	detail domain.VideoHistoryDetail
+	page   domain.VideoHistoryPage
 }
 
 func (r fakeHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {
-	return domain.VideoHistoryPage{}, nil
+	return r.page, nil
 }
 
 func (r fakeHistoryRepository) GetHistory(context.Context, string) (domain.VideoHistoryDetail, error) {

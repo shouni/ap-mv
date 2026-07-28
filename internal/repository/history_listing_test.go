@@ -41,3 +41,36 @@ func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 		t.Errorf("AspectRatio = %q, want empty for a recipe with none recorded", got.AspectRatio)
 	}
 }
+
+// TestVideoHistoryFromRecipeSumsGeneratedSeconds verifies the history list carries the billable
+// Veo seconds (generated cuts only), so the list page can price a job without loading its cuts.
+// The seconds are derived purely from the recipe, which is why they are computed here rather
+// than at render time — the value is stable enough to sit in the TTL-cached VideoHistory, while
+// the price per second (config, changeable) deliberately is not.
+func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
+	recipe := domain.VideoRecipe{
+		ProjectTitle: "test",
+		Cuts: []orchestrator.Cut{
+			{
+				CutIndex:    1,
+				AudioSync:   orchestrator.AudioSync{DurationSec: 8},
+				VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated},
+			},
+			{
+				CutIndex:    2,
+				AudioSync:   orchestrator.AudioSync{DurationSec: 6},
+				VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusPending},
+			},
+		},
+	}
+
+	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
+
+	if got.GeneratedSeconds != 8 {
+		t.Errorf("GeneratedSeconds = %v, want 8 (the pending cut never reached Veo)", got.GeneratedSeconds)
+	}
+	// 単価はリポジトリの責務ではない。キャッシュへ焼き込まないことをここで固定する。
+	if got.Cost.HasCost() {
+		t.Errorf("Cost = %+v, want it left empty for the handler to fill from config", got.Cost)
+	}
+}

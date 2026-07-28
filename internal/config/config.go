@@ -63,6 +63,13 @@ type AIConfig struct {
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
 	KeyframeRateInterval   time.Duration `env:"KEYFRAME_RATE_INTERVAL" envDefault:"60s"`
+	// VeoPriceUSDPerSec は履歴画面に出す概算コストの単価表です（モデル名=USD/生成1秒）。
+	// 空キー（"=0.40" のように書く）は表に無いモデルへのフォールバックになります。
+	//
+	// 既定値は目安であり、実際の単価はモデル・音声生成の有無・契約で変わります。請求額と
+	// 突き合わせる用途には使えません（ジョブ間の比較と無駄の検出用）。正確な数字は
+	// Vertex AI の価格表を確認して、この環境変数で上書きしてください。
+	VeoPriceUSDPerSec map[string]float64 `env:"VEO_PRICE_USD_PER_SEC" envDefault:"veo-3.1-generate-001:0.40,veo-3.1-fast-generate-001:0.15,veo-3.0-generate-001:0.75,veo-3.0-fast-generate-001:0.40,veo-2.0-generate-001:0.50" envSeparator:"," envKeyValSeparator:":"`
 }
 
 // NotificationConfig は外部通知先の設定です。
