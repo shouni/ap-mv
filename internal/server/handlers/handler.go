@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,10 +33,30 @@ type Handler struct {
 	VeoPricing domain.VeoPricing
 }
 
-// applyCostEstimate は履歴詳細に概算コストを埋めます。単価の解決に使うモデルは、
-// レシピが生成時の Veo モデルを保存していないため、現在の既定モデルで代用します。
-func (h *Handler) applyCostEstimate(detail *domain.VideoHistoryDetail) {
-	domain.ApplyVeoCostEstimate(detail, h.ModelOptions.DefaultVeoModel, h.VeoPricing)
+// applyCostEstimate は履歴詳細に概算コストを埋めます。
+//
+// 実績記録（veo_usage.json）があればそこに残ったモデルで単価を引き、実際に投げた秒数との
+// 差＝再生成ロスも埋めます。記録が無いジョブ（実績記録の導入前、またはキーフレームのみ）では
+// レシピから算出した完成尺ベースの概算だけを出し、単価は現在の既定モデルで代用します。
+// 実績の読み取り失敗でページ全体を落とす価値は無いので、警告を残して概算のみで続けます。
+func (h *Handler) applyCostEstimate(ctx context.Context, jobID string, detail *domain.VideoHistoryDetail) {
+	var usage *domain.VeoUsage
+	if h.HistoryRepository != nil {
+		var err error
+		if usage, err = h.HistoryRepository.GetVeoUsage(ctx, jobID); err != nil {
+			slog.WarnContext(ctx, "failed to load veo usage; falling back to the recipe-derived estimate",
+				"job_id", jobID,
+				"error", err,
+			)
+			usage = nil
+		}
+	}
+	model := h.ModelOptions.DefaultVeoModel
+	if usage != nil && strings.TrimSpace(usage.Model) != "" {
+		model = usage.Model
+	}
+	domain.ApplyVeoCostEstimate(detail, model, h.VeoPricing)
+	domain.ApplyVeoUsage(detail, usage)
 }
 
 // PageData は、HTMLテンプレートに渡す共通の描画データです。

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -278,5 +279,137 @@ func TestHistoryListRendersVeoCostColumn(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("History body missing %q: %s", want, body)
 		}
+	}
+}
+
+// TestHistoryDetailRendersRecordedUsage verifies the detail page shows what was actually
+// submitted to Veo alongside the finished runtime, and flags the regenerated cut. The finished
+// runtime alone cannot reveal that cut 2 was billed twice — that is the whole point of the tally.
+func TestHistoryDetailRendersRecordedUsage(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
+		VeoModels:       []string{"veo-test"},
+		DefaultVeoModel: "veo-test",
+	}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.VeoPricing = domain.VeoPricing{"veo-test": 0.50}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Reburned MV", CutCount: 2},
+			Cuts: []domain.VideoHistoryCut{
+				{CutIndex: 1, DurationSec: 8, Status: domain.CutStatusGenerated},
+				{CutIndex: 2, DurationSec: 8, Status: domain.CutStatusGenerated},
+			},
+		},
+		usage: &domain.VeoUsage{
+			Model:            "veo-test",
+			Calls:            3,
+			SubmittedSeconds: 24,
+			Cuts: []domain.VeoCutUsage{
+				{CutIndex: 1, Calls: 1, SubmittedSeconds: 8},
+				{CutIndex: 2, Calls: 2, SubmittedSeconds: 16},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"完成品",
+		"$8.00", // 16sec 完成
+		"実投入",
+		"$12.00", // 24sec 投入
+		"3 回",
+		"再生成ロス",
+		"$4.00", // 差の 8sec
+		"×2 生成",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
+		}
+	}
+}
+
+// TestHistoryDetailWithoutUsageSaysSo verifies a job with no tally states that the regenerated
+// portion is unknown, rather than silently reading as "no waste".
+func TestHistoryDetailWithoutUsageSaysSo(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
+		VeoModels:       []string{"veo-test"},
+		DefaultVeoModel: "veo-test",
+	}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.VeoPricing = domain.VeoPricing{"veo-test": 0.50}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Old MV", CutCount: 1},
+			Cuts:         []domain.VideoHistoryCut{{CutIndex: 1, DurationSec: 8, Status: domain.CutStatusGenerated}},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "実投入") {
+		t.Fatalf("HistoryDetail showed submitted seconds without a tally: %s", body)
+	}
+	if !strings.Contains(body, "実績記録が無いため") {
+		t.Fatalf("HistoryDetail did not explain the missing tally: %s", body)
+	}
+}
+
+// TestHistoryDetailSurvivesUsageReadFailure verifies a broken tally degrades to the estimate
+// instead of failing the page.
+func TestHistoryDetailSurvivesUsageReadFailure(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{
+		VeoModels:       []string{"veo-test"},
+		DefaultVeoModel: "veo-test",
+	}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.VeoPricing = domain.VeoPricing{"veo-test": 0.50}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "MV", CutCount: 1},
+			Cuts:         []domain.VideoHistoryCut{{CutIndex: 1, DurationSec: 8, Status: domain.CutStatusGenerated}},
+		},
+		usageErr: errors.New("storage unavailable"),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "job-1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "$4.00") {
+		t.Fatalf("HistoryDetail lost the recipe-derived estimate: %s", rec.Body.String())
 	}
 }

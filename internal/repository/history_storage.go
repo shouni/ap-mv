@@ -1,10 +1,14 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -121,6 +125,43 @@ func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID str
 		return domain.VideoRecipe{}, err
 	}
 	return *recipe, nil
+}
+
+// GetVeoUsage loads the job's recorded Veo generation tally (written per cut by the video
+// generation filter). A missing file is not an error: jobs that predate the record, and jobs
+// that stopped after keyframes, simply have none — callers then show only the recipe-derived
+// estimate. The record is small and read once per detail view, so it is not cached; it also
+// changes while a job is still generating, which is exactly when a stale copy would mislead.
+func (r *VideoHistoryRepository) GetVeoUsage(ctx context.Context, jobID string) (*domain.VeoUsage, error) {
+	if r == nil || r.reader == nil || r.baseURI == "" {
+		return nil, nil
+	}
+	if err := jobid.Validate(jobID); err != nil {
+		return nil, err
+	}
+	rc, err := r.reader.Open(ctx, r.jobObjectURI(jobID, domain.VeoUsageFileName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+
+	raw, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+	// 空オブジェクトは「記録なし」と同じ扱いにする。書き込み途中の中断などで 0 バイトの
+	// オブジェクトが残っても、履歴画面をエラーにする理由にはならない。
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, nil
+	}
+	var usage domain.VeoUsage
+	if err := json.Unmarshal(raw, &usage); err != nil {
+		return nil, fmt.Errorf("decode %s for job %s: %w", domain.VeoUsageFileName, jobID, err)
+	}
+	return &usage, nil
 }
 
 func (r *VideoHistoryRepository) signHistoryCutURLs(ctx context.Context, cuts []domain.VideoHistoryCut) ([]domain.VideoHistoryCut, error) {

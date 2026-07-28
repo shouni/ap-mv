@@ -213,6 +213,9 @@ func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.Vid
 	cut.Status = orchestrator.CutStatusGenerated
 	cut.VideoID = res.VideoID
 	cut.VideoURL = res.CloudURL
+	// 課金が発生した直後に記録する。完成品の尺（レシピから常に算出できる）と違い、
+	// 「何回投げたか」はこの瞬間にしか分からず、再配信で焼き直された分はここでしか数えられない。
+	recordVeoUsage(ctx, fc, cut)
 	return nil
 }
 
