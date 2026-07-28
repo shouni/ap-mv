@@ -134,8 +134,9 @@ func TestApplyVeoCostEstimateClearsStaleCutCost(t *testing.T) {
 	}
 }
 
-func TestApplyVeoCostEstimateIgnoresNilDetail(t *testing.T) {
+func TestApplyVeoCostEstimateIgnoresNilDetail(_ *testing.T) {
 	// キーフレームのみのジョブや未設定リポジトリで nil が渡っても落ちないこと。
+	// パニックしなければ成功なので、アサーションは無い。
 	ApplyVeoCostEstimate(nil, "veo-a", VeoPricing{"veo-a": 0.5})
 }
 
