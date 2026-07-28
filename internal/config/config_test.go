@@ -28,6 +28,7 @@ var configEnvKeys = []string{
 	"VEO_OUTPUT_PREFIX",
 	"VEO_ASPECT_RATIO",
 	"VEO_GENERATE_AUDIO",
+	"VEO_PRICE_USD_PER_SEC",
 	"VEO_POLL_INTERVAL",
 	"VEO_OPERATION_TIMEOUT",
 	"KEYFRAME_MAX_CONCURRENCY",
@@ -203,6 +204,47 @@ func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 	}
 	if cfg.AI.VeoLocationID != "asia-northeast1" {
 		t.Fatalf("VeoLocationID = %q, want fallback to GCP_LOCATION_ID", cfg.AI.VeoLocationID)
+	}
+}
+
+// TestLoadConfigFromEnvVeoPricingDefaults verifies the built-in Veo price table parses into a
+// usable map. The default is written as a struct tag, so a malformed one would only surface at
+// runtime as a silently empty table (every job priced at the fallback rate).
+func TestLoadConfigFromEnvVeoPricingDefaults(t *testing.T) {
+	clearConfigEnv(t)
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv() error = %v", err)
+	}
+
+	if got := cfg.AI.VeoPriceUSDPerSec[cfg.AI.VeoModel]; got <= 0 {
+		t.Fatalf("VeoPriceUSDPerSec[%q] = %v, want a positive default rate for the default model", cfg.AI.VeoModel, got)
+	}
+	if len(cfg.AI.VeoPriceUSDPerSec) < 2 {
+		t.Fatalf("VeoPriceUSDPerSec = %v, want the full default table", cfg.AI.VeoPriceUSDPerSec)
+	}
+}
+
+// TestLoadConfigFromEnvVeoPricingOverride verifies the price table can be replaced from the
+// environment, including the "" fallback key.
+func TestLoadConfigFromEnvVeoPricingOverride(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("VEO_PRICE_USD_PER_SEC", "veo-x:1.25,:0.05")
+
+	cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		t.Fatalf("LoadConfigFromEnv() error = %v", err)
+	}
+
+	if got := cfg.AI.VeoPriceUSDPerSec["veo-x"]; got != 1.25 {
+		t.Fatalf("VeoPriceUSDPerSec[veo-x] = %v, want 1.25", got)
+	}
+	if got := cfg.AI.VeoPriceUSDPerSec[""]; got != 0.05 {
+		t.Fatalf("VeoPriceUSDPerSec[\"\"] = %v, want 0.05 fallback", got)
+	}
+	if _, ok := cfg.AI.VeoPriceUSDPerSec["veo-3.1-generate-001"]; ok {
+		t.Fatal("VeoPriceUSDPerSec kept a default entry, want the env value to replace the table")
 	}
 }
 

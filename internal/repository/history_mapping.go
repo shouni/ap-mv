@@ -67,6 +67,9 @@ func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.Vide
 		Generated:     allCutsGenerated(recipe.Cuts),
 		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
 		AspectRatio:   strings.TrimSpace(recipe.AspectRatio),
+		// 秒数はレシピだけで確定するのでここで入れる。単価を掛けるのは表示側
+		// （設定から解決するため、キャッシュに単価を焼き込まない）。
+		GeneratedSeconds: domain.GeneratedSecondsOfCuts(recipe.Cuts),
 	}
 	if history.Title == "" {
 		history.Title = jobID

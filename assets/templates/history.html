@@ -23,6 +23,7 @@
                     <th>Created</th>
                     <th>Cuts</th>
                     <th>Aspect Ratio</th>
+                    <th title="生成済みカットの尺 × Veo 単価の概算。実際の請求額とは一致しません">Veo 概算</th>
                     <th>Status</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -38,6 +39,14 @@
                     <td>{{.CreatedAt}}</td>
                     <td>{{.CutCount}}</td>
                     <td>{{.AspectRatio}}</td>
+                    <td>
+                        {{if .Cost.HasCost}}
+                        <span class="fw-semibold">${{printf "%.2f" .Cost.EstimatedUSD}}</span>
+                        <div class="small text-muted">{{printf "%.0f" .Cost.GeneratedSeconds}} sec</div>
+                        {{else}}
+                        <span class="text-muted">-</span>
+                        {{end}}
+                    </td>
                     <td>
                         {{if .Generated}}
                         <span class="badge text-bg-success">generated</span>

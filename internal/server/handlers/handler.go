@@ -26,6 +26,15 @@ type Handler struct {
 	// MusicBucket は、Video Recipe Create フォームの Music Job ID から
 	// レシピJSON（gs://<MusicBucket>/music/<jobID>/recipe.json）を解決するためのGCSバケット名です。
 	MusicBucket string
+	// VeoPricing は履歴画面に出す概算コストの単価表です。nil のときは
+	// domain.DefaultVeoPriceUSDPerSecond へフォールバックするため、未設定でも表示は壊れません。
+	VeoPricing domain.VeoPricing
+}
+
+// applyCostEstimate は履歴詳細に概算コストを埋めます。単価の解決に使うモデルは、
+// レシピが生成時の Veo モデルを保存していないため、現在の既定モデルで代用します。
+func (h *Handler) applyCostEstimate(detail *domain.VideoHistoryDetail) {
+	domain.ApplyVeoCostEstimate(detail, h.ModelOptions.DefaultVeoModel, h.VeoPricing)
 }
 
 // PageData は、HTMLテンプレートに渡す共通の描画データです。

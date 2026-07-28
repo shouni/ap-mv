@@ -67,6 +67,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	webHandler.HistoryRepository = appCtx.HistoryRepository
 	webHandler.JobStatus = appCtx.JobStatus
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
+	webHandler.VeoPricing = domain.VeoPricing(appCtx.Config.AI.VeoPriceUSDPerSec)
 
 	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)
 

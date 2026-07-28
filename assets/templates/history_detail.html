@@ -61,6 +61,28 @@
             </div>
         </div>
 
+        {{if .HistoryDetail.Cost.HasCost}}
+        <div class="card bg-body-tertiary border-0 mb-4">
+            <div class="card-body py-3">
+                <div class="d-flex flex-wrap align-items-baseline gap-3">
+                    <div>
+                        <div class="text-muted small">Veo 概算コスト</div>
+                        <div class="fs-4 fw-semibold">${{printf "%.2f" .HistoryDetail.Cost.EstimatedUSD}}</div>
+                    </div>
+                    <div class="text-muted small">
+                        生成済み {{printf "%.1f" .HistoryDetail.Cost.GeneratedSeconds}} sec
+                        × ${{printf "%.2f" .HistoryDetail.Cost.RateUSDPerSecond}}/sec
+                        {{if .HistoryDetail.Cost.Model}}（{{.HistoryDetail.Cost.Model}} の単価）{{end}}
+                    </div>
+                </div>
+                <p class="small text-muted mb-0 mt-2">
+                    完成品の尺から計算した概算です。実際の請求額とは一致せず、再配信などで同じカットを
+                    焼き直した分もここには現れません。単価は <code>VEO_PRICE_USD_PER_SEC</code> で設定します。
+                </p>
+            </div>
+        </div>
+        {{end}}
+
         {{if .HistoryDetail.FinalVideoSignedURL}}
         <div class="card bg-body-tertiary border-0 mb-4">
             <div class="card-body">
@@ -224,7 +246,10 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
                 {{end}}
                 {{if $cut.DurationSec}}
                 <dt class="col-5 text-muted fw-normal">Duration</dt>
-                <dd class="col-7 mb-1">{{printf "%.1f" $cut.DurationSec}} sec</dd>
+                <dd class="col-7 mb-1">
+                    {{printf "%.1f" $cut.DurationSec}} sec
+                    {{if $cut.EstimatedCostUSD}}<span class="text-muted">/ ${{printf "%.2f" $cut.EstimatedCostUSD}}</span>{{end}}
+                </dd>
                 {{end}}
                 {{if $cut.AudioCue}}
                 {{$audioCue := $cut.AudioCueParts}}

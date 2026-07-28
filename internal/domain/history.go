@@ -25,6 +25,12 @@ type VideoHistory struct {
 	// （例: "16:9", "9:16"）。キーフレーム作成時に一度だけ決まり、既存ジョブに対する
 	// 動画生成・カット再生成はこの値をそのまま引き継ぎます（アスペクト比を都度選び直すことはない）。
 	AspectRatio string `json:"aspect_ratio,omitempty"`
+	// GeneratedSeconds は生成済みカットの尺の合計（＝Veo の課金対象秒数の概算）です。
+	// レシピ読み込み時に確定するのでキャッシュしても陳腐化しません。
+	GeneratedSeconds float64 `json:"generated_seconds,omitempty"`
+	// Cost は GeneratedSeconds に単価を掛けた概算コストです。単価は設定から表示時に
+	// 解決するため、リポジトリではなくハンドラーが埋めます（domain.ApplyVeoCostEstimate）。
+	Cost VideoCostEstimate `json:"cost,omitzero"`
 }
 
 // VideoHistoryCut is a display-ready cut entry for a generated MV history detail.
@@ -44,6 +50,19 @@ type VideoHistoryCut struct {
 	Status         string  `json:"status,omitempty"`
 	StartSec       float64 `json:"start_sec,omitempty"`
 	EndSec         float64 `json:"end_sec,omitempty"`
+	// EstimatedCostUSD は DurationSec × Veo 単価の概算です。未生成のカットは 0 です。
+	// 単価は設定から表示時に解決するため、リポジトリではなくハンドラーが埋めます
+	// （domain.ApplyVeoCostEstimate）。
+	EstimatedCostUSD float64 `json:"estimated_cost_usd,omitempty"`
+}
+
+// IsGenerated は、このカットが動画生成済みとして扱えるかを返します。
+//
+// 生成結果そのものを持つ orchestrator の VideoResult.IsGenerated とは判定材料が異なります:
+// 表示用のカットは video_id を持たないため、status と video_url だけで判定します。
+// video_music_meta.json では両者は同時に埋まるので、実際の結果は一致します。
+func (c VideoHistoryCut) IsGenerated() bool {
+	return c.Status == CutStatusGenerated || strings.TrimSpace(c.VideoURL) != ""
 }
 
 // AudioCueParts is the display-ready breakdown of an AudioCue string into its instrumental/

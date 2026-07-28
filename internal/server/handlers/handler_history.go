@@ -26,6 +26,8 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// 単価は保存せず表示時に解決するため、JSON 応答にも同じ値が乗るよう分岐の前で適用する。
+	domain.ApplyVeoCostEstimateToHistories(page.Items, h.ModelOptions.DefaultVeoModel, h.VeoPricing)
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, page)
 		return
@@ -57,6 +59,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
+	h.applyCostEstimate(&history)
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, history)
 		return
