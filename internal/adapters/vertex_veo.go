@@ -3,9 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/shouni/go-gemini-client/gemini"
@@ -14,11 +12,6 @@ import (
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
 )
-
-// veoHTTPTimeout は Vertex AI への1回の HTTP 呼び出しに許す時間です。
-// 動画生成そのものの待ち時間ではなく（それは veo.Client のポーリングが持ちます）、
-// 投函や進捗確認1回あたりの上限です。
-const veoHTTPTimeout = 30 * time.Second
 
 // VertexVeoRunner は Vertex AI Veo の動画生成を呼び出す Runner です。
 //
@@ -50,34 +43,25 @@ func (r *VertexVeoRunner) Close() error {
 
 // NewVertexVeoRunner はアプリケーション設定から VertexVeoRunner を生成します。
 //
-// Vertex AI の認証（ADC）とリトライは gemini.Client が持ちます。GCS クライアントは
-// Veo の一時出力パスからジョブ配下の正規パスへ動画をコピーするために別途持ちます。
-func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunner, error) {
+// aiClient は NewVertexAIAdapter が組み立てた Vertex AI クライアントを注入します。
+// 自前で組まないのは、テキスト/画像生成と動画生成が別々のクライアントを持つと、
+// リージョン・リトライ間隔・HTTP タイムアウトが片方だけ変更されて食い違うためです
+// （実際に InitialDelay が 60s と 30s で割れていました）。認証とリトライの設定は
+// これで1箇所に集約されます。
+//
+// GCS クライアントは、Veo の一時出力パスからジョブ配下の正規パスへ動画をコピーする
+// ために別途持ちます。
+func NewVertexVeoRunner(ctx context.Context, cfg *config.Config, aiClient gemini.VideoGenerator) (*VertexVeoRunner, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
-	if strings.TrimSpace(cfg.GCP.ProjectID) == "" {
-		return nil, fmt.Errorf("GCP_PROJECT_ID is required")
-	}
-	locationID := strings.TrimSpace(cfg.AI.VeoLocationID)
-	if locationID == "" {
-		locationID = strings.TrimSpace(cfg.GCP.LocationID)
-	}
-	if locationID == "" {
-		return nil, fmt.Errorf("VEO_LOCATION_ID or GCP_LOCATION_ID is required")
+	if aiClient == nil {
+		return nil, fmt.Errorf("vertex AI client is required")
 	}
 	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
 		return nil, fmt.Errorf("AP_MV_BUCKET is required")
 	}
 
-	aiClient, err := gemini.NewClient(ctx, gemini.Config{
-		ProjectID:  strings.TrimSpace(cfg.GCP.ProjectID),
-		LocationID: locationID,
-		HTTPClient: &http.Client{Timeout: veoHTTPTimeout},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create Vertex AI client: %w", err)
-	}
 	videos, err := veo.New(aiClient,
 		veo.WithPollInterval(cfg.AI.VeoPollInterval),
 		veo.WithPollTimeout(cfg.AI.VeoOperationTimeout),

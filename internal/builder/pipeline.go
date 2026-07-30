@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -33,9 +34,10 @@ func buildPipeline(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
+	aiClient gemini.MultimodalModel,
 	externals pipelineExternals,
 ) (*pipeline.Runner, error) {
-	workflows, err := buildWorkflow(ctx, cfg, rio, httpClient, videoRunner)
+	workflows, err := buildWorkflow(ctx, cfg, rio, httpClient, videoRunner, aiClient)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +50,7 @@ func buildPipeline(
 		TaskQueue:         externals.taskQueue,
 		Characters:        characters,
 		HistoryRepository: externals.historyRepository,
-		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, workflows),
+		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, aiClient, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
 		Timeout:           cfg.AI.PipelineTimeout,
@@ -71,6 +73,7 @@ func newWorkflowResolver(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
+	aiClient gemini.MultimodalModel,
 	shared *orchestrator.Workflows,
 ) *workflowResolver {
 	orchCfg := buildOrchestratorConfig(cfg)
@@ -90,6 +93,7 @@ func newWorkflowResolver(
 				rio:          rio,
 				httpClient:   httpClient,
 				videoRunner:  taskVideoRunner,
+				aiClient:     aiClient,
 				visualMode:   taskVisualMode(task),
 				seedOverride: taskSeedOverride(task),
 			})

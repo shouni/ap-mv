@@ -20,7 +20,7 @@ func TestNewWorkflowResolverPassesOrchestratorConfig(t *testing.T) {
 		},
 	}
 
-	resolver := newWorkflowResolver(cfg, nil, nil, nil, &orchestrator.Workflows{})
+	resolver := newWorkflowResolver(cfg, nil, nil, nil, nil, &orchestrator.Workflows{})
 
 	if resolver.orchCfg.GeminiModel != "gemini-text" {
 		t.Fatalf("GeminiModel = %q", resolver.orchCfg.GeminiModel)

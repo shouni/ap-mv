@@ -8,12 +8,12 @@ import (
 
 	characterassets "github.com/shouni/go-character-kit/assets"
 	"github.com/shouni/go-character-kit/character"
+	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
 	"github.com/shouni/ap-mv/assets"
-	"github.com/shouni/ap-mv/internal/adapters"
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -26,6 +26,7 @@ func buildWorkflow(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
+	aiClient gemini.MultimodalModel,
 ) (*orchestrator.Workflows, error) {
 	return buildWorkflowWithConfig(ctx, workflowBuildParams{
 		cfg:         cfg,
@@ -33,6 +34,7 @@ func buildWorkflow(
 		rio:         rio,
 		httpClient:  httpClient,
 		videoRunner: videoRunner,
+		aiClient:    aiClient,
 	})
 }
 
@@ -48,27 +50,34 @@ type characterSeedOverride struct {
 // parameters share a type (two *config.Config-adjacent structs, two string-ish knobs), which
 // made the previous 7-argument positional signature easy to transpose by mistake at call sites.
 type workflowBuildParams struct {
-	cfg          *config.Config
-	orchCfg      orchestrator.Config
-	rio          *app.RemoteIO
-	httpClient   httpkit.HTTPClient
-	videoRunner  ports.VideoRunner
+	cfg         *config.Config
+	orchCfg     orchestrator.Config
+	rio         *app.RemoteIO
+	httpClient  httpkit.HTTPClient
+	videoRunner ports.VideoRunner
+	// aiClient は BuildContainer が組んだ Vertex AI クライアントです。ワークフローは
+	// タスクごとに組み直される（シード上書き・ビジュアルモード）ため、ここで都度
+	// 生成すると 1 タスクにつき 1 クライアント、つまり ADC のトークンソース解決まで
+	// やり直すことになります。
+	aiClient     gemini.MultimodalModel
 	visualMode   string
 	seedOverride *characterSeedOverride
 }
 
 // buildWorkflowWithConfig builds orchestrator workflows from an explicit orchestrator config.
 // p.seedOverride が非nilの場合、対象キャラクターのシードのみをこの構築分に限って差し替えます。
-func buildWorkflowWithConfig(ctx context.Context, p workflowBuildParams) (*orchestrator.Workflows, error) {
+// ctx は現在使っていません。Vertex AI クライアントの生成が呼び出し側へ移り、この関数に
+// 残った処理がいずれも I/O を伴わなくなったためです。引数は残してあります（ワークフロー
+// 構築に I/O が戻ったときに、呼び出し側の連鎖を作り直さずに済むように）。
+func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchestrator.Workflows, error) {
 	if p.cfg == nil || p.rio == nil || p.rio.Reader == nil || p.rio.Writer == nil || p.httpClient == nil {
 		return nil, nil
 	}
+	if p.aiClient == nil {
+		return nil, fmt.Errorf("aiClient is required")
+	}
 	p.orchCfg.ApplyDefaults()
 
-	aiClient, err := adapters.NewVertexAIAdapter(ctx, p.cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize gemini client: %w", err)
-	}
 	characters, err := buildCharacters()
 	if err != nil {
 		return nil, err
@@ -92,7 +101,7 @@ func buildWorkflowWithConfig(ctx context.Context, p workflowBuildParams) (*orche
 		HTTPClient:  p.httpClient,
 		Reader:      workflowReader{delegate: p.rio.Reader},
 		Writer:      p.rio.Writer,
-		AIClient:    aiClient,
+		AIClient:    p.aiClient,
 		VideoRunner: p.videoRunner,
 		PromptDeps: &workflow.PromptDeps{
 			Characters:   characters,
