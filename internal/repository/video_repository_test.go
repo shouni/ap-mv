@@ -31,7 +31,7 @@ func (r *fakeHistoryReader) Open(_ context.Context, p string) (io.ReadCloser, er
 	return io.NopCloser(strings.NewReader(r.files[p])), nil
 }
 
-func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error) error {
+func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error, _ ...remoteio.ListOption) error {
 	r.mu.Lock()
 	if r.listCount == nil {
 		r.listCount = map[string]int{}
@@ -340,7 +340,9 @@ func (r notFoundReader) Open(_ context.Context, p string) (io.ReadCloser, error)
 	return io.NopCloser(strings.NewReader(content)), nil
 }
 
-func (r notFoundReader) List(context.Context, string, func(string) error) error { return nil }
+func (r notFoundReader) List(context.Context, string, func(string) error, ...remoteio.ListOption) error {
+	return nil
+}
 
 func (r notFoundReader) Exists(_ context.Context, p string) (bool, error) {
 	_, ok := r.files[p]

@@ -8,30 +8,31 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
+	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/go-gemini-client/veo"
 
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-const cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+// veoHTTPTimeout は Vertex AI への1回の HTTP 呼び出しに許す時間です。
+// 動画生成そのものの待ち時間ではなく（それは veo.Client のポーリングが持ちます）、
+// 投函や進捗確認1回あたりの上限です。
 const veoHTTPTimeout = 30 * time.Second
 
-// VertexVeoRunner は Vertex AI Veo の長時間実行動画生成 API を呼び出す Runner です。
+// VertexVeoRunner は Vertex AI Veo の動画生成を呼び出す Runner です。
+//
+// API 呼び出しとポーリングは go-gemini-client の veo パッケージが持ち、この型は
+// アプリ固有の関心だけを担当します: ジョブ単位の出力先の決定、生成物のジョブ配下
+// 正規パスへのコピー、タスク単位のモデル・アスペクト比の差し替えです。
 type VertexVeoRunner struct {
-	client                   *http.Client
-	videoCopier              videoCopier
-	projectID                string
-	locationID               string
-	model                    string
-	outputStorageURI         string
-	aspectRatio              string
-	generateAudio            bool
-	pollInterval             time.Duration
-	operationTimeout         time.Duration
-	maxPollConsecutiveErrors int
-	usePreviousVideo         bool
+	videos           *veo.Client
+	videoCopier      videoCopier
+	model            string
+	outputStorageURI string
+	aspectRatio      string
+	generateAudio    bool
+	usePreviousVideo bool
 }
 
 // Close は正規動画パスへのコピーに使う GCS クライアントを解放します。
@@ -49,8 +50,8 @@ func (r *VertexVeoRunner) Close() error {
 
 // NewVertexVeoRunner はアプリケーション設定から VertexVeoRunner を生成します。
 //
-// Vertex AI リクエスト用の Google ADC 認証と、Veo の一時出力パスから
-// ジョブ配下の正規パスへ動画をコピーするための GCS クライアントを初期化します。
+// Vertex AI の認証（ADC）とリトライは gemini.Client が持ちます。GCS クライアントは
+// Veo の一時出力パスからジョブ配下の正規パスへ動画をコピーするために別途持ちます。
 func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunner, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -68,45 +69,41 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config) (*VertexVeoRunn
 	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
 		return nil, fmt.Errorf("AP_MV_BUCKET is required")
 	}
-	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
+
+	aiClient, err := gemini.NewClient(ctx, gemini.Config{
+		ProjectID:  strings.TrimSpace(cfg.GCP.ProjectID),
+		LocationID: locationID,
+		HTTPClient: &http.Client{Timeout: veoHTTPTimeout},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("create Google ADC token source: %w", err)
+		return nil, fmt.Errorf("create Vertex AI client: %w", err)
+	}
+	videos, err := veo.New(aiClient,
+		veo.WithPollInterval(cfg.AI.VeoPollInterval),
+		veo.WithPollTimeout(cfg.AI.VeoOperationTimeout),
+		veo.WithMaxPollErrors(cfg.AI.VeoPollMaxErrors),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create Veo client: %w", err)
 	}
 	storageClient, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create GCS client: %w", err)
 	}
 
-	pollInterval := cfg.AI.VeoPollInterval
-	operationTimeout := cfg.AI.VeoOperationTimeout
-	model := strings.TrimSpace(cfg.AI.VeoModel)
-	aspectRatio := strings.TrimSpace(cfg.AI.VeoAspectRatio)
-
-	baseClient := &http.Client{Timeout: veoHTTPTimeout}
-	ctxWithClient := context.WithValue(ctx, oauth2.HTTPClient, baseClient)
-
-	maxPollConsecutiveErrors := cfg.AI.VeoPollMaxErrors
-	if maxPollConsecutiveErrors <= 0 {
-		maxPollConsecutiveErrors = 10
-	}
 	return &VertexVeoRunner{
-		client:                   oauth2.NewClient(ctxWithClient, ts),
-		videoCopier:              &gcsVideoCopier{client: storageClient},
-		projectID:                strings.TrimSpace(cfg.GCP.ProjectID),
-		locationID:               locationID,
-		model:                    model,
-		outputStorageURI:         buildVeoOutputStorageURI(cfg.Storage.GCSBucket, cfg.AI.VeoOutputPrefix),
-		aspectRatio:              aspectRatio,
-		generateAudio:            cfg.AI.VeoGenerateAudio,
-		pollInterval:             pollInterval,
-		operationTimeout:         operationTimeout,
-		maxPollConsecutiveErrors: maxPollConsecutiveErrors,
-		usePreviousVideo:         cfg.AI.VeoUsePreviousVideo,
+		videos:           videos,
+		videoCopier:      &gcsVideoCopier{client: storageClient},
+		model:            strings.TrimSpace(cfg.AI.VeoModel),
+		outputStorageURI: buildVeoOutputStorageURI(cfg.Storage.GCSBucket, cfg.AI.VeoOutputPrefix),
+		aspectRatio:      strings.TrimSpace(cfg.AI.VeoAspectRatio),
+		generateAudio:    cfg.AI.VeoGenerateAudio,
+		usePreviousVideo: cfg.AI.VeoUsePreviousVideo,
 	}, nil
 }
 
 // WithVideoOptions は、モデルとアスペクト比だけを差し替えた派生 Runner を返します。
-// HTTP クライアントや GCS クライアントは共有するため、タスク単位で安全に呼び出せます。
+// veo クライアントや GCS クライアントは共有するため、タスク単位で安全に呼び出せます。
 // 空文字の指定は元の設定値を維持します。
 func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.VideoRunner {
 	model = strings.TrimSpace(model)
@@ -124,44 +121,42 @@ func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.Vide
 	return &derived
 }
 
-// Run は Veo の動画生成オペレーションを開始し、完了まで待って生成動画のメタデータを返します。
+// Run は Veo の動画生成を実行し、完了後に生成動画のメタデータを返します。
 func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	if err := validateVertexVeoRequest(req); err != nil {
 		return nil, err
 	}
-	runCtx, cancel := context.WithTimeout(ctx, r.operationTimeout)
-	defer cancel()
 
-	op, err := r.startOperation(runCtx, req)
+	result, err := r.videos.Generate(ctx, r.model, r.buildRequest(ctx, req))
+	if err != nil {
+		return nil, fmt.Errorf("generate cut %d: %w", req.CutIndex, err)
+	}
+	video, ok := result.First()
+	if !ok {
+		return nil, fmt.Errorf("cut %d の生成結果に動画が含まれていません（operation: %s）", req.CutIndex, result.OperationName)
+	}
+
+	cloudURL, err := r.canonicalizeGeneratedVideo(ctx, req, video.URI)
 	if err != nil {
 		return nil, err
 	}
-	done, err := r.waitOperation(runCtx, op.Name)
-	if err != nil {
-		return nil, err
-	}
-	video, err := firstGeneratedVideo(done)
-	if err != nil {
-		return nil, err
-	}
-	video, err = r.canonicalizeGeneratedVideo(runCtx, req, video)
-	if err != nil {
-		return nil, err
-	}
-	videoID := video.GCSURI
+
+	// VideoID は次カットの PreviousVideoID として使うため、参照可能な GCS URI を
+	// 優先する。URI が無い（インライン返却）場合だけオペレーション名へ退避する。
+	videoID := cloudURL
 	if videoID == "" {
-		videoID = op.Name
+		videoID = result.OperationName
 	}
-	mimeType := video.MimeType
+	mimeType := video.MIMEType
 	if mimeType == "" {
 		mimeType = "video/mp4"
 	}
 	return &ports.VideoResponse{
-		CloudURL:    video.GCSURI,
+		CloudURL:    cloudURL,
 		VideoID:     videoID,
 		CutIndex:    req.CutIndex,
 		DurationSec: req.DurationSec,
 		MimeType:    mimeType,
-		SizeBytes:   video.SizeBytes,
+		SizeBytes:   int64(len(video.Data)),
 	}, nil
 }

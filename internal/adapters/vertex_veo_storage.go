@@ -51,25 +51,26 @@ func buildVeoCanonicalVideoURI(baseURI string, cutIndex int) string {
 	return fmt.Sprintf("%s/videos/cut_%02d.mp4", baseURI, cutIndex)
 }
 
-// canonicalizeGeneratedVideo はベース URI がある場合、生成動画をジョブ配下の安定したパスへコピーします。
-func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req ports.VideoGenerationRequest, video vertexVideo) (vertexVideo, error) {
-	if r == nil || r.videoCopier == nil || strings.TrimSpace(video.GCSURI) == "" {
-		return video, nil
+// canonicalizeGeneratedVideo は、ベース URI がある場合に生成動画をジョブ配下の安定した
+// パスへコピーし、その URI を返します。Veo の出力先はカット単位の一時ディレクトリなので、
+// メタデータへ残す URI と後段の結合処理が参照する URI を固定するための処理です。
+// コピー対象が無い場合は sourceURI をそのまま返します。
+func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req ports.VideoGenerationRequest, sourceURI string) (string, error) {
+	sourceURI = strings.TrimSpace(sourceURI)
+	if r == nil || r.videoCopier == nil || sourceURI == "" {
+		return sourceURI, nil
 	}
 	baseURI, ok := ports.VideoOutputBaseURIFromContext(ctx)
 	if !ok {
-		return video, nil
+		return sourceURI, nil
 	}
 	targetURI := buildVeoCanonicalVideoURI(baseURI, req.CutIndex)
-	if targetURI == "" || targetURI == video.GCSURI {
-		return video, nil
+	if targetURI == "" || targetURI == sourceURI {
+		return sourceURI, nil
 	}
-	sourceURI := video.GCSURI
 	if err := r.videoCopier.Copy(ctx, sourceURI, targetURI); err != nil {
-		return vertexVideo{}, fmt.Errorf("copy generated video to canonical path: %w", err)
+		return "", fmt.Errorf("copy generated video to canonical path: %w", err)
 	}
-	video.GCSURI = targetURI
-	video.URI = targetURI
 	if err := r.videoCopier.Delete(ctx, sourceURI); err != nil {
 		slog.WarnContext(ctx, "failed to delete temporary Veo video after canonical copy",
 			"source_uri", sourceURI,
@@ -77,7 +78,7 @@ func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req po
 			"error", err,
 		)
 	}
-	return video, nil
+	return targetURI, nil
 }
 
 type videoCopier interface {
