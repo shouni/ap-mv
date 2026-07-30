@@ -152,9 +152,16 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			}
 		}
 		lastVideoID = cut.VideoID
-		// 継続タスクのエンキューに失敗した場合、Cloud Tasks は元のタスクを再試行する。
-		// 再試行時には直前の続きタスクのペイロード（このカットはまだ pending）から再開するため、
-		// カットが再生成される可能性があるが、状態の整合性は保たれる。
+		// 継続タスクのエンキューに失敗した場合、このジョブはここで止まる。キューは
+		// max-attempts=1 で運用しており、失敗したタスクは再配信されないため、残りの
+		// カットを生成する担い手がいなくなる（成果物が出てこないことで気付く）。
+		// 生成済みカットの状態は保存済みなので、同じレシピを投げ直せば
+		// Cut.IsGenerated() のカットはスキップされ、途中から再開できる。
+		//
+		// 検証中は、一時的な失敗が再試行に隠れて systematic なバグを見落とすことと、
+		// 失敗したカットの再生成が Veo の課金をそのまま倍にすることを避けるため、
+		// この「止まる」挙動を選んでいる。定常運用へ移すときに max-attempts を
+		// 増やせば、ここは自動で再開されるようになる。
 		if hasPendingCuts(fc.VideoRecipe) && fc.TaskQueue != nil {
 			return enqueueContinuation(ctx, fc, cut.CutIndex)
 		}
