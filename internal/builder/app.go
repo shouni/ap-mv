@@ -29,7 +29,15 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		}
 	}()
 
-	videoRunner, err := adapters.NewVertexVeoRunner(ctx, cfg)
+	// Vertex AI クライアントはここで一度だけ組み、動画生成とテキスト/画像生成の
+	// 双方へ渡す。以前は両者が別々に生成しており、リージョンやリトライ設定が
+	// 片方だけ変更されて食い違う余地があった。
+	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Vertex AI client: %w", err)
+	}
+
+	videoRunner, err := adapters.NewVertexVeoRunner(ctx, cfg, aiClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize video runner: %w", err)
 	}
@@ -68,7 +76,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
-	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, pipelineExternals{
+	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, aiClient, pipelineExternals{
 		notifier:          notifier,
 		taskQueue:         queue,
 		historyRepository: historyRepository,
