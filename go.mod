@@ -11,7 +11,7 @@ require (
 	github.com/shouni/gcp-kit v1.5.0
 	github.com/shouni/gemini-image-kit v1.12.1
 	github.com/shouni/go-character-kit v1.0.11
-	github.com/shouni/go-gemini-client v1.16.1
+	github.com/shouni/go-gemini-client v1.16.2
 	github.com/shouni/go-http-kit v1.7.2
 	github.com/shouni/go-notifier v1.3.3
 	github.com/shouni/go-prompt-kit v1.2.0

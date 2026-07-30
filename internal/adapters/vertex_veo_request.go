@@ -2,58 +2,77 @@ package adapters
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"math"
 	"net/http"
 	"strings"
 
+	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/go-gemini-client/veo"
+
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// buildGenerateBody は内部の動画生成リクエストを Vertex AI Veo のリクエスト本文へ変換します。
-// どの生成機能（video / referenceImages / image+lastFrame / image）でリクエストを組むかは
-// ports.ClassifyVeoRequest に一本化されており、filter 側のプロンプト・尺選択と構造的に
-// 一致します（Veo は video / referenceImages / image を同一リクエストで併用できません）。
-func (r *VertexVeoRunner) buildGenerateBody(ctx context.Context, req ports.VideoGenerationRequest) map[string]any {
-	instance := map[string]any{
-		"prompt": strings.TrimSpace(req.Prompt),
-	}
-	switch ports.ClassifyVeoRequest(req, r.usePreviousVideo, r.capabilities()) {
-	case ports.VeoModeVideoExtension:
-		instance["video"] = previousVideoMedia(req.PreviousVideoID)
-	case ports.VeoModeReferenceToVideo:
-		instance["referenceImages"] = referenceImagesMedia(req)
-	case ports.VeoModeFramesToVideo:
-		instance["image"] = imageMedia(req)
-		instance["lastFrame"] = lastFrameMedia(req)
-	case ports.VeoModeImageToVideo:
-		// 画像参照が一切ないリクエスト（テキストのみ）も image_to_video に分類される
-		// ため、image は存在するときだけ送る。
-		if media := imageMedia(req); media != nil {
-			instance["image"] = media
-		}
-	}
-	if media := audioMedia(req); media != nil {
-		instance["audio"] = media
-	}
-
-	parameters := map[string]any{
-		"storageUri":      r.outputStorageURIFor(ctx, req),
-		"sampleCount":     1,
-		"durationSeconds": int(math.Round(req.DurationSec)),
-		"generateAudio":   r.generateAudio,
-	}
-	if r.aspectRatio != "" {
-		parameters["aspectRatio"] = r.aspectRatio
+// buildRequest は内部の動画生成リクエストを veo パッケージのリクエストへ変換します。
+// どの生成機能（video / referenceImages / image+lastFrame / image）で組むかは
+// ports.ClassifyVeoRequest に一本化されており、filter 側のプロンプト・尺選択と
+// 構造的に一致します（Veo は video / referenceImages / image を同一リクエストで
+// 併用できません）。
+func (r *VertexVeoRunner) buildRequest(ctx context.Context, req ports.VideoGenerationRequest) veo.Request {
+	out := veo.Request{
+		Prompt:        strings.TrimSpace(req.Prompt),
+		DurationSec:   int(math.Round(req.DurationSec)),
+		AspectRatio:   r.aspectRatio,
+		GenerateAudio: &r.generateAudio,
+		OutputGCSURI:  r.outputStorageURIFor(ctx, req),
 	}
 	if req.Seed != 0 {
-		parameters["seed"] = req.Seed
+		seed := req.Seed
+		out.Seed = &seed
 	}
 
-	return map[string]any{
-		"instances":  []any{instance},
-		"parameters": parameters,
+	switch ports.ClassifyVeoRequest(req, r.usePreviousVideo, r.capabilities()) {
+	case ports.VeoModeVideoExtension:
+		out.Video = previousVideoMedia(req.PreviousVideoID)
+	case ports.VeoModeReferenceToVideo:
+		out.References = referenceImagesMedia(req)
+	case ports.VeoModeFramesToVideo:
+		out.Image = imageMedia(req)
+		out.LastFrame = lastFrameMedia(req)
+	case ports.VeoModeImageToVideo:
+		// 画像参照が一切ないリクエスト（テキストのみ）も image_to_video に分類される
+		// ため、image は存在するときだけ設定する。
+		out.Image = imageMedia(req)
+	}
+
+	if audio := audioMedia(req); audio != nil {
+		out.ModifyRequestBody = injectAudioInstance(*audio)
+	}
+	return out
+}
+
+// injectAudioInstance は、組み立て済みリクエストボディの instances[0] へ音声入力を
+// 差し込むフックを返します。
+//
+// SDK は動画生成の音声入力を型として持っていないため、ボディを直接書き換えます。
+// ExtraBody ではこの位置へ届きません（マージがマップ同士でしか再帰せず、instances は
+// 配列なので丸ごと置き換わり、prompt や画像入力が消えます）。
+//
+// なお、この audio 入力を Veo が実際に解釈しているかは未検証です。公式の SDK にも
+// 対応するフィールドが無いため、無視されている可能性があります。1カットで有無を
+// 比較して確かめた上で、効果が無ければこの経路ごと削除してください。
+func injectAudioInstance(audio map[string]any) func(map[string]any) map[string]any {
+	return func(body map[string]any) map[string]any {
+		instances, ok := body["instances"].([]any)
+		if !ok || len(instances) == 0 {
+			return body
+		}
+		instance, ok := instances[0].(map[string]any)
+		if !ok {
+			return body
+		}
+		instance["audio"] = audio
+		return body
 	}
 }
 
@@ -107,82 +126,62 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 	if req.DurationSec <= 0 {
 		return fmt.Errorf("duration_sec must be positive")
 	}
-	if req.Seed < 0 || req.Seed > math.MaxUint32 {
-		return fmt.Errorf("seed must be between 0 and %d", math.MaxUint32)
+	if req.Seed < 0 || req.Seed > math.MaxInt32 {
+		return fmt.Errorf("seed must be between 0 and %d", math.MaxInt32)
 	}
 	return nil
 }
 
-// referenceImagesMedia は ReferenceImages から Veo の referenceImages payload を組み立てます。
+// referenceImagesMedia は ReferenceImages から Veo の参照画像リストを組み立てます。
 // URI が空のものは除外し、結果が0件の場合は nil を返します。
-func referenceImagesMedia(req ports.VideoGenerationRequest) []map[string]any {
-	if len(req.ReferenceImages) == 0 {
-		return nil
-	}
-	var result []map[string]any
+func referenceImagesMedia(req ports.VideoGenerationRequest) []veo.Reference {
+	var result []veo.Reference
 	for _, uri := range req.ReferenceImages {
 		if uri = strings.TrimSpace(uri); uri == "" {
 			continue
 		}
-		result = append(result, map[string]any{
-			"image": map[string]any{
-				"gcsUri":   uri,
-				"mimeType": mimeTypeFromURI(uri, "image/png"),
-			},
-			"referenceType": "asset",
+		result = append(result, veo.Reference{
+			Image: veo.Media{URI: uri, MIMEType: mimeTypeFromURI(uri, "image/png")},
+			Type:  gemini.VideoReferenceAsset,
 		})
-	}
-	if len(result) == 0 {
-		return nil
 	}
 	return result
 }
 
-// imageMedia は GCS 画像参照またはインライン画像バイト列から Veo の画像入力 payload を組み立てます。
-func imageMedia(req ports.VideoGenerationRequest) map[string]any {
+// imageMedia は GCS 画像参照またはインライン画像バイト列から Veo の画像入力を組み立てます。
+func imageMedia(req ports.VideoGenerationRequest) *veo.Media {
 	if ref := strings.TrimSpace(req.ImageReference); ref != "" {
-		return map[string]any{
-			"gcsUri":   ref,
-			"mimeType": mimeTypeFromURI(ref, "image/png"),
-		}
+		return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "image/png")}
 	}
 	if len(req.InputImage) == 0 {
 		return nil
 	}
-	return map[string]any{
-		"bytesBase64Encoded": base64.StdEncoding.EncodeToString(req.InputImage),
-		"mimeType":           detectedImageMimeType(req.InputImage),
-	}
+	return &veo.Media{Data: req.InputImage, MIMEType: detectedImageMimeType(req.InputImage)}
 }
 
-// lastFrameMedia は LastFrameReference から Veo の lastFrame（終了フレーム）payload を組み立てます。
-func lastFrameMedia(req ports.VideoGenerationRequest) map[string]any {
+// lastFrameMedia は LastFrameReference から Veo の終了フレーム入力を組み立てます。
+func lastFrameMedia(req ports.VideoGenerationRequest) *veo.Media {
 	ref := strings.TrimSpace(req.LastFrameReference)
 	if ref == "" {
 		return nil
 	}
-	return map[string]any{
-		"gcsUri":   ref,
-		"mimeType": mimeTypeFromURI(ref, "image/png"),
-	}
+	return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "image/png")}
 }
 
-// previousVideoMedia は前回生成動画の GCS URI から Veo の動画継続 payload を組み立てます。
-func previousVideoMedia(previousVideoID string) map[string]any {
+// previousVideoMedia は前回生成動画の GCS URI から Veo の動画継続入力を組み立てます。
+func previousVideoMedia(previousVideoID string) *veo.Media {
 	ref := strings.TrimSpace(previousVideoID)
 	if !strings.HasPrefix(ref, "gs://") {
 		return nil
 	}
-	return map[string]any{
-		"gcsUri":   ref,
-		"mimeType": mimeTypeFromURI(ref, "video/mp4"),
-	}
+	return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "video/mp4")}
 }
 
-// audioMedia は GCS 音声参照またはインライン音声バイト列から Veo の音声入力 payload を組み立てます。
-func audioMedia(req ports.VideoGenerationRequest) map[string]any {
+// audioMedia は GCS 音声参照またはインライン音声バイト列から Veo の音声入力 payload を
+// 組み立てます。SDK が型を持たないため、生のマップのまま扱います。
+func audioMedia(req ports.VideoGenerationRequest) *map[string]any {
 	if ref := strings.TrimSpace(req.AudioReference); ref != "" {
-		return map[string]any{
+		return &map[string]any{
 			"gcsUri":   ref,
 			"mimeType": mimeTypeFromURI(ref, "audio/mpeg"),
 		}
@@ -190,8 +189,8 @@ func audioMedia(req ports.VideoGenerationRequest) map[string]any {
 	if len(req.InputAudio) == 0 {
 		return nil
 	}
-	return map[string]any{
-		"bytesBase64Encoded": base64.StdEncoding.EncodeToString(req.InputAudio),
+	return &map[string]any{
+		"bytesBase64Encoded": req.InputAudio,
 		"mimeType":           detectedAudioMimeType(req.InputAudio),
 	}
 }
