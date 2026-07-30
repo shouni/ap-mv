@@ -45,6 +45,20 @@ steps:
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--memory=4Gi'
+      # 第2世代: ffmpeg（静的バイナリを exec）のデコード・エンコードと、GCS との
+      # 動画の往復が処理の大半を占める。第1世代の gVisor はシステムコール介在の
+      # オーバーヘッドが I/O 主体の処理で効いてくる上、Linux 互換も部分的。
+      # 引き換えのコールドスタート増は、1リクエストが数分かかる本サービスでは誤差。
+      - '--execution-environment=gen2'
+      # VEO_OPERATION_TIMEOUT=20m / PIPELINE_TIMEOUT=45m を包含できる上限。
+      # 既定の 300 秒だと、生成が5分を超えたカットでリクエストが打ち切られる。
+      # Veo 側の生成は完走するため video_id を記録できず、Cloud Tasks の再配信で
+      # 同じカットを生成し直すことになる（成功した生成がそのまま課金される）。
+      - '--timeout=3600'
+      # Cloud Run の /tmp はインメモリで、ffmpeg が落としてくる動画がそのまま
+      # メモリ上限（4Gi）を消費する。既定の 80 並列は同時に数本重なった時点で
+      # OOM になる。1ジョブ内の生成は逐次なので、これは並行ジョブ数の上限。
+      - '--concurrency=5'
       - '--update-env-vars'
       - '^|^GCP_PROJECT_ID=${PROJECT_ID}|GCP_LOCATION_ID=${_REGION}|GEMINI_MODELS=${_GEMINI_MODELS}|IMAGE_MODELS=${_IMAGE_MODELS}|VEO_MODEL=${_VEO_MODEL}|VEO_MODELS=${_VEO_MODELS}|VEO_OUTPUT_PREFIX=${_VEO_OUTPUT_PREFIX}'
 
