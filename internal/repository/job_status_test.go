@@ -30,7 +30,9 @@ func (s *statusIO) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(body)), nil
 }
 
-func (s *statusIO) List(context.Context, string, func(string) error) error { return nil }
+func (s *statusIO) List(context.Context, string, func(string) error, ...remoteio.ListOption) error {
+	return nil
+}
 
 func (s *statusIO) Exists(_ context.Context, path string) (bool, error) {
 	_, ok := s.objects[path]
