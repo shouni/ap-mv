@@ -17,6 +17,10 @@ import (
 // 動画生成を伴わないコマンド（画像のみ生成するパス）には含まれません。
 type ChainFinalizeFilter struct {
 	VideoProcessor ports.VideoProcessor
+	// UsePreviousVideo は VideoGenerationFilter.UsePreviousVideo と一致させます。
+	// false のときはカットが video-to-video で繋がらず、IsChainStart も立たないため、
+	// 結合対象の選び方が変わります（chainEndVideoURLs 参照）。
+	UsePreviousVideo bool
 }
 
 // Name returns the receiver name.
@@ -30,7 +34,7 @@ func (f ChainFinalizeFilter) Execute(ctx context.Context, fc *Context) error {
 	if f.VideoProcessor == nil {
 		return nil
 	}
-	chainEndURLs := chainEndVideoURLs(fc.VideoRecipe.Cuts)
+	chainEndURLs := chainEndVideoURLs(fc.VideoRecipe.Cuts, f.UsePreviousVideo)
 	if len(chainEndURLs) == 0 {
 		return nil
 	}
@@ -89,13 +93,21 @@ func expectedDurationSeconds(recipe *orchestrator.VideoRecipe) float64 {
 	return recipe.Cuts[len(recipe.Cuts)-1].EndSec
 }
 
-// chainEndVideoURLs は各継続チェーンの最終カットのVideoURLを、チェーンの登場順に返します。
-// 「次のカットがチェーンの新規起点(IsChainStart)、または自身が最終カット」の位置を
-// チェーン境界として判定します（video_gen.goのIsChainStartマーキングと対）。
-func chainEndVideoURLs(cuts []orchestrator.Cut) []string {
+// chainEndVideoURLs は結合すべき動画のURLを、カットの登場順に返します。
+//
+// usePreviousVideo が true のとき、カットは video-to-video で数珠つなぎに生成され、
+// チェーンの最終カットの動画がそのチェーン全体を含みます。そのため結合対象は各チェーンの
+// 最終カットだけで、「次のカットがチェーンの新規起点(IsChainStart)、または自身が最終カット」
+// の位置をチェーン境界として判定します（video_gen.goのIsChainStartマーキングと対）。
+//
+// usePreviousVideo が false のときはチェーンが存在せず、各カットが自身のキーフレームから
+// 独立に生成された8秒前後のクリップです。IsChainStart を立てる経路も usePreviousVideo の
+// 内側にあるため誰にも印が付きません。この判定を共有すると境界が最終カットだけになり、
+// 完成動画が末尾1カットぶんに縮みます。ここでは全カットが結合対象です。
+func chainEndVideoURLs(cuts []orchestrator.Cut, usePreviousVideo bool) []string {
 	var urls []string
 	for i, cut := range cuts {
-		isBoundary := i == len(cuts)-1 || cuts[i+1].IsChainStart
+		isBoundary := !usePreviousVideo || i == len(cuts)-1 || cuts[i+1].IsChainStart
 		if isBoundary && strings.TrimSpace(cut.VideoURL) != "" {
 			urls = append(urls, cut.VideoURL)
 		}

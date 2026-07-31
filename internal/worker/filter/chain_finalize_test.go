@@ -21,7 +21,7 @@ func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 		{CutIndex: 4, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_4.mp4"}},
 		{CutIndex: 5, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_5.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
 	}
-	got := chainEndVideoURLs(cuts)
+	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_4.mp4", "gs://bucket/cut_5.mp4"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
@@ -34,10 +34,76 @@ func TestChainEndVideoURLsSingleChain(t *testing.T) {
 		{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
 		{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
 	}
-	got := chainEndVideoURLs(cuts)
+	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_2.mp4"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
+	}
+}
+
+// TestChainEndVideoURLsJoinsEveryCutWithoutChaining verifies that with VEO_USE_PREVIOUS_VIDEO
+// off every cut is concatenated. Cuts are then generated independently from their own keyframes
+// and no cut contains the ones before it, so taking only chain ends would drop all but the last.
+// IsChainStart is never set in that mode either (video_gen.go marks it inside a UsePreviousVideo
+// branch), which is what made the finished video collapse to a single cut.
+func TestChainEndVideoURLsJoinsEveryCutWithoutChaining(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}},
+		{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
+		{CutIndex: 3, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_3.mp4"}},
+		{CutIndex: 4, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_4.mp4"}},
+	}
+	got := chainEndVideoURLs(cuts, false)
+	want := []string{
+		"gs://bucket/cut_1.mp4",
+		"gs://bucket/cut_2.mp4",
+		"gs://bucket/cut_3.mp4",
+		"gs://bucket/cut_4.mp4",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("chainEndVideoURLs() = %v, want every cut %v", got, want)
+	}
+}
+
+// TestChainEndVideoURLsIgnoresChainStartWithoutChaining verifies that a stale IsChainStart left
+// on a recipe by an earlier chained run does not shrink the result once chaining is off. The two
+// modes disagree about what the marker means, so the mode decides, not the persisted flag.
+func TestChainEndVideoURLsIgnoresChainStartWithoutChaining(t *testing.T) {
+	cuts := []orchestrator.Cut{
+		{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: orchestrator.ChainControl{IsChainStart: true}},
+		{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
+	}
+	got := chainEndVideoURLs(cuts, false)
+	want := []string{"gs://bucket/cut_1.mp4", "gs://bucket/cut_2.mp4"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
+	}
+}
+
+// TestChainFinalizeFilterConcatsEveryCutWithoutChaining verifies the wiring end to end: the
+// filter, not just the helper, joins all cuts when it is told chaining is off.
+func TestChainFinalizeFilterConcatsEveryCutWithoutChaining(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		Cuts: []orchestrator.Cut{
+			{CutIndex: 1, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_1.mp4"}},
+			{CutIndex: 2, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_2.mp4"}},
+			{CutIndex: 3, VideoResult: orchestrator.VideoResult{VideoURL: "gs://bucket/cut_3.mp4"}},
+		},
+	}
+	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
+
+	err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), &Context{
+		State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(vp.concatCalls) != 1 {
+		t.Fatalf("ConcatHardCut calls = %d, want 1", len(vp.concatCalls))
+	}
+	want := []string{"gs://bucket/cut_1.mp4", "gs://bucket/cut_2.mp4", "gs://bucket/cut_3.mp4"}
+	if !reflect.DeepEqual(vp.concatCalls[0].videoURIs, want) {
+		t.Fatalf("ConcatHardCut videoURIs = %v, want every cut %v", vp.concatCalls[0].videoURIs, want)
 	}
 }
 
@@ -52,7 +118,7 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 		},
 	}
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
-	flt := ChainFinalizeFilter{VideoProcessor: vp}
+	flt := ChainFinalizeFilter{VideoProcessor: vp, UsePreviousVideo: true}
 
 	err := flt.Execute(context.Background(), &Context{
 		State: State{
