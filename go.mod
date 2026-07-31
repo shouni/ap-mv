@@ -17,7 +17,7 @@ require (
 	github.com/shouni/go-prompt-kit v1.2.0
 	github.com/shouni/go-remote-io v1.7.2
 	github.com/shouni/go-utils v1.3.0
-	github.com/shouni/go-veo-orchestrator v1.9.0
+	github.com/shouni/go-veo-orchestrator v1.9.2
 	github.com/shouni/netarmor v1.2.0
 	golang.org/x/sync v0.22.0
 )
