@@ -27,6 +27,11 @@ const (
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
 	// CommandRegenerateCutKeyframe は、指定カットのキーフレームを再生成するコマンドです。
 	CommandRegenerateCutKeyframe TaskCommand = "regenerate_cut_keyframe"
+	// CommandRegenerateSectionKeyframes は、指定セクションに属する全カットのキーフレームを
+	// まとめて再生成するコマンドです。1カットずつ焼き直すと、scene_split が付けたセクション内の
+	// 役割分担（establishing / transition といった scene beat）が片方だけ新しい絵になって
+	// 崩れるため、セクション単位でまとめて焼き直せるようにしています。
+	CommandRegenerateSectionKeyframes TaskCommand = "regenerate_section_keyframes"
 	// CommandRegenerateZip は、キーフレームZIPを再生成するコマンドです。
 	CommandRegenerateZip TaskCommand = "regenerate_zip"
 	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
@@ -55,7 +60,8 @@ type Task struct {
 	CharacterID string `json:"character_id,omitempty"`
 	// CutIndex は再生成対象のカットインデックスです（regenerate_cut_keyframe コマンド専用）。
 	CutIndex *int `json:"cut_index,omitempty"`
-	// SectionIndex は動画化対象のセクション配列インデックス（0始まり）です（short_video_from_section コマンド専用）。
+	// SectionIndex は対象のセクション配列インデックス（0始まり）です
+	// （short_video_from_section = 動画化対象 / regenerate_section_keyframes = 再生成対象）。
 	// セクション名はサビ等で重複しうるため、名前ではなくインデックスで指定します。
 	SectionIndex *int `json:"section_index,omitempty"`
 	// VeoModel が空でないとき、動画生成に使う Veo モデルをタスク単位で差し替えます。
@@ -66,21 +72,27 @@ type Task struct {
 	// （動画生成・カット再生成）では、ハンドラが記録済みの VideoRecipe.AspectRatio を
 	// そのままここへ設定し直すため、キーフレームと動画のアスペクト比が常に一致します。
 	VeoAspectRatio string `json:"veo_aspect_ratio,omitempty"`
-	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします（regenerate_cut_keyframe コマンド専用）。
+	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします
+	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
 	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
-	// OriginalJobID は、再生成タスクの結果が実際に書き込まれる元ジョブのIDです（regenerate_cut_keyframe / regenerate_zip コマンド専用）。
+	// OriginalJobID は、再生成タスクの結果が実際に書き込まれる元ジョブのIDです
+	// （regenerate_cut_keyframe / regenerate_section_keyframes / regenerate_zip コマンド専用）。
 	// JobID は新規生成されたタスク自身のIDのため、通知等で参照先の History Detail を示すにはこちらを使います。
 	OriginalJobID string `json:"original_job_id,omitempty"`
 	// VisualAnchorOverride が空でないとき、再生成対象カットのビジュアルアンカー（プロンプト文言）をこの値に差し替えます（regenerate_cut_keyframe コマンド専用）。
+	// カットごとに異なる文言を持つ値のため、セクション一括再生成では受け付けません。
 	// EditPrompt が指定されている場合はそちらが優先され、VisualAnchorOverride は無視されます。
 	VisualAnchorOverride string `json:"visual_anchor_override,omitempty"`
 	// EditPrompt が空でないとき、フル再生成ではなく既存キーフレーム画像を編集する「編集モード」になります
-	// （regenerate_cut_keyframe コマンド専用）。構図・ポーズ・背景は保ったまま、この指示内容だけを反映します。
+	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。構図・ポーズ・背景は保ったまま、
+	// この指示内容だけを反映します。セクション対象の場合は同じ指示を各カットへ順に適用します。
 	EditPrompt string `json:"edit_prompt,omitempty"`
-	// SeedOverride が非nilのとき、再生成に使うキャラクターシードを一時的にこの値へ差し替えます（regenerate_cut_keyframe コマンド専用）。
+	// SeedOverride が非nilのとき、再生成に使うキャラクターシードを一時的にこの値へ差し替えます
+	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
 	SeedOverride *int64 `json:"seed_override,omitempty"`
 	// SeedOverrideCharacterID は、SeedOverride を適用する対象キャラクターIDです。
-	// ハンドラーが再生成対象カットの既存 CharacterID を解決して設定します（regenerate_cut_keyframe コマンド専用）。
+	// ハンドラーが再生成対象カットの既存 CharacterID を解決して設定します
+	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
 	SeedOverrideCharacterID string `json:"seed_override_character_id,omitempty"`
 	// ASSPrimaryColor は歌唱済みシラブルの色（CSS hex, e.g. "#FFFF00"）。空のときはデフォルト黄色。
 	ASSPrimaryColor string `json:"ass_primary_color,omitempty"`
@@ -139,6 +151,19 @@ func (t *Task) Validate() error {
 		}
 		if t.CutIndex == nil {
 			return fmt.Errorf("%s task requires cut_index", t.Command)
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
+			return err
+		}
+	case CommandRegenerateSectionKeyframes:
+		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+		}
+		if t.SectionIndex == nil || *t.SectionIndex < 0 {
+			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
 		}
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err

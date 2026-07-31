@@ -82,6 +82,7 @@ type PageData struct {
 	HistoryDetail         domain.VideoHistoryDetail
 	PageMeta              domain.PageMeta
 	RegenerateCut         domain.VideoHistoryCut
+	RegenerateSection     domain.VideoHistorySectionGroup
 	RegenerateSeedDefault string
 	LatestVideo           *HomeLatestVideo
 }
@@ -108,6 +109,7 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"history.html",
 		"history_detail.html",
 		"regenerate_cut.html",
+		"regenerate_section.html",
 		"queued.html",
 	} {
 		tmpl, err := template.New(name).Funcs(template.FuncMap{

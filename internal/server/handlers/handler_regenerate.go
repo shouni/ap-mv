@@ -40,6 +40,61 @@ func parseJobIDAndCutIndex(r *http.Request) (jobID string, cutIndex int, err err
 	return jobID, cutIndex, nil
 }
 
+// parseJobIDAndSectionIndex reads and validates the jobID and sectionIndex URL params shared by
+// the section regenerate form page and its submit handler. sectionIndex is the 0-based index into
+// the recipe's section list, matching domain.Task.SectionIndex.
+func parseJobIDAndSectionIndex(r *http.Request) (jobID string, sectionIndex int, err error) {
+	jobID = strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err = jobid.Validate(jobID); err != nil {
+		return "", 0, err
+	}
+	sectionIndex, err = strconv.Atoi(strings.TrimSpace(chi.URLParam(r, "sectionIndex")))
+	if err != nil || sectionIndex < 0 {
+		return "", 0, errors.New("invalid section_index")
+	}
+	return jobID, sectionIndex, nil
+}
+
+// findHistorySectionGroup returns the section and its cuts for sectionIndex, or false when the
+// recipe has no such section. SectionGroups() aligns with the recipe's section order (plus a
+// trailing group for cuts outside every section), so indexing is only valid within Sections.
+func findHistorySectionGroup(history domain.VideoHistoryDetail, sectionIndex int) (domain.VideoHistorySectionGroup, bool) {
+	if sectionIndex < 0 || sectionIndex >= len(history.Sections) {
+		return domain.VideoHistorySectionGroup{}, false
+	}
+	groups := history.SectionGroups()
+	if sectionIndex >= len(groups) {
+		return domain.VideoHistorySectionGroup{}, false
+	}
+	return groups[sectionIndex], true
+}
+
+// applySeedOverride reads the optional "seed" form field and records it on the task as a
+// temporary override for characterID. It reports ok=false after writing an error response when
+// the request is unusable. A seed equal to the character's configured value is left off the task,
+// since overriding with the current value would be a no-op.
+func (h *Handler) applySeedOverride(w http.ResponseWriter, r *http.Request, task *domain.Task, characterID string) bool {
+	seedStr := strings.TrimSpace(r.FormValue("seed"))
+	if seedStr == "" {
+		return true
+	}
+	characterID = strings.TrimSpace(characterID)
+	if characterID == "" {
+		writeError(w, r, http.StatusBadRequest, "no character to apply a seed override to")
+		return false
+	}
+	seed, err := strconv.ParseInt(seedStr, 10, 64)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid seed")
+		return false
+	}
+	if current := h.CharacterOptions.seed(characterID); current == nil || *current != seed {
+		task.SeedOverride = &seed
+		task.SeedOverrideCharacterID = characterID
+	}
+	return true
+}
+
 // loadHistoryForMutation loads history for jobID and validates it has a resolvable storage URI,
 // as required by every handler that enqueues a follow-up task against an existing job. On
 // failure it writes the appropriate error response itself and returns ok=false.
@@ -133,22 +188,106 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		EditPrompt:           strings.TrimSpace(r.FormValue("edit_prompt")),
 		CreatedAt:            time.Now().UTC(),
 	}
-	if seedStr := strings.TrimSpace(r.FormValue("seed")); seedStr != "" {
-		if strings.TrimSpace(cut.CharacterID) == "" {
-			writeError(w, r, http.StatusBadRequest, "cut has no character to apply a seed override to")
-			return
-		}
-		seed, err := strconv.ParseInt(seedStr, 10, 64)
-		if err != nil {
-			writeError(w, r, http.StatusBadRequest, "invalid seed")
-			return
-		}
-		if current := h.CharacterOptions.seed(cut.CharacterID); current == nil || *current != seed {
-			task.SeedOverride = &seed
-			task.SeedOverrideCharacterID = cut.CharacterID
-		}
+	if !h.applySeedOverride(w, r, task, cut.CharacterID) {
+		return
 	}
 	h.enqueue(w, r, task)
+}
+
+// RegenerateSectionKeyframesForm renders a page for regenerating every keyframe of one music
+// section at once (full regenerate or local edit), showing the section's current keyframes.
+func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.Request) {
+	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if h.HistoryRepository == nil {
+		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		return
+	}
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get history detail for section regenerate form",
+			"job_id", jobID,
+			"error", err,
+		)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	group, ok := findHistorySectionGroup(history, sectionIndex)
+	if !ok {
+		http.Error(w, "section not found", http.StatusNotFound)
+		return
+	}
+	seedDefault := ""
+	if seed := h.CharacterOptions.seed(sectionCharacterID(group)); seed != nil {
+		seedDefault = strconv.FormatInt(*seed, 10)
+	}
+	h.renderPage(w, PageData{
+		Title:                 "Regenerate Section",
+		CSRFToken:             csrfTokenFromContext(r.Context()),
+		HistoryDetail:         history,
+		RegenerateSection:     group,
+		RegenerateSeedDefault: seedDefault,
+	}, "regenerate_section.html")
+}
+
+// PostRegenerateSectionKeyframes enqueues a keyframe regeneration task for every cut of one section.
+func (h *Handler) PostRegenerateSectionKeyframes(w http.ResponseWriter, r *http.Request) {
+	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	history, ok := h.loadHistoryForMutation(w, r, jobID)
+	if !ok {
+		return
+	}
+	group, ok := findHistorySectionGroup(history, sectionIndex)
+	if !ok {
+		writeError(w, r, http.StatusNotFound, "section not found")
+		return
+	}
+	if len(group.Cuts) == 0 {
+		writeError(w, r, http.StatusBadRequest, "section has no cuts to regenerate")
+		return
+	}
+	newJobID, err := jobid.New("regen-section")
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	task := &domain.Task{
+		JobID:        newJobID,
+		Command:      domain.CommandRegenerateSectionKeyframes,
+		RecipeURL:    history.StorageURI,
+		SectionIndex: &sectionIndex,
+		// 同一ジョブ内の他カットとアスペクト比がズレないよう、既存レシピの値を引き継ぐ。
+		VeoAspectRatio:    history.AspectRatio,
+		OverwriteKeyframe: r.FormValue("overwrite") == "on",
+		OriginalJobID:     jobID,
+		// ビジュアルアンカーはカットごとに異なる文言のため、セクション一括では受け付けない
+		// （フル再生成は各カットの保存済みアンカーをそのまま使う）。
+		EditPrompt: strings.TrimSpace(r.FormValue("edit_prompt")),
+		CreatedAt:  time.Now().UTC(),
+	}
+	if !h.applySeedOverride(w, r, task, sectionCharacterID(group)) {
+		return
+	}
+	h.enqueue(w, r, task)
+}
+
+// sectionCharacterID returns the character the section's cuts belong to, taken from its first cut
+// with one set. Sections are normally single-character, and a seed override targets one character
+// by ID, so cuts of any other character in the section are simply left untouched by it.
+func sectionCharacterID(group domain.VideoHistorySectionGroup) string {
+	for _, cut := range group.Cuts {
+		if id := strings.TrimSpace(cut.CharacterID); id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 // PostRegenerateZip enqueues a ZIP re-creation task for an existing job.

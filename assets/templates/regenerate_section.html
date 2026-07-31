@@ -1,0 +1,95 @@
+{{define "content"}}
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h1 class="h3 fw-bold mb-1">Regenerate Section {{.RegenerateSection.Section.Name}}</h1>
+                <div class="text-muted small">
+                    <code>{{.HistoryDetail.JobID}}</code>
+                    <span class="ms-2">{{.RegenerateSection.Section.StartSeconds}}s - {{.RegenerateSection.Section.EndSeconds}}s / {{len .RegenerateSection.Cuts}} cuts</span>
+                </div>
+            </div>
+            <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Back</a>
+        </div>
+
+        <div class="row g-3 mb-4">
+            {{range .RegenerateSection.Cuts}}
+            <div class="col-6 col-md-3">
+                {{if .KeyframeURL}}
+                <img src="{{.KeyframeURL}}" class="img-fluid rounded border" alt="Cut {{.CutIndex}} keyframe">
+                {{else}}
+                <div class="border rounded d-flex align-items-center justify-content-center text-muted" style="aspect-ratio:1/1;">
+                    No keyframe
+                </div>
+                {{end}}
+                <div class="small text-muted mt-1">Cut {{.CutIndex}}</div>
+            </div>
+            {{end}}
+        </div>
+
+        <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/sections/{{.RegenerateSection.Section.SectionIndex}}/regenerate-keyframes">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold d-block">モード</label>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="mode" id="mode-regenerate" value="regenerate" checked>
+                    <label class="btn btn-outline-secondary btn-sm" for="mode-regenerate">フル再生成</label>
+                    <input type="radio" class="btn-check" name="mode" id="mode-edit" value="edit">
+                    <label class="btn btn-outline-secondary btn-sm" for="mode-edit">部分編集</label>
+                </div>
+                <div class="form-text">
+                    フル再生成はこのセクションの全カットを保存済みプロンプトから一度に作り直すため、カット間の繋がり（establishing / transition の役割分担）が揃います。構図は変わりえます。
+                    部分編集は今の画像をそのまま保ち、指示した内容だけを各カットへ順に反映します。
+                </div>
+            </div>
+
+            <div id="edit-fields" class="d-none">
+                <div class="mb-3">
+                    <label for="edit_prompt" class="form-label fw-semibold">編集指示</label>
+                    <textarea class="form-control" id="edit_prompt" name="edit_prompt" rows="3" placeholder="例: このセクション全体をもっと明るい照明にしてください"></textarea>
+                    <div class="form-text">セクション内の各カットへ同じ指示を適用します。構図・ポーズ・背景は変わりません。カットごとに別の指示を出したい場合は、カット単位の Regenerate を使ってください。</div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="seed" class="form-label fw-semibold">シード値</label>
+                <input type="number" class="form-control" id="seed" name="seed" value="{{.RegenerateSeedDefault}}" placeholder="変更しない場合は空欄">
+                <div class="form-text">指定するとこの再生成だけシードを一時的に差し替えます（他セクションとのキャラクター一貫性が崩れる場合があります）。</div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" name="overwrite" id="overwrite" checked>
+                <label class="form-check-label" for="overwrite">再生成結果でレシピを上書きする</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Regenerate Section</button>
+                <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+(function () {
+    const editFields = document.getElementById('edit-fields');
+    const editPrompt = document.getElementById('edit_prompt');
+    function applyMode(radio) {
+        const isEdit = radio.value === 'edit' && radio.checked;
+        editFields.classList.toggle('d-none', !isEdit);
+        editPrompt.required = isEdit;
+        // Disabled fields are excluded from form submission, so leftover edit_prompt text
+        // can't be submitted after switching back to full-regenerate mode.
+        editPrompt.disabled = !isEdit;
+    }
+    document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            applyMode(radio);
+        });
+        if (radio.checked) {
+            applyMode(radio);
+        }
+    });
+})();
+</script>
+{{end}}
