@@ -121,8 +121,8 @@ github.com/shouni/gemini-image-kit v1.12.1 h1:9DprNSLCg143e982ISOAa0wyba0tcH6Rlw
 github.com/shouni/gemini-image-kit v1.12.1/go.mod h1:/pVkiMJh+418IBtTRw+/VKrDPlpY8+HaI2O6qHfSXm0=
 github.com/shouni/go-character-kit v1.0.11 h1:c2E78azaCBRLk/KmKp7iAIWmmZS4NocwTXKldjQXhPU=
 github.com/shouni/go-character-kit v1.0.11/go.mod h1:P+RtKl6YoGQrEROnjpsFHw91cwXdO12wPFDsNUsNHfA=
-github.com/shouni/go-gemini-client v1.16.2 h1:j1NBICYqG90Y1x6/Nobs+MkTbCTJQ0BoKhFmGRKM2u8=
-github.com/shouni/go-gemini-client v1.16.2/go.mod h1:4igPxaRMQLZpyQC9xaTEuDoCy2XZ0wIE5+pRuEoHvIU=
+github.com/shouni/go-gemini-client v1.16.3 h1:BooJ7vlUyj6A9rj73fIzHEpOsYUJtpLN0lIJE2i0Am8=
+github.com/shouni/go-gemini-client v1.16.3/go.mod h1:4igPxaRMQLZpyQC9xaTEuDoCy2XZ0wIE5+pRuEoHvIU=
 github.com/shouni/go-http-kit v1.7.2 h1:etlQK0c6C89rhAtYRHGG1om8uDUc+oxw5Ss9SjO7FtQ=
 github.com/shouni/go-http-kit v1.7.2/go.mod h1:EBhrRSrscGl/5J6vG4x/KuEk/W3UelBsj3gg0ycNneM=
 github.com/shouni/go-notifier v1.3.3 h1:CPyq6wTFqGBh2u1Dno0y/EMPJ5MUhVrhMqKZMUBoZRY=

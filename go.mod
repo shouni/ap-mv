@@ -11,7 +11,7 @@ require (
 	github.com/shouni/gcp-kit v1.5.0
 	github.com/shouni/gemini-image-kit v1.12.1
 	github.com/shouni/go-character-kit v1.0.11
-	github.com/shouni/go-gemini-client v1.16.2
+	github.com/shouni/go-gemini-client v1.16.3
 	github.com/shouni/go-http-kit v1.7.2
 	github.com/shouni/go-notifier v1.3.3
 	github.com/shouni/go-prompt-kit v1.2.0
@@ -19,7 +19,6 @@ require (
 	github.com/shouni/go-utils v1.3.0
 	github.com/shouni/go-veo-orchestrator v1.9.0
 	github.com/shouni/netarmor v1.2.0
-	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.22.0
 )
 
@@ -78,6 +77,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect

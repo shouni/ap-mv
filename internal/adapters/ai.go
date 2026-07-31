@@ -5,7 +5,6 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -19,14 +18,6 @@ const (
 	defaultVertexLocationID = "global"
 	// defaultVertexInitialDelay はリトライ遅延
 	defaultVertexInitialDelay = 60 * time.Second
-	// defaultVertexHTTPTimeout は Vertex AI への1回の HTTP 呼び出しに許す時間です。
-	//
-	// このクライアントは動画・テキスト・画像の全生成で共有されるため、最も遅い正常な
-	// 呼び出し（画像生成は数十秒かかることがあり、http.Client.Timeout はレスポンス本文の
-	// 読み切りまで含む）より十分長く取る必要があります。一方で上限が無いと、応答を
-	// 返さない接続を Cloud Run のリクエスト上限（3600s）まで掴み続けることになります。
-	// その間に取った値で、正常系には数倍の余裕があります。
-	defaultVertexHTTPTimeout = 5 * time.Minute
 )
 
 // NewVertexAIAdapter は GCP Vertex AI クライアントを初期化します。
@@ -39,7 +30,6 @@ func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 		ProjectID:    ai.GCP.ProjectID,
 		LocationID:   vertexLocationID(ai),
 		InitialDelay: defaultVertexInitialDelay,
-		HTTPClient:   &http.Client{Timeout: defaultVertexHTTPTimeout},
 	}
 
 	aiClient, err := gemini.NewClient(ctx, clientConfig)
