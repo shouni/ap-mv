@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
-	github.com/shouni/gcp-kit v1.5.0
+	github.com/shouni/gcp-kit v1.5.1
 	github.com/shouni/gemini-image-kit v1.12.1
 	github.com/shouni/go-character-kit v1.0.11
 	github.com/shouni/go-gemini-client v1.16.3
