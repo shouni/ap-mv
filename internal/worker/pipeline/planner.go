@@ -40,7 +40,7 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 	sceneSplit := filter.SceneSplitFilter{UsePreviousVideo: p.UsePreviousVideo, Runner: videoRunner}
 	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
 	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
-	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: p.VideoProcessor}
+	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: p.VideoProcessor, UsePreviousVideo: p.UsePreviousVideo}
 	switch command := taskCommand(task); command {
 	case domain.CommandVideoGenContinuation:
 		return []filter.Filter{videoGen, chainFinalize, filter.PublishingFilter{}}, nil
