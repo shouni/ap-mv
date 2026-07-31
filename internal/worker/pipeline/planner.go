@@ -28,7 +28,8 @@ type DefaultPlanner struct {
 //
 // video_recipe_create はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
 // video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
-// regenerate_cut_keyframe は指定カット 1 枚のキーフレームのみ再生成します。
+// regenerate_cut_keyframe は指定カット 1 枚、regenerate_section_keyframes は指定セクションの
+// 全カットのキーフレームのみ再生成します。
 // video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
 // enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
 //
@@ -43,7 +44,9 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 	switch command := taskCommand(task); command {
 	case domain.CommandVideoGenContinuation:
 		return []filter.Filter{videoGen, chainFinalize, filter.PublishingFilter{}}, nil
-	case domain.CommandRegenerateCutKeyframe:
+	case domain.CommandRegenerateCutKeyframe, domain.CommandRegenerateSectionKeyframes:
+		// 対象が1カットかセクション内の全カットかは RegenerateCutKeyframeFilter が
+		// Task の cut_index / section_index から解決するため、実行計画は共通です。
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
 			filter.RegenerateCutKeyframeFilter{},

@@ -2,6 +2,7 @@ package filter
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	imagePorts "github.com/shouni/gemini-image-kit/ports"
@@ -19,6 +20,12 @@ type fakeCutKeyframeRunner struct {
 	editPromptSeen     string
 	keyframeSeenAtEdit string
 	resultKeyframeRef  string
+	// runAndSaveCuts records the CutIndex list of each RunAndSave call, so section tests can
+	// assert every target cut went through one batched call rather than several.
+	runAndSaveCuts [][]int
+	// editPaths records the output path of each EditAndSave call, so section tests can assert
+	// per-cut calls do not collide on the same keyframe_1.png destination.
+	editPaths []string
 }
 
 func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
@@ -27,14 +34,20 @@ func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoReci
 
 func (f *fakeCutKeyframeRunner) RunAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ string) (*orchestrator.VideoRecipe, error) {
 	f.runAndSaveCalled = true
-	recipe.Cuts[0].KeyframeReference = f.resultKeyframeRef
+	cutIndexes := make([]int, 0, len(recipe.Cuts))
+	for i := range recipe.Cuts {
+		recipe.Cuts[i].KeyframeReference = f.resultKeyframeRef
+		cutIndexes = append(cutIndexes, recipe.Cuts[i].CutIndex)
+	}
+	f.runAndSaveCuts = append(f.runAndSaveCuts, cutIndexes)
 	return recipe, nil
 }
 
-func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, editPrompt string, _ string) (*orchestrator.VideoRecipe, error) {
+func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, editPrompt string, outputPath string) (*orchestrator.VideoRecipe, error) {
 	f.editAndSaveCalled = true
 	f.editPromptSeen = editPrompt
 	f.keyframeSeenAtEdit = recipe.Cuts[0].KeyframeReference
+	f.editPaths = append(f.editPaths, outputPath)
 	recipe.Cuts[0].KeyframeReference = f.resultKeyframeRef
 	return recipe, nil
 }
@@ -53,6 +66,34 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
 			},
 		},
+	}
+	return &Context{
+		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
+		Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}},
+	}
+}
+
+// newRegenSectionTestContext builds a 3-cut recipe spanning two sections (cuts 1-2 in section 1,
+// cut 3 in section 2) for exercising the section-targeted regeneration path.
+func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Context {
+	cut := func(index, sectionIndex int, startSec float64) orchestrator.Cut {
+		return orchestrator.Cut{
+			CutIndex:       index,
+			SectionIndex:   sectionIndex,
+			VisualAnchor:   fmt.Sprintf("anchor %d", index),
+			AudioSync:      orchestrator.AudioSync{StartSec: startSec, EndSec: startSec + 8, DurationSec: 8},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: fmt.Sprintf("gs://bucket/jobs/orig/images/keyframe_%d.png", index)},
+		}
+	}
+	recipe := &orchestrator.VideoRecipe{
+		ProjectTitle: "test",
+		MusicRecipe: domain.MusicRecipe{
+			Sections: []domain.MusicSection{
+				{Name: "Verse", StartSeconds: 0, EndSeconds: 16},
+				{Name: "Chorus", StartSeconds: 16, EndSeconds: 24},
+			},
+		},
+		Cuts: []orchestrator.Cut{cut(1, 1, 0), cut(2, 1, 8), cut(3, 2, 16)},
 	}
 	return &Context{
 		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
@@ -160,6 +201,85 @@ func TestRegenerateCutKeyframeFilterUsesEditModeWhenEditPromptSet(t *testing.T) 
 	}
 	if fc.VideoRecipe.Cuts[0].KeyframeReference != runner.resultKeyframeRef {
 		t.Errorf("KeyframeReference = %q, want %q", fc.VideoRecipe.Cuts[0].KeyframeReference, runner.resultKeyframeRef)
+	}
+}
+
+// TestRegenerateCutKeyframeFilterRegeneratesWholeSection verifies that a section-targeted task
+// regenerates every cut of that section — and only that section — in a single batched RunAndSave,
+// so the cuts are produced together instead of drifting apart across separate calls.
+func TestRegenerateCutKeyframeFilterRegeneratesWholeSection(t *testing.T) {
+	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/section-0/images/keyframe_1.png"}
+	sectionIndex := 0
+	task := &domain.Task{
+		Command:           domain.CommandRegenerateSectionKeyframes,
+		SectionIndex:      &sectionIndex,
+		OverwriteKeyframe: true,
+	}
+	fc := newRegenSectionTestContext(task, runner)
+
+	if err := (RegenerateCutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(runner.runAndSaveCuts) != 1 {
+		t.Fatalf("RunAndSave calls = %d, want 1 batched call, got %v", len(runner.runAndSaveCuts), runner.runAndSaveCuts)
+	}
+	if got, want := runner.runAndSaveCuts[0], []int{1, 2}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("regenerated cut indexes = %v, want %v", got, want)
+	}
+	for _, i := range []int{0, 1} {
+		if fc.VideoRecipe.Cuts[i].KeyframeReference != runner.resultKeyframeRef {
+			t.Errorf("cut %d KeyframeReference = %q, want %q", i+1, fc.VideoRecipe.Cuts[i].KeyframeReference, runner.resultKeyframeRef)
+		}
+	}
+	// 別セクションのカットは対象外なので元のキーフレームのまま。
+	if got, want := fc.VideoRecipe.Cuts[2].KeyframeReference, "gs://bucket/jobs/orig/images/keyframe_3.png"; got != want {
+		t.Errorf("cut 3 KeyframeReference = %q, want unchanged %q", got, want)
+	}
+}
+
+// TestRegenerateCutKeyframeFilterEditsSectionCutsIntoSeparatePaths verifies that section edit mode
+// calls EditAndSave once per cut (the editor only accepts single-cut recipes) and writes each one
+// to its own output path, so the per-call keyframe_1.png destinations don't overwrite each other.
+func TestRegenerateCutKeyframeFilterEditsSectionCutsIntoSeparatePaths(t *testing.T) {
+	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/section-0/cut-1/images/keyframe_1.png"}
+	sectionIndex := 0
+	task := &domain.Task{
+		Command:           domain.CommandRegenerateSectionKeyframes,
+		SectionIndex:      &sectionIndex,
+		OverwriteKeyframe: true,
+		EditPrompt:        "もっと明るい照明に",
+	}
+	fc := newRegenSectionTestContext(task, runner)
+
+	if err := (RegenerateCutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if runner.runAndSaveCalled {
+		t.Error("did not expect RunAndSave to be called in edit mode")
+	}
+	want := []string{
+		"gs://bucket/jobs/regen-1/regens/section-0/cut-1/",
+		"gs://bucket/jobs/regen-1/regens/section-0/cut-2/",
+	}
+	if len(runner.editPaths) != len(want) {
+		t.Fatalf("EditAndSave paths = %v, want %v", runner.editPaths, want)
+	}
+	for i, path := range want {
+		if runner.editPaths[i] != path {
+			t.Errorf("EditAndSave path[%d] = %q, want %q", i, runner.editPaths[i], path)
+		}
+	}
+}
+
+// TestRegenerateCutKeyframeFilterRejectsUntargetedTask verifies the filter refuses a task that
+// names neither a cut nor a section, rather than silently regenerating nothing.
+func TestRegenerateCutKeyframeFilterRejectsUntargetedTask(t *testing.T) {
+	runner := &fakeCutKeyframeRunner{}
+	task := &domain.Task{Command: domain.CommandRegenerateSectionKeyframes}
+	fc := newRegenSectionTestContext(task, runner)
+
+	if err := (RegenerateCutKeyframeFilter{}).Execute(context.Background(), fc); err == nil {
+		t.Fatal("Execute() error = nil, want an error for a task with no cut_index or section_index")
 	}
 }
 

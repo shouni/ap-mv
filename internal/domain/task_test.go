@@ -149,6 +149,67 @@ func TestTaskValidateShortVideoFromSection(t *testing.T) {
 	}
 }
 
+// TestTaskValidateRegenerateSectionKeyframes verifies that section keyframe regeneration requires
+// a recipe source and a non-negative section_index, mirroring short_video_from_section's rules.
+func TestTaskValidateRegenerateSectionKeyframes(t *testing.T) {
+	sectionIndex := 1
+	negativeIndex := -1
+
+	valid := Task{
+		JobID:        "job-1",
+		Command:      CommandRegenerateSectionKeyframes,
+		RecipeURL:    "gs://bucket/jobs/job-1/video_music_meta.json",
+		SectionIndex: &sectionIndex,
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	tests := []struct {
+		name string
+		task Task
+		want string
+	}{
+		{
+			name: "requires section_index",
+			task: Task{
+				JobID:     "job-1",
+				Command:   CommandRegenerateSectionKeyframes,
+				RecipeURL: "gs://bucket/recipe.json",
+			},
+			want: "requires a non-negative section_index",
+		},
+		{
+			name: "rejects negative section_index",
+			task: Task{
+				JobID:        "job-1",
+				Command:      CommandRegenerateSectionKeyframes,
+				RecipeURL:    "gs://bucket/recipe.json",
+				SectionIndex: &negativeIndex,
+			},
+			want: "requires a non-negative section_index",
+		},
+		{
+			name: "requires recipe input",
+			task: Task{
+				JobID:        "job-1",
+				Command:      CommandRegenerateSectionKeyframes,
+				SectionIndex: &sectionIndex,
+			},
+			want: "requires recipe, video_recipe, or recipe_url",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.task.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate() error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}
+
 // TestTaskValidateAcceptsVideoRecipeCreate verifies that video recipe creation tasks validate successfully.
 func TestTaskValidateAcceptsVideoRecipeCreate(t *testing.T) {
 	task := Task{

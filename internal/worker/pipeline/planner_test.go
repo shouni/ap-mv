@@ -27,6 +27,12 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			want:    []string{"recipe_load", "regen_cut_keyframe", "zip_upload"},
 		},
 		{
+			// セクション一括再生成はカット1枚の再生成と同じ実行計画で、対象の解決だけが
+			// regen_cut_keyframe フィルター内で分岐します。
+			command: domain.CommandRegenerateSectionKeyframes,
+			want:    []string{"recipe_load", "regen_cut_keyframe", "zip_upload"},
+		},
+		{
 			command: domain.CommandRegenerateZip,
 			want:    []string{"recipe_load", "zip_upload"},
 		},

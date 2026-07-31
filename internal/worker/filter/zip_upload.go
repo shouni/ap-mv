@@ -19,18 +19,25 @@ type ZipUploadFilter struct{}
 // Name returns the receiver name.
 func (ZipUploadFilter) Name() string { return "zip_upload" }
 
+// isKeyframeRegenCommand reports whether the command regenerates keyframes of an existing job
+// (a single cut or a whole section). Both write their result back into the original job, so the
+// zip step treats them identically.
+func isKeyframeRegenCommand(command domain.TaskCommand) bool {
+	return command == domain.CommandRegenerateCutKeyframe || command == domain.CommandRegenerateSectionKeyframes
+}
+
 // Execute builds a keyframe zip and streams it to GCS at {outputPath}keyframes.zip.
 // For regenerate tasks, only runs when OverwriteKeyframe is true.
 func (ZipUploadFilter) Execute(ctx context.Context, fc *Context) error {
 	if fc == nil || fc.VideoRecipe == nil || fc.Writer == nil || fc.Reader == nil {
 		return nil
 	}
-	if fc.Task != nil && fc.Task.Command == domain.CommandRegenerateCutKeyframe && !fc.Task.OverwriteKeyframe {
+	if fc.Task != nil && isKeyframeRegenCommand(fc.Task.Command) && !fc.Task.OverwriteKeyframe {
 		return nil
 	}
 
 	outputPath := fc.OutputPath
-	if fc.Task != nil && (fc.Task.Command == domain.CommandRegenerateCutKeyframe || fc.Task.Command == domain.CommandRegenerateZip) {
+	if fc.Task != nil && (isKeyframeRegenCommand(fc.Task.Command) || fc.Task.Command == domain.CommandRegenerateZip) {
 		outputPath = originalJobOutputPath(fc.Task.RecipeURL)
 		if outputPath == "" {
 			return fmt.Errorf("zip_upload: cannot resolve original job output path from RecipeURL %q", fc.Task.RecipeURL)

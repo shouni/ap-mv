@@ -98,6 +98,130 @@ func TestPostGenerateVideoFromHistoryInheritsAspectRatio(t *testing.T) {
 	}
 }
 
+// newRegenerateSectionRequest builds a request carrying jobID/sectionIndex chi route params.
+func newRegenerateSectionRequest(method, target, jobID, sectionIndex string, body *strings.Reader) *http.Request {
+	var req *http.Request
+	if body != nil {
+		req = httptest.NewRequest(method, target, body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else {
+		req = httptest.NewRequest(method, target, nil)
+	}
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", jobID)
+	routeContext.URLParams.Add("sectionIndex", sectionIndex)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+}
+
+// sectionRegenHistory returns a two-section history whose cuts split 2/1 across the sections,
+// shared by the section regenerate form and submit tests.
+func sectionRegenHistory() domain.VideoHistoryDetail {
+	return domain.VideoHistoryDetail{
+		VideoHistory: domain.VideoHistory{JobID: "job-1", StorageURI: "gs://bucket/jobs/job-1/video_music_meta.json"},
+		Sections: []domain.VideoHistorySection{
+			{SectionIndex: 0, Name: "Verse", StartSeconds: 0, EndSeconds: 16},
+			{SectionIndex: 1, Name: "Chorus", StartSeconds: 16, EndSeconds: 24},
+		},
+		Cuts: []domain.VideoHistoryCut{
+			{CutIndex: 1, StartSec: 0, CharacterID: "zundamon"},
+			{CutIndex: 2, StartSec: 8, CharacterID: "zundamon"},
+			{CutIndex: 3, StartSec: 16, CharacterID: "zundamon"},
+		},
+	}
+}
+
+// TestRegenerateSectionKeyframesFormRendersSectionCuts verifies the section form renders only the
+// selected section's cuts and posts back to that section's submit route.
+func TestRegenerateSectionKeyframesFormRendersSectionCuts(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{detail: sectionRegenHistory()}
+
+	req := newRegenerateSectionRequest(http.MethodGet, "/web/history/job-1/sections/0/regenerate", "job-1", "0", nil)
+	rec := httptest.NewRecorder()
+
+	h.RegenerateSectionKeyframesForm(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("RegenerateSectionKeyframesForm status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Verse", "/web/history/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("form body missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Cut 3") {
+		t.Fatalf("form body should not include the other section's cut: %s", body)
+	}
+}
+
+// TestRegenerateSectionKeyframesFormRejectsUnknownSection verifies an out-of-range section index
+// is a 404 rather than rendering an empty form.
+func TestRegenerateSectionKeyframesFormRejectsUnknownSection(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{detail: sectionRegenHistory()}
+
+	req := newRegenerateSectionRequest(http.MethodGet, "/web/history/job-1/sections/9/regenerate", "job-1", "9", nil)
+	rec := httptest.NewRecorder()
+
+	h.RegenerateSectionKeyframesForm(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+// TestPostRegenerateSectionKeyframesEnqueuesSectionTask verifies the submit handler queues a
+// section-scoped regeneration task carrying the original job's recipe URI and aspect ratio.
+func TestPostRegenerateSectionKeyframesEnqueuesSectionTask(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	history := sectionRegenHistory()
+	history.AspectRatio = "9:16"
+	h.HistoryRepository = fakeHistoryRepository{detail: history}
+	queue := &recordingQueue{}
+	h.Queue = queue
+
+	body := strings.NewReader("overwrite=on&edit_prompt=" + url.QueryEscape("もっと明るく"))
+	req := newRegenerateSectionRequest(http.MethodPost, "/web/history/job-1/sections/1/regenerate-keyframes", "job-1", "1", body)
+	rec := httptest.NewRecorder()
+
+	h.PostRegenerateSectionKeyframes(rec, req)
+
+	if queue.task == nil {
+		t.Fatalf("no task enqueued; status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if queue.task.Command != domain.CommandRegenerateSectionKeyframes {
+		t.Errorf("Command = %q, want %q", queue.task.Command, domain.CommandRegenerateSectionKeyframes)
+	}
+	if queue.task.SectionIndex == nil || *queue.task.SectionIndex != 1 {
+		t.Errorf("SectionIndex = %v, want 1", queue.task.SectionIndex)
+	}
+	if queue.task.RecipeURL != history.StorageURI {
+		t.Errorf("RecipeURL = %q, want %q", queue.task.RecipeURL, history.StorageURI)
+	}
+	if queue.task.VeoAspectRatio != "9:16" {
+		t.Errorf("VeoAspectRatio = %q, want %q (inherited from history)", queue.task.VeoAspectRatio, "9:16")
+	}
+	if !queue.task.OverwriteKeyframe {
+		t.Error("OverwriteKeyframe = false, want true")
+	}
+	if queue.task.EditPrompt != "もっと明るく" {
+		t.Errorf("EditPrompt = %q, want %q", queue.task.EditPrompt, "もっと明るく")
+	}
+	if err := queue.task.Validate(); err != nil {
+		t.Errorf("enqueued task failed validation: %v", err)
+	}
+}
+
 // newRegenerateRequest builds a request carrying jobID/cutIndex chi route params.
 func newRegenerateRequest(method, target, jobID, cutIndex string, body *strings.Reader) *http.Request {
 	var req *http.Request

@@ -164,10 +164,15 @@
         {{if .HistoryDetail.SectionGroups}}
         {{range .HistoryDetail.SectionGroups}}
         <div data-section-group="{{if .Section.Name}}{{.Section.SectionIndex}}{{else}}unassigned{{end}}">
-            <h3 class="h6 text-muted mb-3">
-                {{if .Section.Name}}{{.Section.Name}}{{else if .Cuts}}未分類のカット{{end}}
-                {{if .Section.Name}}<span class="small">({{.Section.StartSeconds}}s–{{.Section.EndSeconds}}s)</span>{{end}}
-            </h3>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <h3 class="h6 text-muted mb-0">
+                    {{if .Section.Name}}{{.Section.Name}}{{else if .Cuts}}未分類のカット{{end}}
+                    {{if .Section.Name}}<span class="small">({{.Section.StartSeconds}}s–{{.Section.EndSeconds}}s)</span>{{end}}
+                </h3>
+                {{if and .Section.Name .Cuts}}
+                <a href="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate section</a>
+                {{end}}
+            </div>
             <div class="row g-4 mb-4">
                 {{range .Cuts}}
                 {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail)}}
