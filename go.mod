@@ -14,7 +14,7 @@ require (
 	github.com/shouni/go-gemini-client v1.16.4
 	github.com/shouni/go-http-kit v1.7.2
 	github.com/shouni/go-notifier v1.3.3
-	github.com/shouni/go-prompt-kit v1.2.0
+	github.com/shouni/go-prompt-kit v1.4.0
 	github.com/shouni/go-remote-io v1.7.2
 	github.com/shouni/go-utils v1.3.0
 	github.com/shouni/go-veo-orchestrator v1.9.3

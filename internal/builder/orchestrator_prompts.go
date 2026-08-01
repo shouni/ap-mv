@@ -1,16 +1,15 @@
 package builder
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"path"
 	"strings"
 	"text/template"
 
 	characterkit "github.com/shouni/go-character-kit/character"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
+	"github.com/shouni/go-prompt-kit/resource"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/assets"
@@ -19,13 +18,11 @@ import (
 const defaultPromptMode = "default"
 
 type scriptPrompt struct {
-	builder          *promptkit.Builder
-	templates        map[string]string
-	visualTemplates  map[string]string
-	visualMode       string
-	sharedVisualTmpl *template.Template
-	characters       *characterkit.Characters
-	outputSchema     string
+	builder       *promptkit.Builder
+	visualBuilder *promptkit.Builder
+	visualMode    string
+	characters    *characterkit.Characters
+	outputSchema  string
 }
 
 type scriptPromptData struct {
@@ -156,18 +153,16 @@ func newScriptPrompt() (*scriptPrompt, error) {
 
 // newScriptPromptFromTemplates creates a script prompt from parsed templates.
 func newScriptPromptFromTemplates(templates map[string]string, visualTemplates ...map[string]string) (*scriptPrompt, error) {
-	builder, err := promptkit.NewBuilder(templates)
+	// 未知のモードは既定モードへ委ねる。既定モードの存在は NewBuilder が検証する。
+	builder, err := promptkit.NewBuilder(templates, promptkit.WithDefaultMode(defaultPromptMode))
 	if err != nil {
-		return nil, err
-	}
-	if _, ok := templates[defaultPromptMode]; !ok {
-		return nil, fmt.Errorf("default script prompt is required")
+		return nil, fmt.Errorf("default script prompt is required: %w", err)
 	}
 	selectedVisualTemplates := map[string]string{}
 	if len(visualTemplates) > 0 && visualTemplates[0] != nil {
 		selectedVisualTemplates = visualTemplates[0]
 	}
-	sharedTmpl, err := buildSharedVisualTemplate(selectedVisualTemplates)
+	visualBuilder, err := newVisualBuilder(selectedVisualTemplates)
 	if err != nil {
 		return nil, err
 	}
@@ -176,24 +171,28 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 		return nil, err
 	}
 	return &scriptPrompt{
-		builder:          builder,
-		templates:        templates,
-		visualTemplates:  selectedVisualTemplates,
-		sharedVisualTmpl: sharedTmpl,
-		outputSchema:     outputSchema,
+		builder:       builder,
+		visualBuilder: visualBuilder,
+		outputSchema:  outputSchema,
 	}, nil
 }
 
-func buildSharedVisualTemplate(visualTemplates map[string]string) (*template.Template, error) {
-	tmpl := template.New("").Funcs(template.FuncMap{"join": strings.Join})
-	for name, content := range visualTemplates {
-		if strings.HasPrefix(name, "_") {
-			if _, err := tmpl.New(name).Parse(content); err != nil {
-				return nil, fmt.Errorf("parse shared visual template %q: %w", name, err)
-			}
-		}
+// newVisualBuilder は映像スタイル用テンプレートの Builder を作ります。
+// "_" 始まりのファイルは partial として登録され、モード本文から
+// {{template "recipe_output" .}} で参照されます。
+// テンプレートが無い場合は nil を返し、呼び出し側は映像プロンプトなしとして扱います。
+func newVisualBuilder(visualTemplates map[string]string) (*promptkit.Builder, error) {
+	if len(visualTemplates) == 0 {
+		return nil, nil
 	}
-	return tmpl, nil
+	builder, err := promptkit.NewBuilder(visualTemplates,
+		promptkit.WithFuncs(template.FuncMap{"join": strings.Join}),
+		promptkit.WithDefaultMode(defaultPromptMode),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build visual mode templates: %w", err)
+	}
+	return builder, nil
 }
 
 // Build renders the script prompt for the requested mode.
@@ -208,10 +207,6 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	if mode == "" {
 		mode = defaultPromptMode
 	}
-	templateMode := mode
-	if _, ok := p.templates[templateMode]; !ok {
-		templateMode = defaultPromptMode
-	}
 	sourceRecipeJSON, err := formatSourceRecipeJSON(data.SourceRecipe)
 	if err != nil {
 		return "", err
@@ -220,7 +215,7 @@ func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (stri
 	if err != nil {
 		return "", err
 	}
-	return p.builder.Build(templateMode, scriptPromptData{
+	return p.builder.Build(mode, scriptPromptData{
 		Mode:             mode,
 		SourceRecipeJSON: sourceRecipeJSON,
 		VisualPrompt:     visualPrompt,
@@ -258,58 +253,31 @@ func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoReci
 }
 
 func (p *scriptPrompt) visualPrompt(mode string, data *orchestrator.TemplateData) (string, error) {
-	if p == nil || len(p.visualTemplates) == 0 {
+	if p == nil || p.visualBuilder == nil {
 		return "", nil
 	}
 	if p.visualMode != "" {
 		mode = p.visualMode
 	}
 	mode = strings.TrimSpace(mode)
-	if mode == "" {
-		mode = defaultPromptMode
+	if data == nil || data.SourceRecipe == nil {
+		return "", nil
 	}
-	raw := ""
-	if !strings.HasPrefix(mode, "_") {
-		raw = strings.TrimSpace(p.visualTemplates[mode])
-	}
-	if raw == "" {
-		raw = strings.TrimSpace(p.visualTemplates[defaultPromptMode])
-	}
-	if raw == "" || data == nil || data.SourceRecipe == nil {
-		return raw, nil
-	}
-	tmpl, err := p.sharedVisualTmpl.Clone()
+	// 未知のモードや partial 名を渡した場合は Builder が既定モードへ委ねます。
+	rendered, err := p.visualBuilder.Build(mode, newVisualModeData(data.SourceRecipe, p.defaultCharacter()))
 	if err != nil {
-		return "", fmt.Errorf("clone shared visual templates: %w", err)
-	}
-	if _, err := tmpl.New("main").Parse(raw); err != nil {
-		return "", fmt.Errorf("parse visual mode template %q: %w", mode, err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, "main", newVisualModeData(data.SourceRecipe, p.defaultCharacter())); err != nil {
 		return "", fmt.Errorf("render visual mode template %q: %w", mode, err)
 	}
-	return buf.String(), nil
+	// テンプレート末尾の改行がスクリプト本文へ持ち込まれないよう、前後の空白を落とします。
+	return strings.TrimSpace(rendered), nil
 }
 
-// loadPromptTemplates loads prompt templates.
+// loadPromptTemplates loads prompt templates. Mode names come from the file name
+// without its extension.
 func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, error) {
-	entries, err := fs.ReadDir(fileSystem, rootDir)
+	templates, err := resource.Load(fileSystem, rootDir, "", resource.WithExtensions(".md"))
 	if err != nil {
 		return nil, fmt.Errorf("read prompt directory: %w", err)
-	}
-
-	templates := make(map[string]string)
-	for _, entry := range entries {
-		if entry.IsDir() || path.Ext(entry.Name()) != ".md" {
-			continue
-		}
-		mode := strings.TrimSuffix(entry.Name(), path.Ext(entry.Name()))
-		content, err := fs.ReadFile(fileSystem, path.Join(rootDir, entry.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("read script prompt %s: %w", entry.Name(), err)
-		}
-		templates[mode] = string(content)
 	}
 	return templates, nil
 }
