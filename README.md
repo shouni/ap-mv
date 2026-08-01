@@ -184,6 +184,23 @@ Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。
 
 ---
 
+## 🔀 タスク固有の Workflows
+
+`workflow.New` で組み立てた orchestrator の `Workflows` はプロセス全体で共有しますが、
+タスクがモデル（`TextModel` / `ImageModel`）・シード・Veo 設定（`VeoModel` / `VeoAspectRatio`）を
+上書きしている場合だけ、そのタスク専用の `Workflows` を構築して使います
+（`internal/builder` の `workflowResolver`）。
+
+判定と構築を1か所に閉じているため、タスク固有オプションを増やすときはここだけを変更すれば済みます。
+
+**専用に構築した `Workflows` はタスク完了時に `Close()` します。** `workflow.New` は
+画像キャッシュのクリーンアップ goroutine を起こすため、閉じ忘れるとジョブごとに goroutine が
+積み上がります。共有インスタンスは閉じてはいけないので、`Resolve` は Workflows と一緒に
+後始末用の関数を返し、呼び出し側はそれを `defer` します（どちらを受け取ったかは
+呼び出し側から判別できないため、後始末を返せるのは解決した側だけです）。
+
+---
+
 ## 📂 プロジェクト構造 (Project Structure)
 
 データフローの時系列に沿って綺麗にパッキングされ、無駄な階層移動を極限まで削ぎ落とした洗練されたフォルダレイアウトです。
