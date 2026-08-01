@@ -171,10 +171,11 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	if err := task.Validate(); err != nil {
 		return nil, err
 	}
-	workflows, err := r.resolveWorkflows(ctx, task)
+	workflows, releaseWorkflows, err := r.resolveWorkflows(ctx, task)
 	if err != nil {
 		return nil, err
 	}
+	defer releaseWorkflows()
 	videoRunner := ports.DeriveVideoRunner(r.deps.VideoRunner, task.VeoModel, task.VeoAspectRatio)
 	fc := &filter.Context{
 		State: filter.State{
@@ -287,11 +288,18 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 
 // resolveWorkflows は WorkflowResolver へタスクに応じた Workflows の解決を委譲します。
 // Resolver が未設定の場合は Workflows なし（VideoRunner 直接実行のみ）で実行します。
-func (r *Runner) resolveWorkflows(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
+func (r *Runner) resolveWorkflows(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, func(), error) {
 	if r == nil || r.deps.WorkflowResolver == nil {
-		return nil, nil
+		return nil, func() {}, nil
 	}
-	return r.deps.WorkflowResolver.Resolve(ctx, task)
+	workflows, release, err := r.deps.WorkflowResolver.Resolve(ctx, task)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	if release == nil {
+		release = func() {}
+	}
+	return workflows, release, nil
 }
 
 // outputPath はタスク成果物を配置するベースパスを返します。

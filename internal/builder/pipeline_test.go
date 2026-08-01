@@ -44,7 +44,7 @@ func TestWorkflowResolverBuildsForSelectedModels(t *testing.T) {
 		},
 	}
 
-	got, err := resolver.Resolve(t.Context(), &domain.Task{
+	got, release, err := resolver.Resolve(t.Context(), &domain.Task{
 		AIModels: domain.AIModels{TextModel: "gemini-alt", ImageModel: "image-default"},
 	})
 	if err != nil {
@@ -56,6 +56,10 @@ func TestWorkflowResolverBuildsForSelectedModels(t *testing.T) {
 	if got != built {
 		t.Fatal("Resolve() did not return the task-specific workflows")
 	}
+	if release == nil {
+		t.Fatal("Resolve() did not return a release func for task-scoped workflows")
+	}
+	release()
 }
 
 // TestWorkflowResolverReusesSharedForDefaultOptions verifies that default models without
@@ -72,7 +76,7 @@ func TestWorkflowResolverReusesSharedForDefaultOptions(t *testing.T) {
 		},
 	}
 
-	got, err := resolver.Resolve(t.Context(), &domain.Task{
+	got, release, err := resolver.Resolve(t.Context(), &domain.Task{
 		AIModels: domain.AIModels{TextModel: "gemini-default", ImageModel: "image-default"},
 	})
 	if err != nil {
@@ -83,6 +87,14 @@ func TestWorkflowResolverReusesSharedForDefaultOptions(t *testing.T) {
 	}
 	if got != shared {
 		t.Fatal("Resolve() did not return the shared workflows")
+	}
+	// 共有インスタンスは閉じてはいけないので、release は何もしない関数であること。
+	if release == nil {
+		t.Fatal("Resolve() returned a nil release func")
+	}
+	release()
+	if shared.Video != nil {
+		t.Error("release must not tear down the shared workflows")
 	}
 }
 
@@ -117,9 +129,11 @@ func TestWorkflowResolverBuildsForTaskOverrides(t *testing.T) {
 					return &orchestrator.Workflows{}, nil
 				},
 			}
-			if _, err := resolver.Resolve(t.Context(), tt.task); err != nil {
+			_, release, err := resolver.Resolve(t.Context(), tt.task)
+			if err != nil {
 				t.Fatalf("Resolve() error = %v", err)
 			}
+			release()
 			if calls != 1 {
 				t.Fatalf("build calls = %d, want 1", calls)
 			}

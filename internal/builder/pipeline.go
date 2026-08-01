@@ -3,6 +3,7 @@ package builder
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/shouni/go-gemini-client/gemini"
@@ -113,15 +114,22 @@ type workflowResolver struct {
 }
 
 // Resolve はタスクに応じた Workflows を返します。
-func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
+func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, func(), error) {
+	// 共有インスタンスはプロセス全体で使い回すので閉じない。
 	if r.build == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
-		return r.shared, nil
+		return r.shared, func() {}, nil
 	}
 	workflows, err := r.build(ctx, task)
 	if err != nil {
-		return nil, fmt.Errorf("build workflow for selected models: %w", err)
+		return nil, func() {}, fmt.Errorf("build workflow for selected models: %w", err)
 	}
-	return workflows, nil
+	// タスク専用に構築したものは、このタスクが終わったら閉じる。閉じないと
+	// 画像キャッシュのクリーンアップ goroutine がタスクごとに積み上がる。
+	return workflows, func() {
+		if err := workflows.Close(); err != nil {
+			slog.Warn("failed to close task-scoped workflows", "error", err)
+		}
+	}, nil
 }
 
 // usesCustomModels はタスクが既定モデル以外を指定しているかを判定します。
