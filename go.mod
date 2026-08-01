@@ -9,15 +9,15 @@ require (
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/shouni/gcp-kit v1.5.1
-	github.com/shouni/gemini-image-kit v1.12.1
+	github.com/shouni/gemini-image-kit v1.12.3
 	github.com/shouni/go-character-kit v1.0.11
-	github.com/shouni/go-gemini-client v1.16.3
+	github.com/shouni/go-gemini-client v1.16.4
 	github.com/shouni/go-http-kit v1.7.2
 	github.com/shouni/go-notifier v1.3.3
 	github.com/shouni/go-prompt-kit v1.2.0
 	github.com/shouni/go-remote-io v1.7.2
 	github.com/shouni/go-utils v1.3.0
-	github.com/shouni/go-veo-orchestrator v1.9.2
+	github.com/shouni/go-veo-orchestrator v1.9.3
 	github.com/shouni/netarmor v1.2.0
 	golang.org/x/sync v0.22.0
 )
