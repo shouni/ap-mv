@@ -9,6 +9,8 @@ import (
 
 	"github.com/shouni/go-remote-io/remoteio"
 
+	"github.com/shouni/go-job-kit/jobstatus"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -60,6 +62,9 @@ func newStatusRepo(io *statusIO) *JobStatusRepository {
 
 // 状態はジョブ出力ディレクトリ配下に置き、履歴削除（プレフィックス一括削除）で
 // 自動的に片付くようにする。履歴一覧は video_music_meta.json だけを拾うため混ざらない。
+// 保存形式そのもの（未記録・破損 JSON・パストラバーサル・上書き）の検証は
+// go-job-kit の jobstatus 側にあります。ここは ap-mv 固有の点だけを見ます。
+
 func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	t.Parallel()
 
@@ -67,9 +72,11 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	repo := newStatusRepo(io)
 
 	err := repo.Save(context.Background(), domain.JobStatus{
-		JobID:   "mv-20260726-123456-abcdef123456",
-		Command: "mv_from_keyframe_video_recipe",
-		State:   domain.JobStateQueued,
+		Status: jobstatus.Status{
+			JobID:   "mv-20260726-123456-abcdef123456",
+			Command: "mv_from_keyframe_video_recipe",
+			State:   domain.JobStateQueued,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -86,11 +93,13 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 
 	repo := newStatusRepo(newStatusIO())
 	original := domain.JobStatus{
-		JobID:         "mv-20260726-123456-abcdef123456",
-		Command:       "video_gen_continuation",
-		State:         domain.JobStateSucceeded,
-		Title:         "テスト曲",
-		Attempts:      3,
+		Status: jobstatus.Status{
+			JobID:    "mv-20260726-123456-abcdef123456",
+			Command:  "video_gen_continuation",
+			State:    domain.JobStateSucceeded,
+			Title:    "テスト曲",
+			Attempts: 3,
+		},
 		OriginalJobID: "video-recipe-20260725-101010-aabbccdd",
 		OutputURI:     testBaseURI + "/mv-20260726-123456-abcdef123456/",
 	}
@@ -113,38 +122,5 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 	}
 	if got.UpdatedAt.IsZero() {
 		t.Fatal("UpdatedAt が設定されていない")
-	}
-}
-
-// 未記録は障害と区別できるよう ErrJobStatusNotFound を返すこと。
-func TestGetReturnsNotFoundForUnknownJob(t *testing.T) {
-	t.Parallel()
-
-	repo := newStatusRepo(newStatusIO())
-
-	_, err := repo.Get(context.Background(), "mv-20260726-123456-abcdef123456")
-	if !errors.Is(err, ErrJobStatusNotFound) {
-		t.Fatalf("Get() error = %v, want ErrJobStatusNotFound", err)
-	}
-}
-
-// パス風のジョブ ID は正規化され、ジョブディレクトリの外へ書き出されないこと。
-func TestSaveRejectsPathTraversalJobID(t *testing.T) {
-	t.Parallel()
-
-	io := newStatusIO()
-	repo := newStatusRepo(io)
-
-	if err := repo.Save(context.Background(), domain.JobStatus{
-		JobID: "../../etc/passwd",
-		State: domain.JobStateQueued,
-	}); err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
-
-	for _, path := range io.written {
-		if !strings.HasPrefix(path, testBaseURI+"/") || strings.Contains(path, "..") {
-			t.Fatalf("ジョブディレクトリの外へ書き込まれている: %q", path)
-		}
 	}
 }

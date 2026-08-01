@@ -1,6 +1,10 @@
 package domain
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/shouni/go-job-kit/paging"
+)
 
 // VideoHistory is the metadata shown in the generated MV history list.
 type VideoHistory struct {
@@ -196,18 +200,7 @@ func sectionIndexForCutStart(sections []VideoHistorySection, startSec float64) i
 }
 
 // PageMeta contains pagination metadata for history list views.
-type PageMeta struct {
-	Page       int  `json:"page"`
-	PerPage    int  `json:"per_page"`
-	Total      int  `json:"total"`
-	TotalPages int  `json:"total_pages"`
-	HasPrev    bool `json:"has_prev"`
-	HasNext    bool `json:"has_next"`
-	PrevPage   int  `json:"prev_page"`
-	NextPage   int  `json:"next_page"`
-	From       int  `json:"from"`
-	To         int  `json:"to"`
-}
+type PageMeta = paging.PageMeta
 
 // VideoHistoryPage contains a page of generated MV history items.
 type VideoHistoryPage struct {
