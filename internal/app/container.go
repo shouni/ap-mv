@@ -2,6 +2,7 @@
 package app
 
 import (
+	"io"
 	"log/slog"
 
 	"github.com/shouni/gcp-kit/tasks"
@@ -66,6 +67,12 @@ func (c *Container) Close() {
 	if c.Pipeline != nil {
 		if err := c.Pipeline.Close(); err != nil {
 			slog.Error("failed to close pipeline", "error", err)
+		}
+	}
+	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
+	if closer, ok := c.HistoryRepository.(io.Closer); ok && closer != nil {
+		if err := closer.Close(); err != nil {
+			slog.Error("failed to close history repository", "error", err)
 		}
 	}
 }

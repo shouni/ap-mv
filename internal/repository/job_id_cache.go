@@ -33,7 +33,7 @@ func NewJobIDListCache() *ttlcache.Cache[string, []string] {
 func (r *VideoHistoryRepository) listJobIDs(ctx context.Context, collect func(context.Context) ([]string, error)) ([]string, error) {
 	if r.jobIDCache != nil {
 		if cached := r.jobIDCache.Get(jobIDListCacheKey); cached != nil {
-			// 呼び出し側（selectHistoryPageIDs）が受け取ったスライスをその場でソートするため、
+			// キャッシュ本体をそのまま渡すと、受け取った側の書き換えが並行リクエストへ波及するため、
 			// キャッシュ本体を渡すと並行リクエスト同士で競合します。必ず複製を返します。
 			return slices.Clone(cached.Value()), nil
 		}

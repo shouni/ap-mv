@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/shouni/go-job-kit/jobstatus"
+
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -81,9 +83,11 @@ func (s statusRecorder) build(
 	}
 
 	status := domain.JobStatus{
-		JobID:         task.JobID,
-		Command:       string(task.Command),
-		State:         state,
+		Status: jobstatus.Status{
+			JobID:   task.JobID,
+			Command: string(task.Command),
+			State:   state,
+		},
 		OriginalJobID: task.OriginalJobID,
 	}
 	if task.Recipe != nil {

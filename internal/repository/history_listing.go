@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/shouni/go-job-kit/cache"
+	"github.com/shouni/go-job-kit/paging"
 	"github.com/shouni/go-remote-io/remoteio"
 	"golang.org/x/sync/errgroup"
 
@@ -36,8 +38,8 @@ type VideoHistoryRepository struct {
 	reader       remoteio.InputReader
 	writer       remoteio.OutputWriter
 	signer       remoteio.URLSigner
-	historyCache *ttlcache.Cache[string, domain.VideoHistory]
-	recipeCache  *ttlcache.Cache[string, domain.VideoRecipe]
+	historyCache *cache.TTL[domain.VideoHistory]
+	recipeCache  *cache.TTL[domain.VideoRecipe]
 	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
 	// メタデータ本体のキャッシュと違い、これが無いと履歴画面を開くたびに
 	// baseURI 配下全体の List が走ります。
@@ -57,7 +59,7 @@ type VideoHistoryRepositoryConfig struct {
 	// Signer は再生用の署名付き URL を発行します。発行しない用途では nil を許容します。
 	Signer remoteio.URLSigner
 	// HistoryCache は履歴メタデータのキャッシュです。nil なら既定の TTL キャッシュを作ります。
-	HistoryCache *ttlcache.Cache[string, domain.VideoHistory]
+	HistoryCache *cache.TTL[domain.VideoHistory]
 }
 
 // NewVideoHistoryRepository creates a generated MV history repository.
@@ -126,7 +128,10 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		return domain.VideoHistoryPage{}, err
 	}
 
-	selectedIDs, meta := selectHistoryPageIDs(jobIDs, page, perPage)
+	// ジョブ ID は "{用途}-{生成時刻}-{乱数}" 形式で、用途プレフィックスが 7 種あります。
+	// ID の文字列比較ではプレフィックス順になってしまうため、埋め込まれた時刻を
+	// ソートキーとして渡します。時刻を持たない ID は末尾に回ります。
+	selectedIDs, meta := paging.SelectIDs(jobIDs, page, perPage, paging.WithSortKey(historyCreatedAtRaw))
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(historyFetchConcurrency)
 
@@ -167,7 +172,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 
 	return domain.VideoHistoryPage{
 		Items:    histories,
-		PageMeta: adjustPageMetaItemCount(meta, len(histories)),
+		PageMeta: paging.AdjustItemCount(meta, len(histories)),
 	}, nil
 }
 
