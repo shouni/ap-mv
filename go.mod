@@ -8,16 +8,16 @@ require (
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
-	github.com/shouni/gcp-kit v1.5.1
+	github.com/shouni/gcp-kit v1.5.2
 	github.com/shouni/gemini-image-kit v1.12.3
 	github.com/shouni/go-character-kit v1.0.11
 	github.com/shouni/go-gemini-client v1.16.4
 	github.com/shouni/go-http-kit v1.7.2
-	github.com/shouni/go-job-kit v1.0.1
-	github.com/shouni/go-notifier v1.3.3
-	github.com/shouni/go-prompt-kit v1.4.0
+	github.com/shouni/go-job-kit v1.0.2
+	github.com/shouni/go-notifier v1.3.4
+	github.com/shouni/go-prompt-kit v1.4.1
 	github.com/shouni/go-remote-io v1.7.2
-	github.com/shouni/go-utils v1.3.0
+	github.com/shouni/go-utils v1.5.0
 	github.com/shouni/go-veo-orchestrator v1.9.3
 	github.com/shouni/netarmor v1.2.0
 	golang.org/x/sync v0.22.0
@@ -35,17 +35,17 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.35.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.59.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.59.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.43.2 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.15 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.33 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.33 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.14 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.26 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.33 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.2 // indirect
-	github.com/aws/smithy-go v1.27.5 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.43.3 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.34 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.35 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.27 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.34 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.35 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.3 // indirect
+	github.com/aws/smithy-go v1.27.6 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
