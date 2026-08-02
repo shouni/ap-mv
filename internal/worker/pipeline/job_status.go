@@ -31,14 +31,11 @@ func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 
 // alreadySucceeded は、そのジョブが既に完了しているかどうかを返します。
 //
-// Cloud Tasks は at-least-once 配信なので、通知の失敗などでワーカーがエラーを返すと
-// 同じタスクが再配信されます。動画生成をまるごと呼び直すと Veo の生成コストが
-// そのまま二重に発生するため、完了済みならここで打ち切ります。
-//
-// なお、これはジョブ単位のガードです。カット単位で分割実行される動画生成の途中
-// （state=running）で再配信された場合は、そのカットの再生成までは防げません。
-// それには各カット生成前に永続化済みの状態を確認する仕組みが別途必要です。
-func (s statusRecorder) alreadySucceeded(ctx context.Context, jobID string) bool {
+// 状態を読めなかった場合はエラーを返します。呼び出し側はそのままエラーを返して
+// Cloud Tasks の再配信に委ねてください。ここで「未完了」に倒すと、完了済みジョブを
+// 作り直してこのガードが防ぐはずのコストを発生させ、「完了済み」に倒すと未完了の
+// ジョブがタスクごと ACK されて二度と実行されません。
+func (s statusRecorder) alreadySucceeded(ctx context.Context, jobID string) (bool, error) {
 	return s.recorder.AlreadySucceeded(ctx, jobID)
 }
 
