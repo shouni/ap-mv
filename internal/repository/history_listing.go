@@ -6,15 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
-	"sort"
 	"strings"
-	"sync"
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/shouni/go-job-kit/cache"
 	"github.com/shouni/go-job-kit/paging"
 	"github.com/shouni/go-remote-io/remoteio"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/shouni/go-utils/jobid"
 
@@ -128,51 +125,39 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		return domain.VideoHistoryPage{}, err
 	}
 
+	// 読み込めなかったジョブも一覧には残したいので、代替値は load の中で返します
+	// （LoadPage は load がエラーを返した ID を一覧から落とします）。
+	load := func(ctx context.Context, id string) (domain.VideoHistory, error) {
+		history, err := r.buildHistory(ctx, id)
+		if err != nil {
+			slog.WarnContext(ctx, "failed to load history metadata",
+				"job_id", id,
+				"error", err,
+			)
+			return domain.VideoHistory{
+				JobID:      id,
+				Title:      id,
+				CreatedAt:  formatHistoryCreatedAt(id),
+				StorageURI: r.metadataURI(id),
+			}, nil
+		}
+		return history, nil
+	}
+
 	// ジョブ ID は "{用途}-{生成時刻}-{乱数}" 形式で、用途プレフィックスが 7 種あります。
 	// ID の文字列比較ではプレフィックス順になってしまうため、埋め込まれた時刻を
 	// ソートキーとして渡します。時刻を持たない ID は末尾に回ります。
-	selectedIDs, meta := paging.SelectIDs(jobIDs, page, perPage, paging.WithSortKey(jobid.SortKey))
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(historyFetchConcurrency)
-
-	histories := make([]domain.VideoHistory, 0, len(selectedIDs))
-	var mu sync.Mutex
-	for _, id := range selectedIDs {
-		eg.Go(func() error {
-			history, err := r.buildHistory(ctx, id)
-			if err != nil {
-				slog.WarnContext(ctx, "failed to load history metadata",
-					"job_id", id,
-					"error", err,
-				)
-				history = domain.VideoHistory{
-					JobID:      id,
-					Title:      id,
-					CreatedAt:  formatHistoryCreatedAt(id),
-					StorageURI: r.metadataURI(id),
-				}
-			}
-			mu.Lock()
-			histories = append(histories, history)
-			mu.Unlock()
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
+	histories, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, load,
+		paging.WithSortKey(jobid.SortKey),
+		paging.WithConcurrency(historyFetchConcurrency),
+	)
+	if err != nil {
 		return domain.VideoHistoryPage{}, err
 	}
-	// 並列取得で順序が崩れるため、ページ選択時と同じ作成日時降順で並べ直す。
-	sort.Slice(histories, func(i, j int) bool {
-		ti, tj := jobid.SortKey(histories[i].JobID), jobid.SortKey(histories[j].JobID)
-		if ti != tj {
-			return ti > tj
-		}
-		return histories[i].JobID > histories[j].JobID
-	})
 
 	return domain.VideoHistoryPage{
 		Items:    histories,
-		PageMeta: paging.AdjustItemCount(meta, len(histories)),
+		PageMeta: meta,
 	}, nil
 }
 
