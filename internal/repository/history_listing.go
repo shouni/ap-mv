@@ -8,7 +8,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/shouni/go-job-kit/cache"
 	"github.com/shouni/go-job-kit/paging"
 	"github.com/shouni/go-remote-io/remoteio"
@@ -40,7 +39,7 @@ type VideoHistoryRepository struct {
 	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
 	// メタデータ本体のキャッシュと違い、これが無いと履歴画面を開くたびに
 	// baseURI 配下全体の List が走ります。
-	jobIDCache *ttlcache.Cache[string, []string]
+	jobIDCache *cache.IDList
 }
 
 // VideoHistoryRepositoryConfig は VideoHistoryRepository の依存関係です。

@@ -7,7 +7,6 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
-	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/shouni/gcp-kit v1.5.2
 	github.com/shouni/gemini-image-kit v1.12.3
 	github.com/shouni/go-character-kit v1.0.11
@@ -63,6 +62,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.23.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/slack-go/slack v0.27.0 // indirect
