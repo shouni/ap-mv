@@ -111,7 +111,12 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
 	// Veo の生成コストがそのまま二重に発生します。
 	status := newStatusRecorder(r.deps.JobStatus)
-	if status.alreadySucceeded(ctx, task.JobID) {
+	done, err := status.alreadySucceeded(ctx, task.JobID)
+	if err != nil {
+		// 状態を読めない。判断できないので再配信に委ねる。
+		return err
+	}
+	if done {
 		slog.InfoContext(ctx, "skipping already completed job")
 		return nil
 	}

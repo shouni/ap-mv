@@ -3,14 +3,15 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
-
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/worker/filter"
+	"github.com/shouni/go-job-kit/jobstatus"
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
 // fakeJobStatusStore はメモリ上でジョブ状態を保持するテスト用ストアです。
@@ -39,7 +40,9 @@ func (s *fakeJobStatusStore) Get(_ context.Context, jobID string) (domain.JobSta
 
 	status, ok := s.statuses[jobID]
 	if !ok {
-		return domain.JobStatus{}, errors.New("not found")
+		// 未記録は ErrNotFound を包んで返す（Store の契約）。素のエラーを返すと
+		// 「読めなかった」に分類され、再実行ガードがエラーを返します。
+		return domain.JobStatus{}, fmt.Errorf("%w: 未記録", jobstatus.ErrNotFound)
 	}
 	return status, nil
 }

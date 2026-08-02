@@ -2,8 +2,9 @@ package repository
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,7 +28,9 @@ func newStatusIO() *statusIO {
 func (s *statusIO) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	body, ok := s.objects[path]
 	if !ok {
-		return nil, errors.New("object not found")
+		// remoteio は未存在を os.ErrNotExist に包んで返す。fake もそれに合わせないと
+		// 「未存在」と「読めない」を取り違えたまま通ってしまう。
+		return nil, fmt.Errorf("オブジェクトが見つかりません (%s): %w", path, os.ErrNotExist)
 	}
 	return io.NopCloser(strings.NewReader(body)), nil
 }
