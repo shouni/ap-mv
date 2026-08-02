@@ -131,7 +131,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	// ジョブ ID は "{用途}-{生成時刻}-{乱数}" 形式で、用途プレフィックスが 7 種あります。
 	// ID の文字列比較ではプレフィックス順になってしまうため、埋め込まれた時刻を
 	// ソートキーとして渡します。時刻を持たない ID は末尾に回ります。
-	selectedIDs, meta := paging.SelectIDs(jobIDs, page, perPage, paging.WithSortKey(historyCreatedAtRaw))
+	selectedIDs, meta := paging.SelectIDs(jobIDs, page, perPage, paging.WithSortKey(jobid.SortKey))
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(historyFetchConcurrency)
 
@@ -163,7 +163,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	}
 	// 並列取得で順序が崩れるため、ページ選択時と同じ作成日時降順で並べ直す。
 	sort.Slice(histories, func(i, j int) bool {
-		ti, tj := historyCreatedAtRaw(histories[i].JobID), historyCreatedAtRaw(histories[j].JobID)
+		ti, tj := jobid.SortKey(histories[i].JobID), jobid.SortKey(histories[j].JobID)
 		if ti != tj {
 			return ti > tj
 		}
