@@ -56,7 +56,7 @@ func (s *statusIO) Delete(_ context.Context, path string) error {
 	return nil
 }
 
-func newStatusRepo(io *statusIO) *JobStatusRepository {
+func newStatusRepo(io *statusIO) *jobstatus.Store[domain.JobStatus] {
 	return NewJobStatusRepository(testBaseURI, io, io)
 }
 
@@ -71,7 +71,7 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	io := newStatusIO()
 	repo := newStatusRepo(io)
 
-	err := repo.Save(context.Background(), domain.JobStatus{
+	err := repo.Save(context.Background(), "mv-20260726-123456-abcdef123456", domain.JobStatus{
 		Status: jobstatus.Status{
 			JobID:   "mv-20260726-123456-abcdef123456",
 			Command: "mv_from_keyframe_video_recipe",
@@ -103,7 +103,7 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 		OriginalJobID: "video-recipe-20260725-101010-aabbccdd",
 		OutputURI:     testBaseURI + "/mv-20260726-123456-abcdef123456/",
 	}
-	if err := repo.Save(context.Background(), original); err != nil {
+	if err := repo.Save(context.Background(), original.JobID, original); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 

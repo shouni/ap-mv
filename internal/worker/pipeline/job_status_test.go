@@ -24,7 +24,7 @@ func newFakeJobStatusStore() *fakeJobStatusStore {
 	return &fakeJobStatusStore{statuses: map[string]domain.JobStatus{}}
 }
 
-func (s *fakeJobStatusStore) Save(_ context.Context, status domain.JobStatus) error {
+func (s *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.JobStatus) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -33,15 +33,15 @@ func (s *fakeJobStatusStore) Save(_ context.Context, status domain.JobStatus) er
 	return nil
 }
 
-func (s *fakeJobStatusStore) Get(_ context.Context, jobID string) (*domain.JobStatus, error) {
+func (s *fakeJobStatusStore) Get(_ context.Context, jobID string) (domain.JobStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	status, ok := s.statuses[jobID]
 	if !ok {
-		return nil, errors.New("not found")
+		return domain.JobStatus{}, errors.New("not found")
 	}
-	return &status, nil
+	return status, nil
 }
 
 func (s *fakeJobStatusStore) states() []domain.JobState {

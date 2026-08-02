@@ -23,7 +23,7 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	}
 
 	status := domain.NewQueuedJobStatus(task, time.Now().UTC())
-	if err := h.JobStatus.Save(r.Context(), status); err != nil {
+	if err := h.JobStatus.Save(r.Context(), task.JobID, status); err != nil {
 		slog.WarnContext(r.Context(), "failed to record queued job status",
 			"job_id", task.JobID,
 			"error", err,

@@ -20,31 +20,13 @@ type statusRecorder struct {
 
 // newStatusRecorder は ports.JobStatusStore を裏付けとした statusRecorder を構築します。
 // store が nil の場合、記録は行われません。
+//
+// ports.JobStatusStore は jobstatus.StatusStore と同じシグネチャなので、そのまま渡せます。
 func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 	if store == nil {
 		return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](nil)}
 	}
-	return statusRecorder{recorder: jobstatus.NewRecorder(portStatusStore{store: store})}
-}
-
-// portStatusStore は ports.JobStatusStore を jobstatus.StatusStore の形へ合わせます。
-//
-// ports 側は Save がジョブ ID を status に含める前提（Save(ctx, status)）で、Get はポインタを
-// 返します。jobstatus 側は Save(ctx, jobID, status) と値返しなので、その差だけを吸収します。
-type portStatusStore struct {
-	store ports.JobStatusStore
-}
-
-func (p portStatusStore) Get(ctx context.Context, jobID string) (domain.JobStatus, error) {
-	status, err := p.store.Get(ctx, jobID)
-	if err != nil {
-		return domain.JobStatus{}, err
-	}
-	return *status, nil
-}
-
-func (p portStatusStore) Save(ctx context.Context, _ string, status domain.JobStatus) error {
-	return p.store.Save(ctx, status)
+	return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](store)}
 }
 
 // alreadySucceeded は、そのジョブが既に完了しているかどうかを返します。
