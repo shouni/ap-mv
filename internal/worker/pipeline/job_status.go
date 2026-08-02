@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/shouni/go-job-kit/jobstatus"
 
@@ -11,14 +10,41 @@ import (
 )
 
 // statusRecorder はジョブ状態の記録を担当します。
-// 記録先が未設定（store == nil）でもパイプラインは動作し、記録だけが行われません。
-// 状態の記録に失敗しても生成そのものは止めず、警告ログに留めます。
+//
+// 再実行ガード・前回記録からの引き継ぎ・記録失敗を握り潰す振る舞いは jobstatus.Recorder に
+// 集約しており、ここが与えるのは ap-mv 固有の状態の組み立てだけです。
+// 記録先が未設定でもパイプラインは動作し、記録だけが行われません。
 type statusRecorder struct {
+	recorder *jobstatus.Recorder[domain.JobStatus]
+}
+
+// newStatusRecorder は ports.JobStatusStore を裏付けとした statusRecorder を構築します。
+// store が nil の場合、記録は行われません。
+func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
+	if store == nil {
+		return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](nil)}
+	}
+	return statusRecorder{recorder: jobstatus.NewRecorder(portStatusStore{store: store})}
+}
+
+// portStatusStore は ports.JobStatusStore を jobstatus.StatusStore の形へ合わせます。
+//
+// ports 側は Save がジョブ ID を status に含める前提（Save(ctx, status)）で、Get はポインタを
+// 返します。jobstatus 側は Save(ctx, jobID, status) と値返しなので、その差だけを吸収します。
+type portStatusStore struct {
 	store ports.JobStatusStore
 }
 
-func (s statusRecorder) enabled() bool {
-	return s.store != nil
+func (p portStatusStore) Get(ctx context.Context, jobID string) (domain.JobStatus, error) {
+	status, err := p.store.Get(ctx, jobID)
+	if err != nil {
+		return domain.JobStatus{}, err
+	}
+	return *status, nil
+}
+
+func (p portStatusStore) Save(ctx context.Context, _ string, status domain.JobStatus) error {
+	return p.store.Save(ctx, status)
 }
 
 // alreadySucceeded は、そのジョブが既に完了しているかどうかを返します。
@@ -31,34 +57,24 @@ func (s statusRecorder) enabled() bool {
 // （state=running）で再配信された場合は、そのカットの再生成までは防げません。
 // それには各カット生成前に永続化済みの状態を確認する仕組みが別途必要です。
 func (s statusRecorder) alreadySucceeded(ctx context.Context, jobID string) bool {
-	if !s.enabled() {
-		return false
-	}
-
-	status, err := s.store.Get(ctx, jobID)
-	if err != nil {
-		// 未記録・読み取り失敗はいずれも「完了していない」とみなして処理を続行します。
-		// 状態を読めないことを理由に生成を止めるほうが害が大きいためです。
-		return false
-	}
-	return status.IsTerminal()
+	return s.recorder.AlreadySucceeded(ctx, jobID)
 }
 
 // markRunning は処理開始を記録し、試行回数を 1 つ進めます。
 func (s statusRecorder) markRunning(ctx context.Context, task *domain.Task) {
-	s.save(ctx, s.build(ctx, task, domain.JobStateRunning, func(status *domain.JobStatus) {
-		status.Attempts++
-	}))
+	s.record(ctx, task, domain.JobStateRunning, func(next, _ *domain.JobStatus) {
+		next.Attempts++
+	})
 }
 
 // markSucceeded は成功と成果物の保存先を記録します。
 func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, req domain.NotificationRequest) {
-	s.save(ctx, s.build(ctx, task, domain.JobStateSucceeded, func(status *domain.JobStatus) {
-		status.OutputURI = req.OutputURI
+	s.record(ctx, task, domain.JobStateSucceeded, func(next, _ *domain.JobStatus) {
+		next.OutputURI = req.OutputURI
 		if req.Title != "" {
-			status.Title = req.Title
+			next.Title = req.Title
 		}
-	}))
+	})
 }
 
 // markFailed は失敗と理由を記録します。
@@ -66,20 +82,22 @@ func (s statusRecorder) markFailed(ctx context.Context, task *domain.Task, cause
 	if cause == nil {
 		return
 	}
-	s.save(ctx, s.build(ctx, task, domain.JobStateFailed, func(status *domain.JobStatus) {
-		status.Error = cause.Error()
-	}))
+	s.record(ctx, task, domain.JobStateFailed, func(next, _ *domain.JobStatus) {
+		next.Error = cause.Error()
+	})
 }
 
-// build は既存の記録（試行回数・投入時刻・タイトル）を引き継いで新しい状態を組み立てます。
-func (s statusRecorder) build(
+// record は今回の記録ぶんの状態を組み立てて保存します。
+// Attempts・QueuedAt と、レシピから題目が取れなかったときの Title は Recorder が
+// 前回の記録から引き継ぎます。apply はその引き継ぎの後に呼ばれます。
+func (s statusRecorder) record(
 	ctx context.Context,
 	task *domain.Task,
 	state domain.JobState,
-	apply func(*domain.JobStatus),
-) *domain.JobStatus {
-	if !s.enabled() || task == nil {
-		return nil
+	apply func(next, prev *domain.JobStatus),
+) {
+	if task == nil {
+		return
 	}
 
 	status := domain.JobStatus{
@@ -93,27 +111,6 @@ func (s statusRecorder) build(
 	if task.Recipe != nil {
 		status.Title = task.Recipe.Title
 	}
-	if previous, err := s.store.Get(ctx, task.JobID); err == nil {
-		status.Attempts = previous.Attempts
-		status.QueuedAt = previous.QueuedAt
-		if status.Title == "" {
-			status.Title = previous.Title
-		}
-	}
-	apply(&status)
 
-	return &status
-}
-
-// save は状態を書き込み、失敗しても警告ログに留めます。
-func (s statusRecorder) save(ctx context.Context, status *domain.JobStatus) {
-	if status == nil {
-		return
-	}
-	if err := s.store.Save(ctx, *status); err != nil {
-		slog.WarnContext(ctx, "failed to record job status",
-			"state", status.State,
-			"error", err,
-		)
-	}
+	s.recorder.Record(ctx, task.JobID, status, apply)
 }

@@ -110,7 +110,7 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
 	// Veo の生成コストがそのまま二重に発生します。
-	status := statusRecorder{store: r.deps.JobStatus}
+	status := newStatusRecorder(r.deps.JobStatus)
 	if status.alreadySucceeded(ctx, task.JobID) {
 		slog.InfoContext(ctx, "skipping already completed job")
 		return nil
