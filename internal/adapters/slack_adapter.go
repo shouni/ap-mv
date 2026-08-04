@@ -133,15 +133,7 @@ func gcsConsoleURL(uri string) string {
 // してしまうと、コピーして gsutil などにそのまま渡せなくなります。
 func writeURIField(body *notify.Body, label, uri string) {
 	uri = strings.TrimSpace(uri)
-	if uri == "" {
-		return
-	}
-
-	if consoleURL := gcsConsoleURL(uri); consoleURL != "" {
-		body.Link(label, consoleURL, uri)
-		return
-	}
-	body.Field(label, uri)
+	body.LinkOrField(label, gcsConsoleURL(uri), uri)
 }
 
 // writeSlackRequestSummary はジョブの識別情報を追記します。
