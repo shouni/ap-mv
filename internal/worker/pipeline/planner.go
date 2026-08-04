@@ -28,6 +28,8 @@ type DefaultPlanner struct {
 //
 // video_recipe_create はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
 // video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
+// video_recipe_draft はさらに手前、カット割り（scene_split）までで停止して VideoRecipe を
+// 下書き保存します。キーフレーム画像はカット数だけ焼かれるため、その手前に確認の余地を残します。
 // regenerate_cut_keyframe は指定カット 1 枚、regenerate_section_keyframes は指定セクションの
 // 全カットのキーフレームのみ再生成します。
 // video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
@@ -64,6 +66,14 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			videoGen,
 			chainFinalize,
 			filter.PublishingFilter{},
+		}, nil
+	case domain.CommandVideoRecipeDraft:
+		// キーフレームを1枚も焼かずに終わる唯一の生成系コマンド。scene_split まで通すのは
+		// カット割りを確定させてから見せるためで、台本直後のカット列は尺が未確定です。
+		return []filter.Filter{
+			filter.ScriptingFilter{},
+			sceneSplit,
+			filter.DraftSaveFilter{},
 		}, nil
 	case domain.CommandVideoRecipeCreate:
 		return []filter.Filter{

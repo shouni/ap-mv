@@ -106,6 +106,15 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Post("/compose", h.PostVideoRecipeCreate)
 		r.Get("/video-recipe-create", h.VideoRecipeCreateForm)
 		r.Post("/video-recipe-create", h.PostVideoRecipeCreate)
+		// 下書き作成は compose と同じ入力で、キーフレームを焼かずにカット割りまでで止まります。
+		r.Post("/compose-draft", h.PostVideoRecipeDraft)
+		r.Post("/video-recipe-draft", h.PostVideoRecipeDraft)
+		r.Route("/drafts", func(r chi.Router) {
+			r.Get("/", h.Drafts)
+			// 詳細画面は用意していません（JSON は ap-mcp 用、ブラウザは一覧へ戻ります）。
+			r.Get("/{jobID}", h.Draft)
+			r.Delete("/{jobID}", h.DeleteDraft)
+		})
 		// フォーム画面は履歴詳細の動画生成フォームへ統合済み。POST は ap-mcp 等の
 		// M2M 呼び出しの互換性のために残している。
 		r.Post("/generate-from-recipe", h.PostRecipe)

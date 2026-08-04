@@ -120,6 +120,42 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 	h.enqueue(w, r, task)
 }
 
+// PostVideoRecipeDraft handles draft creation form submissions.
+//
+// 入力は PostVideoRecipeCreate と同じで、違いはコマンドだけです。キーフレームを焼かずに
+// カット割りまでで止め、結果を下書きとして保存します。
+func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid form")
+		return
+	}
+	// 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
+	// ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
+	jobID, err := jobid.New("video-draft")
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sourceURL, err := h.musicRecipeSourceURL(r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	task := &domain.Task{
+		JobID:          jobID,
+		Command:        domain.CommandVideoRecipeDraft,
+		AIModels:       h.aiModelsFromForm(r),
+		SourceURL:      sourceURL,
+		Text:           strings.TrimSpace(r.FormValue("text")),
+		ImageURL:       strings.TrimSpace(r.FormValue("image_url")),
+		CharacterID:    h.characterIDFromForm(r),
+		VisualMode:     h.visualModeFromForm(r),
+		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
+		CreatedAt:      time.Now().UTC(),
+	}
+	h.enqueue(w, r, task)
+}
+
 // musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
 // submits music_job_id (ap-comp と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
 // M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts

@@ -30,7 +30,10 @@ const (
 
 // VideoHistoryRepository lists generated MV metadata from the workflow output directory.
 type VideoHistoryRepository struct {
-	baseURI      string
+	baseURI string
+	// draftBaseURI は下書き（video_recipe_draft.json）を走査する起点です。baseURI とは
+	// 別プレフィックスで、履歴の走査・削除とは対象範囲が重なりません。
+	draftBaseURI string
 	reader       remoteio.InputReader
 	writer       remoteio.OutputWriter
 	signer       remoteio.URLSigner
@@ -49,7 +52,10 @@ type VideoHistoryRepository struct {
 type VideoHistoryRepositoryConfig struct {
 	// BaseURI は履歴を走査する起点です（末尾のスラッシュは正規化します）。
 	BaseURI string
-	Reader  remoteio.InputReader
+	// DraftBaseURI は下書きを走査する起点です（末尾のスラッシュは正規化します）。
+	// 空の場合、下書き機能は無効になります（一覧は空を返します）。
+	DraftBaseURI string
+	Reader       remoteio.InputReader
 	// Writer は履歴の削除・更新に使います。読み取り専用の用途では nil を許容します。
 	Writer remoteio.OutputWriter
 	// Signer は再生用の署名付き URL を発行します。発行しない用途では nil を許容します。
@@ -66,6 +72,7 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 	}
 	return &VideoHistoryRepository{
 		baseURI:      strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
+		draftBaseURI: strings.TrimRight(strings.TrimSpace(cfg.DraftBaseURI), "/"),
 		reader:       cfg.Reader,
 		writer:       cfg.Writer,
 		signer:       cfg.Signer,
@@ -119,7 +126,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	if r == nil || r.reader == nil || r.baseURI == "" {
 		return domain.VideoHistoryPage{}, nil
 	}
-	jobIDs, err := r.listJobIDs(ctx, r.collectJobIDs)
+	jobIDs, err := r.listJobIDs(ctx, jobIDListCacheKey, r.collectJobIDs)
 	if err != nil {
 		return domain.VideoHistoryPage{}, err
 	}

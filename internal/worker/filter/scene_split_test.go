@@ -264,6 +264,76 @@ func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
 	}
 }
 
+// TestSceneSplitFilterIsIdempotent pins the property the draft flow depends on: a recipe that
+// already went through scene splitting must survive a second pass unchanged. Both
+// mv_from_keyframe_video_recipe (RecipeLoad -> SceneSplit) and the draft flow re-run the filter
+// over an already-split recipe, so a non-idempotent pass would silently re-plan the cuts the user
+// just reviewed.
+func TestSceneSplitFilterIsIdempotent(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		usePreviousVideo bool
+	}{
+		{"keyframe scenes", false},
+		{"video-to-video chains", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recipe := &orchestrator.VideoRecipe{
+				ProjectTitle: "test",
+				MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
+				Cuts: []orchestrator.Cut{
+					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
+					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"}},
+				},
+			}
+
+			filter := SceneSplitFilter{UsePreviousVideo: tc.usePreviousVideo}
+			newContext := func() *Context {
+				return &Context{State: State{
+					Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+					VideoRecipe: recipe,
+				}}
+			}
+
+			if err := filter.Execute(context.Background(), newContext()); err != nil {
+				t.Fatalf("first Execute() error = %v", err)
+			}
+			first := append([]orchestrator.Cut(nil), recipe.Cuts...)
+
+			if err := filter.Execute(context.Background(), newContext()); err != nil {
+				t.Fatalf("second Execute() error = %v", err)
+			}
+			second := recipe.Cuts
+
+			if len(second) != len(first) {
+				t.Fatalf("second pass produced %d cuts, want %d (same as first pass)", len(second), len(first))
+			}
+			for i := range first {
+				a, b := first[i], second[i]
+				if a.DurationSec != b.DurationSec || a.StartSec != b.StartSec || a.EndSec != b.EndSec {
+					t.Errorf("cut[%d] timing changed: first %v..%v (%vs), second %v..%v (%vs)",
+						i, a.StartSec, a.EndSec, a.DurationSec, b.StartSec, b.EndSec, b.DurationSec)
+				}
+				if a.IsChainStart != b.IsChainStart {
+					t.Errorf("cut[%d].IsChainStart changed: %v -> %v", i, a.IsChainStart, b.IsChainStart)
+				}
+				if a.IsSectionStart != b.IsSectionStart {
+					t.Errorf("cut[%d].IsSectionStart changed: %v -> %v", i, a.IsSectionStart, b.IsSectionStart)
+				}
+				if a.VisualAnchor != b.VisualAnchor {
+					t.Errorf("cut[%d].VisualAnchor changed:\n first  = %q\n second = %q", i, a.VisualAnchor, b.VisualAnchor)
+				}
+				if a.AudioCue != b.AudioCue {
+					t.Errorf("cut[%d].AudioCue changed:\n first  = %q\n second = %q", i, a.AudioCue, b.AudioCue)
+				}
+				if a.Dialogue != b.Dialogue {
+					t.Errorf("cut[%d].Dialogue changed: %q -> %q", i, a.Dialogue, b.Dialogue)
+				}
+			}
+		})
+	}
+}
+
 func TestAllocateChainDurations(t *testing.T) {
 	full := videoToVideoChainDurations(veoSupportedDurationsSec)
 	reference := videoToVideoChainDurations(veoReferenceToVideoDurationsSec)

@@ -135,6 +135,12 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 		videoEnd = cuts[0].StartSec
 	}
 	for _, cut := range cuts {
+		// IsChainStart が立っているカットは、前回の SceneSplit が割り当て済みのチェーン
+		// ブロックです（draft から読み直した場合や、保存済みレシピを渡された
+		// mv_from_keyframe_video_recipe）。そのブロックは下の割り当てで自分自身へ
+		// 再割り当てされて必ず単独ブロック（i == 0）になるため、シーンリセットを
+		// 添字（i > 0）からは復元できません。ここで拾って引き継ぎます。
+		sceneReset := cut.IsChainStart && cut.IsSectionStart
 		cut = resetCutForSceneKeyframe(cut)
 		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
 		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
@@ -164,7 +170,9 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 			// inheritance for visual continuity. SectionIndex does not change between these
 			// sub-blocks; real musical section boundaries are detected downstream from
 			// SectionIndex and marked IsSectionStart there.
-			sub.IsSectionStart = i > 0
+			// sceneReset carries a scene change planned by an earlier pass over the same
+			// recipe, so re-splitting is idempotent (TestSceneSplitFilterIsIdempotent).
+			sub.IsSectionStart = i > 0 || sceneReset
 			expanded = append(expanded, sub)
 			videoEnd += d
 		}

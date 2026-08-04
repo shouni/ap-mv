@@ -42,6 +42,10 @@ type Dependencies struct {
 	// OutputBaseURI はタスク成果物のベース URI です。空の場合はフィルター側で
 	// 保存先を指定しません（任意）。
 	OutputBaseURI string
+	// DraftBaseURI は video_recipe_draft コマンドが下書きを保存するベース URI です。
+	// OutputBaseURI とは別プレフィックスにしてください（履歴走査と削除の対象範囲が
+	// 混ざります）。空の場合は下書きの保存先を指定しません（任意）。
+	DraftBaseURI string
 	// Timeout はタスク 1 件の実行時間の上限です。0 以下は無制限を意味します（任意）。
 	// カット分割された継続タスクにはそれぞれ個別に適用されます。
 	Timeout time.Duration
@@ -188,6 +192,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 			Recipe:      task.Recipe,
 			VideoRecipe: task.VideoRecipe,
 			OutputPath:  r.outputPath(task),
+			DraftPath:   r.draftPath(task),
 		},
 		Services: filter.Services{
 			VideoRunner:       videoRunner,
@@ -315,4 +320,15 @@ func (r *Runner) outputPath(task *domain.Task) string {
 		return ""
 	}
 	return strings.TrimRight(r.deps.OutputBaseURI, "/") + "/" + task.JobID + "/"
+}
+
+// draftPath は下書き（video_recipe_draft.json）を配置するベースパスを返します。
+//
+// DraftBaseURI が未設定の場合は空文字を返し、DraftSaveFilter がエラーにします。
+// 下書き作成が保存先不明のまま成功したことになると、一覧に出ない下書きが生まれます。
+func (r *Runner) draftPath(task *domain.Task) string {
+	if task == nil || strings.TrimSpace(r.deps.DraftBaseURI) == "" {
+		return ""
+	}
+	return strings.TrimRight(r.deps.DraftBaseURI, "/") + "/" + task.JobID + "/"
 }

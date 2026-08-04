@@ -15,6 +15,12 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 		want    []string
 	}{
 		{
+			// 下書きはキーフレームを1枚も焼かずに終わる唯一の生成系コマンド。cut_keyframe_gen が
+			// 紛れ込むと「確認してから焼く」という下書きの存在理由が消えるため、ここで固定する。
+			command: domain.CommandVideoRecipeDraft,
+			want:    []string{"scripting", "scene_split", "draft_save"},
+		},
+		{
 			command: domain.CommandVideoRecipeCreate,
 			want:    []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"},
 		},

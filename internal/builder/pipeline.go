@@ -54,6 +54,7 @@ func buildPipeline(
 		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, aiClient, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
+		DraftBaseURI:      workflowDraftBaseURI(cfg),
 		Timeout:           cfg.AI.PipelineTimeout,
 		JobStatus:         externals.jobStatus,
 	}

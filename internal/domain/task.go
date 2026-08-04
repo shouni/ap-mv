@@ -23,6 +23,11 @@ type TaskCommand string
 const (
 	// CommandVideoRecipeCreate は、VideoRecipeを作成するコマンドです。
 	CommandVideoRecipeCreate TaskCommand = "video_recipe_create"
+	// CommandVideoRecipeDraft は、台本生成とカット割りまでを実行し、キーフレームを
+	// 1枚も焼かずに VideoRecipe を下書きとして保存するコマンドです。カット数がそのまま
+	// キーフレーム画像の生成枚数になるため、割り付けを確認してから進めたいときに使います。
+	// 保存した下書きは recipe_url として mv_from_keyframe_video_recipe へ渡します。
+	CommandVideoRecipeDraft TaskCommand = "video_recipe_draft"
 	// CommandMVFromKeyframeVideoRecipe は、VideoRecipeからMVを生成するコマンドです。
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
 	// CommandRegenerateCutKeyframe は、指定カットのキーフレームを再生成するコマンドです。
@@ -116,7 +121,7 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandVideoRecipeCreate:
+	case CommandVideoRecipeCreate, CommandVideoRecipeDraft:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
 		}
