@@ -43,6 +43,12 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			want:    []string{"recipe_load", "zip_upload"},
 		},
 		{
+			// カット単位の動画作り直しは scene_split を通さない。保存済みのカット割りを
+			// 再計画すると、作り直さないカットの動画（既存の VideoURL）と対応が崩れる。
+			command: domain.CommandRegenerateCutVideo,
+			want:    []string{"recipe_load", "cut_video_select", "video_gen", "chain_finalize", "publishing"},
+		},
+		{
 			command: domain.CommandShortVideoFromSection,
 			want:    []string{"recipe_load", "section_select", "video_gen", "chain_finalize", "publishing"},
 		},

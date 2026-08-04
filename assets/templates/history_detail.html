@@ -254,6 +254,14 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
                     {{end}}
                     {{if $cut.Status}}<span class="badge text-bg-light border">{{$cut.Status}}</span>{{end}}
                     <a href="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
+                    {{if $cut.VideoURL}}
+                    <form method="POST" action="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate-video" class="d-inline"
+                          onsubmit="return confirm('Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?');">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <button type="submit" class="btn btn-sm btn-outline-warning"
+                                title="このカットの動画だけを作り直します。キーフレームはそのまま使い、結果は新しいジョブになります">動画を作り直す</button>
+                    </form>
+                    {{end}}
                 </div>
             </div>
             <dl class="row small mb-2">

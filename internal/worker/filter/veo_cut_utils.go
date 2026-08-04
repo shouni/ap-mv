@@ -2,7 +2,6 @@ package filter
 
 import (
 	"math"
-	"sort"
 	"strings"
 
 	characterkit "github.com/shouni/go-character-kit/character"
@@ -12,59 +11,38 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// veoSupportedDurationsSec は Veo image_to_video が受け付けるカット尺（秒）の昇順リストです。
-var veoSupportedDurationsSec = []float64{4, 6, 8}
+// Veo が受け付けるカット尺は go-veo-orchestrator/ports が唯一の定義元です。ここで写しを
+// 持つと、ライブラリ側の runner/video.go が送信前に自分の定数で尺を検証している
+// （不一致は ErrUnsupportedCutDuration）ため、片方だけ変えた時点で全カットが弾かれます。
+// 名前だけ短く借りて、値と算出はライブラリのものをそのまま使います。
+var (
+	// veoSupportedDurationsSec は Veo image_to_video が受け付けるカット尺（秒）の昇順リストです。
+	veoSupportedDurationsSec = orchestrator.ImageToVideoDurationsSec()
+	// veoReferenceToVideoDurationsSec は Veo reference_to_video（referenceImages）が受け付ける
+	// 唯一のカット尺（秒）です。
+	veoReferenceToVideoDurationsSec = orchestrator.ReferenceToVideoDurationsSec()
+)
 
-// veoReferenceToVideoDurationsSec は Veo reference_to_video（referenceImages）が受け付ける
-// 唯一のカット尺（秒）です。image_to_video の {4,6,8} とは異なるサポート値のため、
-// 個別に定義しています。
-var veoReferenceToVideoDurationsSec = []float64{8}
-
-// veoMaxCutDurationSec は Veo image_to_video の最大カット尺（秒）です。
-const veoMaxCutDurationSec = 8.0
-
-// veoVideoExtensionDurationSec は Veo の video_extension（video-to-video、前カット動画を
-// PreviousVideoID として引き継ぐ生成）が受け付ける唯一のカット尺（秒）です。
-// image_to_video の {4,6,8} とは異なるサポート値のため、個別に定義しています。
-const veoVideoExtensionDurationSec = 7.0
-
-// veoContinuationMaxDurationSec は継続チェーンの累積尺（秒）がこの値に達する手前で
-// 新しいチェーンへリセットする閾値です（動画を打ち切るのではなく、そのカットを
-// PreviousVideoIDなしの新規ベースとして生成し直す）。
-//
-// Veo の video_extension が「前の動画」として受け付けられる累積尺の実際の上限は30秒
-// （実運用で確認済み: 累積29秒(cut4)までの動画をPreviousVideoIDとして渡す継続生成は成功するが、
-// 累積36秒(cut5)の動画を渡すと "Video duration 36 seconds exceeds the maximum duration 30
-// seconds" (code=3) で失敗する）。しかし video_extension は前回の生成結果を条件入力として
-// 再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積する
-// （実ジョブで確認: 継続1回目で彩度+20%、以降のラウンドでもコントラストが単調に増加し続けた）。
-// そのためAPI上限の30秒ではなく、より低いこの値で早めにリセットし、1チェーンあたりの
-// 継続回数（＝ドリフトの蓄積量）を抑える。
-const veoContinuationMaxDurationSec = 24.0
+const (
+	// veoMaxCutDurationSec は Veo image_to_video の最大カット尺（秒）です。
+	veoMaxCutDurationSec = orchestrator.VeoMaxCutDurationSec
+	// veoVideoExtensionDurationSec は Veo の video_extension（video-to-video、前カット動画を
+	// PreviousVideoID として引き継ぐ生成）が受け付ける唯一のカット尺（秒）です。
+	veoVideoExtensionDurationSec = orchestrator.VeoVideoExtensionDurationSec
+	// veoContinuationMaxDurationSec は継続チェーンの累積尺（秒）がこの値に達する手前で
+	// 新しいチェーンへリセットする閾値です（動画を打ち切るのではなく、そのカットを
+	// PreviousVideoID なしの新規ベースとして生成し直す）。API 上限の30秒ではなくこの値を
+	// 使う理由（継続ごとの彩度・コントラストのドリフト蓄積）はライブラリ側の定義を参照。
+	veoContinuationMaxDurationSec = orchestrator.VeoContinuationMaxDurationSec
+)
 
 // videoToVideoChainDurations は、1本の継続チェーン（ベース1カット + video_extension の
 // 継続カット列）として生成できる合計尺（秒）の候補を昇順で返します。baseDurations は
 // チェーン先頭カットに許される尺（image_to_video なら {4,6,8}、reference_to_video なら
-// {8}）です。各候補は「ベース尺 + 7秒 × 継続回数」で、累積尺が
-// veoContinuationMaxDurationSec を超える手前まで（expandCutsToSupportedDurations の
-// リセット判定と同じ規則）伸ばした値です。既定の設定では {4,6,8,11,13,15,18,20,22}
-// になります。scene_split がチェーンブロックの尺を計画する際の候補として使います。
+// {8}）です。既定の設定では {4,6,8,11,13,15,18,20,22} になります。
+// scene_split がチェーンブロックの尺を計画する際の候補として使います。
 func videoToVideoChainDurations(baseDurations []float64) []float64 {
-	seen := make(map[float64]bool)
-	var out []float64
-	for _, base := range baseDurations {
-		for d := base; ; d += veoVideoExtensionDurationSec {
-			if !seen[d] {
-				seen[d] = true
-				out = append(out, d)
-			}
-			if d+veoVideoExtensionDurationSec > veoContinuationMaxDurationSec {
-				break
-			}
-		}
-	}
-	sort.Float64s(out)
-	return out
+	return orchestrator.ChainDurations(baseDurations)
 }
 
 // expandCutsToSupportedDurations は各カットの尺を Veo のサポート値へ正規化します。

@@ -319,6 +319,46 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
+// PostRegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すタスクを投入します。
+//
+// キーフレームは元ジョブのものをそのまま使い、作り直さないカットは生成済みのままスキップ
+// されます。継続チェーン方式では同じチェーンの後続カットもまとめて作り直されます
+// （CutVideoSelectFilter）。結果は新しいジョブとして保存され、元ジョブは変更しません
+// （履歴詳細の「動画生成」と同じ扱い。既に完成しているMVを途中まで壊した状態にしないため）。
+func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
+	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	history, ok := h.loadHistoryForMutation(w, r, jobID)
+	if !ok {
+		return
+	}
+	// 投入前に存在確認しておく。ここで弾かないと、失敗したジョブとしてしか現れない。
+	if _, found := findHistoryCutByIndex(history.Cuts, cutIndex); !found {
+		writeError(w, r, http.StatusBadRequest, "cut not found in this job")
+		return
+	}
+	newJobID, err := jobid.New("regen-video")
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
+	}
+	task := &domain.Task{
+		JobID:     newJobID,
+		Command:   domain.CommandRegenerateCutVideo,
+		RecipeURL: history.StorageURI,
+		CutIndex:  &cutIndex,
+		VeoModel:  h.veoModelFromForm(r),
+		// アスペクト比はキーフレーム作成時に決まった値を必ず引き継ぐ
+		// （PostGenerateVideoFromHistory と同じ理由）。
+		VeoAspectRatio: history.AspectRatio,
+		CreatedAt:      time.Now().UTC(),
+	}
+	h.enqueue(w, r, task)
+}
+
 // PostGenerateVideoFromHistory は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
 // target=full で全カットのフルMV生成、target=<セクションインデックス> でそのセクションだけの
 // ショート動画生成になります。キーフレーム・歌詞・時間割はジョブの保存済みレシピから

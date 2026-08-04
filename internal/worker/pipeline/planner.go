@@ -59,6 +59,18 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			filter.RecipeLoadFilter{},
 			filter.ZipUploadFilter{},
 		}, nil
+	case domain.CommandRegenerateCutVideo:
+		// scene_split を通さないのが要点。保存済みのカット割りをそのまま使い、
+		// CutVideoSelectFilter が対象カット（と同じチェーンの残り）だけを未生成へ戻す。
+		// 他のカットは status=generated のままなので videoGen がスキップし、
+		// chainFinalize が既存の動画と合わせて 1 本へ結合し直す。
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
+			filter.CutVideoSelectFilter{UsePreviousVideo: p.UsePreviousVideo},
+			videoGen,
+			chainFinalize,
+			filter.PublishingFilter{},
+		}, nil
 	case domain.CommandShortVideoFromSection:
 		return []filter.Filter{
 			filter.RecipeLoadFilter{},
