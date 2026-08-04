@@ -77,6 +77,7 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 		videoEnd = cuts[0].StartSec
 	}
 	for _, cut := range cuts {
+		priorKeyframe := cut.KeyframeReference
 		cut = resetCutForSceneKeyframe(cut)
 		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
 		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。StartSec/EndSec は
@@ -93,6 +94,8 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 				subCuts[i].VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(subCuts))
 				subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
 			}
+		} else {
+			subCuts[0].KeyframeReference = priorKeyframe
 		}
 		expanded = append(expanded, subCuts...)
 		videoEnd = expanded[len(expanded)-1].EndSec
@@ -141,6 +144,12 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 		// 再割り当てされて必ず単独ブロック（i == 0）になるため、シーンリセットを
 		// 添字（i > 0）からは復元できません。ここで拾って引き継ぎます。
 		sceneReset := cut.IsChainStart && cut.IsSectionStart
+		// 1ブロックへ再割り当てされたカットは、焼いてあるキーフレームがそのカットのまま
+		// 対応し続けるので捨てません（下の len(durations) == 1 の分岐で戻します）。捨てると
+		// 「保存済みキーフレームから動画を作る」操作のたびに画像を全部焼き直すことになります。
+		// 複数ブロックへ割れた場合は、1枚の絵が別々の scene beat を持つ複数カットに
+		// 対応してしまうため戻しません。
+		priorKeyframe := cut.KeyframeReference
 		cut = resetCutForSceneKeyframe(cut)
 		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
 		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
@@ -161,6 +170,8 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 				sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
 				sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
 				sub.Dialogue = domain.DistributeLines(lines, i, len(durations))
+			} else {
+				sub.KeyframeReference = priorKeyframe
 			}
 			// resetCutForSceneKeyframe already forced IsSectionStart=false above, so this is
 			// the only place it gets set: sub-block 2+ is a deliberate in-section scene change
