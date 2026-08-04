@@ -82,6 +82,47 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 	}
 }
 
+// TestRecipeLoadFilterAbsolutizesRelativeKeyframes pins that job-relative keyframe paths from a
+// stored recipe are resolved against the job the recipe came from, not the new job about to run.
+//
+// This matters because CutKeyframeRunner skips any cut whose KeyframeReference is non-empty. A
+// relative path left as-is would satisfy that check while pointing at nothing under the new job's
+// output path, so Veo would be handed a reference it cannot read.
+func TestRecipeLoadFilterAbsolutizesRelativeKeyframes(t *testing.T) {
+	reader := staticReader{content: `{
+		"title": "legacy recipe",
+		"cuts": [
+			{"cut_index": 1, "duration_sec": 8, "visual_anchor": "a", "keyframe_reference": "images/keyframe_001.png"},
+			{"cut_index": 2, "duration_sec": 8, "visual_anchor": "b", "keyframe_reference": "gs://bucket/other-job/images/keyframe_002.png"},
+			{"cut_index": 3, "duration_sec": 8, "visual_anchor": "c"}
+		]
+	}`}
+	fc := &Context{
+		State: State{
+			Task: &domain.Task{
+				JobID:     "mv-2",
+				Command:   domain.CommandMVFromKeyframeVideoRecipe,
+				RecipeURL: "gs://bucket/ap-mv/veo/jobs/job-1/video_music_meta.json",
+			},
+		},
+		Services: Services{Reader: reader},
+	}
+
+	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	want := []string{
+		"gs://bucket/ap-mv/veo/jobs/job-1/images/keyframe_001.png",
+		"gs://bucket/other-job/images/keyframe_002.png",
+		"",
+	}
+	for i, expected := range want {
+		if got := fc.VideoRecipe.Cuts[i].KeyframeReference; got != expected {
+			t.Errorf("cut[%d].KeyframeReference = %q, want %q", i, got, expected)
+		}
+	}
+}
+
 // TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	fc := &Context{

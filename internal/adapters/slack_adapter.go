@@ -89,12 +89,20 @@ func (s *SlackAdapter) NotifyTaskError(ctx context.Context, errDetail error, req
 func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) string {
 	var sb strings.Builder
 	writeSlackRequestSummary(&sb, req)
-	historyJobID := req.HistoryJobID
-	if historyJobID == "" {
-		historyJobID = req.JobID
-	}
-	if historyURL := s.historyDetailURL(historyJobID); historyURL != "" {
-		fmt.Fprintf(&sb, "*History Detail:* <%s|%s>\n", historyURL, historyJobID)
+	// 下書き（video_recipe_draft）は video_music_meta.json を書かないため履歴に現れません。
+	// 履歴詳細のリンクを出すと開いた先が 404/500 になるので、成果物が実際に並ぶ一覧へ誘導します。
+	if req.Command == string(domain.CommandVideoRecipeDraft) {
+		if draftsURL := s.draftsURL(); draftsURL != "" {
+			fmt.Fprintf(&sb, "*Drafts:* <%s|%s>\n", draftsURL, req.JobID)
+		}
+	} else {
+		historyJobID := req.HistoryJobID
+		if historyJobID == "" {
+			historyJobID = req.JobID
+		}
+		if historyURL := s.historyDetailURL(historyJobID); historyURL != "" {
+			fmt.Fprintf(&sb, "*History Detail:* <%s|%s>\n", historyURL, historyJobID)
+		}
 	}
 	writeSlackRequestGenerationMetadata(&sb, req)
 	if req.CutCount > 0 {
@@ -147,6 +155,19 @@ func writeSlackRequestSource(sb *strings.Builder, req domain.NotificationRequest
 	if req.AudioURL != "" {
 		fmt.Fprintf(sb, "*Audio:* %s\n", req.AudioURL)
 	}
+}
+
+// draftsURL は下書き一覧のURLを返します。下書きには専用の詳細画面が無いため
+// （JSON は ap-mcp 用、ブラウザは一覧へリダイレクト）、リンク先は一覧そのものです。
+func (s *SlackAdapter) draftsURL() string {
+	if s.serviceURL == "" {
+		return ""
+	}
+	draftsURL, err := url.JoinPath(s.serviceURL, "/web/drafts")
+	if err != nil {
+		return ""
+	}
+	return draftsURL
 }
 
 func (s *SlackAdapter) historyDetailURL(jobID string) string {

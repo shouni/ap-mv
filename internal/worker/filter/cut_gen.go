@@ -42,9 +42,9 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	if outputPath == "" {
 		return fmt.Errorf("output path is required")
 	}
-	if allCutsHaveKeyframes(fc.VideoRecipe.Cuts) {
-		return reuseExistingKeyframes(ctx, fc, outputPath)
-	}
+	// RunAndSave は keyframe_reference を持つカットを焼き直しません
+	// （go-veo-orchestrator v1.10.0 以降）。SceneSplitFilter が 1:1 で再割り当てされた
+	// カットの参照を残すため、保存済みレシピからの動画生成は画像を作り直さずに済みます。
 	recipe, err := fc.Workflows.CutKeyframe.RunAndSave(ctx, fc.VideoRecipe, outputPath)
 	if err != nil {
 		return err
@@ -52,44 +52,6 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	applyLyricsToVideoRecipeCuts(recipe)
 	fc.VideoRecipe = recipe
 	fc.Recipe, err = toDomainRecipe(recipe)
-	return err
-}
-
-// allCutsHaveKeyframes reports whether every cut already points at a generated keyframe image.
-//
-// CutKeyframeRunner.RunAndSave has no per-cut skip — it regenerates the whole recipe — so
-// without this check, "generate a video from the saved keyframes" would re-bake every image
-// first. SceneSplitFilter keeps a cut's KeyframeReference when the cut re-allocates 1:1, which
-// is what makes this reachable for an already-planned recipe.
-//
-// 相対パスの参照（旧ジョブのレシピ）は元ジョブのベースからしか解決できず、このジョブの
-// 出力パスとは一致しないため温存の対象にしません（従来どおり焼き直します）。
-func allCutsHaveKeyframes(cuts []domain.VideoCut) bool {
-	if len(cuts) == 0 {
-		return false
-	}
-	for _, cut := range cuts {
-		if !strings.Contains(strings.TrimSpace(cut.KeyframeReference), "://") {
-			return false
-		}
-	}
-	return true
-}
-
-// reuseExistingKeyframes finishes the keyframe stage without generating any image.
-//
-// RunAndSave が副産物として書いていた video_music_meta.json をここで明示的に書きます。
-// 履歴一覧はこのファイルを目印にジョブを拾うため、書かずに進むと生成中のジョブが
-// 履歴から見えなくなります（フルMVは数十分かかるので、その間ずっと消えます）。
-func reuseExistingKeyframes(ctx context.Context, fc *Context, outputPath string) error {
-	applyLyricsToVideoRecipeCuts(fc.VideoRecipe)
-	if fc.Workflows.Publish != nil {
-		if _, err := fc.Workflows.Publish.Run(ctx, fc.VideoRecipe, outputPath); err != nil {
-			return fmt.Errorf("cut_keyframe_gen: save metadata for reused keyframes: %w", err)
-		}
-	}
-	var err error
-	fc.Recipe, err = toDomainRecipe(fc.VideoRecipe)
 	return err
 }
 

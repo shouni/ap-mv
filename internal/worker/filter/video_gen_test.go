@@ -491,8 +491,3 @@ func (w *recordingVideoWorkflow) Run(_ context.Context, _ *orchestrator.VideoRec
 	w.runCalled = true
 	return nil, nil
 }
-
-func (w *recordingVideoWorkflow) RunAndSave(_ context.Context, _ *orchestrator.VideoRecipe, _ string) (*orchestrator.VideoPlotResponse, error) {
-	w.runCalled = true
-	return nil, nil
-}

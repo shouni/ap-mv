@@ -8,6 +8,8 @@ import (
 	"io"
 	"strings"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -80,7 +82,26 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
 	applyTaskCharacterIDToVideoRecipe(fc.Task, fc.VideoRecipe)
+	absolutizeKeyframeReferences(fc.VideoRecipe, originalJobOutputPath(fc.Task.RecipeURL))
 	return nil
+}
+
+// absolutizeKeyframeReferences は、元ジョブ相対で保存された keyframe_reference を
+// そのジョブのルートで絶対 URI 化します。
+//
+// 保存済みレシピは新しいジョブとして実行されるため、相対参照のままだと新ジョブの出力パスを
+// 基準に解決されて別のオブジェクト（たいていは存在しないもの）を指します。ここで直しておくのは、
+// 下流の CutKeyframeRunner が「keyframe_reference が空でない = 焼き直さない」で判断するためです。
+// 解決前に渡すと、指し先の壊れた参照をそのまま再利用してしまいます。
+//
+// base が空（レシピ JSON を直接渡された場合など）や、すでにスキーム付きの参照はそのままです。
+func absolutizeKeyframeReferences(recipe *orchestrator.VideoRecipe, base string) {
+	if recipe == nil || base == "" {
+		return
+	}
+	for i := range recipe.Cuts {
+		recipe.Cuts[i].KeyframeReference = resolveRecipeObjectURI(base, recipe.Cuts[i].KeyframeReference)
+	}
 }
 
 // readRecipeInput reads and validates a music recipe or keyframe video recipe from remote storage.

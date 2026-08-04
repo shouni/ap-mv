@@ -137,6 +137,8 @@ github.com/shouni/go-utils v1.5.0 h1:uYjAMebKGDoZFDBZxugndcyTyaCpmNXd8KgnzueqnOg
 github.com/shouni/go-utils v1.5.0/go.mod h1:MRR3X08kWJ+sSS2+KRuvWEikXui5Tixg9vta6r30SnE=
 github.com/shouni/go-veo-orchestrator v1.9.3 h1:ec8fFbx+wtFeKzh6aOPp1AIf6T/gB8Lb7fkNBjLcEtI=
 github.com/shouni/go-veo-orchestrator v1.9.3/go.mod h1:Ojo+M27bKaVnTwTnJkduSr8NZgbldEbB52Aju6teRko=
+github.com/shouni/go-veo-orchestrator v1.10.0 h1:aENMvNxJKxzGKmvg31Tl9ZRSnsnY88ZQQyldxHo2Kec=
+github.com/shouni/go-veo-orchestrator v1.10.0/go.mod h1:tjg+OkHhfNwV0zNEITk13MP1f59t+y53NI3429BTegM=
 github.com/shouni/netarmor v1.2.0 h1:dubvM231CMkYz6bhYNB29Gp4YA3UnP6Wq0wfwzMFxnI=
 github.com/shouni/netarmor v1.2.0/go.mod h1:WxojUH0M+Z2lqZH2vw572A1zn5l1VkH7V47rnTnZmVY=
 github.com/slack-go/slack v0.27.0 h1:VWOpUzOK6UAPCCQlFxl79jhv8a/b+GOSJMnWziDJ8B8=
