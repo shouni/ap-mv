@@ -26,6 +26,10 @@ type fakeCutKeyframeRunner struct {
 	// editPaths records the output path of each EditAndSave call, so section tests can assert
 	// per-cut calls do not collide on the same keyframe_1.png destination.
 	editPaths []string
+	// keyframeRefsAtRunAndSave records the KeyframeReference values as they arrived, before the
+	// fake overwrites them. Skipping already-baked cuts is the runner's job (go-veo-orchestrator),
+	// so what ap-mv must be checked for is that it hands those references through untouched.
+	keyframeRefsAtRunAndSave []string
 }
 
 func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
@@ -36,6 +40,7 @@ func (f *fakeCutKeyframeRunner) RunAndSave(_ context.Context, recipe *orchestrat
 	f.runAndSaveCalled = true
 	cutIndexes := make([]int, 0, len(recipe.Cuts))
 	for i := range recipe.Cuts {
+		f.keyframeRefsAtRunAndSave = append(f.keyframeRefsAtRunAndSave, recipe.Cuts[i].KeyframeReference)
 		recipe.Cuts[i].KeyframeReference = f.resultKeyframeRef
 		cutIndexes = append(cutIndexes, recipe.Cuts[i].CutIndex)
 	}
