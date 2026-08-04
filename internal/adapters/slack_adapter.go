@@ -109,13 +109,39 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) stri
 		fmt.Fprintf(&sb, "*Cuts:* `%d`\n", req.CutCount)
 	}
 	if req.OutputURI != "" {
-		fmt.Fprintf(&sb, "*Output:* %s\n", req.OutputURI)
+		fmt.Fprintf(&sb, "*Output:* %s\n", gcsConsoleLink(req.OutputURI))
 	}
 	writeSlackRequestSource(&sb, req)
 	if sb.Len() == 0 {
 		sb.WriteString(slackNotAvailable)
 	}
 	return sb.String()
+}
+
+// gcsConsoleLink は gs:// URI を Slack で開けるリンクへ変換します。
+//
+// Slack が自動リンク化するのは http/https だけで、gs:// はただの文字列として表示されます
+// （押しても何も起きません）。ブラウザで開ける形は Cloud Console の URL なので、表示は
+// gs:// のまま（コピーして gsutil などにそのまま渡せるように）、リンク先だけ Console に
+// します。末尾がスラッシュのものはディレクトリ扱いでバケットブラウザへ、単体オブジェクトは
+// 詳細ページへ飛ばします。
+//
+// gs:// 以外（http(s) や空文字）はそのまま返し、呼び出し側がそのまま出力します。
+func gcsConsoleLink(uri string) string {
+	uri = strings.TrimSpace(uri)
+	const scheme = "gs://"
+	if !strings.HasPrefix(uri, scheme) {
+		return uri
+	}
+	objectPath := strings.TrimPrefix(uri, scheme)
+	if objectPath == "" {
+		return uri
+	}
+	consoleURL := "https://console.cloud.google.com/storage/browser/" + objectPath
+	if !strings.HasSuffix(objectPath, "/") {
+		consoleURL = "https://console.cloud.google.com/storage/browser/_details/" + objectPath
+	}
+	return fmt.Sprintf("<%s|%s>", consoleURL, uri)
 }
 
 func writeSlackRequestSummary(sb *strings.Builder, req domain.NotificationRequest) {
@@ -147,13 +173,13 @@ func writeSlackRequestGenerationMetadata(sb *strings.Builder, req domain.Notific
 
 func writeSlackRequestSource(sb *strings.Builder, req domain.NotificationRequest) {
 	if req.SourceURL != "" {
-		fmt.Fprintf(sb, "*Source:* %s\n", req.SourceURL)
+		fmt.Fprintf(sb, "*Source:* %s\n", gcsConsoleLink(req.SourceURL))
 	}
 	if req.RecipeURL != "" {
-		fmt.Fprintf(sb, "*Recipe:* %s\n", req.RecipeURL)
+		fmt.Fprintf(sb, "*Recipe:* %s\n", gcsConsoleLink(req.RecipeURL))
 	}
 	if req.AudioURL != "" {
-		fmt.Fprintf(sb, "*Audio:* %s\n", req.AudioURL)
+		fmt.Fprintf(sb, "*Audio:* %s\n", gcsConsoleLink(req.AudioURL))
 	}
 }
 

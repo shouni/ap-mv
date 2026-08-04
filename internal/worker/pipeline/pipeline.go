@@ -173,7 +173,10 @@ type runResult struct {
 	recipe      *domain.MusicRecipe
 	videoRecipe *domain.VideoRecipe
 	outputPath  string
-	deferred    bool
+	// draftPath は下書きの保存先です。下書きは outputPath（jobs 配下）に何も書かないため、
+	// 通知に載せる成果物の場所はこちらになります。
+	draftPath string
+	deferred  bool
 }
 
 func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error) {
@@ -231,6 +234,7 @@ func newRunResult(fc *filter.Context, deferred bool) *runResult {
 		recipe:      fc.Recipe,
 		videoRecipe: fc.VideoRecipe,
 		outputPath:  fc.OutputPath,
+		draftPath:   fc.DraftPath,
 		deferred:    deferred,
 	}
 }
@@ -283,7 +287,11 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 		CreatedAt:    task.CreatedAt,
 	}
 	if result != nil {
+		// 下書きは jobs 配下に何も書かないので、そこを案内すると空のディレクトリへ誘導する。
 		req.OutputURI = result.outputPath
+		if task.Command == domain.CommandVideoRecipeDraft && result.draftPath != "" {
+			req.OutputURI = result.draftPath
+		}
 		// videoRecipe は newRunResult で正規化済み。ここでは読み取りのみ行います。
 		if result.videoRecipe != nil {
 			req.Title = result.videoRecipe.MusicRecipe.Title
