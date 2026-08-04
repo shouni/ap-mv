@@ -288,3 +288,32 @@ func TestNewSlackAdapterRequiresHTTPClientWhenWebhookSet(t *testing.T) {
 		t.Fatal("expected an error when the HTTP client is nil but a webhook URL is set")
 	}
 }
+
+// TestNotifySetsLevel pins the outcome level on both notification paths.
+// Slack turns it into a coloured attachment bar, so it carries information the
+// heading's emoji cannot.
+func TestNotifySetsLevel(t *testing.T) {
+	req := domain.NotificationRequest{Command: "video_recipe", JobID: "job-1"}
+
+	t.Run("complete is success", func(t *testing.T) {
+		adapter, rec := newTestSlackAdapter("https://example.com")
+
+		if err := adapter.NotifyTaskComplete(context.Background(), req); err != nil {
+			t.Fatalf("NotifyTaskComplete failed: %v", err)
+		}
+		if got := rec.last(t).Level; got != notify.LevelSuccess {
+			t.Errorf("Level = %v, want %v", got, notify.LevelSuccess)
+		}
+	})
+
+	t.Run("error is failure", func(t *testing.T) {
+		adapter, rec := newTestSlackAdapter("https://example.com")
+
+		if err := adapter.NotifyTaskError(context.Background(), errors.New("boom"), req); err != nil {
+			t.Fatalf("NotifyTaskError failed: %v", err)
+		}
+		if got := rec.last(t).Level; got != notify.LevelFailure {
+			t.Errorf("Level = %v, want %v", got, notify.LevelFailure)
+		}
+	})
+}
