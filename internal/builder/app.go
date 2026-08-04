@@ -63,7 +63,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
-	notifier, err := adapters.NewSlackAdapter(httpClient, cfg.Notification.SlackWebhookURL, cfg.Server.ServiceURL)
+	notifier, err := adapters.NewSlackAdapter(httpClient.WithoutRetry(), cfg.Notification.SlackWebhookURL, cfg.Server.ServiceURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
 	}
