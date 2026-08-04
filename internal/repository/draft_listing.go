@@ -184,8 +184,12 @@ func (r *VideoHistoryRepository) SaveDraftRecipe(ctx context.Context, jobID stri
 
 // DeleteDraft は指定ジョブ ID の下書きを削除します。
 //
-// 下書きは安く作れるぶん溜まるので、消す手段は一覧と同時に要ります。完成ジョブと違って
-// 成果物が1ファイルしかないため、プレフィックス配下を消せば終わりです。
+// 下書きは安く作れるぶん溜まるので、消す手段は一覧と同時に要ります。
+//
+// 消す先が2つあるのは、下書きジョブも進行状況を記録するためです。成果物（下書き JSON）は
+// drafts プレフィックス配下ですが、status.json はジョブ状態ストアの決まりで jobs プレフィックス
+// 配下（`<jobs>/<jobID>/`）に書かれます。前者だけ消すと、履歴にも下書き一覧にも現れない
+// ディレクトリが jobs 配下に残り続けます。
 func (r *VideoHistoryRepository) DeleteDraft(ctx context.Context, jobID string) error {
 	if r == nil || r.reader == nil || r.writer == nil || r.draftBaseURI == "" {
 		return errors.New("draft repository is not properly configured")
@@ -193,16 +197,21 @@ func (r *VideoHistoryRepository) DeleteDraft(ctx context.Context, jobID string) 
 	if err := jobid.Validate(jobID); err != nil {
 		return err
 	}
-	prefix := r.draftBaseURI + "/" + jobID + "/"
-	var paths []string
-	if err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		paths = append(paths, gcsPath)
-		return nil
-	}); err != nil {
+	paths, err := r.listObjectsUnder(ctx, r.draftBaseURI+"/"+jobID+"/")
+	if err != nil {
 		return fmt.Errorf("list draft objects for deletion: %w", err)
 	}
 	if len(paths) == 0 {
 		paths = append(paths, r.draftURI(jobID))
+	}
+	// 下書きジョブが jobs 配下へ残した進行状況（status.json）も引き取る。ファイル名を
+	// 決め打ちせずプレフィックスごと拾うのは、状態ストアの保存先が変わっても追随するためです。
+	if r.baseURI != "" {
+		statusPaths, err := r.listObjectsUnder(ctx, r.baseURI+"/"+jobID+"/")
+		if err != nil {
+			return fmt.Errorf("list draft job status for deletion: %w", err)
+		}
+		paths = append(paths, statusPaths...)
 	}
 
 	var errs []error
@@ -217,6 +226,18 @@ func (r *VideoHistoryRepository) DeleteDraft(ctx context.Context, jobID string) 
 	// 一覧から消えたことを TTL の満了を待たずに反映させる。
 	r.invalidateJobIDList(draftJobIDListCacheKey)
 	return nil
+}
+
+// listObjectsUnder は prefix 配下のオブジェクト URI を集めます。
+func (r *VideoHistoryRepository) listObjectsUnder(ctx context.Context, prefix string) ([]string, error) {
+	var paths []string
+	if err := r.reader.List(ctx, prefix, func(gcsPath string) error {
+		paths = append(paths, gcsPath)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return paths, nil
 }
 
 // draftURI は下書き JSON の GCS URI を返します。

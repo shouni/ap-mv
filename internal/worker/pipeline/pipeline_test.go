@@ -176,3 +176,32 @@ func TestExecuteSkipsCompletionNotificationWhenDeferred(t *testing.T) {
 		t.Fatalf("error notifications = %d, want 0", len(notifier.errors))
 	}
 }
+
+// TestNotificationOutputURIPointsAtDraftPath pins that a draft job's notification reports where
+// the draft actually is. Drafts write nothing under the jobs prefix, so reporting outputPath
+// would send the reader to an empty directory.
+func TestNotificationOutputURIPointsAtDraftPath(t *testing.T) {
+	task := &domain.Task{JobID: "video-draft-1", Command: domain.CommandVideoRecipeDraft}
+	result := &runResult{
+		outputPath: "gs://ap-mv/veo/jobs/video-draft-1/",
+		draftPath:  "gs://ap-mv/veo/drafts/video-draft-1/",
+	}
+
+	req := notificationRequest(task, result)
+
+	if req.OutputURI != "gs://ap-mv/veo/drafts/video-draft-1/" {
+		t.Errorf("OutputURI = %q, want the drafts path", req.OutputURI)
+	}
+}
+
+// TestNotificationOutputURIKeepsJobPathForOtherCommands pins the unchanged behaviour elsewhere.
+func TestNotificationOutputURIKeepsJobPathForOtherCommands(t *testing.T) {
+	task := &domain.Task{JobID: "video-recipe-1", Command: domain.CommandVideoRecipeCreate}
+	result := &runResult{outputPath: "gs://ap-mv/veo/jobs/video-recipe-1/"}
+
+	req := notificationRequest(task, result)
+
+	if req.OutputURI != "gs://ap-mv/veo/jobs/video-recipe-1/" {
+		t.Errorf("OutputURI = %q, want the job output path", req.OutputURI)
+	}
+}
