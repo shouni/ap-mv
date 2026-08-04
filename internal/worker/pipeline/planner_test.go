@@ -15,6 +15,12 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 		want    []string
 	}{
 		{
+			// 下書きはキーフレームを1枚も焼かずに終わる唯一の生成系コマンド。cut_keyframe_gen が
+			// 紛れ込むと「確認してから焼く」という下書きの存在理由が消えるため、ここで固定する。
+			command: domain.CommandVideoRecipeDraft,
+			want:    []string{"scripting", "scene_split", "draft_save"},
+		},
+		{
 			command: domain.CommandVideoRecipeCreate,
 			want:    []string{"scripting", "scene_split", "cut_keyframe_gen", "zip_upload"},
 		},
@@ -35,6 +41,12 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 		{
 			command: domain.CommandRegenerateZip,
 			want:    []string{"recipe_load", "zip_upload"},
+		},
+		{
+			// カット単位の動画作り直しは scene_split を通さない。保存済みのカット割りを
+			// 再計画すると、作り直さないカットの動画（既存の VideoURL）と対応が崩れる。
+			command: domain.CommandRegenerateCutVideo,
+			want:    []string{"recipe_load", "cut_video_select", "video_gen", "chain_finalize", "publishing"},
 		},
 		{
 			command: domain.CommandShortVideoFromSection,

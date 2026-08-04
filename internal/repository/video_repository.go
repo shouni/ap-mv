@@ -197,6 +197,6 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 	r.deleteCachedHistory(jobID)
 	r.deleteCachedVideoRecipe(jobID)
 	// ジョブが一覧から消えたことを TTL の満了を待たずに反映させる。
-	r.invalidateJobIDList()
+	r.invalidateJobIDList(jobIDListCacheKey)
 	return nil
 }

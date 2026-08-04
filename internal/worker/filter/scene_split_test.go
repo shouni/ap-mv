@@ -264,6 +264,157 @@ func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
 	}
 }
 
+// TestSceneSplitFilterIsIdempotent pins the property the draft flow depends on: a recipe that
+// already went through scene splitting must survive a second pass unchanged. Both
+// mv_from_keyframe_video_recipe (RecipeLoad -> SceneSplit) and the draft flow re-run the filter
+// over an already-split recipe, so a non-idempotent pass would silently re-plan the cuts the user
+// just reviewed.
+func TestSceneSplitFilterIsIdempotent(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		usePreviousVideo bool
+	}{
+		{"keyframe scenes", false},
+		{"video-to-video chains", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recipe := &orchestrator.VideoRecipe{
+				ProjectTitle: "test",
+				MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
+				Cuts: []orchestrator.Cut{
+					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
+					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"}},
+				},
+			}
+
+			filter := SceneSplitFilter{UsePreviousVideo: tc.usePreviousVideo}
+			newContext := func() *Context {
+				return &Context{State: State{
+					Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+					VideoRecipe: recipe,
+				}}
+			}
+
+			if err := filter.Execute(context.Background(), newContext()); err != nil {
+				t.Fatalf("first Execute() error = %v", err)
+			}
+			first := append([]orchestrator.Cut(nil), recipe.Cuts...)
+
+			if err := filter.Execute(context.Background(), newContext()); err != nil {
+				t.Fatalf("second Execute() error = %v", err)
+			}
+			second := recipe.Cuts
+
+			if len(second) != len(first) {
+				t.Fatalf("second pass produced %d cuts, want %d (same as first pass)", len(second), len(first))
+			}
+			for i := range first {
+				a, b := first[i], second[i]
+				if a.DurationSec != b.DurationSec || a.StartSec != b.StartSec || a.EndSec != b.EndSec {
+					t.Errorf("cut[%d] timing changed: first %v..%v (%vs), second %v..%v (%vs)",
+						i, a.StartSec, a.EndSec, a.DurationSec, b.StartSec, b.EndSec, b.DurationSec)
+				}
+				if a.IsChainStart != b.IsChainStart {
+					t.Errorf("cut[%d].IsChainStart changed: %v -> %v", i, a.IsChainStart, b.IsChainStart)
+				}
+				if a.IsSectionStart != b.IsSectionStart {
+					t.Errorf("cut[%d].IsSectionStart changed: %v -> %v", i, a.IsSectionStart, b.IsSectionStart)
+				}
+				if a.VisualAnchor != b.VisualAnchor {
+					t.Errorf("cut[%d].VisualAnchor changed:\n first  = %q\n second = %q", i, a.VisualAnchor, b.VisualAnchor)
+				}
+				if a.AudioCue != b.AudioCue {
+					t.Errorf("cut[%d].AudioCue changed:\n first  = %q\n second = %q", i, a.AudioCue, b.AudioCue)
+				}
+				if a.Dialogue != b.Dialogue {
+					t.Errorf("cut[%d].Dialogue changed: %q -> %q", i, a.Dialogue, b.Dialogue)
+				}
+			}
+		})
+	}
+}
+
+// TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation pins the half of the keyframe-reuse
+// fix that lives here: a cut that re-allocates to a single block keeps the image already baked
+// for it, so CutKeyframeFilter can skip regeneration. Without this, "generate a video from the
+// saved keyframes" re-bakes every image first.
+func TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		usePreviousVideo bool
+	}{
+		{"keyframe scenes", false},
+		{"video-to-video chains", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recipe := &orchestrator.VideoRecipe{
+				ProjectTitle: "test",
+				MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
+				Cuts: []orchestrator.Cut{{
+					CutIndex:       1,
+					VisualAnchor:   "rooftop",
+					AudioSync:      orchestrator.AudioSync{StartSec: 0, DurationSec: 8, AudioCue: "0:00 to 0:08"},
+					KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
+					ChainControl:   orchestrator.ChainControl{IsChainStart: true},
+				}},
+			}
+
+			err := (SceneSplitFilter{UsePreviousVideo: tc.usePreviousVideo}).Execute(context.Background(), &Context{
+				State: State{
+					Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
+					VideoRecipe: recipe,
+				},
+			})
+			if err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if len(recipe.Cuts) != 1 {
+				t.Fatalf("cuts = %d, want 1 (an 8s cut re-allocates to a single block)", len(recipe.Cuts))
+			}
+			if got := recipe.Cuts[0].KeyframeReference; got != "gs://bucket/jobs/job-1/images/keyframe_001.png" {
+				t.Errorf("KeyframeReference = %q, want the existing image to be kept", got)
+			}
+			// 生成状態は落とす（動画は作り直す）が、絵は使い回す、が意図。
+			if recipe.Cuts[0].Status != orchestrator.CutStatusPending || recipe.Cuts[0].VideoID != "" {
+				t.Errorf("video generation state was not reset: status=%q videoID=%q", recipe.Cuts[0].Status, recipe.Cuts[0].VideoID)
+			}
+		})
+	}
+}
+
+// TestSceneSplitFilterDropsKeyframeWhenCutIsResplit pins the conservative half: once a cut is
+// divided, one image can no longer stand for several cuts that each get their own scene beat.
+func TestSceneSplitFilterDropsKeyframeWhenCutIsResplit(t *testing.T) {
+	recipe := &orchestrator.VideoRecipe{
+		ProjectTitle: "test",
+		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
+		Cuts: []orchestrator.Cut{{
+			CutIndex:       1,
+			VisualAnchor:   "rooftop",
+			AudioSync:      orchestrator.AudioSync{StartSec: 0, DurationSec: 20, AudioCue: "0:00 to 0:20"},
+			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
+		}},
+	}
+
+	err := (SceneSplitFilter{}).Execute(context.Background(), &Context{
+		State: State{
+			Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
+			VideoRecipe: recipe,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(recipe.Cuts) < 2 {
+		t.Fatalf("cuts = %d, want the 20s cut to be split", len(recipe.Cuts))
+	}
+	for i, cut := range recipe.Cuts {
+		if cut.KeyframeReference != "" {
+			t.Errorf("cut[%d].KeyframeReference = %q, want cleared for a re-split cut", i, cut.KeyframeReference)
+		}
+	}
+}
+
 func TestAllocateChainDurations(t *testing.T) {
 	full := videoToVideoChainDurations(veoSupportedDurationsSec)
 	reference := videoToVideoChainDurations(veoReferenceToVideoDurationsSec)

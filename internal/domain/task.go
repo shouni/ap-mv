@@ -23,6 +23,11 @@ type TaskCommand string
 const (
 	// CommandVideoRecipeCreate は、VideoRecipeを作成するコマンドです。
 	CommandVideoRecipeCreate TaskCommand = "video_recipe_create"
+	// CommandVideoRecipeDraft は、台本生成とカット割りまでを実行し、キーフレームを
+	// 1枚も焼かずに VideoRecipe を下書きとして保存するコマンドです。カット数がそのまま
+	// キーフレーム画像の生成枚数になるため、割り付けを確認してから進めたいときに使います。
+	// 保存した下書きは recipe_url として mv_from_keyframe_video_recipe へ渡します。
+	CommandVideoRecipeDraft TaskCommand = "video_recipe_draft"
 	// CommandMVFromKeyframeVideoRecipe は、VideoRecipeからMVを生成するコマンドです。
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
 	// CommandRegenerateCutKeyframe は、指定カットのキーフレームを再生成するコマンドです。
@@ -34,6 +39,13 @@ const (
 	CommandRegenerateSectionKeyframes TaskCommand = "regenerate_section_keyframes"
 	// CommandRegenerateZip は、キーフレームZIPを再生成するコマンドです。
 	CommandRegenerateZip TaskCommand = "regenerate_zip"
+	// CommandRegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すコマンドです。
+	// キーフレームは元ジョブのものをそのまま使い、他のカットは生成済みのままスキップされます。
+	// 継続チェーン方式（VEO_USE_PREVIOUS_VIDEO=true）では、対象カットの動画を差し替えると
+	// それを PreviousVideoID として参照する後続カットの入力が古くなるため、同じチェーンの
+	// 残りもまとめて作り直します（CutVideoSelectFilter）。結果は新しいジョブとして保存され、
+	// 元ジョブは変更しません。
+	CommandRegenerateCutVideo TaskCommand = "regenerate_cut_video"
 	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
 	// 動画化してショート動画を生成するコマンドです。
 	CommandShortVideoFromSection TaskCommand = "short_video_from_section"
@@ -116,7 +128,7 @@ func (t *Task) Validate() error {
 		return err
 	}
 	switch t.Command {
-	case CommandVideoRecipeCreate:
+	case CommandVideoRecipeCreate, CommandVideoRecipeDraft:
 		if strings.TrimSpace(t.SourceURL) == "" && strings.TrimSpace(t.Text) == "" && strings.TrimSpace(t.ImageURL) == "" {
 			return fmt.Errorf("%s task requires source_url, text, or image_url", t.Command)
 		}
@@ -164,6 +176,19 @@ func (t *Task) Validate() error {
 		}
 		if t.SectionIndex == nil || *t.SectionIndex < 0 {
 			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
+		}
+		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+			return err
+		}
+		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
+			return err
+		}
+	case CommandRegenerateCutVideo:
+		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+		}
+		if t.CutIndex == nil {
+			return fmt.Errorf("%s task requires cut_index", t.Command)
 		}
 		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
 			return err
