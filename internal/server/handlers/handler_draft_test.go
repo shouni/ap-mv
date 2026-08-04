@@ -21,6 +21,21 @@ type fakeDraftRepository struct {
 	recipe  *domain.VideoRecipe
 	err     error
 	deleted []string
+	// saved records the last SaveDraftRecipe call so update tests can assert what was persisted.
+	saved      *domain.VideoRecipe
+	saveJobID  string
+	saveErr    error
+	saveCalled bool
+}
+
+func (f *fakeDraftRepository) SaveDraftRecipe(_ context.Context, jobID string, recipe *domain.VideoRecipe) error {
+	f.saveCalled = true
+	if f.saveErr != nil {
+		return f.saveErr
+	}
+	f.saveJobID = jobID
+	f.saved = recipe
+	return nil
 }
 
 func (f *fakeDraftRepository) ListDraftPage(context.Context, int, int) (domain.VideoDraftPage, error) {
@@ -148,6 +163,104 @@ func TestDraftRedirectsBrowsersToList(t *testing.T) {
 	}
 	if location := rec.Header().Get("Location"); location != "/web/drafts" {
 		t.Errorf("Location = %q, want %q", location, "/web/drafts")
+	}
+}
+
+func draftUpdateRequest(t *testing.T, body string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPut, "/web/drafts/"+draftTestJobID, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", draftTestJobID)
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+}
+
+const draftUpdateRecipeJSON = `{
+  "project_title": "updated",
+  "cuts": [
+    {"cut_index": 1, "section_index": 1, "visual_anchor": "rewritten anchor", "duration_sec": 8, "start_sec": 0, "end_sec": 8}
+  ]
+}`
+
+// TestUpdateDraftAcceptsEnvelopeShape pins the round trip an agent actually performs: what
+// GET /web/drafts/{jobID} returns ({"recipe": ...}) can be edited and PUT back unchanged in shape.
+func TestUpdateDraftAcceptsEnvelopeShape(t *testing.T) {
+	repo := &fakeDraftRepository{}
+	h := newDraftHandler(t, repo)
+
+	rec := httptest.NewRecorder()
+	h.UpdateDraft(rec, draftUpdateRequest(t, `{"job_id":"`+draftTestJobID+`","recipe":`+draftUpdateRecipeJSON+`}`))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateDraft status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !repo.saveCalled {
+		t.Fatal("SaveDraftRecipe was not called")
+	}
+	if repo.saveJobID != draftTestJobID {
+		t.Errorf("saved job ID = %q, want %q", repo.saveJobID, draftTestJobID)
+	}
+	if repo.saved == nil || len(repo.saved.Cuts) != 1 {
+		t.Fatalf("saved recipe = %+v, want 1 cut", repo.saved)
+	}
+	if got := repo.saved.Cuts[0].VisualAnchor; got != "rewritten anchor" {
+		t.Errorf("saved visual anchor = %q, want the edited value", got)
+	}
+	var out struct {
+		Status           string  `json:"status"`
+		CutCount         int     `json:"cut_count"`
+		TotalDurationSec float64 `json:"total_duration_sec"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out.Status != "updated" || out.CutCount != 1 || out.TotalDurationSec != 8 {
+		t.Errorf("response = %+v, want status=updated cut_count=1 total_duration_sec=8", out)
+	}
+}
+
+// TestUpdateDraftAcceptsBareRecipe covers the other accepted shape: the VideoRecipe alone.
+func TestUpdateDraftAcceptsBareRecipe(t *testing.T) {
+	repo := &fakeDraftRepository{}
+	h := newDraftHandler(t, repo)
+
+	rec := httptest.NewRecorder()
+	h.UpdateDraft(rec, draftUpdateRequest(t, draftUpdateRecipeJSON))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("UpdateDraft status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if repo.saved == nil || len(repo.saved.Cuts) != 1 {
+		t.Fatalf("saved recipe = %+v, want 1 cut", repo.saved)
+	}
+}
+
+// TestUpdateDraftRejectsInvalidRecipe pins that a repository-level validation failure surfaces as
+// a 400 rather than overwriting the draft with something keyframe generation would choke on.
+func TestUpdateDraftRejectsInvalidRecipe(t *testing.T) {
+	repo := &fakeDraftRepository{saveErr: errors.New("cuts must not be empty")}
+	h := newDraftHandler(t, repo)
+
+	rec := httptest.NewRecorder()
+	h.UpdateDraft(rec, draftUpdateRequest(t, `{"recipe":{"project_title":"x","cuts":[]}}`))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UpdateDraft status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+func TestUpdateDraftRejectsEmptyBody(t *testing.T) {
+	repo := &fakeDraftRepository{}
+	h := newDraftHandler(t, repo)
+
+	rec := httptest.NewRecorder()
+	h.UpdateDraft(rec, draftUpdateRequest(t, ""))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("UpdateDraft status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if repo.saveCalled {
+		t.Error("SaveDraftRecipe was called for an empty body; want no write")
 	}
 }
 

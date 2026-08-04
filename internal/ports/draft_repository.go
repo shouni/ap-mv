@@ -17,5 +17,8 @@ type DraftRepository interface {
 	// GetDraftRecipe は下書きの VideoRecipe を返します。下書きは作られた後に
 	// 書き換わらないため、履歴詳細と違って読み出しごとの鮮度を気にする必要はありません。
 	GetDraftRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error)
+	// SaveDraftRecipe は下書きを上書き保存します。読んで直して読み直すループを
+	// 画像コスト0で回せるようにするための経路です。
+	SaveDraftRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error
 	DeleteDraft(ctx context.Context, jobID string) error
 }

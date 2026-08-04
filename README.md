@@ -311,7 +311,8 @@ sequenceDiagram
 
 1. 作成フォーム（`/web/video-recipe-create`）で入力し、**「下書きだけ作る」** を押します（`POST /web/compose-draft`）。`Scripting -> Scene Split -> Draft Save` まで走り、キーフレームは1枚も生成されません。
 2. `/web/drafts` で一覧を開き、カット数・セクション数・尺の合計を確認します。**尺の合計が曲尺と大きくズレていればカット割りの取り違え**なので、ここで捨てて作り直します。中身（`cuts[]` の `visual_anchor` / `audio_cue` / `duration_sec`）まで読む場合は ap-mcp の `get_video_draft` を使います（詳細画面は用意しておらず、`GET /web/drafts/{jobID}` は `Accept: application/json` のときだけ JSON を返します）。
-3. 進める場合は一覧の **「この下書きからMVを作る」** を押します。下書きの GCS URI が `recipe_url` として `mv_from_keyframe_video_recipe` に渡り、別の Job ID で本生成が走ります（下書きは残ります）。
+3. 直したい場合は ap-mcp の `update_video_draft`（`PUT /web/drafts/{jobID}`）で書き戻します。**キーフレームを1枚も生成しないため、読む→直す→読み直すは何周してもコストがかかりません。** 直して効くのは `visual_anchor`（キーフレームと Veo のプロンプト）・`audio_cue`（曲の展開との対応）・`character_id`・`dialogue` です。尺（`duration_sec` / `start_sec` / `end_sec`）を書き換えても、生成時に `SceneSplitFilter` が楽曲タイムラインを正として割り付け直すため、そのままは反映されません。
+4. 進める場合は一覧の **「この下書きからMVを作る」** を押します。下書きの GCS URI が `recipe_url` として `mv_from_keyframe_video_recipe` に渡り、別の Job ID で本生成が走ります（下書きは残ります）。
 
 `SceneSplitFilter` は同じレシピを二度通しても結果が変わらないため（`TestSceneSplitFilterIsIdempotent` / `TestDraftSaveRoundTripKeepsCutPlan`）、本生成側で Scene Split が再実行されてもカット割りは下書きで確認したまま保たれます。
 
@@ -349,6 +350,7 @@ sequenceDiagram
 | `POST` | `/web/compose-draft` | 下書き作成サブミット（`/web/video-recipe-draft` も同じ handler）。入力は VideoRecipe 作成と同一で、キーフレームを焼かずにカット割りまでで止まる |
 | `GET` | `/web/drafts` | 下書き一覧。カット数・セクション数・尺の合計を表示する |
 | `GET` | `/web/drafts/{jobID}` | 下書きの `VideoRecipe` を JSON で返す（`Accept: application/json`、ap-mcp 用）。ブラウザからは一覧へリダイレクト（詳細画面は用意していない） |
+| `PUT` | `/web/drafts/{jobID}` | 下書きを上書き保存。本文は `{"recipe": {...}}`（GET の応答と同じ形）または `VideoRecipe` 単体。保存前に `Normalize` と `ValidateVideoRecipe` を通し、保存後のカット数と尺を返す |
 | `DELETE` | `/web/drafts/{jobID}` | 下書き削除。`X-CSRF-Token` ヘッダーが必要 |
 | `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成（`/web/generate-from-recipe` も同じ handler）。フォーム画面は履歴詳細の動画生成フォームへ統合済みで、ap-mcp 等の M2M 呼び出し互換のために残している |
 | `GET` | `/web/jobs/{jobID}` | ジョブの進行状況（`queued` / `running` / `succeeded` / `failed`）を JSON で返します。失敗時は理由と試行回数も含みます。未記録のジョブは 404 |

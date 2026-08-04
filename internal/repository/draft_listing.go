@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/shouni/go-job-kit/paging"
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -142,6 +145,41 @@ func (r *VideoHistoryRepository) GetDraftRecipe(ctx context.Context, jobID strin
 		return nil, fmt.Errorf("decode draft (%s): %w", uri, err)
 	}
 	return recipe, nil
+}
+
+// SaveDraftRecipe は下書きの VideoRecipe を上書き保存します。
+//
+// 下書きを読んで直して読み直す、を画像コスト0で繰り返せるようにするための経路です。
+// 直した内容を反映する手段が生成時の recipe_json しか無いと、レビューは1周で終わってしまい、
+// 「確認してから焼く」ための下書きが確認のためだけの読み取り専用になります。
+//
+// 保存前に Normalize と検証を通すのは DraftSaveFilter と同じ理由です（下書きとしては
+// 読めるがキーフレーム生成で落ちるレシピを一覧に残さない）。一覧の表示値はレシピから
+// 都度算出するため、キャッシュの破棄は要りません（下書き本体はキャッシュしていません）。
+func (r *VideoHistoryRepository) SaveDraftRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error {
+	if r == nil || r.writer == nil || r.draftBaseURI == "" {
+		return errors.New("draft repository is not properly configured")
+	}
+	if err := jobid.Validate(jobID); err != nil {
+		return err
+	}
+	if recipe == nil {
+		return errors.New("draft recipe is nil")
+	}
+	recipe.Normalize()
+	if err := domain.ValidateVideoRecipe(recipe); err != nil {
+		return err
+	}
+
+	raw, err := json.MarshalIndent(recipe, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode draft recipe: %w", err)
+	}
+	uri := r.draftURI(jobID)
+	if err := r.writer.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
+		return fmt.Errorf("write draft (%s): %w", uri, err)
+	}
+	return nil
 }
 
 // DeleteDraft は指定ジョブ ID の下書きを削除します。

@@ -113,6 +113,8 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 			r.Get("/", h.Drafts)
 			// 詳細画面は用意していません（JSON は ap-mcp 用、ブラウザは一覧へ戻ります）。
 			r.Get("/{jobID}", h.Draft)
+			// 直した下書きを保存し直す。読んで直して読み直すループを画像コスト0で回すため。
+			r.Put("/{jobID}", h.UpdateDraft)
 			r.Delete("/{jobID}", h.DeleteDraft)
 		})
 		// フォーム画面は履歴詳細の動画生成フォームへ統合済み。POST は ap-mcp 等の
