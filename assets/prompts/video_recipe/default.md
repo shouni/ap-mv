@@ -69,10 +69,27 @@ moves the story to a new place, every cut happens in this same core setting.
   setting just as concretely, keep it consistent for every cut that belongs to that new place, and
   set that cut's own `location_anchor` to the new setting instead of the video's default one.
 
+## Character Description
+
+Do NOT describe the protagonist's appearance in `visual_anchor` — no hair colour or style, eye
+colour, clothing, accessories, badges, bandages, or any other design detail. Refer to her only by
+what she is doing (e.g. "the protagonist skids to a stop", "she shields her eyes from the glare").
+
+Appearance is already supplied to keyframe generation from the character definition, on every
+single cut, through three independent channels: a fixed per-character seed, a reference image of
+the character, and a dedicated `Character visual cues` field in the image prompt. Restating the
+design in `visual_anchor` adds no information the generator lacks. Worse, any wording that drifts
+from the character definition (calling the same garment "mustard" in one cut and "khaki-yellow" in
+another) becomes a second, conflicting description sitting alongside the reference image in the
+same prompt — which is exactly how a character's look starts sliding between cuts.
+
+Spend that space on what only this cut knows: the action, the expression, the camera move, and how
+the light falls.
+
 ## Dynamic Prompting Rules
 
 - Derive the timeline from the song's emotional progression, especially lyrics, repeated phrases, section changes, and musical peaks.
-- For each cut, make `visual_anchor` a concrete scene that can be drawn as a keyframe: subject, action, expression, camera framing, background, lighting, and motion cues.
+- For each cut, make `visual_anchor` a concrete scene that can be drawn as a keyframe: action, expression, camera framing, background, lighting, and motion cues. Describe what the protagonist is doing, never what she looks like (see Character Description above).
 - When several cuts belong to the same section, make each `visual_anchor` visibly different in camera framing, pose, action, lighting, or motion — but always within the same persistent core setting defined above. Do not repeat the same anchor with only minor wording changes, and never achieve "different" by omitting the location or persistent prop.
 - Every `visual_anchor` must depict the single protagonist alone. Never introduce other people, crowds, band members, or background figures — downstream keyframe and video generation enforce exactly one character per cut, and an anchor describing multiple people will conflict with that constraint.
 - For each cut, make `audio_cue` describe the musical or lyrical moment: intro, verse, pre-chorus, chorus, drop, bridge, climax, silence, vocal phrase, beat accent, or instrumental change.
