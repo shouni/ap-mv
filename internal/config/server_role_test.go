@@ -114,3 +114,48 @@ func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 		t.Fatal("expected an error when TASK_AUDIENCE_URL is missing")
 	}
 }
+
+// TestTaskIssuersFallsBackToServiceAccountEmail は、ALLOWED_TASK_SERVICE_ACCOUNTS を
+// 設定していない既存のデプロイがそのまま動き続けることを確認します。
+func TestTaskIssuersFallsBackToServiceAccountEmail(t *testing.T) {
+	cfg := newRoleTestConfig(ServerRoleWorker)
+
+	got := cfg.TaskIssuers()
+	if len(got) != 1 || got[0] != cfg.GCP.ServiceAccountEmail {
+		t.Fatalf("TaskIssuers() = %v, want [%s]", got, cfg.GCP.ServiceAccountEmail)
+	}
+}
+
+// TestTaskIssuersPrefersExplicitAllowlist は、web と worker で実行サービスアカウントを
+// 分けたときに発行元を 2 つ受け付けられることを確認します。ap-mv は worker も
+// 継続カットを投入するため、発行元が 1 つに収まりません。
+func TestTaskIssuersPrefersExplicitAllowlist(t *testing.T) {
+	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg.Tasks.AllowedServiceAccounts = []string{
+		"ap-mv-web-runner@test-project.iam.gserviceaccount.com",
+		"ap-mv-worker-runner@test-project.iam.gserviceaccount.com",
+	}
+
+	got := cfg.TaskIssuers()
+	if len(got) != 2 {
+		t.Fatalf("TaskIssuers() = %v, want the two configured issuers", got)
+	}
+	for _, issuer := range got {
+		if issuer == cfg.GCP.ServiceAccountEmail {
+			t.Fatalf("TaskIssuers() must not fall back when an allowlist is configured: %v", got)
+		}
+	}
+}
+
+// TestValidateEssentialConfigRequiresTaskIssuerForWorker は、発行元が 1 件も無いまま
+// Worker が起動しないことを確認します。空だと検証器が fail-closed になり、
+// 全タスクが 500 で失敗し続けます。
+func TestValidateEssentialConfigRequiresTaskIssuerForWorker(t *testing.T) {
+	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg.GCP.ServiceAccountEmail = ""
+	cfg.Tasks.AllowedServiceAccounts = nil
+
+	if err := cfg.ValidateEssentialConfig(); err == nil {
+		t.Fatal("expected an error when no task issuer is configured")
+	}
+}

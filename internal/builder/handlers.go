@@ -57,7 +57,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		// （fail-closed）ため、起動時に構成を確かめておきます。
 		taskAuth := auth.NewTaskVerifier(
 			appCtx.Config.Tasks.TaskAudienceURL,
-			[]string{appCtx.Config.GCP.ServiceAccountEmail},
+			appCtx.Config.TaskIssuers(),
 		)
 		if !taskAuth.Configured() {
 			return nil, fmt.Errorf("cloud Tasks の OIDC 検証を構成できません: TASK_AUDIENCE_URL と SERVICE_ACCOUNT_EMAIL の両方が必要です")
@@ -190,6 +190,6 @@ func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
 		// Cloud Tasks の OIDC トークンに署名するサービスアカウント。audience は
 		// 誰でも指定できる文字列に過ぎず、それだけでは呼び出し元を認証できないため、
 		// 発行元サービスアカウントの照合まで行わせる（未設定だと起動時に失敗する）。
-		AllowedTaskServiceAccounts: []string{cfg.GCP.ServiceAccountEmail},
+		AllowedTaskServiceAccounts: cfg.TaskIssuers(),
 	})
 }

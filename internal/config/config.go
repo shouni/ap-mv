@@ -43,8 +43,10 @@ func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == Ser
 
 // GCPConfig は Vertex AI / Cloud Tasks 呼び出しに使う GCP プロジェクト情報です。
 type GCPConfig struct {
-	ProjectID           string `env:"GCP_PROJECT_ID"`
-	LocationID          string `env:"GCP_LOCATION_ID"`
+	ProjectID  string `env:"GCP_PROJECT_ID"`
+	LocationID string `env:"GCP_LOCATION_ID"`
+	// ServiceAccountEmail は、投入するタスクの OIDC トークンに**署名する**サービスアカウントです。
+	// 受信側が受け付ける発行元は Tasks.AllowedServiceAccounts で別に指定します。
 	ServiceAccountEmail string `env:"SERVICE_ACCOUNT_EMAIL"`
 }
 
@@ -53,6 +55,11 @@ type TasksConfig struct {
 	QueueID         string `env:"CLOUD_TASKS_QUEUE_ID"`
 	WorkerURL       string `env:"WORKER_URL"`
 	TaskAudienceURL string `env:"TASK_AUDIENCE_URL"`
+	// AllowedServiceAccounts は、受信側が受け付けるトークン発行元の許可リストです。
+	// web と worker で実行サービスアカウントを分けると発行元が 2 つになるため、
+	// 単一値の SERVICE_ACCOUNT_EMAIL とは別に持ちます（worker も継続カットを投入するため）。
+	// 未設定なら SERVICE_ACCOUNT_EMAIL 1 件にフォールバックします（Config.TaskIssuers を使うこと）。
+	AllowedServiceAccounts []string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
 }
 
 // StorageConfig は GCS バケットの設定です。
@@ -149,6 +156,7 @@ func (c *Config) normalize() error {
 	c.Auth.AllowedEmails = normalizeStringSlice(c.Auth.AllowedEmails)
 	c.Auth.AllowedDomains = normalizeStringSlice(c.Auth.AllowedDomains)
 	c.Auth.AllowedM2MServiceAccounts = normalizeStringSlice(c.Auth.AllowedM2MServiceAccounts)
+	c.Tasks.AllowedServiceAccounts = normalizeStringSlice(c.Tasks.AllowedServiceAccounts)
 	// Veo は提供リージョンが限られる（例: us-central1）ため、Cloud Tasks 等と共有する
 	// GCP_LOCATION_ID とは別に VEO_LOCATION_ID で上書きできる。未設定なら共通値を使う。
 	if strings.TrimSpace(c.AI.VeoLocationID) == "" {

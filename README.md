@@ -145,7 +145,8 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
-| `SERVICE_ACCOUNT_EMAIL` | なし | Cloud Tasks OIDC token を発行する service account |
+| `SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの OIDC token に**署名する** service account |
+| `ALLOWED_TASK_SERVICE_ACCOUNTS` | `SERVICE_ACCOUNT_EMAIL` | 受信側が**受け付ける**発行元の許可リスト（カンマ区切り）。web と worker で実行 SA を分けると発行元が 2 つになるため、単一値の `SERVICE_ACCOUNT_EMAIL` とは別に指定できます（ap-mv は worker も継続カットを投入するため） |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
 | `VEO_MODELS` | `veo-3.1-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |
 | `VEO_LOCATION_ID` | `GCP_LOCATION_ID` の値 | Veo API を呼び出す Vertex AI location。`global` も指定可能（グローバルエンドポイント `aiplatform.googleapis.com` を使用）。Veo は提供リージョンが限られるため、データ所在地の要件がなければ `global` を、リージョン固定が必要なら `us-central1` 等を指定します |
