@@ -132,7 +132,8 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | --- | --- | --- |
 | `PORT` | `8080` | HTTP server の listen port |
 | `LOG_LEVEL` | `INFO` | ログ出力レベル（`DEBUG` / `INFO` / `WARN` / `ERROR`）。ログは Cloud Logging が解釈する `severity` / `message` 形式で出力され、`X-Cloud-Trace-Context` があればリクエスト単位でトレースに紐付きます |
-| `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う公開URL |
+| `SERVER_ROLE` | なし（= web/worker 両方） | このプロセスが担う役割。`web` / `worker` / 未設定。詳細は「web / worker の分離」節を参照 |
+| `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う**公開**URL。web/worker を分けた場合、worker にも**非公開の worker 自身ではなく web の URL**を設定します（Slack のリンクがこの値から作られるため） |
 | `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
 | `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
 | `AP_MV_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
@@ -141,8 +142,8 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `GEMINI_MODELS` | `gemini-3.6-flash` | Web UI の Gemini Model 選択肢 |
 | `IMAGE_MODEL` | `gemini-3.1-flash-image` | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |
 | `IMAGE_MODELS` | `gemini-3.1-flash-image` | Web UI の Image Model 選択肢 |
-| `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint |
-| `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience |
+| `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
+| `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `SERVICE_ACCOUNT_EMAIL` | なし | Cloud Tasks OIDC token を発行する service account |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
@@ -162,7 +163,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
-Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントには Vertex AI の実行権限、Cloud Tasks 利用権限、`AP_MV_BUCKET` への読み書き権限が必要です。
+Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウント（`ap-mv-runner`）には Vertex AI の実行権限、Cloud Tasks の投入権限、`AP_MV_BUCKET` への読み書き権限、`AP_MUSIC_BUCKET` への**読み取り**権限、署名付き URL 発行のための自分自身への `iam.serviceAccountTokenCreator` が必要です。権限定義は `ap-infra` リポジトリの `mv.tf` にあります。
 
 ### Web Security Environment Variables
 
@@ -176,9 +177,9 @@ Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。
 | `ALLOWED_DOMAINS` | ログインを許可するドメインのリスト |
 | `ALLOWED_M2M_SERVICE_ACCOUNTS` | `/web/*` エンドポイントを OIDC Bearer トークン（`Authorization: Bearer <ID Token>`, audience=`SERVICE_URL`）で呼び出せるサービスアカウントのメールアドレス一覧（カンマ区切り）。未設定の場合、サーバー間通信は常に拒否されます |
 
-ブラウザセッション（Cookie + CSRF）に加えて、`ALLOWED_M2M_SERVICE_ACCOUNTS` に登録済みのサービスアカウントが発行した OIDC Bearer トークンでも `/web/*` を認証でき、`Accept: application/json` を付けると JSON レスポンスを返します（ap-mcp など他サービスからのマシン間呼び出し向け）。M2M認証が成功したリクエストはCSRF検証をバイパスします。
+M2M 認証が成功したリクエストは CSRF 検証をバイパスします。
 
-`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。Cloud Run では `SESSION_SECRET`、`SESSION_ENCRYPT_KEY`、OAuth 設定、認可リスト、Cloud Tasks 設定、GCS/Veo 設定が未設定だと起動エラーになります。
+`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。検証範囲は `SERVER_ROLE` に従い、`SESSION_SECRET` / `SESSION_ENCRYPT_KEY` / OAuth 設定 / 認可リストは **Web 面を提供する場合のみ**必須です。Cloud Tasks 設定・GCS・Veo 設定はどちらの役割でも必須になります。
 
 ### History Storage
 
@@ -338,7 +339,31 @@ sequenceDiagram
 6. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
 7. 詳細画面の **Delete** ボタン（または `DELETE /web/history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
 
-### 6. HTTP エンドポイント
+### 4. web / worker の分離
+
+本番では 1 つのイメージを 2 つの Cloud Run サービスとしてデプロイし、`SERVER_ROLE` で役割を切り替えます（`cloudbuild.yaml`）。
+
+| | `ap-mv`（web） | `ap-mv-worker` |
+| --- | --- | --- |
+| `SERVER_ROLE` | `web` | `worker` |
+| 提供するルート | `/web/*`, `/auth/*` | `/tasks/generate` |
+| 公開 | あり | **なし**（Cloud Run の IAM で遮断） |
+| memory / cpu | 512Mi / 1 | 1Gi / 2 |
+| concurrency / timeout | 20 / 300s | 4 / 3600s |
+
+`SERVER_ROLE` を未指定にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動きます。
+
+分離する理由は 3 つあります。
+
+1. **デプロイ設定を役割ごとに最適化できる** — 動画生成は数分〜数十分かかるため worker は長い timeout が要りますが、その上限を Web 面にまで課す必要はありません
+2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です。同居していると長時間ジョブがレイテンシの p99 を支配し、Web の遅延もメモリのピーク要因も判別できません
+3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証ミドルウェアだけでした。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
+
+役割ごとに構築される依存も変わります。`SERVER_ROLE=worker` では OAuth ハンドラを構築せず、Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
+
+> **ap-comp との違い**: ap-mv の worker は**自分でもタスクを投入します**。動画をカット単位で分割生成し、残りがあれば次のカットを積み直すためです（`internal/worker/filter/video_gen.go`）。そのため `CLOUD_TASKS_QUEUE_ID` と `WORKER_URL` は worker 側にも必須で、`WORKER_URL` は **worker 自身**を指します。ap-comp の worker は投入しないので、この配線は不要でした。
+
+### 5. HTTP エンドポイント
 
 | メソッド | パス | 用途 |
 | --- | --- | --- |
@@ -367,7 +392,7 @@ sequenceDiagram
 | `POST` | `/web/history/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
 
-### 7. 実装メモ
+### 6. 実装メモ
 
 * ジョブの進行状況は `{VEO 出力ベース}/{jobID}/status.json` に記録します。Web プロセスが投入時に `queued` を、Worker プロセスが `running` → `succeeded` / `failed` を書き込みます。履歴一覧は `video_music_meta.json` だけを拾うため一覧には混ざらず、履歴削除（プレフィックス一括削除）で自動的に片付きます。
 * Cloud Tasks は at-least-once 配信のため、`Runner.Execute` は開始時に完了済み（`succeeded`）のジョブを検出したら処理を打ち切ります。通知失敗などでワーカーが一度エラーを返しただけでも再配信されるため、このガードが無いと Veo の生成コストが二重に発生します。
