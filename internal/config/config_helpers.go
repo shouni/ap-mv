@@ -98,8 +98,14 @@ func (c *Config) ValidateEssentialConfig() error {
 		}
 	}
 
-	if c.Server.Role.ServesWorker() && c.Tasks.TaskAudienceURL == "" {
-		return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+	if c.Server.Role.ServesWorker() {
+		if c.Tasks.TaskAudienceURL == "" {
+			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+		}
+		// 空だと検証器が fail-closed になり、全タスクが 500 で失敗し続けます。
+		if len(c.TaskIssuers()) == 0 {
+			return fmt.Errorf("タスクの発行元が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS または SERVICE_ACCOUNT_EMAIL を設定してください")
+		}
 	}
 
 	return nil
@@ -132,5 +138,23 @@ func (c *Config) validateWebConfig() error {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY の長さが不正です (%d バイト)。16, 24, 32 バイトのいずれかにしてください", keyLen)
 	}
 
+	return nil
+}
+
+// TaskIssuers は、受信側が受け付ける Cloud Tasks トークンの発行元を返します。
+//
+// ALLOWED_TASK_SERVICE_ACCOUNTS があればそれを使い、無ければ SERVICE_ACCOUNT_EMAIL の
+// 1 件にフォールバックします。web と worker で実行サービスアカウントを分けると発行元が
+// 2 つになるため（worker も継続カットを投入する）、単一値の SERVICE_ACCOUNT_EMAIL では
+// 足りなくなります。
+//
+// フォールバックを normalize ではなくここに置くのは、呼び出し順への依存を作らないためです。
+func (c *Config) TaskIssuers() []string {
+	if len(c.Tasks.AllowedServiceAccounts) > 0 {
+		return c.Tasks.AllowedServiceAccounts
+	}
+	if email := strings.TrimSpace(c.GCP.ServiceAccountEmail); email != "" {
+		return []string{email}
+	}
 	return nil
 }
