@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -91,7 +89,9 @@ func TestLatestVideoForHomePrefersFinalVideoSignedURL(t *testing.T) {
 
 	got := h.latestVideoForHome(req, []domain.VideoHistory{{JobID: "job-1", Generated: true}})
 
-	require.NotNil(t, got, "latestVideoForHome() = nil, want a result")
+	if got == nil {
+		t.Fatal("latestVideoForHome() = nil, want a result")
+	}
 	if got.VideoURL != "https://signed.example/final.mp4" {
 		t.Errorf("VideoURL = %q, want FinalVideoSignedURL", got.VideoURL)
 	}
@@ -120,7 +120,9 @@ func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
 
 	got := h.latestVideoForHome(req, []domain.VideoHistory{{JobID: "job-1", Generated: true}})
 
-	require.NotNil(t, got, "latestVideoForHome() = nil, want a result")
+	if got == nil {
+		t.Fatal("latestVideoForHome() = nil, want a result")
+	}
 	if got.VideoURL != "https://signed.example/cut2.mp4" {
 		t.Errorf("VideoURL = %q, want last cut's VideoSignedURL", got.VideoURL)
 	}
