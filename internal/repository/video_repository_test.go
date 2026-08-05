@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/shouni/go-remote-io/remoteio"
 )
 
@@ -367,9 +369,7 @@ func TestGetVeoUsageReadsRecordedTally(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVeoUsage() error = %v", err)
 	}
-	if usage == nil {
-		t.Fatal("GetVeoUsage() = nil, want a record")
-	}
+	require.NotNil(t, usage, "GetVeoUsage() = nil, want a record")
 	if usage.Calls != 3 || usage.SubmittedSeconds != 22 || usage.Model != "veo-test" {
 		t.Fatalf("usage = %+v, want the recorded tally", usage)
 	}
