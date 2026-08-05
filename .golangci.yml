@@ -16,6 +16,28 @@ linters:
     errcheck:
       exclude-functions:
         - (io.ReadCloser).Close
+  exclusions:
+    rules:
+      # staticcheck の SA5011 を _test.go で無効化する。
+      #
+      # `if x == nil { t.Fatal(...) }` の後で x を参照するのは Go のテストでは
+      # 一般的な書き方で、nil 参照にはならない。t.Fatal が戻らないことは
+      # testing パッケージの仕様である（Fatal は FailNow を呼び、FailNow は
+      # runtime.Goexit を呼んで実行を打ち切る）。つまりコードは正しい。
+      #
+      # ところが CI 上の staticcheck は「Fatal は戻らない」という解析結果（facts）を
+      # 取りこぼすことがあり、そのとき偽陽性を出す。facts の有無が問われるのは
+      # *再解析されたパッケージ* だけなので、症状は「変更したパッケージに現れ、
+      # 直すと次に変更した別のパッケージへ移る」という形になる。
+      # 2026-08-05 にキャッシュ削除・該当箇所の書き換え・testify 導入を順に試したが、
+      # いずれも移動するだけで収束しなかった。
+      #
+      # 本番コードでは有効なままにしている。テストでの nil 参照は実行時に panic として
+      # 即座に現れるため、ここを除外して失うものは小さい。
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "SA5011"
 
 formatters:
   enable:
