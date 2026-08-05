@@ -7,13 +7,13 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
-	github.com/shouni/gcp-kit v1.5.3
+	github.com/shouni/gcp-kit v1.6.0
 	github.com/shouni/gemini-image-kit v1.12.3
 	github.com/shouni/go-character-kit v1.0.11
 	github.com/shouni/go-gemini-client v1.16.4
 	github.com/shouni/go-http-kit v1.8.0
 	github.com/shouni/go-job-kit v1.0.4
-	github.com/shouni/go-notify v1.2.1
+	github.com/shouni/go-notify v1.2.2
 	github.com/shouni/go-prompt-kit v1.4.1
 	github.com/shouni/go-remote-io v1.7.2
 	github.com/shouni/go-utils v1.5.0

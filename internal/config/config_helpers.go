@@ -53,29 +53,24 @@ func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
 		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
 	}
-	if !c.IsSecureWorkerURL() {
-		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
-	}
-
-	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {
-		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
-	}
-
-	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
-		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
-	}
-
 	if c.GCP.ProjectID == "" {
 		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
 	}
 	if c.GCP.LocationID == "" {
 		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
 	}
+	if c.GCP.ServiceAccountEmail == "" {
+		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	}
+	// ap-comp と違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
+	// 分割生成し、残りがあれば次のカットを自分で積み直すため
+	// （internal/worker/filter/video_gen.go）。したがってキューと WORKER_URL は
+	// どちらの役割でも必須になる。
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
 	}
-	if c.GCP.ServiceAccountEmail == "" {
-		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	if !c.IsSecureWorkerURL() {
+		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
 	}
 	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
 	if c.Storage.GCSBucket == "" {
@@ -97,6 +92,36 @@ func (c *Config) ValidateEssentialConfig() error {
 		return fmt.Errorf("VEO_OPERATION_TIMEOUT は正の duration である必要があります")
 	}
 
+	if c.Server.Role.ServesWeb() {
+		if err := c.validateWebConfig(); err != nil {
+			return err
+		}
+	}
+
+	if c.Server.Role.ServesWorker() && c.Tasks.TaskAudienceURL == "" {
+		return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+	}
+
+	return nil
+}
+
+// GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
+func (c *Config) GetGCSObjectURL(path string) string {
+	return remoteio.BuildGCSURI(normalizeGCSBucket(c.Storage.GCSBucket), path)
+}
+
+// validateWebConfig は Web 面（OAuth ログインとセッション）に必要な設定を検証します。
+// Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
+// 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
+func (c *Config) validateWebConfig() error {
+	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" || c.Auth.SessionSecret == "" {
+		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret, SessionSecret）が不足しています")
+	}
+
+	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
+		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
+	}
+
 	if c.Auth.SessionEncryptKey == "" {
 		return fmt.Errorf("SESSION_ENCRYPT_KEY が設定されていません。セキュアな運用のために必須です")
 	}
@@ -108,9 +133,4 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 
 	return nil
-}
-
-// GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
-func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(normalizeGCSBucket(c.Storage.GCSBucket), path)
 }

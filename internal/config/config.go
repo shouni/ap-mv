@@ -2,6 +2,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,10 +15,31 @@ const taskGeneratePath = "/tasks/generate"
 
 // ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
 type ServerConfig struct {
-	ServiceURL      string        `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
-	Port            string        `env:"PORT" envDefault:"8080"`
+	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
+	Port       string `env:"PORT" envDefault:"8080"`
+	// Role はこのプロセスが担う役割です。空なら Web と Worker の両方を提供します。
+	Role            ServerRole    `env:"SERVER_ROLE"`
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 }
+
+// ServerRole はプロセスが担う役割です。Cloud Run のサービスを web と worker に
+// 分けたときに、各プロセスが必要とする依存だけを構築するために使います。
+type ServerRole string
+
+const (
+	// ServerRoleBoth は Web と Worker の両方を提供します（既定値・ローカル開発用）。
+	ServerRoleBoth ServerRole = ""
+	// ServerRoleWeb は Web UI と M2M API だけを提供し、/tasks/generate を公開しません。
+	ServerRoleWeb ServerRole = "web"
+	// ServerRoleWorker は /tasks/generate だけを提供し、Web UI と OAuth を持ちません。
+	ServerRoleWorker ServerRole = "worker"
+)
+
+// ServesWeb は、この役割が Web 面（/web/* と OAuth）を提供するかを返します。
+func (r ServerRole) ServesWeb() bool { return r == ServerRoleBoth || r == ServerRoleWeb }
+
+// ServesWorker は、この役割が Worker 面（/tasks/generate）を提供するかを返します。
+func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == ServerRoleWorker }
 
 // GCPConfig は Vertex AI / Cloud Tasks 呼び出しに使う GCP プロジェクト情報です。
 type GCPConfig struct {
@@ -105,6 +127,15 @@ type Config struct {
 
 // normalize normalizes the provided values.
 func (c *Config) normalize() error {
+	role := ServerRole(strings.ToLower(strings.TrimSpace(string(c.Server.Role))))
+	switch role {
+	case ServerRoleBoth, ServerRoleWeb, ServerRoleWorker:
+		c.Server.Role = role
+	default:
+		return fmt.Errorf("SERVER_ROLE (%q) は %q, %q, または未設定である必要があります",
+			c.Server.Role, ServerRoleWeb, ServerRoleWorker)
+	}
+
 	workerURL, err := normalizeWorkerURL(c.Server.ServiceURL, c.Tasks.WorkerURL)
 	if err != nil {
 		return err

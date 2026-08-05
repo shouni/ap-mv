@@ -25,9 +25,13 @@ type AppHandlers struct {
 	Worker      *worker.Handler[domain.Task]
 	M2M         *auth.M2MVerifier
 	StaticFiles fs.FS
+	// TaskAuth は Cloud Tasks からの OIDC を検証します。Auth と違い OAuth 設定を
+	// 必要としないため、Web 面を持たない Worker プロセスでも構築できます。
+	TaskAuth *auth.TaskVerifier
 }
 
-// BuildHandlers は認証、Web、Cloud Tasks workerのハンドラーを組み立てます。
+// BuildHandlers は各ハンドラーの依存関係を SERVER_ROLE に応じて組み立てます。
+// 担当しない面のハンドラーは nil のままにし、router 側でルート登録ごと省かれるようにします。
 func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*AppHandlers, error) {
 	if appCtx == nil || appCtx.Config == nil {
 		return nil, fmt.Errorf("app container and config are required")
@@ -35,22 +39,50 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	if appCtx.Config.Server.ServiceURL == "" {
 		return nil, fmt.Errorf("認証リダイレクトのために ServiceURL の設定が必要です")
 	}
-	if appCtx.Pipeline == nil {
-		return nil, fmt.Errorf("pipeline is not configured")
+
+	h := &AppHandlers{StaticFiles: staticFiles}
+	role := appCtx.Config.Server.Role
+
+	if role.ServesWeb() {
+		if err := buildWebHandlers(templates, appCtx, h); err != nil {
+			return nil, err
+		}
 	}
 
+	if role.ServesWorker() {
+		if appCtx.Pipeline == nil {
+			return nil, fmt.Errorf("pipeline is not configured")
+		}
+		// audience と発行元サービスアカウントの両方が揃わないと検証は常に失敗する
+		// （fail-closed）ため、起動時に構成を確かめておきます。
+		taskAuth := auth.NewTaskVerifier(
+			appCtx.Config.Tasks.TaskAudienceURL,
+			[]string{appCtx.Config.GCP.ServiceAccountEmail},
+		)
+		if !taskAuth.Configured() {
+			return nil, fmt.Errorf("cloud Tasks の OIDC 検証を構成できません: TASK_AUDIENCE_URL と SERVICE_ACCOUNT_EMAIL の両方が必要です")
+		}
+		h.TaskAuth = taskAuth
+		h.Worker = worker.NewHandler[domain.Task](appCtx.Pipeline)
+	}
+
+	return h, nil
+}
+
+// buildWebHandlers は Web 面（OAuth・Web UI・M2M 検証）のハンドラーを組み立てます。
+func buildWebHandlers(templates fs.FS, appCtx *app.Container, h *AppHandlers) error {
 	authHandler, err := createAuthHandler(appCtx.Config)
 	if err != nil {
-		return nil, fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
+		return fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
 
 	characterOptions, err := buildCharacterOptions()
 	if err != nil {
-		return nil, fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
+		return fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
 	}
 	visualOptions, err := buildVisualModeOptions()
 	if err != nil {
-		return nil, fmt.Errorf("visual Mode選択肢の初期化に失敗しました: %w", err)
+		return fmt.Errorf("visual Mode選択肢の初期化に失敗しました: %w", err)
 	}
 
 	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
@@ -62,7 +94,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		DefaultVeoModel:    appCtx.Config.AI.VeoModel,
 	}, characterOptions, visualOptions)
 	if err != nil {
-		return nil, fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
+		return fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
 	webHandler.HistoryRepository = appCtx.HistoryRepository
 	webHandler.DraftRepository = appCtx.DraftRepository
@@ -70,17 +102,11 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 	webHandler.VeoPricing = domain.VeoPricing(appCtx.Config.AI.VeoPriceUSDPerSec)
 
-	workerHandler := worker.NewHandler[domain.Task](appCtx.Pipeline)
+	h.Auth = authHandler
+	h.Web = webHandler
+	h.M2M = auth.NewM2MVerifier(appCtx.Config.Server.ServiceURL, appCtx.Config.Auth.AllowedM2MServiceAccounts)
 
-	m2mVerifier := auth.NewM2MVerifier(appCtx.Config.Server.ServiceURL, appCtx.Config.Auth.AllowedM2MServiceAccounts)
-
-	return &AppHandlers{
-		Auth:        authHandler,
-		Web:         webHandler,
-		Worker:      workerHandler,
-		M2M:         m2mVerifier,
-		StaticFiles: staticFiles,
-	}, nil
+	return nil
 }
 
 func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
