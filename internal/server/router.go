@@ -72,15 +72,17 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		}
 	})
 
+	// SERVER_ROLE=web のプロセスでは TaskAuth も Worker も nil になるため、
+	// このグループごと登録されず /tasks/generate は公開されません。
 	r.Group(func(r chi.Router) {
-		if h == nil || h.Auth == nil {
+		if h == nil || h.TaskAuth == nil {
 			if h != nil && h.Worker != nil {
-				slog.Error("Auth handler is nil, skipping worker routes")
+				slog.Error("Task verifier is nil, skipping worker routes")
 			}
 			return
 		}
 
-		r.Use(h.Auth.TaskOIDCVerificationMiddleware)
+		r.Use(h.TaskAuth.Middleware)
 
 		if h.Worker != nil {
 			r.Post("/tasks/generate", h.Worker.ProcessTask)
