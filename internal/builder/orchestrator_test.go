@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shouni/go-character-kit/character"
+
 	"github.com/shouni/ap-mv/internal/config"
 )
 
@@ -41,10 +43,7 @@ func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildCharacters() error = %v", err)
 	}
-	original := base.GetCharacter("zundamon")
-	if original == nil {
-		t.Fatal("bundled zundamon character was not loaded")
-	}
+	original := requireCharacter(t, base, "zundamon")
 	var originalSeed *int64
 	if original.Seed != nil {
 		s := *original.Seed
@@ -53,10 +52,7 @@ func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
 
 	overridden := withCharacterSeedOverride(base, "zundamon", 999999)
 
-	got := overridden.GetCharacter("zundamon")
-	if got == nil {
-		t.Fatal("overridden characters missing zundamon")
-	}
+	got := requireCharacter(t, overridden, "zundamon")
 	if got.Seed == nil || *got.Seed != 999999 {
 		t.Fatalf("overridden seed = %v, want 999999", got.Seed)
 	}
@@ -94,13 +90,35 @@ func TestBuildCharactersUsesBundledCharactersByDefault(t *testing.T) {
 		t.Fatalf("buildCharacters() error = %v", err)
 	}
 
-	if chars.GetCharacter("zundamon") == nil {
-		t.Fatal("bundled zundamon character was not loaded")
+	requireCharacter(t, chars, "zundamon")
+
+	if def := requireDefaultCharacter(t, chars); def.ID != "tsumugi" {
+		t.Fatalf("default character = %q, want tsumugi", def.ID)
 	}
-	if got := chars.GetDefault(); got == nil || got.ID != "tsumugi" {
-		if got == nil {
-			t.Fatal("default character is nil, want tsumugi")
-		}
-		t.Fatalf("default character = %q, want tsumugi", got.ID)
+}
+
+// requireCharacter は指定 ID のキャラクターを取り出し、無ければテストを打ち切ります。
+// 呼び出し側で「nil チェック → デリファレンス」を書かずに済ませるための小さなヘルパーです。
+// staticcheck の SA5011 は t.Fatal が戻らないことを解析結果（facts）から判断しますが、
+// golangci-lint の増分キャッシュ経由ではこれを取りこぼして偽陽性を出すことがあるため、
+// パターン自体を呼び出し側に残さないようにしています。
+func requireCharacter(t *testing.T, chars *character.Characters, id string) *character.Character {
+	t.Helper()
+	c := chars.GetCharacter(id)
+	if c == nil {
+		t.Fatalf("character %q was not loaded", id)
 	}
+	return c
+}
+
+// requireDefaultCharacter は既定キャラクターを取り出し、無ければテストを打ち切ります。
+// requireCharacter と同じく、呼び出し側に「nil チェック → デリファレンス」を残さないための
+// ヘルパーです。
+func requireDefaultCharacter(t *testing.T, chars *character.Characters) *character.Character {
+	t.Helper()
+	c := chars.GetDefault()
+	if c == nil {
+		t.Fatal("default character was not loaded")
+	}
+	return c
 }
