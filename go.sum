@@ -105,8 +105,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
-github.com/shouni/gcp-kit v1.6.0 h1:UHhyAPX41WKBj9UPqaX9sZmtsWKty9PofHQRIA0pP/E=
-github.com/shouni/gcp-kit v1.6.0/go.mod h1:5uidg74wWq9KAPjFcq2tqQFgv+Ay5GDf24BOzX1mSfc=
+github.com/shouni/gcp-kit v1.7.0 h1:17ZfINWf8ZtebFkwDfx247QsceTfv2VwIajinq7qTGo=
+github.com/shouni/gcp-kit v1.7.0/go.mod h1:fSuKO+LvoL155WE4N8UbmSW8dodyDvT92J/u6V2Ztqo=
 github.com/shouni/gemini-image-kit v1.12.4 h1:OdjNgNjEIGRJMjapKrPgiFgvQnAeAlBrt1+w7mMQkts=
 github.com/shouni/gemini-image-kit v1.12.4/go.mod h1:rOX1MqsObiFTFm4udY2k6LPIHBd5YzURkN2gJWaa2BY=
 github.com/shouni/go-character-kit v1.1.0 h1:d2fSP6V/j19ndYetFrV+98zoBSXTUBHWGDJe6G6mm1Q=

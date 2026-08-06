@@ -7,7 +7,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/gorilla/sessions v1.4.0
-	github.com/shouni/gcp-kit v1.6.0
+	github.com/shouni/gcp-kit v1.7.0
 	github.com/shouni/gemini-image-kit v1.12.4
 	github.com/shouni/go-character-kit v1.1.0
 	github.com/shouni/go-gemini-client v1.16.5
