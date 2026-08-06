@@ -164,7 +164,17 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
-Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウント（`ap-mv-runner`）には Vertex AI の実行権限、Cloud Tasks の投入権限、`AP_MV_BUCKET` への読み書き権限、`AP_MUSIC_BUCKET` への**読み取り**権限、署名付き URL 発行のための自分自身への `iam.serviceAccountTokenCreator` が必要です。権限定義は `ap-infra` リポジトリの `mv.tf` にあります。
+Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントは web / worker で分かれており、必要な権限も異なります。
+
+| | `ap-mv-web-runner` | `ap-mv-worker-runner` |
+| --- | --- | --- |
+| `AP_MV_BUCKET` | 読み書き | 読み書き |
+| `AP_MUSIC_BUCKET` | 不要（`gs://` の URI を組み立てるだけ） | **読み取り**（`music_job_id` から `recipe.json` を読む） |
+| Vertex AI | 不要 | 必要（Veo / Gemini） |
+| Cloud Tasks 投入 | 必要 | **必要**（継続カットの自己投入） |
+| 自分自身への `iam.serviceAccountTokenCreator` | 必要（署名付き URL） | 必要 |
+
+worker も投入側になるため、worker の `ALLOWED_TASK_SERVICE_ACCOUNTS` には 2 つの SA を両方並べてください。権限定義は `ap-infra` リポジトリの `app_ap_mv.tf` にあります。
 
 ### Web Security Environment Variables
 
