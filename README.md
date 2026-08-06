@@ -232,7 +232,7 @@ ap-mv/
 │   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
 └── internal/
     ├── adapters/           # Vertex AI Veo adapter
-    ├── app/                # DI container と RemoteIO 依存
+    ├── app/                # DI container（RemoteIO は remoteio.Bundle の別名）
     ├── builder/            # config から container / handlers / workflow / pipeline / prompt builder を構築
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証

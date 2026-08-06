@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-mv/internal/adapters"
@@ -36,7 +37,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 	resources = append(resources, storage)
 
-	rio, err := buildRemoteIO(storage)
+	rio, err := remoteio.NewBundle(storage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", err)
 	}
