@@ -231,9 +231,10 @@ ap-mv/
 │   ├── prompts/            # VideoRecipe 生成・Visual Mode・Veo動画生成モード別（image_to_video / reference_to_video / video_extension）のプロンプトテンプレート
 │   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
 └── internal/
-    ├── adapters/           # Vertex AI Veo adapter
+    ├── adapters/           # 外部サービス連携（Vertex AI Veo adapter, Slack, ffmpeg）
+    │   └── prompt/         # Gemini へ送るプロンプト組み立て（台本・キーフレーム）
     ├── app/                # DI container（RemoteIO は remoteio.Bundle の別名）
-    ├── builder/            # config から container / handlers / workflow / pipeline / prompt builder を構築
+    ├── builder/            # config から container / handlers / workflow / pipeline を構築（配線のみ）
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
     ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias

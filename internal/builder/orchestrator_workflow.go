@@ -13,7 +13,7 @@ import (
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
-	"github.com/shouni/ap-mv/assets"
+	"github.com/shouni/ap-mv/internal/adapters/prompt"
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -85,13 +85,11 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 	if p.seedOverride != nil {
 		characters = withCharacterSeedOverride(characters, p.seedOverride.characterID, p.seedOverride.seed)
 	}
-	scriptPromptBuilder, err := newScriptPrompt()
+	scriptPrompt, err := prompt.NewScript(p.visualMode, characters)
 	if err != nil {
 		return nil, err
 	}
-	scriptPromptBuilder.visualMode = p.visualMode
-	scriptPromptBuilder.characters = characters
-	visualTemplates, err := assets.LoadVisualModeFiles()
+	keyframePrompt, err := prompt.NewKeyframe(p.orchCfg.StyleSuffix, p.visualMode)
 	if err != nil {
 		return nil, err
 	}
@@ -104,13 +102,9 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 		AIClient:    p.aiClient,
 		VideoRunner: p.videoRunner,
 		PromptDeps: &workflow.PromptDeps{
-			Characters:   characters,
-			ScriptPrompt: scriptPromptBuilder,
-			KeyframePrompt: keyframePrompt{
-				styleSuffix:     p.orchCfg.StyleSuffix,
-				visualMode:      p.visualMode,
-				visualTemplates: visualTemplates,
-			},
+			Characters:     characters,
+			ScriptPrompt:   scriptPrompt,
+			KeyframePrompt: keyframePrompt,
 		},
 	})
 	if err != nil {

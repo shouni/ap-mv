@@ -1,4 +1,4 @@
-package builder
+package prompt
 
 import (
 	"strings"
@@ -11,9 +11,9 @@ import (
 
 // TestScriptPromptBuildUsesDefaultPromptAsset verifies that script prompts use the bundled default template.
 func TestScriptPromptBuildUsesDefaultPromptAsset(t *testing.T) {
-	prompt, err := newScriptPrompt()
+	prompt, err := NewScript("", nil)
 	if err != nil {
-		t.Fatalf("newScriptPrompt() error = %v", err)
+		t.Fatalf("NewScript() error = %v", err)
 	}
 
 	got, err := prompt.Build("compose", scriptPromptTestData("青い光の中で走る主人公"))
@@ -43,9 +43,9 @@ func TestScriptPromptBuildUsesModeTemplateWhenAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
 	}
-	prompt, err := newScriptPromptFromTemplates(templates)
+	prompt, err := newScriptFromTemplates(templates)
 	if err != nil {
-		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
+		t.Fatalf("newScriptFromTemplates() error = %v", err)
 	}
 
 	got, err := prompt.Build("compose", scriptPromptTestData("source"))
@@ -65,9 +65,9 @@ func TestScriptPromptBuildFallsBackToDefaultTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
 	}
-	prompt, err := newScriptPromptFromTemplates(templates)
+	prompt, err := newScriptFromTemplates(templates)
 	if err != nil {
-		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
+		t.Fatalf("newScriptFromTemplates() error = %v", err)
 	}
 
 	got, err := prompt.Build("unknown", scriptPromptTestData("source"))
@@ -87,12 +87,12 @@ func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPromptTemplates() error = %v", err)
 	}
-	prompt, err := newScriptPromptFromTemplates(templates, map[string]string{
+	prompt, err := newScriptFromTemplates(templates, map[string]string{
 		"default":      "default visual",
 		"sparkle_rock": "sparkle visual",
 	})
 	if err != nil {
-		t.Fatalf("newScriptPromptFromTemplates() error = %v", err)
+		t.Fatalf("newScriptFromTemplates() error = %v", err)
 	}
 	prompt.visualMode = "sparkle_rock"
 
@@ -143,9 +143,9 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 // self-contradicting prompt (the other entry point of the same failure class as the
 // multi-view reference sheet regression below).
 func TestScriptPromptRequiresSingleProtagonistAnchors(t *testing.T) {
-	prompt, err := newScriptPrompt()
+	prompt, err := NewScript("", nil)
 	if err != nil {
-		t.Fatalf("newScriptPrompt() error = %v", err)
+		t.Fatalf("NewScript() error = %v", err)
 	}
 
 	got, err := prompt.Build("compose", scriptPromptTestData("source"))
@@ -169,7 +169,7 @@ func TestScriptPromptRequiresSingleProtagonistAnchors(t *testing.T) {
 // video-recipe-20260711-212833-438dd22e71d3 cut 1: two near-identical Tsumugi figures generated
 // side by side). The system prompt must explicitly rule this out.
 func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T) {
-	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
 	cut := orchestrator.Cut{CutIndex: 1, VisualAnchor: "sitting in a train car"}
 
@@ -198,7 +198,7 @@ func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T
 // zero location wording rendered as an indoor school hallway, plus a backpack never in the
 // character's design). LocationAnchor must always be injected into the prompt when present.
 func TestKeyframePromptBuildCutGroundsPromptInLocationAnchor(t *testing.T) {
-	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
 	cut := orchestrator.Cut{
 		CutIndex:       9,
@@ -219,7 +219,7 @@ func TestKeyframePromptBuildCutGroundsPromptInLocationAnchor(t *testing.T) {
 // gives full generation, plus an explicit "keep everything else the same" instruction and a
 // "no text" system prompt — so edits don't drift the art style like a bare edit instruction would.
 func TestKeyframePromptBuildEditReinforcesCharacterAndStyle(t *testing.T) {
-	p := keyframePrompt{styleSuffix: "Japanese anime style, cel-shaded"}
+	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
 	cut := orchestrator.Cut{CutIndex: 2}
 
@@ -244,9 +244,9 @@ func TestKeyframePromptBuildEditReinforcesCharacterAndStyle(t *testing.T) {
 // TestAllBundledVisualModesRender verifies that every bundled visual mode template renders without error
 // when given a fully populated recipe, catching field-name mismatches at test time rather than runtime.
 func TestAllBundledVisualModesRender(t *testing.T) {
-	prompt, err := newScriptPrompt()
+	prompt, err := NewScript("", nil)
 	if err != nil {
-		t.Fatalf("newScriptPrompt() error = %v", err)
+		t.Fatalf("NewScript() error = %v", err)
 	}
 	data := &orchestrator.TemplateData{
 		SourceRecipe: &orchestrator.VideoRecipe{
@@ -289,9 +289,9 @@ func TestAllBundledVisualModesRender(t *testing.T) {
 // keyframe generation later uses — otherwise cuts can drift from the character sheet (e.g. a cut
 // describing "short dark hair" for a character actually defined with a long auburn ponytail).
 func TestScriptPromptBuildGroundsVisualAnchorInDefaultCharacter(t *testing.T) {
-	prompt, err := newScriptPrompt()
+	prompt, err := NewScript("", nil)
 	if err != nil {
-		t.Fatalf("newScriptPrompt() error = %v", err)
+		t.Fatalf("NewScript() error = %v", err)
 	}
 	characters, err := characterkit.NewCharacters([]characterkit.Character{
 		{
@@ -326,9 +326,9 @@ func TestScriptPromptBuildGroundsVisualAnchorInDefaultCharacter(t *testing.T) {
 // cleanly (no stray template output) when no characters are configured, preserving existing
 // behavior for callers that don't wire a character repository.
 func TestScriptPromptBuildOmitsProtagonistBlockWithoutCharacters(t *testing.T) {
-	prompt, err := newScriptPrompt()
+	prompt, err := NewScript("", nil)
 	if err != nil {
-		t.Fatalf("newScriptPrompt() error = %v", err)
+		t.Fatalf("NewScript() error = %v", err)
 	}
 
 	got, err := prompt.Build("sparkle_rock", scriptPromptTestData("source"))
