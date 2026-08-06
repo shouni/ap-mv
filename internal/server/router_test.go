@@ -108,6 +108,61 @@ func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
 	}
 }
 
+// TestNewRouterOmitsWorkerRouteForWebRole は、SERVER_ROLE=web のプロセスで
+// /tasks/generate が登録されないことを確認します。
+//
+// 見るのは「401 で拒否される」ではなく「404 でルートが無い」ことです。役割を分けた
+// 目的は公開サービス上からタスク受付口を消すことなので、アプリのコードが応答する
+// 余地を残していない状態まで確かめる必要があります。
+func TestNewRouterOmitsWorkerRouteForWebRole(t *testing.T) {
+	// BuildHandlers が role=web で組む形: TaskAuth も Worker も nil。
+	router, _ := newAuthenticatedTestRouter(t)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks/generate", nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("POST /tasks/generate status = %d, want %d (worker ルートは web ロールで登録されてはならない)", rec.Code, http.StatusNotFound)
+	}
+}
+
+// TestNewRouterOmitsWebRoutesForWorkerRole は、SERVER_ROLE=worker のプロセスで
+// Web 面と OAuth のルートが登録されないことを確認します。
+func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
+	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
+	router := newWorkerRoleTestRouter()
+
+	for _, path := range []string{"/", "/web/history", "/auth/login"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s status = %d, want %d (web ルートは worker ロールで登録されてはならない)", path, rec.Code, http.StatusNotFound)
+		}
+	}
+}
+
+// TestNewRouterKeepsHealthForWorkerRole は、Worker 面だけの構成でもヘルスチェックが
+// 残ることを確認します。Cloud Run の起動判定に使われます。
+func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
+	router := newWorkerRoleTestRouter()
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /health status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+// newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
+func newWorkerRoleTestRouter() http.Handler {
+	return NewRouter(&builder.AppHandlers{
+		TaskAuth:    auth.NewTaskVerifier("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
+		StaticFiles: assets.StaticFiles,
+	}, "")
+}
+
 // newAuthenticatedTestRouter creates a router and authenticated session cookies for tests.
 func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 	t.Helper()
