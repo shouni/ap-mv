@@ -42,20 +42,24 @@ func withWebAuth(cfg *Config) *Config {
 // /tasks/generate が復活します。ここが退行すると、その設定漏れが黙って通ります。
 func TestParseServerRole(t *testing.T) {
 	t.Run("有効な値", func(t *testing.T) {
-		valid := map[string]ServerRole{
-			"web":    ServerRoleWeb,
-			"worker": ServerRoleWorker,
-			"both":   ServerRoleBoth,
-			" WEB ":  ServerRoleWeb,
+		tests := []struct {
+			raw  string
+			want ServerRole
+		}{
+			{raw: "web", want: ServerRoleWeb},
+			{raw: "worker", want: ServerRoleWorker},
+			{raw: "both", want: ServerRoleBoth},
+			// 大文字と前後の空白は正規化して受け付ける。
+			{raw: " WEB ", want: ServerRoleWeb},
 		}
 
-		for raw, want := range valid {
-			got, err := ParseServerRole(raw)
+		for _, tt := range tests {
+			got, err := ParseServerRole(tt.raw)
 			if err != nil {
-				t.Fatalf("ParseServerRole(%q) error = %v", raw, err)
+				t.Fatalf("ParseServerRole(%q) error = %v", tt.raw, err)
 			}
-			if got != want {
-				t.Errorf("ParseServerRole(%q) = %q, want %q", raw, got, want)
+			if got != tt.want {
+				t.Errorf("ParseServerRole(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		}
 	})
