@@ -61,9 +61,6 @@ func (r ServerRole) ServesWorker() bool { return r == ServerRoleBoth || r == Ser
 type GCPConfig struct {
 	ProjectID  string `env:"GCP_PROJECT_ID"`
 	LocationID string `env:"GCP_LOCATION_ID"`
-	// ServiceAccountEmail は、投入するタスクの OIDC トークンに**署名する**サービスアカウントです。
-	// 受信側が受け付ける発行元は Tasks.AllowedServiceAccounts で別に指定します。
-	ServiceAccountEmail string `env:"SERVICE_ACCOUNT_EMAIL"`
 }
 
 // TasksConfig は Cloud Tasks キューへのエンキュー設定です。
@@ -76,10 +73,8 @@ type TasksConfig struct {
 	// このプロセスが署名するわけではありません。ap-mv は worker も継続カットを
 	// 投入するため、どちらの役割でも必要です。
 	CallerServiceAccountEmail string `env:"TASK_CALLER_SERVICE_ACCOUNT_EMAIL"`
-	// AllowedServiceAccounts は、受信側が受け付けるトークン発行元の許可リストです。
-	// web と worker で実行サービスアカウントを分けると発行元が 2 つになるため、
-	// 単一値の SERVICE_ACCOUNT_EMAIL とは別に持ちます（worker も継続カットを投入するため）。
-	// 未設定なら SERVICE_ACCOUNT_EMAIL 1 件にフォールバックします（Config.TaskIssuers を使うこと）。
+	// AllowedServiceAccounts は、worker が受け付ける caller SA の許可リストです。
+	// ap-mv は worker も継続カットを投入するため、web と worker の両方を並べます。
 	AllowedServiceAccounts []string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
 }
 

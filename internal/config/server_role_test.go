@@ -14,10 +14,11 @@ func newRoleTestConfig(role ServerRole) *Config {
 	cfg.Server.Role = role
 	cfg.Tasks.WorkerURL = "https://ap-mv-worker.example.run.app/tasks/generate"
 	cfg.Tasks.QueueID = "mv-queue"
+	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
+	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://ap-mv-worker.example.run.app"
 	cfg.GCP.ProjectID = "test-project"
 	cfg.GCP.LocationID = "asia-northeast1"
-	cfg.GCP.ServiceAccountEmail = "tasks@test-project.iam.gserviceaccount.com"
 	cfg.Storage.GCSBucket = "ap-mv"
 	cfg.AI.VeoModel = "veo-3.1-generate-001"
 	cfg.AI.VeoOutputPrefix = "veo"
@@ -152,44 +153,11 @@ func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 	}
 }
 
-// TestTaskIssuersFallsBackToServiceAccountEmail は、ALLOWED_TASK_SERVICE_ACCOUNTS を
-// 設定していない既存のデプロイがそのまま動き続けることを確認します。
-func TestTaskIssuersFallsBackToServiceAccountEmail(t *testing.T) {
-	cfg := newRoleTestConfig(ServerRoleWorker)
-
-	got := cfg.TaskIssuers()
-	if len(got) != 1 || got[0] != cfg.GCP.ServiceAccountEmail {
-		t.Fatalf("TaskIssuers() = %v, want [%s]", got, cfg.GCP.ServiceAccountEmail)
-	}
-}
-
-// TestTaskIssuersPrefersExplicitAllowlist は、web と worker で実行サービスアカウントを
-// 分けたときに発行元を 2 つ受け付けられることを確認します。ap-mv は worker も
-// 継続カットを投入するため、発行元が 1 つに収まりません。
-func TestTaskIssuersPrefersExplicitAllowlist(t *testing.T) {
-	cfg := newRoleTestConfig(ServerRoleWorker)
-	cfg.Tasks.AllowedServiceAccounts = []string{
-		"ap-mv-web-runner@test-project.iam.gserviceaccount.com",
-		"ap-mv-worker-runner@test-project.iam.gserviceaccount.com",
-	}
-
-	got := cfg.TaskIssuers()
-	if len(got) != 2 {
-		t.Fatalf("TaskIssuers() = %v, want the two configured issuers", got)
-	}
-	for _, issuer := range got {
-		if issuer == cfg.GCP.ServiceAccountEmail {
-			t.Fatalf("TaskIssuers() must not fall back when an allowlist is configured: %v", got)
-		}
-	}
-}
-
-// TestValidateEssentialConfigRequiresTaskIssuerForWorker は、発行元が 1 件も無いまま
+// TestValidateEssentialConfigRequiresAllowlistForWorker は、発行元が 1 件も無いまま
 // Worker が起動しないことを確認します。空だと検証器が fail-closed になり、
 // 全タスクが 500 で失敗し続けます。
-func TestValidateEssentialConfigRequiresTaskIssuerForWorker(t *testing.T) {
+func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
 	cfg := newRoleTestConfig(ServerRoleWorker)
-	cfg.GCP.ServiceAccountEmail = ""
 	cfg.Tasks.AllowedServiceAccounts = nil
 
 	if err := cfg.ValidateEssentialConfig(); err == nil {
@@ -205,33 +173,25 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 	tests := []struct {
 		name   string
 		caller string
-		legacy string
 		want   string
 	}{
 		{
 			name:   "新しい変数があればそれを使う",
 			caller: "caller@test-project.iam.gserviceaccount.com",
-			legacy: "legacy@test-project.iam.gserviceaccount.com",
 			want:   "caller@test-project.iam.gserviceaccount.com",
-		},
-		{
-			name:   "無ければ旧変数へフォールバックする",
-			legacy: "legacy@test-project.iam.gserviceaccount.com",
-			want:   "legacy@test-project.iam.gserviceaccount.com",
 		},
 		{
 			name:   "前後の空白は落とす",
 			caller: "  caller@test-project.iam.gserviceaccount.com  ",
 			want:   "caller@test-project.iam.gserviceaccount.com",
 		},
-		{name: "どちらも無ければ空"},
+		{name: "未設定なら空"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &Config{}
 			cfg.Tasks.CallerServiceAccountEmail = tt.caller
-			cfg.GCP.ServiceAccountEmail = tt.legacy
 
 			if got := cfg.TaskCallerServiceAccount(); got != tt.want {
 				t.Errorf("TaskCallerServiceAccount() = %q, want %q", got, tt.want)
