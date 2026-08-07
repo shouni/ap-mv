@@ -1,4 +1,13 @@
-package builder
+// Package prompt は、Gemini へ送るプロンプト文字列の組み立てを担います。
+//
+// ここには I/O がありません（埋め込みアセットの読み出しを除く）。台本生成用の Script と
+// キーフレーム生成用の Keyframe の 2 つがあり、どちらも go-veo-orchestrator の
+// ports.ScriptPrompt / ports.KeyframePrompt を満たします。
+//
+// DI を担う internal/builder ではなくここに置いているのは、これがプロンプトという
+// 出力そのものを作る処理であって、依存の配線ではないためです（ap-comp の
+// internal/adapters/prompt と同じ位置づけ）。
+package prompt
 
 import (
 	"encoding/json"
@@ -17,7 +26,10 @@ import (
 
 const defaultPromptMode = "default"
 
-type scriptPrompt struct {
+// Script は台本生成 LLM へ送るプロンプトを組み立てます。
+// 映像スタイル（visual mode）のテンプレートを本文へ差し込むため、
+// 台本用と映像スタイル用の 2 つの Builder を持ちます。
+type Script struct {
 	builder       *promptkit.Builder
 	visualBuilder *promptkit.Builder
 	visualMode    string
@@ -131,15 +143,18 @@ func newVisualModeData(recipe *orchestrator.VideoRecipe, char *characterkit.Char
 // resolved a per-task character override (that happens later via applyTaskCharacterIDToVideoRecipe),
 // so grounding on anything other than the default would require threading task state through the
 // external ScriptPrompt/TemplateData contract.
-func (p *scriptPrompt) defaultCharacter() *characterkit.Character {
+func (p *Script) defaultCharacter() *characterkit.Character {
 	if p == nil || p.characters == nil {
 		return nil
 	}
 	return p.characters.GetDefault()
 }
 
-// newScriptPrompt creates a script prompt from bundled prompt assets.
-func newScriptPrompt() (*scriptPrompt, error) {
+// NewScript は埋め込みアセットから台本プロンプトを組み立てます。
+//
+// visualMode と characters を引数で受け取るのは、以前のように生成後にフィールドを
+// 代入する形だと、設定し忘れた Script が存在し得るためです。
+func NewScript(visualMode string, characters *characterkit.Characters) (*Script, error) {
 	templates, err := loadPromptTemplates(assets.VideoRecipePrompts, assets.VideoRecipePromptDir)
 	if err != nil {
 		return nil, err
@@ -148,11 +163,17 @@ func newScriptPrompt() (*scriptPrompt, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newScriptPromptFromTemplates(templates, visualTemplates)
+	p, err := newScriptFromTemplates(templates, visualTemplates)
+	if err != nil {
+		return nil, err
+	}
+	p.visualMode = visualMode
+	p.characters = characters
+	return p, nil
 }
 
-// newScriptPromptFromTemplates creates a script prompt from parsed templates.
-func newScriptPromptFromTemplates(templates map[string]string, visualTemplates ...map[string]string) (*scriptPrompt, error) {
+// newScriptFromTemplates creates a script prompt from parsed templates.
+func newScriptFromTemplates(templates map[string]string, visualTemplates ...map[string]string) (*Script, error) {
 	// 未知のモードは既定モードへ委ねる。既定モードの存在は NewBuilder が検証する。
 	builder, err := promptkit.NewBuilder(templates, promptkit.WithDefaultMode(defaultPromptMode))
 	if err != nil {
@@ -170,7 +191,7 @@ func newScriptPromptFromTemplates(templates map[string]string, visualTemplates .
 	if err != nil {
 		return nil, err
 	}
-	return &scriptPrompt{
+	return &Script{
 		builder:       builder,
 		visualBuilder: visualBuilder,
 		outputSchema:  outputSchema,
@@ -196,7 +217,7 @@ func newVisualBuilder(visualTemplates map[string]string) (*promptkit.Builder, er
 }
 
 // Build renders the script prompt for the requested mode.
-func (p *scriptPrompt) Build(mode string, data *orchestrator.TemplateData) (string, error) {
+func (p *Script) Build(mode string, data *orchestrator.TemplateData) (string, error) {
 	if data == nil || data.SourceRecipe == nil {
 		return "", fmt.Errorf("source recipe is required")
 	}
@@ -252,7 +273,7 @@ func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoReci
 	return &cloned, nil
 }
 
-func (p *scriptPrompt) visualPrompt(mode string, data *orchestrator.TemplateData) (string, error) {
+func (p *Script) visualPrompt(mode string, data *orchestrator.TemplateData) (string, error) {
 	if p == nil || p.visualBuilder == nil {
 		return "", nil
 	}
@@ -282,10 +303,24 @@ func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, e
 	return templates, nil
 }
 
-type keyframePrompt struct {
+// Keyframe はキーフレーム画像生成へ送るプロンプトを組み立てます。
+type Keyframe struct {
 	styleSuffix     string
 	visualMode      string
 	visualTemplates map[string]string
+}
+
+// NewKeyframe は埋め込みアセットからキーフレームプロンプトを組み立てます。
+func NewKeyframe(styleSuffix, visualMode string) (Keyframe, error) {
+	visualTemplates, err := assets.LoadVisualModeFiles()
+	if err != nil {
+		return Keyframe{}, err
+	}
+	return Keyframe{
+		styleSuffix:     styleSuffix,
+		visualMode:      visualMode,
+		visualTemplates: visualTemplates,
+	}, nil
 }
 
 // resolveCharacterPromptFields returns the keyframe-prompt character name (falling back to a
@@ -303,7 +338,7 @@ func resolveCharacterPromptFields(char *characterkit.Character) (name, cues stri
 }
 
 // BuildCut builds prompts for a single keyframe cut.
-func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
+func (p Keyframe) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
 	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		fmt.Sprintf("Create a clean keyframe image for cut %d.", cut.CutIndex),
@@ -326,7 +361,7 @@ func (p keyframePrompt) BuildCut(cut orchestrator.Cut, char *characterkit.Charac
 // BuildEdit builds prompts for editing an existing keyframe image with editPrompt, reinforcing
 // character identity and art style the same way BuildCut does so the edited result doesn't
 // drift from the rest of the cuts.
-func (p keyframePrompt) BuildEdit(_ orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
+func (p Keyframe) BuildEdit(_ orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
 	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		"Edit the provided keyframe image. Keep the composition, pose, background, and art style exactly as they are; apply only this change.",
@@ -339,7 +374,7 @@ func (p keyframePrompt) BuildEdit(_ orchestrator.Cut, char *characterkit.Charact
 	return userPrompt, systemPrompt
 }
 
-func (p keyframePrompt) visualPrompt() string {
+func (p Keyframe) visualPrompt() string {
 	mode := strings.TrimSpace(p.visualMode)
 	if mode == "" {
 		mode = defaultPromptMode

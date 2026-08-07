@@ -12,6 +12,7 @@ import (
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/gcp-kit/auth"
 )
 
 // TestPostRegenerateCutKeyframeInheritsHistoryAspectRatio verifies the queued task's aspect
@@ -37,7 +38,7 @@ func TestPostRegenerateCutKeyframeInheritsHistoryAspectRatio(t *testing.T) {
 
 	form := url.Values{"csrf_token": {"token"}}
 	req := newRegenerateRequest(http.MethodPost, "/web/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
-	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostRegenerateCutKeyframe(rec, req)
@@ -82,7 +83,7 @@ func TestPostGenerateVideoFromHistoryInheritsAspectRatio(t *testing.T) {
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
-	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostGenerateVideoFromHistory(rec, req)
@@ -324,7 +325,7 @@ func TestPostRegenerateCutKeyframeSkipsSeedOverrideWhenUnchanged(t *testing.T) {
 
 	form := url.Values{"csrf_token": {"token"}, "seed": {"20260707"}}
 	req := newRegenerateRequest(http.MethodPost, "/web/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
-	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostRegenerateCutKeyframe(rec, req)
@@ -389,7 +390,7 @@ func TestPostRegenerateCutKeyframeAppliesOverridesAndOriginalJobID(t *testing.T)
 		"overwrite":     {"on"},
 	}
 	req := newRegenerateRequest(http.MethodPost, "/web/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
-	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostRegenerateCutKeyframe(rec, req)
@@ -431,7 +432,7 @@ func TestPostRegenerateCutKeyframeRejectsSeedWithoutCharacter(t *testing.T) {
 
 	form := url.Values{"csrf_token": {"token"}, "seed": {"1"}}
 	req := newRegenerateRequest(http.MethodPost, "/web/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
-	req = req.WithContext(WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostRegenerateCutKeyframe(rec, req)

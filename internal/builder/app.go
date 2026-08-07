@@ -8,11 +8,13 @@ import (
 	"io"
 
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-mv/internal/adapters"
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
+	"github.com/shouni/ap-mv/internal/ports"
 	"github.com/shouni/ap-mv/internal/repository"
 )
 
@@ -29,29 +31,13 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		}
 	}()
 
-	// Vertex AI クライアントはここで一度だけ組み、動画生成とテキスト/画像生成の
-	// 双方へ渡す。以前は両者が別々に生成しており、リージョンやリトライ設定が
-	// 片方だけ変更されて食い違う余地があった。
-	aiClient, err := adapters.NewVertexAIAdapter(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Vertex AI client: %w", err)
-	}
-
-	videoRunner, err := adapters.NewVertexVeoRunner(ctx, cfg, aiClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize video runner: %w", err)
-	}
-	// resources is only for cleanup while BuildContainer is still assembling dependencies.
-	// On success, app.Container.Close owns the runtime lifecycle.
-	resources = append(resources, videoRunner)
-
 	storage, err := gcs.New(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GCS factory: %w", err)
 	}
 	resources = append(resources, storage)
 
-	rio, err := buildRemoteIO(storage)
+	rio, err := remoteio.NewBundle(storage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", err)
 	}
@@ -63,10 +49,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
-	notifier, err := adapters.NewSlackAdapter(httpClient.WithoutRetry(), cfg.Notification.SlackWebhookURL, cfg.Server.ServiceURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize slack notifier: %w", err)
-	}
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
 		BaseURI:      workflowOutputBaseURI(cfg),
@@ -77,14 +59,47 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
-	pipe, err := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, aiClient, pipelineExternals{
-		notifier:          notifier,
-		taskQueue:         queue,
-		historyRepository: historyRepository,
-		jobStatus:         jobStatus,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize worker pipeline: %w", err)
+
+	// 生成系（Vertex AI・Veo・Slack 通知・パイプライン）を組み立てるのは Worker 面だけです。
+	// Web 面で組み立てないことで、ap-mv-web-runner が aiplatform.user も
+	// SLACK_WEBHOOK_URL へのアクセス権も持たないという ap-infra 側の前提と一致します
+	// （持たせる理由が無く、持たせれば分離した意味が薄れます）。
+	//
+	// pipe は nil のままなら Container.Close も BuildHandlers も参照しません。
+	// 非 nil のインターフェースが nil を保持する状態を作らないよう、組み立てたときにだけ代入します。
+	var pipe ports.Pipeline
+	if cfg.Server.Role.ServesWorker() {
+		// Vertex AI クライアントはここで一度だけ組み、動画生成とテキスト/画像生成の
+		// 双方へ渡す。以前は両者が別々に生成しており、リージョンやリトライ設定が
+		// 片方だけ変更されて食い違う余地があった。
+		aiClient, aiErr := adapters.NewVertexAIAdapter(ctx, cfg)
+		if aiErr != nil {
+			return nil, fmt.Errorf("failed to initialize Vertex AI client: %w", aiErr)
+		}
+
+		videoRunner, runnerErr := adapters.NewVertexVeoRunner(ctx, cfg, aiClient)
+		if runnerErr != nil {
+			return nil, fmt.Errorf("failed to initialize video runner: %w", runnerErr)
+		}
+		// resources is only for cleanup while BuildContainer is still assembling dependencies.
+		// On success, app.Container.Close owns the runtime lifecycle (Pipeline.Close closes it).
+		resources = append(resources, videoRunner)
+
+		notifier, notifierErr := adapters.NewSlackAdapter(httpClient.WithoutRetry(), cfg.Notification.SlackWebhookURL, cfg.Server.ServiceURL)
+		if notifierErr != nil {
+			return nil, fmt.Errorf("failed to initialize slack notifier: %w", notifierErr)
+		}
+
+		builtPipe, pipeErr := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, aiClient, pipelineExternals{
+			notifier:          notifier,
+			taskQueue:         queue,
+			historyRepository: historyRepository,
+			jobStatus:         jobStatus,
+		})
+		if pipeErr != nil {
+			return nil, fmt.Errorf("failed to initialize worker pipeline: %w", pipeErr)
+		}
+		pipe = builtPipe
 	}
 
 	return &app.Container{

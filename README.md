@@ -231,9 +231,10 @@ ap-mv/
 │   ├── prompts/            # VideoRecipe 生成・Visual Mode・Veo動画生成モード別（image_to_video / reference_to_video / video_extension）のプロンプトテンプレート
 │   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
 └── internal/
-    ├── adapters/           # Vertex AI Veo adapter
-    ├── app/                # DI container と RemoteIO 依存
-    ├── builder/            # config から container / handlers / workflow / pipeline / prompt builder を構築
+    ├── adapters/           # 外部サービス連携（Vertex AI Veo adapter, Slack, ffmpeg）
+    │   └── prompt/         # Gemini へ送るプロンプト組み立て（台本・キーフレーム）
+    ├── app/                # DI container（RemoteIO は remoteio.Bundle の別名）
+    ├── builder/            # config から container / handlers / workflow / pipeline を構築（配線のみ）
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
     ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias
@@ -370,7 +371,11 @@ sequenceDiagram
 2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です。同居していると長時間ジョブがレイテンシの p99 を支配し、Web の遅延もメモリのピーク要因も判別できません
 3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証ミドルウェアだけでした。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
 
-役割ごとに構築される依存も変わります。`SERVER_ROLE=worker` では OAuth ハンドラを構築せず、Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
+役割ごとに構築される依存も変わります（`internal/builder/app.go`・`handlers.go`）。
+
+- `SERVER_ROLE=worker` では OAuth ハンドラを構築せず、Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
+- `SERVER_ROLE=web` では Vertex AI クライアント・Veo runner・Slack 通知・worker パイプラインを構築しません。`ap-mv-web-runner` は `aiplatform.user` も `SLACK_WEBHOOK_URL` へのアクセス権も持たない（`ap-infra/app_ap_mv.tf`）ため、持たせる理由がありません。
+- Cloud Tasks のエンキューアと GCS・履歴リポジトリはどちらの役割でも構築します。worker も継続カットを自分で投入し、ジョブ状態を書き戻すためです。
 
 > **ap-comp との違い**: ap-mv の worker は**自分でもタスクを投入します**。動画をカット単位で分割生成し、残りがあれば次のカットを積み直すためです（`internal/worker/filter/video_gen.go`）。そのため `CLOUD_TASKS_QUEUE_ID` と `WORKER_URL` は worker 側にも必須で、`WORKER_URL` は **worker 自身**を指します。ap-comp の worker は投入しないので、この配線は不要でした。
 
