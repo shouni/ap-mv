@@ -132,7 +132,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | --- | --- | --- |
 | `PORT` | `8080` | HTTP server の listen port |
 | `LOG_LEVEL` | `INFO` | ログ出力レベル（`DEBUG` / `INFO` / `WARN` / `ERROR`）。ログは Cloud Logging が解釈する `severity` / `message` 形式で出力され、`X-Cloud-Trace-Context` があればリクエスト単位でトレースに紐付きます |
-| `SERVER_ROLE` | なし（= web/worker 両方） | このプロセスが担う役割。`web` / `worker` / 未設定。詳細は「web / worker の分離」節を参照 |
+| `SERVER_ROLE` | なし（必須） | このプロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」節を参照 |
 | `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う**公開**URL。web/worker を分けた場合、worker にも**非公開の worker 自身ではなく web の URL**を設定します（Slack のリンクがこの値から作られるため） |
 | `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
 | `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
@@ -363,7 +363,10 @@ sequenceDiagram
 | memory / cpu | 512Mi / 1 | 1Gi / 2 |
 | concurrency / timeout | 20 / 300s | 4 / 3600s |
 
-`SERVER_ROLE` を未指定にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動きます。
+`SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
+
+`SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
+環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。
 
 分離する理由は 3 つあります。
 
