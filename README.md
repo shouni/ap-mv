@@ -145,7 +145,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
-| `SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの OIDC token に**署名する** service account |
+| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。ap-mv は worker も継続カットを投入するため、どちらの役割でも必要です。未設定時は旧 `SERVICE_ACCOUNT_EMAIL` にフォールバックします（移行用・Terraform 適用後に削除） |
 | `ALLOWED_TASK_SERVICE_ACCOUNTS` | `SERVICE_ACCOUNT_EMAIL` | 受信側が**受け付ける**発行元の許可リスト（カンマ区切り）。web と worker で実行 SA を分けると発行元が 2 つになるため、単一値の `SERVICE_ACCOUNT_EMAIL` とは別に指定できます（ap-mv は worker も継続カットを投入するため） |
 | `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
 | `VEO_MODELS` | `veo-3.1-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |

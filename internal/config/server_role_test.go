@@ -196,3 +196,46 @@ func TestValidateEssentialConfigRequiresTaskIssuerForWorker(t *testing.T) {
 		t.Fatal("expected an error when no task issuer is configured")
 	}
 }
+
+// TestTaskCallerServiceAccount は、caller SA の解決順を確認します。
+//
+// 新しい TASK_CALLER_SERVICE_ACCOUNT_EMAIL を優先し、無ければ旧 SERVICE_ACCOUNT_EMAIL に
+// フォールバックします。後者は Terraform を切り替えるまでの移行用で、適用後に削除します。
+func TestTaskCallerServiceAccount(t *testing.T) {
+	tests := []struct {
+		name   string
+		caller string
+		legacy string
+		want   string
+	}{
+		{
+			name:   "新しい変数があればそれを使う",
+			caller: "caller@test-project.iam.gserviceaccount.com",
+			legacy: "legacy@test-project.iam.gserviceaccount.com",
+			want:   "caller@test-project.iam.gserviceaccount.com",
+		},
+		{
+			name:   "無ければ旧変数へフォールバックする",
+			legacy: "legacy@test-project.iam.gserviceaccount.com",
+			want:   "legacy@test-project.iam.gserviceaccount.com",
+		},
+		{
+			name:   "前後の空白は落とす",
+			caller: "  caller@test-project.iam.gserviceaccount.com  ",
+			want:   "caller@test-project.iam.gserviceaccount.com",
+		},
+		{name: "どちらも無ければ空"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{}
+			cfg.Tasks.CallerServiceAccountEmail = tt.caller
+			cfg.GCP.ServiceAccountEmail = tt.legacy
+
+			if got := cfg.TaskCallerServiceAccount(); got != tt.want {
+				t.Errorf("TaskCallerServiceAccount() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

@@ -59,8 +59,8 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.GCP.LocationID == "" {
 		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
 	}
-	if c.GCP.ServiceAccountEmail == "" {
-		return fmt.Errorf("SERVICE_ACCOUNT_EMAIL が設定されていません")
+	if c.TaskCallerServiceAccount() == "" {
+		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
 	// ap-comp と違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
 	// 分割生成し、残りがあれば次のカットを自分で積み直すため
@@ -139,6 +139,21 @@ func (c *Config) validateWebConfig() error {
 	}
 
 	return nil
+}
+
+// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
+//
+// TASK_CALLER_SERVICE_ACCOUNT_EMAIL があればそれを使い、無ければ旧 SERVICE_ACCOUNT_EMAIL に
+// フォールバックします。後者は Terraform を新変数へ切り替えるまでの移行用であり、
+// 適用後に削除します（残すと「この変数は誰のこと？」という曖昧さが戻るため）。
+//
+// TaskIssuers と同じく、フォールバックを normalize ではなくここに置くのは
+// 呼び出し順への依存を作らないためです。
+func (c *Config) TaskCallerServiceAccount() string {
+	if email := strings.TrimSpace(c.Tasks.CallerServiceAccountEmail); email != "" {
+		return email
+	}
+	return strings.TrimSpace(c.GCP.ServiceAccountEmail)
 }
 
 // TaskIssuers は、受信側が受け付ける Cloud Tasks トークンの発行元を返します。
