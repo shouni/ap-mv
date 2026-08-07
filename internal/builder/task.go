@@ -19,7 +19,7 @@ func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer
 		WorkerURL:  cfg.Tasks.WorkerURL,
 		// タスクに指定する caller SA。トークンを生成して付与するのは Cloud Tasks で、
 		// このプロセスが署名するわけではありません。受信側の許可リスト
-		// （Config.TaskIssuers）とは別物なので取り違えないこと。
+		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。
 		ServiceAccountEmail: cfg.TaskCallerServiceAccount(),
 		Audience:            cfg.Tasks.TaskAudienceURL,
 	}

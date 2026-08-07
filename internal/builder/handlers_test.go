@@ -29,8 +29,9 @@ func newRoleTestConfig(role config.ServerRole) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.Role = role
 	cfg.Server.ServiceURL = "https://web.example.test"
+	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
+	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://worker.example.test"
-	cfg.GCP.ServiceAccountEmail = "runner@example.iam.gserviceaccount.com"
 	cfg.Auth.GoogleClientID = "test-client-id"
 	cfg.Auth.GoogleClientSecret = "test-client-secret"
 	cfg.Auth.SessionSecret = strings.Repeat("a", 32)
