@@ -235,12 +235,12 @@ func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	got := expandCutsToSupportedDurations(recipe.Cuts, true, nil, false)
+	got := orchestrator.ExpandCutsToSupportedDurations(recipe.Cuts, true, nil, false)
 
 	total := 0.0
 	for i := range got {
 		total += got[i].DurationSec
-		if got[i].DurationSec != veoVideoExtensionDurationSec && got[i].DurationSec != 4 && got[i].DurationSec != 6 && got[i].DurationSec != 8 {
+		if got[i].DurationSec != orchestrator.VeoVideoExtensionDurationSec && got[i].DurationSec != 4 && got[i].DurationSec != 6 && got[i].DurationSec != 8 {
 			t.Errorf("cut[%d].DurationSec = %v, want a Veo-supported value (4/6/8 base or 7 extension)", i, got[i].DurationSec)
 		}
 		if i > 0 && got[i].StartSec != got[i-1].EndSec {
@@ -416,8 +416,8 @@ func TestSceneSplitFilterDropsKeyframeWhenCutIsResplit(t *testing.T) {
 }
 
 func TestAllocateChainDurations(t *testing.T) {
-	full := videoToVideoChainDurations(veoSupportedDurationsSec)
-	reference := videoToVideoChainDurations(veoReferenceToVideoDurationsSec)
+	full := orchestrator.ChainDurations(orchestrator.ImageToVideoDurationsSec())
+	reference := orchestrator.ChainDurations(orchestrator.ReferenceToVideoDurationsSec())
 	cases := []struct {
 		name       string
 		target     float64

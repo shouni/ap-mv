@@ -189,11 +189,6 @@ func (c *Config) NormalizeModels() {
 	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels, domain.DefaultVeoModel)
 }
 
-// LoadConfig は環境変数から設定を読み込みます。
-func LoadConfig() (*Config, error) {
-	return LoadConfigFromEnv()
-}
-
 // LoadConfigFromEnv は環境変数から設定を読み込み、変換エラーを返します。
 func LoadConfigFromEnv() (*Config, error) {
 	var cfg Config

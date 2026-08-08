@@ -152,7 +152,7 @@ func editTargetKeyframes(ctx context.Context, fc *Context, targets []int, editPr
 		tempRecipe := newRegenTempRecipe(fc, []orchestrator.Cut{cut})
 		outputPath := regenCutOutputPath(basePath, cut.CutIndex, len(targets))
 
-		updated, err := fc.Workflows.CutKeyframe.EditAndSave(ctx, tempRecipe, editPrompt, outputPath)
+		updated, err := fc.Workflows.CutKeyframe.EditAndSave(ctx, tempRecipe, 0, editPrompt, outputPath)
 		if errors.Is(err, orchestrator.ErrEditingNotSupported) {
 			// 設定済みの画像生成エンジンが編集（EditCut）に対応していない場合、
 			// editPrompt を VisualAnchor に追記した上で全体再生成にフォールバックする。

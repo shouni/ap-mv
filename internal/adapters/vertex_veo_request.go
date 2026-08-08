@@ -33,7 +33,7 @@ func (r *VertexVeoRunner) buildRequest(ctx context.Context, req ports.VideoGener
 
 	switch ports.ClassifyVeoRequest(req, r.usePreviousVideo, r.capabilities()) {
 	case ports.VeoModeVideoExtension:
-		out.Video = previousVideoMedia(req.PreviousVideoID)
+		out.Video = previousVideoMedia(req.PreviousVideoURI)
 	case ports.VeoModeReferenceToVideo:
 		out.References = referenceImagesMedia(req)
 	case ports.VeoModeFramesToVideo:
@@ -77,42 +77,26 @@ func injectAudioInstance(audio map[string]any) func(map[string]any) map[string]a
 }
 
 // capabilities は使用モデルの Veo オプション機能対応状況を ports.VeoCapabilities として
-// 返します（ports.ClassifyVeoRequest の入力）。
+// 返します（ports.ClassifyVeoRequest の入力）。モデル名→対応機能の規則は
+// ports.VeoModelCapabilities が唯一の定義元です（以前はここで文字列前方一致を
+// 再導出しており、「ルールはライブラリが持つ」という原則が破れていました）。
 func (r *VertexVeoRunner) capabilities() ports.VeoCapabilities {
-	return ports.VeoCapabilities{
-		ReferenceImages: r.modelSupportsReferenceImages(),
-		LastFrame:       r.modelSupportsLastFrame(),
-	}
+	return ports.VeoModelCapabilities(r.model)
 }
 
-// modelSupportsReferenceImages は使用モデルが referenceImages（asset 参照）に対応するかを返します。
-// referenceImages は Veo 3 系のみサポートで、Veo 3.1 Fast は非対応です。
-func (r *VertexVeoRunner) modelSupportsReferenceImages() bool {
-	model := strings.ToLower(r.model)
-	return strings.HasPrefix(model, "veo-3") && !strings.Contains(model, "fast")
-}
-
-// modelSupportsLastFrame は使用モデルが lastFrame（first/last frame 補間）に対応するかを
-// 返します。Vertex AI で対応するのは veo-2.0-generate-001 / veo-3.1-generate-001 /
-// veo-3.1-fast-generate-001 で、Veo 3.0 系は非対応です（referenceImages と違い Fast も対応）。
-func (r *VertexVeoRunner) modelSupportsLastFrame() bool {
-	model := strings.ToLower(r.model)
-	return strings.HasPrefix(model, "veo-2") || strings.HasPrefix(model, "veo-3.1")
-}
-
-// SupportsLastFrame は modelSupportsLastFrame を公開し、ports.LastFrameSupporter を満たします。
+// SupportsLastFrame は ports.LastFrameSupporter を満たします。
 // video_gen フィルタが、次カットのキーフレームを lastFrame（frames_to_video 補間）として
 // 渡すかを、モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
 func (r *VertexVeoRunner) SupportsLastFrame() bool {
-	return r.modelSupportsLastFrame()
+	return r.capabilities().LastFrame
 }
 
-// SupportsReferenceImages は modelSupportsReferenceImages を公開し、ports.ReferenceImagesSupporter を
-// 満たします。呼び出し元（カットの尺をVeoのサポート値へ正規化する処理）が、このRunnerが
-// reference_to_video（referenceImages、8秒固定）を使うか image_to_video（{4,6,8}秒）を使うかを、
+// SupportsReferenceImages は ports.ReferenceImagesSupporter を満たします。呼び出し元
+// （カットの尺をVeoのサポート値へ正規化する処理）が、このRunnerが reference_to_video
+// （referenceImages、8秒固定）を使うか image_to_video（{4,6,8}秒）を使うかを、
 // モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
 func (r *VertexVeoRunner) SupportsReferenceImages() bool {
-	return r.modelSupportsReferenceImages()
+	return r.capabilities().ReferenceImages
 }
 
 // validateVertexVeoRequest は Veo API アダプターに必要なリクエスト項目を検証します。

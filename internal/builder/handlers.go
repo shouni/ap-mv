@@ -141,27 +141,12 @@ func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
 		}
 		options.Modes = append(options.Modes, handlers.VisualModeOption{
 			ID:        mode,
-			Name:      visualModeDisplayName(mode),
+			Name:      handlers.DisplayVisualModeName(mode),
 			IsDefault: mode == assets.DefaultVisualMode,
 		})
 	}
 	options.DefaultModeID = assets.DefaultVisualMode
 	return options, nil
-}
-
-func visualModeDisplayName(mode string) string {
-	switch mode {
-	case "default":
-		return "Default"
-	case "girls_metal":
-		return "Girls Metal"
-	case "sparkle_rock":
-		return "Sparkle Rock"
-	case "techno_melancholic":
-		return "Techno Melancholic"
-	default:
-		return mode
-	}
 }
 
 // buildCharacterOptions builds character options.

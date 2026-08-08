@@ -125,12 +125,11 @@ func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequ
 		return nil, err
 	}
 
-	// VideoID は次カットの PreviousVideoID として使うため、参照可能な GCS URI を
-	// 優先する。URI が無い（インライン返却）場合だけオペレーション名へ退避する。
+	// VideoID は次カットの PreviousVideoURI として使うため、参照可能な gs:// URI
+	// だけを載せる（VideoResponse.VideoID の契約）。以前は URI が無い場合に
+	// オペレーション名へ退避していたが、その値は video_extension に分類されないのに
+	// チェーン文脈として引き回され、7秒計画のカットが尺検証で誤って拒否されていた。
 	videoID := cloudURL
-	if videoID == "" {
-		videoID = result.OperationName
-	}
 	mimeType := video.MIMEType
 	if mimeType == "" {
 		mimeType = "video/mp4"

@@ -42,7 +42,7 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	}
 
 	// 8,7,7,8(reset),7: cumulative 8->15->22, then 22+7>24 so cut4 resets.
-	// veoContinuationMaxDurationSec=24 caps each chain at 2 video_extension continuations
+	// orchestrator.VeoContinuationMaxDurationSec=24 caps each chain at 2 video_extension continuations
 	// (not 3) to limit color-drift accumulation, so this chain is shorter than Veo's ~30s
 	// hard API limit would otherwise allow.
 	wantChainStart := []bool{true, false, false, true, false}
@@ -73,7 +73,7 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 // ones that reuse the previous generation as Veo's video-to-video conditioning input) get
 // color-matched against the cut's own scene keyframe image, and that the corrected
 // VideoURL/VideoID — not the raw Veo output — is what chains forward as the next cut's
-// PreviousVideoID. Repeated video_extension rounds drift in saturation (confirmed on a real
+// PreviousVideoURI. Repeated video_extension rounds drift in saturation (confirmed on a real
 // job: +20% after the first continuation, climbing further each round), so leaving the raw
 // output uncorrected would let the drift compound round over round instead of being pulled
 // back each time.
@@ -132,7 +132,7 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	}
 
 	// The corrected URI must be what's stored on the cut (and thus what chains forward as the
-	// next cut's PreviousVideoID) — not the raw, uncorrected Veo output.
+	// next cut's PreviousVideoURI) — not the raw, uncorrected Veo output.
 	if recipe.Cuts[1].VideoURL != wantDestURIs[0] || recipe.Cuts[1].VideoID != wantDestURIs[0] {
 		t.Errorf("cut[1] VideoURL/VideoID = %q/%q, want corrected URI %q", recipe.Cuts[1].VideoURL, recipe.Cuts[1].VideoID, wantDestURIs[0])
 	}

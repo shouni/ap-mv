@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	imagePorts "github.com/shouni/gemini-image-kit/ports"
 	"github.com/shouni/go-veo-orchestrator/keyframe"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
@@ -80,7 +79,7 @@ type aspectRatioCapturingRunner struct {
 	seenAspectRatio string
 }
 
-func (r *aspectRatioCapturingRunner) Run(context.Context, *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
+func (r *aspectRatioCapturingRunner) Run(context.Context, *orchestrator.VideoRecipe) ([]*orchestrator.KeyframeImage, error) {
 	return nil, nil
 }
 
@@ -89,7 +88,7 @@ func (r *aspectRatioCapturingRunner) RunAndSave(_ context.Context, recipe *orche
 	return recipe, nil
 }
 
-func (r *aspectRatioCapturingRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ string, _ string) (*orchestrator.VideoRecipe, error) {
+func (r *aspectRatioCapturingRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ int, _ string, _ string) (*orchestrator.VideoRecipe, error) {
 	return recipe, nil
 }
 

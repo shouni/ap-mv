@@ -91,47 +91,27 @@ func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) 
 
 // PostVideoRecipeCreate handles video recipe creation form submissions.
 func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid form")
-		return
-	}
-	jobID, err := jobid.New("video-recipe")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
-		return
-	}
-	sourceURL, err := h.musicRecipeSourceURL(r)
-	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
-		return
-	}
-	task := &domain.Task{
-		JobID:          jobID,
-		Command:        domain.CommandVideoRecipeCreate,
-		AIModels:       h.aiModelsFromForm(r),
-		SourceURL:      sourceURL,
-		Text:           strings.TrimSpace(r.FormValue("text")),
-		ImageURL:       strings.TrimSpace(r.FormValue("image_url")),
-		CharacterID:    h.characterIDFromForm(r),
-		VisualMode:     h.visualModeFromForm(r),
-		VeoAspectRatio: strings.TrimSpace(r.FormValue("aspect_ratio")),
-		CreatedAt:      time.Now().UTC(),
-	}
-	h.enqueue(w, r, task)
+	h.postMusicRecipeTask(w, r, "video-recipe", domain.CommandVideoRecipeCreate)
 }
 
 // PostVideoRecipeDraft handles draft creation form submissions.
 //
-// 入力は PostVideoRecipeCreate と同じで、違いはコマンドだけです。キーフレームを焼かずに
-// カット割りまでで止め、結果を下書きとして保存します。
+// 入力は PostVideoRecipeCreate と同じで、違いはコマンドとジョブ ID プレフィックスだけです。
+// キーフレームを焼かずにカット割りまでで止め、結果を下書きとして保存します。
+// 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
+// ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
 func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
+	h.postMusicRecipeTask(w, r, "video-draft", domain.CommandVideoRecipeDraft)
+}
+
+// postMusicRecipeTask は、Music Recipe を入力とする作成系フォーム（本生成と下書き）の
+// 共通実装です。2 つのハンドラは定数 2 つを除いて byte 単位で同一でした。
+func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jobPrefix string, command domain.TaskCommand) {
 	if err := r.ParseForm(); err != nil {
 		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
-	// 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
-	// ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
-	jobID, err := jobid.New("video-draft")
+	jobID, err := jobid.New(jobPrefix)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -143,7 +123,7 @@ func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
 	}
 	task := &domain.Task{
 		JobID:          jobID,
-		Command:        domain.CommandVideoRecipeDraft,
+		Command:        command,
 		AIModels:       h.aiModelsFromForm(r),
 		SourceURL:      sourceURL,
 		Text:           strings.TrimSpace(r.FormValue("text")),

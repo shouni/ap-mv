@@ -37,7 +37,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(fc.Task, fc.VideoRecipe)
-	// expandCutsToSupportedDurations はカットの所属セクションを cut.SectionIndex から直接
+	// ExpandCutsToSupportedDurations はカットの所属セクションを cut.SectionIndex から直接
 	// 判定するため、（呼び出し元がまだ Normalize していない可能性に備えて）ここで確実に
 	// 補完しておく。Normalize は冪等なので、既に呼ばれていても無害。
 	fc.VideoRecipe.Normalize()
@@ -45,8 +45,8 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
 	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
 	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
-	// （詳細は expandCutsToSupportedDurations のコメント参照）。
-	fc.VideoRecipe.Cuts = expandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
+	// （詳細は orchestrator.ExpandCutsToSupportedDurations のコメント参照）。
+	fc.VideoRecipe.Cuts = orchestrator.ExpandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
 	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
@@ -122,11 +122,11 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			}
 			continue
 		}
-		// expandCutsToSupportedDurations は、video_extension の累積尺がVeoの上限に達する
+		// ExpandCutsToSupportedDurations は、video_extension の累積尺がVeoの上限に達する
 		// 手前でチェーンをリセットし、そのカットを7秒固定ではなく{4,6,8}秒のいずれかに
 		// 揃える。7秒固定でない = チェーンリセット後の新規ベースカットなので、
-		// PreviousVideoIDを引き継がずに生成する。
-		if f.UsePreviousVideo && cut.DurationSec != veoVideoExtensionDurationSec {
+		// PreviousVideoURI を引き継がずに生成する。
+		if f.UsePreviousVideo && cut.DurationSec != orchestrator.VeoVideoExtensionDurationSec {
 			lastVideoID = ""
 			cut.IsChainStart = true
 			// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成された
@@ -143,10 +143,10 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				}
 			}
 		}
-		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, nextCutLastFrameReference(fc.VideoRecipe.Cuts, i)); err != nil {
+		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, orchestrator.Cuts(fc.VideoRecipe.Cuts).NextLastFrameReference(i)); err != nil {
 			return err
 		}
-		if f.UsePreviousVideo && cut.DurationSec == veoVideoExtensionDurationSec {
+		if f.UsePreviousVideo && cut.DurationSec == orchestrator.VeoVideoExtensionDurationSec {
 			if err := f.colorCorrectExtensionCut(ctx, fc, cut); err != nil {
 				return err
 			}
@@ -190,7 +190,7 @@ func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
 }
 
 // generateCut runs a single cut through the video runner and updates its status, VideoID, and
-// VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoID
+// VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoURI
 // context (video-to-video continuation). lastFrameRef is the next cut's keyframe used as this
 // cut's ending frame (frames_to_video interpolation). The request is built first and then
 // classified via ports.ClassifyVeoRequest — the same decision the adapter makes when building
@@ -200,10 +200,10 @@ func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.Vid
 		CutIndex:           cut.CutIndex,
 		DurationSec:        cut.DurationSec,
 		Seed:               videoSeed(fc, cut),
-		PreviousVideoID:    lastVideoID,
+		PreviousVideoURI:   lastVideoID,
 		ImageReference:     cut.KeyframeReference,
 		LastFrameReference: lastFrameRef,
-		ReferenceImages:    cutReferenceImages(*cut, fc.Characters),
+		ReferenceImages:    orchestrator.CutReferenceImages(*cut, fc.Characters),
 		AudioReference:     cut.AudioReference,
 	}
 	mode := ports.ClassifyVeoRequest(req, f.UsePreviousVideo, ports.RunnerCapabilities(runner))

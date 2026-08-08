@@ -7,6 +7,8 @@ import (
 
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/netarmor/securenet"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
@@ -82,8 +84,8 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.AI.VeoOutputPrefix == "" {
 		return fmt.Errorf("VEO_OUTPUT_PREFIX が設定されていません")
 	}
-	if c.AI.VeoAspectRatio != "16:9" && c.AI.VeoAspectRatio != "9:16" {
-		return fmt.Errorf("VEO_ASPECT_RATIO は 16:9 または 9:16 である必要があります")
+	if !domain.IsAllowedAspectRatio(c.AI.VeoAspectRatio) {
+		return fmt.Errorf("VEO_ASPECT_RATIO は %s のいずれかである必要があります", strings.Join(domain.AllowedAspectRatios, " / "))
 	}
 	if c.AI.VeoPollInterval <= 0 {
 		return fmt.Errorf("VEO_POLL_INTERVAL は正の duration である必要があります")

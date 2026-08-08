@@ -53,6 +53,11 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "Queued") {
 		t.Fatalf("PostVideoRecipeCreate body missing queued page: %s", rec.Body.String())
 	}
+	// 投入後の画面はジョブ状態をポーリングして queued → running → succeeded/failed を
+	// 表示する（サーバー側の /web/jobs/{jobID} は以前から存在し、UI 側が未接続だった）。
+	if !strings.Contains(rec.Body.String(), "/web/jobs/") {
+		t.Fatalf("queued page is missing the job-status polling script: %s", rec.Body.String())
+	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
 	}
@@ -282,5 +287,26 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 	if queue.task.ImageModel != "image-b" {
 		t.Fatalf("queued image model = %q, want %q", queue.task.ImageModel, "image-b")
+	}
+}
+
+// TestComposeTemplateOffersAllAspectRatios は、compose.html の選択肢が
+// domain.AllowedAspectRatios（唯一の定義）と同期していることを検証します。
+// テンプレートは Go の定数を参照できないため、このテストが同期の担保です。
+func TestComposeTemplateOffersAllAspectRatios(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.VideoRecipeCreateForm(rec, httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("VideoRecipeCreateForm status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, ratio := range domain.AllowedAspectRatios {
+		if !strings.Contains(body, `value="`+ratio+`"`) {
+			t.Errorf("compose.html is missing aspect ratio option %q (sync it with domain.AllowedAspectRatios)", ratio)
+		}
 	}
 }

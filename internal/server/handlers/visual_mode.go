@@ -29,7 +29,7 @@ func (o *VisualModeOptions) normalize() {
 		o.Modes[i].ID = strings.TrimSpace(o.Modes[i].ID)
 		o.Modes[i].Name = strings.TrimSpace(o.Modes[i].Name)
 		if o.Modes[i].Name == "" {
-			o.Modes[i].Name = displayVisualModeName(o.Modes[i].ID)
+			o.Modes[i].Name = DisplayVisualModeName(o.Modes[i].ID)
 		}
 	}
 	sort.SliceStable(o.Modes, func(i, j int) bool {
@@ -86,7 +86,11 @@ func (h *Handler) visualModeFromForm(r *http.Request) string {
 	return options.DefaultModeID
 }
 
-func displayVisualModeName(id string) string {
+// DisplayVisualModeName は visual mode の ID から表示名を作ります（アンダースコア区切りを
+// タイトルケースへ）。builder 側にモード名のハードコード switch が併存していた頃は、
+// 新しい .md を追加すると UI に raw ID が出る手作業リストの更新漏れがありました。
+// 生成的な変換 1 本にしたので、モード追加時のコード変更は不要です。
+func DisplayVisualModeName(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return "Default"

@@ -175,7 +175,7 @@
             </div>
             <div class="row g-4 mb-4">
                 {{range .Cuts}}
-                {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail)}}
+                {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail "CSRFToken" $.CSRFToken)}}
                 {{end}}
             </div>
         </div>
@@ -183,7 +183,7 @@
         {{else}}
         <div class="row g-4">
             {{range .HistoryDetail.Cuts}}
-            {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail)}}
+            {{template "historyCutCard" (dict "Cut" . "Detail" $.HistoryDetail "CSRFToken" $.CSRFToken)}}
             {{end}}
         </div>
         {{end}}
@@ -232,6 +232,10 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
 {{define "historyCutCard"}}
 {{$cut := .Cut}}
 {{$detail := .Detail}}
+{{/* $ はこのサブテンプレートの引数（dict）に再束縛されるため、CSRF トークンは
+     dict 経由で受け取る。$.CSRFToken と書くと dict に無いキーを引いて常に空になり、
+     フォーム送信が 403 Invalid CSRF token で落ちる（実際に落ちていた）。 */}}
+{{$csrfToken := .CSRFToken}}
 <div class="col-md-6 col-xl-4">
     <div class="card h-100 history-cut-card">
         {{if $cut.VideoSignedURL}}
@@ -257,7 +261,7 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
                     {{if $cut.VideoURL}}
                     <form method="POST" action="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate-video" class="d-inline"
                           onsubmit="return confirm('Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?');">
-                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <input type="hidden" name="csrf_token" value="{{$csrfToken}}">
                         <button type="submit" class="btn btn-sm btn-outline-warning"
                                 title="このカットの動画だけを作り直します。キーフレームはそのまま使い、結果は新しいジョブになります">動画を作り直す</button>
                     </form>

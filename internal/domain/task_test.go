@@ -135,7 +135,7 @@ func TestTaskValidateShortVideoFromSection(t *testing.T) {
 				SectionIndex:   &sectionIndex,
 				VeoAspectRatio: "4:3",
 			},
-			want: "veo_aspect_ratio must be 16:9 or 9:16",
+			want: "veo_aspect_ratio must be one of 16:9, 9:16",
 		},
 	}
 

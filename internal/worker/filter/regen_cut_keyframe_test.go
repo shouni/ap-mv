@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	imagePorts "github.com/shouni/gemini-image-kit/ports"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -32,7 +31,7 @@ type fakeCutKeyframeRunner struct {
 	keyframeRefsAtRunAndSave []string
 }
 
-func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*imagePorts.ImageResponse, error) {
+func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*orchestrator.KeyframeImage, error) {
 	return nil, nil
 }
 
@@ -48,7 +47,7 @@ func (f *fakeCutKeyframeRunner) RunAndSave(_ context.Context, recipe *orchestrat
 	return recipe, nil
 }
 
-func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, editPrompt string, outputPath string) (*orchestrator.VideoRecipe, error) {
+func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ int, editPrompt string, outputPath string) (*orchestrator.VideoRecipe, error) {
 	f.editAndSaveCalled = true
 	f.editPromptSeen = editPrompt
 	f.keyframeSeenAtEdit = recipe.Cuts[0].KeyframeReference

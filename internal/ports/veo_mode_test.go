@@ -24,10 +24,10 @@ func TestClassifyVeoRequest(t *testing.T) {
 		caps             VeoCapabilities
 		want             VeoGenerationMode
 	}{
-		{"video context wins over refs", true, VideoGenerationRequest{PreviousVideoID: "gs://bucket/prev.mp4", ReferenceImages: refs}, full, VeoModeVideoExtension},
-		{"video context wins over last frame", true, VideoGenerationRequest{PreviousVideoID: "gs://bucket/prev.mp4", ImageReference: "gs://bucket/kf.png", LastFrameReference: "gs://bucket/next.png"}, full, VeoModeVideoExtension},
-		{"previous video disabled", false, VideoGenerationRequest{PreviousVideoID: "gs://bucket/prev.mp4", ReferenceImages: refs}, full, VeoModeReferenceToVideo},
-		{"non-gs previous video id", true, VideoGenerationRequest{PreviousVideoID: "operation-id-123", ReferenceImages: refs}, full, VeoModeReferenceToVideo},
+		{"video context wins over refs", true, VideoGenerationRequest{PreviousVideoURI: "gs://bucket/prev.mp4", ReferenceImages: refs}, full, VeoModeVideoExtension},
+		{"video context wins over last frame", true, VideoGenerationRequest{PreviousVideoURI: "gs://bucket/prev.mp4", ImageReference: "gs://bucket/kf.png", LastFrameReference: "gs://bucket/next.png"}, full, VeoModeVideoExtension},
+		{"previous video disabled", false, VideoGenerationRequest{PreviousVideoURI: "gs://bucket/prev.mp4", ReferenceImages: refs}, full, VeoModeReferenceToVideo},
+		{"non-gs previous video id", true, VideoGenerationRequest{PreviousVideoURI: "operation-id-123", ReferenceImages: refs}, full, VeoModeReferenceToVideo},
 		{"refs with supporting model", false, VideoGenerationRequest{ReferenceImages: refs}, full, VeoModeReferenceToVideo},
 		{"refs win over last frame", false, VideoGenerationRequest{ReferenceImages: refs, ImageReference: "gs://bucket/kf.png", LastFrameReference: "gs://bucket/next.png"}, full, VeoModeReferenceToVideo},
 		{"blank-only refs ignored", false, VideoGenerationRequest{ReferenceImages: []string{" ", ""}}, full, VeoModeImageToVideo},

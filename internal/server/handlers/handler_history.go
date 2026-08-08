@@ -76,11 +76,11 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.HistoryRepository == nil {
-		http.Error(w, "history storage adapter is not configured", http.StatusInternalServerError)
+		writeError(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	hasKeyframes := false
@@ -110,7 +110,7 @@ func (h *Handler) DownloadKeyframes(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !hasKeyframes {
-		http.Error(w, "no keyframes available", http.StatusNotFound)
+		writeError(w, r, http.StatusNotFound, "no keyframes available")
 		return
 	}
 	w.Header().Set("Content-Type", "application/zip")
@@ -151,11 +151,15 @@ func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if h.HistoryRepository != nil {
-		if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
-			writeError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
+	if h.HistoryRepository == nil {
+		// 何も消していないのに 202 を返すと呼び出し側は成功と誤認する。
+		// 読み取り系（Draft 等）が 500/503 を返すのと同じ扱いに揃える。
+		writeError(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
+		return
+	}
+	if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
 }

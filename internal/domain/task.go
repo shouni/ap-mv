@@ -138,88 +138,57 @@ func (t *Task) Validate() error {
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
+		return validateOptionalAspectRatio(t.VeoAspectRatio)
 	case CommandMVFromKeyframeVideoRecipe, CommandVideoGenContinuation:
-		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
-		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+		if err := t.validateRecipeSourceTask(); err != nil {
 			return err
 		}
 		if err := validateOptionalGCSURI("audio_url", t.AudioURL); err != nil {
 			return err
 		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
 		if t.Recipe != nil {
 			return ValidateMusicRecipe(t.Recipe)
 		}
-	case CommandRegenerateCutKeyframe:
-		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+		return nil
+	case CommandRegenerateCutKeyframe, CommandRegenerateCutVideo:
+		if err := t.validateRecipeSourceTask(); err != nil {
+			return err
 		}
 		if t.CutIndex == nil {
 			return fmt.Errorf("%s task requires cut_index", t.Command)
 		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+		return nil
+	case CommandRegenerateSectionKeyframes, CommandShortVideoFromSection:
+		if err := t.validateRecipeSourceTask(); err != nil {
 			return err
-		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
-	case CommandRegenerateSectionKeyframes:
-		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
 		}
 		if t.SectionIndex == nil || *t.SectionIndex < 0 {
 			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
 		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
-			return err
-		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
-	case CommandRegenerateCutVideo:
-		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
-		}
-		if t.CutIndex == nil {
-			return fmt.Errorf("%s task requires cut_index", t.Command)
-		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
-			return err
-		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
+		return nil
 	case CommandRegenerateZip:
 		if strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("%s task requires recipe_url", t.Command)
 		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
-			return err
-		}
-	case CommandShortVideoFromSection:
-		if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
-			return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
-		}
-		if t.SectionIndex == nil || *t.SectionIndex < 0 {
-			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
-		}
-		if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
-			return err
-		}
-		if err := validateOptionalAspectRatio(t.VeoAspectRatio); err != nil {
-			return err
-		}
+		return validateOptionalGCSURI("recipe_url", t.RecipeURL)
 	default:
 		return fmt.Errorf("unsupported command: %s", t.Command)
 	}
-	return nil
+}
+
+// validateRecipeSourceTask は、保存済みレシピを入力に取るコマンド群
+// （mv_from_keyframe_video_recipe / 継続 / 再生成系 / ショート）に共通の三連
+// 「recipe ∨ video_recipe ∨ recipe_url が必要 → recipe_url は GCS URI →
+// aspect_ratio は許可値」を検証します。以前は 5 つの case がこの並びを丸ごと
+// 繰り返しており、コマンド追加のたびに 1 箇所だけ検証が抜ける余地がありました。
+func (t *Task) validateRecipeSourceTask() error {
+	if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
+		return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
+	}
+	if err := validateOptionalGCSURI("recipe_url", t.RecipeURL); err != nil {
+		return err
+	}
+	return validateOptionalAspectRatio(t.VeoAspectRatio)
 }
 
 // ASSColors returns the karaoke colors configured on this task.
@@ -230,13 +199,29 @@ func (t *Task) ASSColors() ASSColors {
 	return ASSColors{Primary: t.ASSPrimaryColor, Secondary: t.ASSSecondaryColor}
 }
 
+// AllowedAspectRatios は Veo 生成で受け付けるアスペクト比の唯一の定義です。
+// config のバリデーションとタスク検証がこれを共有します（compose.html の選択肢も
+// この値と一致させてください — テンプレートは定数を参照できないため、
+// TestComposeTemplateOffersAllAspectRatios が同期を検証します）。
+var AllowedAspectRatios = []string{"16:9", "9:16"}
+
+// IsAllowedAspectRatio は value が許可されたアスペクト比かを返します。
+func IsAllowedAspectRatio(value string) bool {
+	for _, allowed := range AllowedAspectRatios {
+		if value == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // validateOptionalAspectRatio validates an optional Veo aspect ratio field.
 func validateOptionalAspectRatio(value string) error {
 	value = strings.TrimSpace(value)
-	if value == "" || value == "16:9" || value == "9:16" {
+	if value == "" || IsAllowedAspectRatio(value) {
 		return nil
 	}
-	return fmt.Errorf("veo_aspect_ratio must be 16:9 or 9:16")
+	return fmt.Errorf("veo_aspect_ratio must be one of %s", strings.Join(AllowedAspectRatios, ", "))
 }
 
 // validateOptionalGCSURI validates an optional GCS URI field.

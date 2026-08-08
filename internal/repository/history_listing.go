@@ -84,19 +84,31 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 
 // collectJobIDs は baseURI 直下を走査して MV ジョブの ID を集めます。
 // バケット全体の List になるため、呼び出しは listJobIDs のキャッシュ越しに行います。
+// regen-keyframe- で始まる ID は再生成用の作業ジョブなので一覧から除外します。
 func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
-	prefix := r.baseURI + "/"
+	jobIDs, err := r.collectJobIDsUnder(ctx, r.baseURI, videoMetadataFile, regenKeyframePrefix)
+	if err != nil {
+		return nil, fmt.Errorf("list history objects: %w", err)
+	}
+	return jobIDs, nil
+}
+
+// collectJobIDsUnder は、baseURI 直下の {jobID}/{metadataFile} を1階層だけ走査して
+// ジョブ ID を集める共通実装です。履歴（video_music_meta.json）と下書き
+// （video_recipe_draft.json）は走査プレフィックスとファイル名が違うだけで
+// 同じ規則を共有します。excludePrefix が非空の場合、その接頭辞の ID を除外します。
+func (r *VideoHistoryRepository) collectJobIDsUnder(ctx context.Context, baseURI, metadataFile, excludePrefix string) ([]string, error) {
+	// path.Dir は gs:// の // を潰すため strings ベースで深さを確認する。
+	// コンストラクタで末尾スラッシュは除去済みだが、防御的に再度除去する。
+	baseURI = strings.TrimSuffix(baseURI, "/")
 	seen := map[string]bool{}
 	var jobIDs []string
-	err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		if path.Base(gcsPath) != videoMetadataFile {
+	err := r.reader.List(ctx, baseURI+"/", func(gcsPath string) error {
+		if path.Base(gcsPath) != metadataFile {
 			return nil
 		}
-		// {baseURI}/{jobID}/video_music_meta.json の1階層のみ対象にする。
+		// {baseURI}/{jobID}/{metadataFile} の1階層のみ対象にする。
 		// サブディレクトリ（regens/cut-N/ 等）の metadata は除外する。
-		// path.Dir は gs:// の // を潰すため strings ベースで深さを確認する。
-		// コンストラクタで末尾スラッシュは除去済みだが、防御的に再度除去する。
-		baseURI := strings.TrimSuffix(r.baseURI, "/")
 		rel := strings.TrimPrefix(gcsPath, baseURI+"/")
 		if strings.Count(rel, "/") != 1 {
 			return nil
@@ -105,7 +117,7 @@ func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, e
 		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
 			return nil
 		}
-		if strings.HasPrefix(jobID, regenKeyframePrefix) {
+		if excludePrefix != "" && strings.HasPrefix(jobID, excludePrefix) {
 			return nil
 		}
 		if err := jobid.Validate(jobID); err != nil {
@@ -116,7 +128,7 @@ func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, e
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("list history objects: %w", err)
+		return nil, err
 	}
 	return jobIDs, nil
 }

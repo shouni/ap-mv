@@ -79,8 +79,8 @@ func TestNextCutLastFrameReference(t *testing.T) {
 		{"last cut", 5, ""},
 	}
 	for _, tt := range tests {
-		if got := nextCutLastFrameReference(cuts, tt.i); got != tt.want {
-			t.Errorf("%s: nextCutLastFrameReference(cuts, %d) = %q, want %q", tt.name, tt.i, got, tt.want)
+		if got := orchestrator.Cuts(cuts).NextLastFrameReference(tt.i); got != tt.want {
+			t.Errorf("%s: NextLastFrameReference(%d) = %q, want %q", tt.name, tt.i, got, tt.want)
 		}
 	}
 }
