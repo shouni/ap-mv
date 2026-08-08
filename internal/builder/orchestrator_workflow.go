@@ -26,7 +26,7 @@ func buildWorkflow(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.MultimodalModel,
+	aiClient gemini.Model,
 ) (*orchestrator.Workflows, error) {
 	return buildWorkflowWithConfig(ctx, workflowBuildParams{
 		cfg:         cfg,
@@ -59,7 +59,7 @@ type workflowBuildParams struct {
 	// タスクごとに組み直される（シード上書き・ビジュアルモード）ため、ここで都度
 	// 生成すると 1 タスクにつき 1 クライアント、つまり ADC のトークンソース解決まで
 	// やり直すことになります。
-	aiClient     gemini.MultimodalModel
+	aiClient     gemini.Model
 	visualMode   string
 	seedOverride *characterSeedOverride
 }
@@ -89,7 +89,7 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 	if err != nil {
 		return nil, err
 	}
-	keyframePrompt, err := prompt.NewKeyframe(p.orchCfg.StyleSuffix, p.visualMode)
+	keyframePrompt, err := prompt.NewKeyframe(prompt.DefaultStyleSuffix, p.visualMode)
 	if err != nil {
 		return nil, err
 	}

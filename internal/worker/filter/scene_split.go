@@ -10,7 +10,6 @@ import (
 	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
-	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
@@ -86,13 +85,13 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 		cut.StartSec = videoEnd
 		cut.DurationSec = target
 		cut.EndSec = videoEnd + target
-		subCuts := splitCutBySupportedDurations(cut, veoSupportedDurationsSec)
+		subCuts := orchestrator.SplitCutBySupportedDurations(cut, orchestrator.ImageToVideoDurationsSec())
 		if len(subCuts) > 1 {
-			lines := splitDialogueLines(cut.Dialogue)
+			lines := orchestrator.SplitDialogueLines(cut.Dialogue)
 			for i := range subCuts {
 				subCuts[i].AudioCue = sceneAudioCue(cut.AudioCue, i, len(subCuts))
 				subCuts[i].VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(subCuts))
-				subCuts[i].Dialogue = domain.DistributeLines(lines, i, len(subCuts))
+				subCuts[i].Dialogue = orchestrator.DistributeLines(lines, i, len(subCuts))
 			}
 		} else {
 			subCuts[0].KeyframeReference = priorKeyframe
@@ -154,12 +153,12 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
 		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
 		target := cutMusicalEndSec(cut) - videoEnd
-		bases := veoSupportedDurationsSec
-		if cutUsesReferenceImages(cut, characters, referenceImagesSupported) {
-			bases = veoReferenceToVideoDurationsSec
+		bases := orchestrator.ImageToVideoDurationsSec()
+		if orchestrator.CutUsesReferenceImages(cut, characters, referenceImagesSupported) {
+			bases = orchestrator.ReferenceToVideoDurationsSec()
 		}
-		durations := allocateChainDurations(target, videoToVideoChainDurations(bases))
-		lines := splitDialogueLines(cut.Dialogue)
+		durations := allocateChainDurations(target, orchestrator.ChainDurations(bases))
+		lines := orchestrator.SplitDialogueLines(cut.Dialogue)
 		for i, d := range durations {
 			sub := cut
 			sub.StartSec = videoEnd
@@ -169,7 +168,7 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 			if len(durations) > 1 {
 				sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
 				sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
-				sub.Dialogue = domain.DistributeLines(lines, i, len(durations))
+				sub.Dialogue = orchestrator.DistributeLines(lines, i, len(durations))
 			} else {
 				sub.KeyframeReference = priorKeyframe
 			}
@@ -244,24 +243,9 @@ func allocateChainDurations(target float64, candidates []float64) []float64 {
 	return out
 }
 
-// resetCutGenerationState clears a cut's per-generation state so it will be (re)generated:
-// Status returns to pending and VideoID/VideoURL/IsChainStart are cleared. When keepKeyframe is
-// false it additionally clears KeyframeReference and IsSectionStart (a fresh scene keyframe will
-// be generated for this cut); when true both are preserved because the caller reuses the cut's
-// stored keyframe reference (e.g. SectionSelectFilter re-generating an existing job's cuts).
-func resetCutGenerationState(cut *orchestrator.Cut, keepKeyframe bool) {
-	cut.Status = orchestrator.CutStatusPending
-	cut.VideoID = ""
-	cut.VideoURL = ""
-	cut.IsChainStart = false
-	if !keepKeyframe {
-		cut.KeyframeReference = ""
-		cut.IsSectionStart = false
-	}
-}
 
 func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
-	resetCutGenerationState(&cut, false)
+	cut.ResetGeneration(false)
 	return cut
 }
 

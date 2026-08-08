@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/shouni/gcp-kit/auth"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
@@ -411,5 +412,53 @@ func TestHistoryDetailSurvivesUsageReadFailure(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "$4.00") {
 		t.Fatalf("HistoryDetail lost the recipe-derived estimate: %s", rec.Body.String())
+	}
+}
+
+// TestHistoryDetailCutCardCarriesCSRFToken は、カットカード内の「動画を作り直す」フォームに
+// CSRF トークンが埋まることを検証します。historyCutCard は dict 引数で $ が再束縛される
+// サブテンプレートのため、$.CSRFToken と書くと常に空になり、ブラウザからの送信が
+// 403 Invalid CSRF token で落ちていました（dict 経由で渡すのが正解）。
+func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:    "video-recipe-20260618-081931-abc",
+				Title:    "CSRF regression",
+				CutCount: 1,
+			},
+			Cuts: []domain.VideoHistoryCut{
+				{
+					CutIndex: 1,
+					VideoURL: "gs://bucket/videos/cut_1.mp4",
+					Status:   "generated",
+				},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
+	ctx = auth.WithCSRFToken(ctx, "csrf-test-token")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="csrf_token" value="csrf-test-token"`) {
+		t.Fatalf("cut card regenerate-video form is missing the CSRF token: %s", body)
+	}
+	if strings.Contains(body, `name="csrf_token" value=""`) {
+		t.Fatalf("an empty csrf_token input was rendered: %s", body)
 	}
 }

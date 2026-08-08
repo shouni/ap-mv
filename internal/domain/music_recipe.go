@@ -6,18 +6,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shouni/go-gemini-client/lyria"
+	"github.com/shouni/go-gemini-client/music"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
-// LyricsDraft は go-gemini-client が定義する作詞フェーズの出力です。
-type LyricsDraft = lyria.LyricsDraft
+// LyricsDraft は go-gemini-client/music が定義する作詞フェーズの出力です。
+type LyricsDraft = music.LyricsDraft
 
-// MusicRecipe は go-gemini-client/lyria の楽曲設計図です。
-type MusicRecipe = lyria.MusicRecipe
+// MusicRecipe は go-gemini-client/music の楽曲設計図です。
+// 型だけの葉パッケージなので、lyria の生成ワークフロー一式を輸入せずに済みます。
+type MusicRecipe = music.Recipe
 
-// MusicSection は go-gemini-client/lyria の曲内セクションです。
-type MusicSection = lyria.MusicSection
+// MusicSection は go-gemini-client/music の曲内セクションです。
+type MusicSection = music.Section
 
 // VideoRecipe は go-veo-orchestrator が定義する動画台本です。
 type VideoRecipe = orchestrator.VideoRecipe
@@ -301,26 +302,11 @@ func SectionEndSeconds(startSeconds, endSeconds, duration int) int {
 }
 
 // DistributeLines splits lines proportionally across `total` buckets and returns the lines
-// assigned to bucket `pos` (0-indexed), joined by newlines. Used both to spread lyrics lines
-// across a section's cuts and to spread a cut's dialogue across its sub-cuts after duration
-// splitting (internal/worker/filter).
+// assigned to bucket `pos` (0-indexed), joined by newlines.
+// 実装は尺プランナーと共に go-veo-orchestrator へ移動しました（配分規則が
+// サブカット分割と一致している必要があるため、定義は1つにします）。
 func DistributeLines(lines []string, pos, total int) string {
-	if len(lines) == 0 {
-		return ""
-	}
-	if total <= 1 {
-		return strings.Join(lines, "\n")
-	}
-	n := len(lines)
-	start := pos * n / total
-	end := (pos + 1) * n / total
-	if start >= n || start >= end {
-		return ""
-	}
-	if end > n {
-		end = n
-	}
-	return strings.Join(lines[start:end], "\n")
+	return orchestrator.DistributeLines(lines, pos, total)
 }
 
 // NormalizeMusicRecipe fills section time ranges for a music recipe.

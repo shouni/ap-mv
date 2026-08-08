@@ -11,8 +11,8 @@ import (
 // 分類結果はライブラリ側の runner/video.go が送信前の尺検証にも使うため（不一致は
 // ErrUnsupportedCutDuration になる）、片方だけ変えると壊れます。定義はライブラリに1つ、
 // ap-mv 側は呼び出し名を保つための別名だけ、という形にしています。
-// 尺の定数・候補（ImageToVideoDurationsSec / ChainDurations 等）も同じ理由で
-// veoports をそのまま使います（internal/worker/filter/veo_cut_utils.go）。
+// 尺の定数・候補と尺プランナー（ImageToVideoDurationsSec / ChainDurations /
+// ExpandCutsToSupportedDurations 等）も同じ理由でライブラリの ports を直接使います。
 
 // VeoGenerationMode は、1つの動画生成リクエストが Veo のどの生成機能で解釈されるかを
 // 表します。値は assets/prompts/video_gen/ 配下のプロンプトファイル名（拡張子なし）と
@@ -50,7 +50,7 @@ func RunnerCapabilities(runner VideoRunner) VeoCapabilities {
 // adapter のリクエスト本文構築と filter のプロンプト・尺選択が同じ判定を共有するための
 // 唯一の分岐点で、優先順位は次のとおりです:
 //
-//  1. video_extension — usePreviousVideo が有効で、PreviousVideoID が gs:// 参照のとき。
+//  1. video_extension — usePreviousVideo が有効で、PreviousVideoURI が gs:// 参照のとき。
 //     Veo は video と referenceImages / image を併用できないため、以降の画像参照は
 //     すべて無視されます。
 //  2. reference_to_video — 参照画像 URI が1つ以上あり、モデルが referenceImages に
@@ -61,4 +61,10 @@ func RunnerCapabilities(runner VideoRunner) VeoCapabilities {
 //  4. image_to_video — それ以外すべて。
 func ClassifyVeoRequest(req VideoGenerationRequest, usePreviousVideo bool, caps VeoCapabilities) VeoGenerationMode {
 	return veoports.ClassifyVeoRequest(req, usePreviousVideo, caps)
+}
+
+// VeoModelCapabilities は、Veo のモデル名からオプション機能への対応を導出します。
+// モデル名→対応機能の規則はライブラリ側が唯一の定義元です。
+func VeoModelCapabilities(model string) VeoCapabilities {
+	return veoports.VeoModelCapabilities(model)
 }

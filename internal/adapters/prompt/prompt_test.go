@@ -7,6 +7,8 @@ import (
 
 	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
+	"github.com/shouni/ap-mv/assets"
 )
 
 // TestScriptPromptBuildUsesDefaultPromptAsset verifies that script prompts use the bundled default template.
@@ -352,5 +354,47 @@ func scriptPromptTestData(title string) *orchestrator.TemplateData {
 				}},
 			},
 		},
+	}
+}
+
+// TestKeyframePromptContainsNoTemplateDirectives は、キーフレーム経路のプロンプトに
+// Go テンプレート構文（{{...}}）と台本生成専用の節が混入しないことを、同梱の全
+// visual mode について検証します。キーフレーム経路はテンプレートをレンダリング
+// しないため、以前は {{template "recipe_output" .}} と script 向け演出指示が
+// そのまま画像モデルへ送られていました。
+func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
+	modes, err := assets.LoadVisualModeFiles()
+	if err != nil {
+		t.Fatalf("LoadVisualModeFiles() error = %v", err)
+	}
+	for mode := range modes {
+		// アンダースコア始まりは他テンプレートから参照されるパーシャルで、
+		// visual mode として選択される名前ではない。
+		if strings.HasPrefix(mode, "_") {
+			continue
+		}
+		t.Run(mode, func(t *testing.T) {
+			kf, err := NewKeyframe("test style", mode)
+			if err != nil {
+				t.Fatalf("NewKeyframe(%q) error = %v", mode, err)
+			}
+			userPrompt, systemPrompt := kf.BuildCut(orchestrator.Cut{
+				CutIndex:     1,
+				VisualAnchor: "rooftop at dawn",
+				AudioSync:    orchestrator.AudioSync{AudioCue: "intro pad"},
+			}, nil)
+			for _, prompt := range []string{userPrompt, systemPrompt} {
+				if strings.Contains(prompt, "{{") || strings.Contains(prompt, "}}") {
+					t.Fatalf("mode %q leaks template directives into the image prompt:\n%s", mode, prompt)
+				}
+				if strings.Contains(prompt, "For Script Generation") {
+					t.Fatalf("mode %q leaks the script-only section into the image prompt:\n%s", mode, prompt)
+				}
+			}
+			// 節の除去がスタイル指示ごと消していないこと（Core Direction は残る）。
+			if !strings.Contains(userPrompt, "Core Direction") {
+				t.Fatalf("mode %q lost its style guidance:\n%s", mode, userPrompt)
+			}
+		})
 	}
 }

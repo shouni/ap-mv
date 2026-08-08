@@ -35,7 +35,7 @@ func buildPipeline(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.MultimodalModel,
+	aiClient gemini.Model,
 	externals pipelineExternals,
 ) (*pipeline.Runner, error) {
 	workflows, err := buildWorkflow(ctx, cfg, rio, httpClient, videoRunner, aiClient)
@@ -75,7 +75,7 @@ func newWorkflowResolver(
 	rio *app.RemoteIO,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.MultimodalModel,
+	aiClient gemini.Model,
 	shared *orchestrator.Workflows,
 ) *workflowResolver {
 	orchCfg := buildOrchestratorConfig(cfg)

@@ -90,7 +90,7 @@ func TestDraftsRendersCutBudget(t *testing.T) {
 			CutCount:         12,
 			SectionCount:     4,
 			TotalDurationSec: 186,
-			AspectRatio:      "16:9",
+			AspectRatio:      "9:16",
 			StorageURI:       "gs://bucket/ap-mv/veo/drafts/" + draftTestJobID + "/video_recipe_draft.json",
 		}}},
 	})
@@ -110,6 +110,9 @@ func TestDraftsRendersCutBudget(t *testing.T) {
 		`name="recipe_url"`,
 		"gs://bucket/ap-mv/veo/drafts/" + draftTestJobID + "/video_recipe_draft.json",
 		`action="/web/generate-from-recipe"`,
+		// 下書きのアスペクト比は明示的にフォームで運ぶ。渡さないとプロセス既定
+		// （16:9）で生成され、9:16 の下書きから 16:9 の動画ができてしまう。
+		`name="aspect_ratio" value="9:16"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Drafts body missing %q", want)

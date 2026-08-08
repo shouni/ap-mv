@@ -49,6 +49,10 @@
                             <form method="POST" action="/web/generate-from-recipe" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                                 <input type="hidden" name="recipe_url" value="{{.StorageURI}}">
+                                {{/* 下書き作成時に決めたアスペクト比を明示的に運ぶ。渡さないと
+                                     PostRecipe 側が空値と解釈し、プロセス既定（16:9）で生成されて
+                                     9:16 の下書きから 16:9 の動画ができてしまう。 */}}
+                                {{if .AspectRatio}}<input type="hidden" name="aspect_ratio" value="{{.AspectRatio}}">{{end}}
                                 <button type="submit" class="btn btn-sm btn-primary">この下書きからMVを作る</button>
                             </form>
                             <button type="button" class="btn btn-sm btn-outline-danger"

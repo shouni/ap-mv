@@ -66,7 +66,7 @@ func TestBuildRequestReferenceImages(t *testing.T) {
 	req := baseRequest()
 	req.ImageReference = "gs://bucket/kf.png"
 	req.ReferenceImages = []string{"gs://bucket/characters/zundamon.png", "gs://bucket/kf.png"}
-	req.PreviousVideoID = "gs://bucket/prev.mp4"
+	req.PreviousVideoURI = "gs://bucket/prev.mp4"
 
 	// 対応モデル: referenceImages を送り、image は送らない。
 	runner := &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/"}

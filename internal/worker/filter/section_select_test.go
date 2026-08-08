@@ -106,7 +106,7 @@ func TestSplitCutBySupportedDurations(t *testing.T) {
 		KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png"},
 	}
 
-	subCuts := splitCutBySupportedDurations(cut, veoSupportedDurationsSec)
+	subCuts := orchestrator.SplitCutBySupportedDurations(cut, orchestrator.ImageToVideoDurationsSec())
 
 	wantDurations := []float64{8, 8, 8, 8, 4}
 	if len(subCuts) != len(wantDurations) {
@@ -137,20 +137,20 @@ func TestCapCutsTotalDuration(t *testing.T) {
 	for i := range cuts {
 		cuts[i] = orchestrator.Cut{CutIndex: i + 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}}
 	}
-	capped := capCutsTotalDuration(cuts, 60)
+	capped := orchestrator.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 7 {
 		t.Fatalf("capped cuts = %d, want 7 (7*8=56s <= 60s)", len(capped))
 	}
 
 	// 56s + 4s = 60s ちょうどは収まる。
 	cuts = append(cuts[:7], orchestrator.Cut{CutIndex: 8, AudioSync: orchestrator.AudioSync{DurationSec: 4}})
-	capped = capCutsTotalDuration(cuts, 60)
+	capped = orchestrator.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 8 {
 		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
 	}
 
 	// 上限超えの単独カットでも先頭は必ず残す。
-	capped = capCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 90}}}, 60)
+	capped = orchestrator.CapCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 90}}}, 60)
 	if len(capped) != 1 {
 		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
 	}
@@ -171,8 +171,8 @@ func TestSnapToSupportedDuration(t *testing.T) {
 		{in: 8, want: 8},
 	}
 	for _, tt := range tests {
-		if got := snapToSupportedDuration(tt.in, veoSupportedDurationsSec); got != tt.want {
-			t.Errorf("snapToSupportedDuration(%v) = %v, want %v", tt.in, got, tt.want)
+		if got := orchestrator.SnapDuration(tt.in, orchestrator.ImageToVideoDurationsSec()); got != tt.want {
+			t.Errorf("orchestrator.SnapDuration(%v) = %v, want %v", tt.in, got, tt.want)
 		}
 	}
 }

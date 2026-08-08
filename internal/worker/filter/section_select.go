@@ -49,7 +49,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 		// 生成し直すため、生成状態を初期化する。IsChainStart は元ジョブの生成時（または
 		// scene_split の事前計画時）に付いたチェーン構造の名残なので、ここで消去して
 		// 後続の VideoGenerationFilter に従来どおり累積尺ベースでチェーンを組み直させる。
-		resetCutGenerationState(&cut, true)
+		cut.ResetGeneration(true)
 		cut.KeyframeReference = resolveRecipeObjectURI(originalBase, cut.KeyframeReference)
 		cuts = append(cuts, cut)
 	}
@@ -63,7 +63,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	// video_extension 用の 7 秒固定への正規化は、後続の VideoGenerationFilter が
 	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video/reference_to_video 用の
 	// 尺で分割・丸めるだけでよい。
-	fc.VideoRecipe.Cuts = capCutsTotalDuration(expandCutsToSupportedDurations(cuts, false, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
+	fc.VideoRecipe.Cuts = orchestrator.CapCutsTotalDuration(orchestrator.ExpandCutsToSupportedDurations(cuts, false, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {

@@ -309,6 +309,12 @@ type Keyframe struct {
 	visualMode      string
 	visualTemplates map[string]string
 }
+// DefaultStyleSuffix は、キーフレーム画像プロンプトへ付与する既定の画風指定です。
+// 以前は go-veo-orchestrator の Config が持っていましたが、ライブラリは一度も
+// 読んでおらず、実際に使うのはこのパッケージ（NewKeyframe）だけだったため、
+// プロンプト文言の所有者であるここへ移しました。
+const DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, expressive eyes, cinematic lighting, consistent character design, high resolution"
+
 
 // NewKeyframe は埋め込みアセットからキーフレームプロンプトを組み立てます。
 func NewKeyframe(styleSuffix, visualMode string) (Keyframe, error) {
@@ -380,9 +386,33 @@ func (p Keyframe) visualPrompt() string {
 		mode = defaultPromptMode
 	}
 	if prompt := strings.TrimSpace(p.visualTemplates[mode]); prompt != "" {
+		return stripScriptOnlySection(prompt)
+	}
+	return stripScriptOnlySection(strings.TrimSpace(p.visualTemplates[defaultPromptMode]))
+}
+
+// scriptOnlyHeading は、visual mode ファイル内で「台本生成（Script）専用」の節が始まる
+// 見出しです。この節はセクション別の物語演出指示と {{template "recipe_output" .}} という
+// Go テンプレート参照を含み、Script 経路（newVisualBuilder）だけがレンダリングします。
+const scriptOnlyHeading = "#### For Script Generation"
+
+// stripScriptOnlySection は、visual mode テンプレートから台本生成専用の節
+// （scriptOnlyHeading から次の #### 見出しの手前まで）を取り除きます。
+//
+// キーフレーム経路はテンプレートをレンダリングせず生のまま使うため、以前は
+// {{template "recipe_output" .}} という文字列と script 向けの演出指示がそのまま
+// 画像モデルへ送られていました。節の切り出しに（レンダリングではなく）文字列操作を
+// 使うのは、キーフレーム経路には流し込むテンプレートデータが存在しないためです。
+func stripScriptOnlySection(prompt string) string {
+	start := strings.Index(prompt, scriptOnlyHeading)
+	if start == -1 {
 		return prompt
 	}
-	return strings.TrimSpace(p.visualTemplates[defaultPromptMode])
+	rest := prompt[start+len(scriptOnlyHeading):]
+	if next := strings.Index(rest, "\n#### "); next != -1 {
+		return strings.TrimSpace(prompt[:start] + rest[next+1:])
+	}
+	return strings.TrimSpace(prompt[:start])
 }
 
 // nonEmptyStrings returns the non-empty values in order.

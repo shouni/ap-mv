@@ -45,7 +45,7 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 // 彩度を、そのカットのシーン用キーフレーム画像（cut.KeyframeReference）へ引き戻します。
 // Veo の video_extension は直前の生成結果を条件入力として再利用するため、継続を重ねるたびに
 // 彩度がドリフトして蓄積します（実運用で確認済み: 継続1回目で彩度+20%、以降のラウンドでも
-// コントラストが単調に増加し続けた）。補正後のVideoURL/VideoIDを次カットのPreviousVideoIDとして
+// コントラストが単調に増加し続けた）。補正後のVideoURL/VideoIDを次カットのPreviousVideoURIとして
 // 使うことで、ドリフトが次世代へ複利的に蓄積するのを防ぎます。
 //
 // 補正の基準には char.ReferenceURL（キャラクター立ち絵）を使わないこと。あれは白背景に

@@ -34,10 +34,10 @@ func chainTestRecipe() *orchestrator.VideoRecipe {
 		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
 		Cuts: []orchestrator.Cut{
 			generatedCut(1, 8, true),
-			generatedCut(2, veoVideoExtensionDurationSec, false),
-			generatedCut(3, veoVideoExtensionDurationSec, false),
+			generatedCut(2, orchestrator.VeoVideoExtensionDurationSec, false),
+			generatedCut(3, orchestrator.VeoVideoExtensionDurationSec, false),
 			generatedCut(4, 8, true),
-			generatedCut(5, veoVideoExtensionDurationSec, false),
+			generatedCut(5, orchestrator.VeoVideoExtensionDurationSec, false),
 		},
 	}
 }
@@ -81,7 +81,7 @@ func equalInts(a, b []int) bool {
 
 // TestCutVideoSelectResetsRestOfChain is the point of the filter: in a video-to-video chain, a
 // regenerated cut invalidates every later cut in the same chain, because those were generated
-// against the old cut's video as PreviousVideoID. Resetting only the target would leave the tail
+// against the old cut's video as PreviousVideoURI. Resetting only the target would leave the tail
 // chained to a video that no longer exists in the result.
 func TestCutVideoSelectResetsRestOfChain(t *testing.T) {
 	recipe := chainTestRecipe()
