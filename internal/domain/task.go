@@ -199,7 +199,6 @@ func (t *Task) ASSColors() ASSColors {
 	return ASSColors{Primary: t.ASSPrimaryColor, Secondary: t.ASSSecondaryColor}
 }
 
-// validateOptionalAspectRatio validates an optional Veo aspect ratio field.
 // AllowedAspectRatios は Veo 生成で受け付けるアスペクト比の唯一の定義です。
 // config のバリデーションとタスク検証がこれを共有します（compose.html の選択肢も
 // この値と一致させてください — テンプレートは定数を参照できないため、
@@ -216,6 +215,7 @@ func IsAllowedAspectRatio(value string) bool {
 	return false
 }
 
+// validateOptionalAspectRatio validates an optional Veo aspect ratio field.
 func validateOptionalAspectRatio(value string) error {
 	value = strings.TrimSpace(value)
 	if value == "" || IsAllowedAspectRatio(value) {

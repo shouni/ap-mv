@@ -57,7 +57,7 @@ func TestWriteConcatList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("writeConcatList() error = %v", err)
 	}
-	defer os.Remove(listPath)
+	defer func() { _ = os.Remove(listPath) }()
 
 	data, err := os.ReadFile(listPath)
 	if err != nil {
