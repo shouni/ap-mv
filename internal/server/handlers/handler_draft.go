@@ -13,6 +13,8 @@ import (
 
 	"github.com/shouni/go-utils/jobid"
 
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -120,7 +122,14 @@ func (h *Handler) UpdateDraft(w http.ResponseWriter, r *http.Request) {
 			"job_id", jobID,
 			"error", err,
 		)
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		// SaveDraftRecipe はレシピの検証と GCS への書き込みの両方で失敗しうる。
+		// 検証失敗（ErrRecipeInvalid）だけが呼び出し側の誤りで、ストレージ障害を
+		// 400 で返すと「あなたのレシピが悪い」という嘘になる（以前は全部 400 だった）。
+		status := http.StatusInternalServerError
+		if errors.Is(err, orchestrator.ErrRecipeInvalid) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, r, status, err.Error())
 		return
 	}
 
@@ -159,11 +168,13 @@ func (h *Handler) DeleteDraft(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if h.DraftRepository != nil {
-		if err := h.DraftRepository.DeleteDraft(r.Context(), jobID); err != nil {
-			writeError(w, r, http.StatusInternalServerError, err.Error())
-			return
-		}
+	if h.DraftRepository == nil {
+		writeError(w, r, http.StatusServiceUnavailable, "draft storage adapter is not configured")
+		return
+	}
+	if err := h.DraftRepository.DeleteDraft(r.Context(), jobID); err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
 }

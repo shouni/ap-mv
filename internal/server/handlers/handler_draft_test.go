@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -240,8 +241,10 @@ func TestUpdateDraftAcceptsBareRecipe(t *testing.T) {
 
 // TestUpdateDraftRejectsInvalidRecipe pins that a repository-level validation failure surfaces as
 // a 400 rather than overwriting the draft with something keyframe generation would choke on.
+// 検証失敗は orchestrator.ErrRecipeInvalid を包んで返るのが実リポジトリの挙動で、
+// ストレージ障害（500 になる）とはこのセンチネルで区別される。
 func TestUpdateDraftRejectsInvalidRecipe(t *testing.T) {
-	repo := &fakeDraftRepository{saveErr: errors.New("cuts must not be empty")}
+	repo := &fakeDraftRepository{saveErr: fmt.Errorf("%w: video recipe requires cuts", orchestrator.ErrRecipeInvalid)}
 	h := newDraftHandler(t, repo)
 
 	rec := httptest.NewRecorder()
@@ -249,6 +252,21 @@ func TestUpdateDraftRejectsInvalidRecipe(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("UpdateDraft status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+}
+
+// TestUpdateDraftStorageFailureIsServerError pins that a write/GCS failure is reported as the
+// server's fault (500), not the caller's (400) — a storage outage must not read as "your
+// recipe is wrong".
+func TestUpdateDraftStorageFailureIsServerError(t *testing.T) {
+	repo := &fakeDraftRepository{saveErr: errors.New("write draft (gs://bucket/x): connection reset")}
+	h := newDraftHandler(t, repo)
+
+	rec := httptest.NewRecorder()
+	h.UpdateDraft(rec, draftUpdateRequest(t, `{"recipe":{"project_title":"x","cuts":[{"cut_index":1}]}}`))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("UpdateDraft status = %d, want %d; body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
 }
 

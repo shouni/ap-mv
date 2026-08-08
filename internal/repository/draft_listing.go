@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"path"
 	"strings"
 
 	"github.com/shouni/go-job-kit/paging"
@@ -23,30 +22,9 @@ import (
 // キーフレームも動画も持たないため、表示モデル・キャッシュキー・削除範囲を分けています。
 
 // collectDraftJobIDs は draftBaseURI 直下を走査して下書きのジョブ ID を集めます。
+// 実体は履歴一覧と同じ collectJobIDsUnder で、走査プレフィックスとファイル名だけが違います。
 func (r *VideoHistoryRepository) collectDraftJobIDs(ctx context.Context) ([]string, error) {
-	prefix := r.draftBaseURI + "/"
-	seen := map[string]bool{}
-	var jobIDs []string
-	err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		if path.Base(gcsPath) != domain.VideoDraftFileName {
-			return nil
-		}
-		// {draftBaseURI}/{jobID}/video_recipe_draft.json の1階層のみ対象にする。
-		rel := strings.TrimPrefix(gcsPath, r.draftBaseURI+"/")
-		if strings.Count(rel, "/") != 1 {
-			return nil
-		}
-		jobID := path.Base(path.Dir(gcsPath))
-		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
-			return nil
-		}
-		if err := jobid.Validate(jobID); err != nil {
-			return nil
-		}
-		seen[jobID] = true
-		jobIDs = append(jobIDs, jobID)
-		return nil
-	})
+	jobIDs, err := r.collectJobIDsUnder(ctx, r.draftBaseURI, domain.VideoDraftFileName, "")
 	if err != nil {
 		return nil, fmt.Errorf("list draft objects: %w", err)
 	}

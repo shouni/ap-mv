@@ -10,6 +10,19 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Music Job ID</label>
                         <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
+                        <div class="form-text">ap-comp で作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
+                    </div>
+                    {{/* handler / Task.Validate は url・text も受け付ける（source_url ∨ text ∨ image_url が必須）。
+                         以前はこのフォームが music_job_id しか出しておらず、他の入力は M2M 専用に見えていた。 */}}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Recipe URL <span class="text-muted fw-normal">(Music Job ID の代わりに)</span></label>
+                        <input class="form-control" name="url" placeholder="gs://bucket/music/…/recipe.json">
+                        <div class="form-text">Music Recipe / Video Recipe JSON の GCS URI を直接指定できます。</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Free Text <span class="text-muted fw-normal">(実験用)</span></label>
+                        <textarea class="form-control" name="text" rows="3" placeholder="曲のテーマや構成の説明から台本を起こします"></textarea>
+                        <div class="form-text">Music Job ID / Recipe URL のどちらも無い場合に使われます。いずれか 1 つは必須です。</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Aspect Ratio</label>

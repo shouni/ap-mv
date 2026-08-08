@@ -309,12 +309,12 @@ type Keyframe struct {
 	visualMode      string
 	visualTemplates map[string]string
 }
+
 // DefaultStyleSuffix は、キーフレーム画像プロンプトへ付与する既定の画風指定です。
 // 以前は go-veo-orchestrator の Config が持っていましたが、ライブラリは一度も
 // 読んでおらず、実際に使うのはこのパッケージ（NewKeyframe）だけだったため、
 // プロンプト文言の所有者であるここへ移しました。
 const DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, expressive eyes, cinematic lighting, consistent character design, high resolution"
-
 
 // NewKeyframe は埋め込みアセットからキーフレームプロンプトを組み立てます。
 func NewKeyframe(styleSuffix, visualMode string) (Keyframe, error) {

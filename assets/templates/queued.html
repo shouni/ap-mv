@@ -4,7 +4,7 @@
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4 p-md-5">
                 <div class="d-flex align-items-center gap-3 mb-4">
-                    <i class="bi bi-check-circle-fill text-success fs-2"></i>
+                    <i id="job-status-icon" class="bi bi-check-circle-fill text-success fs-2"></i>
                     <div>
                         <h1 class="h3 fw-bold mb-1">Queued</h1>
                         <p class="text-muted mb-0">非同期パイプラインに投入しました。</p>
@@ -14,9 +14,14 @@
                     <dt class="col-sm-3">Job ID</dt>
                     <dd class="col-sm-9"><code>{{.JobID}}</code></dd>
                     <dt class="col-sm-3">Status</dt>
-                    <dd class="col-sm-9">{{.Status}}</dd>
+                    <dd class="col-sm-9">
+                        <span id="job-status-state" class="badge text-bg-secondary">{{.Status}}</span>
+                        <span id="job-status-spinner" class="spinner-border spinner-border-sm text-secondary ms-2" role="status" aria-hidden="true"></span>
+                        <div id="job-status-error" class="text-danger small mt-2 d-none"></div>
+                    </dd>
                 </dl>
                 <div class="d-flex flex-wrap gap-2">
+                    <a id="job-status-history-link" class="btn btn-success d-none" href="/web/history/{{.JobID}}">結果を見る</a>
                     <a class="btn btn-primary" href="/web/video-recipe-create">Create Another</a>
                     <a class="btn btn-outline-secondary" href="/">Back Home</a>
                 </div>
@@ -24,4 +29,67 @@
         </div>
     </div>
 </div>
+<script>
+(function () {
+    // /web/jobs/{jobID} をポーリングして queued → running → succeeded/failed を反映する。
+    // サーバー側の記録（statusRecorder）は以前から動いており、この画面が唯一の未接続点だった。
+    var jobID = {{.JobID}};
+    var stateEl = document.getElementById("job-status-state");
+    var iconEl = document.getElementById("job-status-icon");
+    var spinnerEl = document.getElementById("job-status-spinner");
+    var errorEl = document.getElementById("job-status-error");
+    var historyLink = document.getElementById("job-status-history-link");
+    var interval = 5000;
+    var timer = null;
+
+    function render(status) {
+        var state = status.state || "queued";
+        stateEl.textContent = state;
+        stateEl.className = "badge " + ({
+            queued: "text-bg-secondary",
+            running: "text-bg-info",
+            succeeded: "text-bg-success",
+            failed: "text-bg-danger"
+        }[state] || "text-bg-secondary");
+        if (state === "succeeded") {
+            iconEl.className = "bi bi-check-circle-fill text-success fs-2";
+            spinnerEl.classList.add("d-none");
+            // 再生成系は成果物が元ジョブ側に書かれるため、そちらの履歴へ案内する。
+            var jobForHistory = status.original_job_id || jobID;
+            historyLink.href = "/web/history/" + encodeURIComponent(jobForHistory);
+            historyLink.classList.remove("d-none");
+            stop();
+        } else if (state === "failed") {
+            iconEl.className = "bi bi-x-circle-fill text-danger fs-2";
+            spinnerEl.classList.add("d-none");
+            if (status.error) {
+                errorEl.textContent = status.error;
+                errorEl.classList.remove("d-none");
+            }
+            stop();
+        }
+    }
+
+    function stop() {
+        if (timer !== null) {
+            clearInterval(timer);
+            timer = null;
+        }
+    }
+
+    function poll() {
+        fetch("/web/jobs/" + encodeURIComponent(jobID), { headers: { "Accept": "application/json" } })
+            .then(function (res) {
+                // 404 は「この機能より前のジョブ」や記録前の一瞬でも起こるため、静かに続行。
+                if (!res.ok) { return null; }
+                return res.json();
+            })
+            .then(function (status) { if (status) { render(status); } })
+            .catch(function () { /* 一時的な失敗は次のポーリングに任せる */ });
+    }
+
+    poll();
+    timer = setInterval(poll, interval);
+})();
+</script>
 {{end}}

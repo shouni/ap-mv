@@ -243,7 +243,6 @@ func allocateChainDurations(target float64, candidates []float64) []float64 {
 	return out
 }
 
-
 func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
 	cut.ResetGeneration(false)
 	return cut

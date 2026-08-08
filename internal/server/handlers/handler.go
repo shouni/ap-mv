@@ -69,8 +69,6 @@ type PageData struct {
 	JobID                 string
 	Status                string
 	Message               string
-	CSS                   []string
-	JS                    []string
 	GeminiModels          []string
 	ImageModels           []string
 	VeoModels             []string

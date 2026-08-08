@@ -90,12 +90,8 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 	if err := jobid.Validate(jobID); err != nil {
 		return err
 	}
-	prefix := r.baseURI + "/" + jobID + "/"
-	var paths []string
-	if err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		paths = append(paths, gcsPath)
-		return nil
-	}); err != nil {
+	paths, err := r.listObjectsUnder(ctx, r.baseURI+"/"+jobID+"/")
+	if err != nil {
 		return fmt.Errorf("list history objects for deletion: %w", err)
 	}
 	if len(paths) == 0 {

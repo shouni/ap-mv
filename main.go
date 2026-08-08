@@ -36,7 +36,7 @@ func main() {
 // run はアプリケーションの初期化とサーバー起動を行います。defer によるクリーンアップが
 // os.Exit で無視されないよう、終了コードの決定は main 側に委ねます。
 func run() error {
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadConfigFromEnv()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		return err

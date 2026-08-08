@@ -76,4 +76,3 @@ func indexOfCutIndex(cuts []orchestrator.Cut, cutIndex int) int {
 	}
 	return -1
 }
-

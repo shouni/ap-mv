@@ -339,6 +339,17 @@ func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (port
 	cmd := exec.CommandContext(ctx, p.binary(), "-i", localPath, "-f", "null", "-")
 	out, _ := cmd.CombinedOutput()
 
+	stats, err := parseProbeOutput(out)
+	if err != nil {
+		return ports.VideoStats{}, fmt.Errorf("probe %s: %w", videoURI, err)
+	}
+	return stats, nil
+}
+
+// parseProbeOutput は ffmpeg のヘッダ出力から尺と音声トラックの有無を読み取ります。
+// ffmpeg の実行から切り離した純関数にしているのは、バイナリ無しで解析規則を
+// テストできるようにするためです。
+func parseProbeOutput(out []byte) (ports.VideoStats, error) {
 	stats := ports.VideoStats{}
 	for _, match := range probeStreamsPattern.FindAllSubmatch(out, -1) {
 		if string(match[1]) == "Audio" {
@@ -348,13 +359,13 @@ func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (port
 
 	match := probeDurationPattern.FindSubmatch(out)
 	if match == nil {
-		return ports.VideoStats{}, fmt.Errorf("probe: duration not found in ffmpeg output for %s", videoURI)
+		return ports.VideoStats{}, fmt.Errorf("duration not found in ffmpeg output")
 	}
 	hours, _ := strconv.ParseFloat(string(match[1]), 64)
 	minutes, _ := strconv.ParseFloat(string(match[2]), 64)
 	seconds, err := strconv.ParseFloat(string(match[3]), 64)
 	if err != nil {
-		return ports.VideoStats{}, fmt.Errorf("probe: parse duration %q: %w", match[0], err)
+		return ports.VideoStats{}, fmt.Errorf("parse duration %q: %w", match[0], err)
 	}
 	stats.DurationSeconds = hours*3600 + minutes*60 + seconds
 
