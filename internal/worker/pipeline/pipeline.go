@@ -21,7 +21,10 @@ import (
 	"github.com/shouni/ap-mv/internal/worker/filter"
 )
 
-const notificationTimeout = 10 * time.Second
+const (
+	notificationTimeout = 10 * time.Second
+	statusRecordTimeout = 30 * time.Second
+)
 
 // Dependencies は Runner の実行に必要な依存の束です。New が必須依存の欠落を
 // 生成時に検証するため、実行時まで依存不足が分からない状態を防ぎます。
@@ -104,7 +107,11 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	)
 
 	// Veo の動画生成が応答しなくなった場合に Cloud Run のインスタンスを占有し続けないよう、
-	// タスク 1 件に上限を設ける。打ち切られたタスクは Cloud Tasks の再試行で作り直せる。
+	// タスク 1 件に上限を設ける。打ち切られたタスクは下で failed として記録されるため、
+	// 画面には理由が残り、Slack にも通知が飛ぶ。
+	//
+	// この上限は Cloud Tasks の dispatch deadline より**短く**保つこと。長いと先に
+	// Cloud Tasks がリクエストを打ち切り、アプリが自分の失敗を書く機会を失う。
 	if r.deps.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
@@ -129,7 +136,16 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	result, err := r.run(ctx, &task)
 	req := notificationRequest(&task, result)
 	if err != nil {
-		status.markFailed(ctx, &task, err)
+		// 失敗の記録は打ち切られた context から切り離して行う。打ち切りこそが失敗理由で
+		// ある場面（Timeout の発火、Cloud Tasks の dispatch deadline 超過によるリクエストの
+		// キャンセル）では ctx は既に Done で、そのまま使うと GCS への状態書き込みが失敗する。
+		// 状態は running のまま固着し、mv-queue は max_attempts = 1 なので再試行も来ない。
+		// 記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように見える。
+		// 通知側は notifyError が notificationContext で同じことをしている。
+		statusCtx, cancel := statusContext(ctx)
+		defer cancel()
+
+		status.markFailed(statusCtx, &task, err)
 		r.notifyError(ctx, err, req)
 		return err
 	}
@@ -263,6 +279,12 @@ func (r *Runner) notifyError(ctx context.Context, errDetail error, req domain.No
 
 func notificationContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(ctx), notificationTimeout)
+}
+
+// statusContext は失敗の記録用に、呼び出し元から切り離した短い context を返します。
+// 通知より長いのは、GCS への書き込みがリトライを伴うためです。
+func statusContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), statusRecordTimeout)
 }
 
 func notificationRequest(task *domain.Task, result *runResult) domain.NotificationRequest {

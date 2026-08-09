@@ -156,7 +156,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
-| `PIPELINE_TIMEOUT` | `45m` | ワーカータスク1件の実行時間の上限。フィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され Cloud Tasks の再試行で作り直せます。カット分割された継続タスクにはそれぞれ個別に適用されます |
+| `PIPELINE_TIMEOUT` | `45m` | ワーカータスク1件の実行時間の上限。フィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され、理由が画面と Slack に残ります。カット分割された継続タスクにはそれぞれ個別に適用されます。**Cloud Tasks の dispatch deadline より短く設定してください**（既定の `45m` は超えているため、本番では `25m` を明示しています。理由は「web / worker の分離」を参照）|
 | `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
 | `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoURI` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
 | `VEO_PRICE_USD_PER_SEC` | `veo-3.1-generate-001:0.40,veo-3.1-fast-generate-001:0.15,veo-3.0-generate-001:0.75,veo-3.0-fast-generate-001:0.40,veo-2.0-generate-001:0.50` | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。既定値は目安であり、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して上書きしてください |
@@ -360,9 +360,28 @@ sequenceDiagram
 | --- | --- | --- |
 | `SERVER_ROLE` | `web` | `worker` |
 | 提供するルート | `/web/*`, `/auth/*` | `/tasks/generate` |
-| 公開 | あり | **なし**（Cloud Run の IAM で遮断） |
+| 公開 | あり | **なし**（ingress と Cloud Run の IAM で遮断） |
+| ingress | `all` | **`internal`**（到達経路を Cloud Tasks に限定） |
 | memory / cpu | 512Mi / 1 | 1Gi / 2 |
-| concurrency / timeout | 20 / 300s | 4 / 3600s |
+| concurrency / timeout | 20 / 300s | 4 / 1800s |
+
+worker の実行時間の上限を決める値は 3 つあり、この大小関係を守ります。
+
+```
+PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
+   25m (アプリ)        30m (タスク)            1800s (サービス)
+```
+
+実効上限を決めるのは**いちばん小さい値**です。dispatch deadline だけは未指定でも既定の
+10 分が効くため、指定を忘れると Cloud Run の timeout を 3600s にしていても 10 分で
+ワーカーが打ち切られます（値は `internal/builder/task.go` の `tasks.Config.DispatchDeadline`）。
+
+`PIPELINE_TIMEOUT` を**いちばん短く**取るのが要点で、**アプリが自分で先に諦める**ことで
+ジョブ状態に `failed` を書き Slack に通知してから終われます。逆順にすると先に Cloud Tasks が
+リクエストを打ち切り、アプリは自分の失敗を書く機会を失います。`mv-queue` は
+`max_attempts = 1` なので再試行も来ず、ジョブは `running` のまま残り続けます。
+この記録は打ち切られた context から切り離して行っています
+（`internal/worker/pipeline/pipeline.go` の `statusContext`）。
 
 `SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
 
