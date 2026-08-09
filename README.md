@@ -187,7 +187,7 @@ worker も投入側になるため、worker の `ALLOWED_TASK_SERVICE_ACCOUNTS` 
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
 | `ALLOWED_EMAILS` | ログインを許可するメールアドレスのリスト |
 | `ALLOWED_DOMAINS` | ログインを許可するドメインのリスト |
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | `/web/*` エンドポイントを OIDC Bearer トークン（`Authorization: Bearer <ID Token>`, audience=`SERVICE_URL`）で呼び出せるサービスアカウントのメールアドレス一覧（カンマ区切り）。未設定の場合、サーバー間通信は常に拒否されます |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | `/web/*` エンドポイントを OIDC Bearer トークン（`Authorization: Bearer <ID Token>`, audience=`SERVICE_URL`）で呼び出せるサービスアカウントのメールアドレス一覧（カンマ区切り）。**`web` 面では必須**で、未設定だと起動に失敗します（M2M 経路は無効化できず、未設定のまま起動するとブラウザは正常なのに ap-mcp だけログイン画面の HTML を受け取る形で壊れるため） |
 
 M2M 認証が成功したリクエストは CSRF 検証をバイパスします。
 
