@@ -3,12 +3,17 @@ package builder
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/shouni/gcp-kit/tasks"
 
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/domain"
 )
+
+// taskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
+// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。
+const taskDispatchDeadline = 30 * time.Minute
 
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer[domain.Task], error) {
@@ -22,6 +27,12 @@ func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer
 		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。
 		ServiceAccountEmail: cfg.TaskCallerServiceAccount(),
 		Audience:            cfg.Tasks.TaskAudienceURL,
+		// ワーカーの実行時間の実効上限です。未指定だと Cloud Tasks の既定 10 分が効き、
+		// worker 側の Cloud Run timeout をいくら長くしてもそこで打ち切られます。
+		// 継続カットの自己投入もこのエンキューアを通るので、カット 1 本ぶんに同じ上限がかかります。
+		// PIPELINE_TIMEOUT をこれより短く（本番では 25m）設定して、アプリが自分で先に
+		// 諦められるようにしています。関係は README「web / worker の分離」を参照。
+		DispatchDeadline: taskDispatchDeadline,
 	}
 	return tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 }
