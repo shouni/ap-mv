@@ -44,7 +44,7 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// Veo がサポートしない尺（reference_to_videoなら8秒以外、image_to_videoなら4/6/8秒以外）の
 	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
 	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
-	// (veoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
+	// (orchestrator.VeoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
 	// （詳細は orchestrator.ExpandCutsToSupportedDurations のコメント参照）。
 	fc.VideoRecipe.Cuts = orchestrator.ExpandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
@@ -134,7 +134,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			// 参照画像として引き継ぎ、静的な立ち絵からの独立生成による見た目の
 			// ブレ（衣装ズレ等）を抑える。ただし IsSectionStart は「意図的な場面転換」
 			// （実際の曲のセクション境界、または scene_split.go によるシーン内リセット
-			// のどちらか。詳細は veo_cut_utils.go の expandCutsToSupportedDurations
+			// のどちらか。詳細は orchestrator.ExpandCutsToSupportedDurations の
 			// コメント参照）なので、どちらの理由でも直前の絵を引き継がず、そのカット
 			// 自身に割り当てられたキーフレーム参照のまま生成する。
 			if i > 0 && !cut.IsSectionStart {
