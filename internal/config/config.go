@@ -92,15 +92,15 @@ type AIConfig struct {
 	// あってこのリポジトリの都合ではないため、既定値を置くと「デプロイ設定を変えて
 	// いないのに古いモデルを使い続ける」状態が隠れます。
 	//
-	// 一覧はカンマ区切りで、先頭が既定モデルです。単数形は自身の env が優先で、
-	// 空なら一覧の先頭から埋まります（ap-comp と違い env からも読みます）。
-	// どちらも空なら ValidateEssentialConfig が起動時に落とします。
+	// 一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が一覧の
+	// 先頭から埋めるので、環境変数からは読みません（ap-comp と同じ形）。
+	// 一覧が空なら ValidateEssentialConfig が起動時に落とします。
 	GeminiModels []string `env:"GEMINI_MODELS"`
 	ImageModels  []string `env:"IMAGE_MODELS"`
 	VeoModels    []string `env:"VEO_MODELS"`
-	GeminiModel  string   `env:"GEMINI_MODEL"`
-	ImageModel   string   `env:"IMAGE_MODEL"`
-	VeoModel     string   `env:"VEO_MODEL"`
+	GeminiModel  string   `env:"-"`
+	ImageModel   string   `env:"-"`
+	VeoModel     string   `env:"-"`
 
 	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
@@ -189,9 +189,11 @@ func (c *Config) normalize() error {
 
 // NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
-	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, c.AI.GeminiModel)
-	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, c.AI.ImageModel)
-	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, c.AI.VeoModel)
+	// 単数形は env から読まないので、先頭に置きたいモデル（preferred）はありません。
+	// ModelOptions 側は選択中のモデルを先頭へ寄せるために preferred を使います。
+	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, "")
+	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, "")
+	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, "")
 	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels)
 	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels)
 	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels)

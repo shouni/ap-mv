@@ -19,11 +19,8 @@ var configEnvKeys = []string{
 	"AP_MV_BUCKET",
 	"AP_MUSIC_BUCKET",
 	"SLACK_WEBHOOK_URL",
-	"GEMINI_MODEL",
 	"GEMINI_MODELS",
-	"IMAGE_MODEL",
 	"IMAGE_MODELS",
-	"VEO_MODEL",
 	"VEO_MODELS",
 	"VEO_LOCATION_ID",
 	"VEO_OUTPUT_PREFIX",
@@ -137,9 +134,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	t.Setenv("WORKER_URL", "https://worker.example.com/tasks/generate")
 	t.Setenv("TASK_AUDIENCE_URL", "https://tasks.example.com")
 	t.Setenv("AP_MV_BUCKET", "gs://music-bucket/output/")
-	t.Setenv("GEMINI_MODEL", "gemini-selected")
 	t.Setenv("GEMINI_MODELS", "gemini-a, gemini-b")
-	t.Setenv("IMAGE_MODEL", "image-standard")
 	t.Setenv("IMAGE_MODELS", "image-a, image-b")
 	t.Setenv("VEO_GENERATE_AUDIO", "true")
 	t.Setenv("VEO_POLL_INTERVAL", "7s")
@@ -166,13 +161,14 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	if !cfg.AI.VeoGenerateAudio {
 		t.Fatal("VeoGenerateAudio = false, want true")
 	}
-	if cfg.AI.ImageModel != "image-standard" {
+	// 単数形は一覧の先頭から埋まります（環境変数からは読みません）。
+	if cfg.AI.ImageModel != "image-a" {
 		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
 	}
-	if len(cfg.AI.GeminiModels) != 3 || cfg.AI.GeminiModels[0] != "gemini-selected" || cfg.AI.GeminiModels[1] != "gemini-a" {
+	if len(cfg.AI.GeminiModels) != 2 || cfg.AI.GeminiModels[0] != "gemini-a" || cfg.AI.GeminiModels[1] != "gemini-b" {
 		t.Fatalf("GeminiModels = %#v", cfg.AI.GeminiModels)
 	}
-	if len(cfg.AI.ImageModels) != 3 || cfg.AI.ImageModels[0] != "image-standard" || cfg.AI.ImageModels[1] != "image-a" {
+	if len(cfg.AI.ImageModels) != 2 || cfg.AI.ImageModels[0] != "image-a" || cfg.AI.ImageModels[1] != "image-b" {
 		t.Fatalf("ImageModels = %#v", cfg.AI.ImageModels)
 	}
 	if cfg.AI.VeoPollInterval != 7*time.Second {
@@ -200,7 +196,6 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("GCP_LOCATION_ID", "asia-northeast1")
-	t.Setenv("VEO_MODEL", "veo-selected")
 	t.Setenv("VEO_MODELS", "veo-a, veo-b")
 
 	cfg, err := LoadConfigFromEnv()
@@ -208,11 +203,11 @@ func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if cfg.AI.VeoModel != "veo-selected" {
+	if cfg.AI.VeoModel != "veo-a" {
 		t.Fatalf("VeoModel = %q", cfg.AI.VeoModel)
 	}
-	if len(cfg.AI.VeoModels) != 3 || cfg.AI.VeoModels[0] != "veo-selected" || cfg.AI.VeoModels[1] != "veo-a" || cfg.AI.VeoModels[2] != "veo-b" {
-		t.Fatalf("VeoModels = %v, want selected model prepended", cfg.AI.VeoModels)
+	if len(cfg.AI.VeoModels) != 2 || cfg.AI.VeoModels[0] != "veo-a" || cfg.AI.VeoModels[1] != "veo-b" {
+		t.Fatalf("VeoModels = %v", cfg.AI.VeoModels)
 	}
 	if cfg.AI.VeoLocationID != "asia-northeast1" {
 		t.Fatalf("VeoLocationID = %q, want fallback to GCP_LOCATION_ID", cfg.AI.VeoLocationID)
