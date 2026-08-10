@@ -155,13 +155,13 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `PIPELINE_TIMEOUT` | `45m` | ワーカータスク1件の実行時間の上限。フィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され、理由が画面と Slack に残ります。カット分割された継続タスクにはそれぞれ個別に適用されます。**Cloud Tasks の dispatch deadline より短く設定してください**（既定の `45m` は超えているため、本番では `25m` を明示しています。理由は「web / worker の分離」を参照）|
 | `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
 | `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoURI` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
-| `VEO_PRICE_USD_PER_SEC` | `veo-3.1-generate-001:0.40,veo-3.1-fast-generate-001:0.15,veo-3.0-generate-001:0.75,veo-3.0-fast-generate-001:0.40,veo-2.0-generate-001:0.50` | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。既定値は目安であり、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して上書きしてください |
+| `VEO_PRICE_USD_PER_SEC` | なし | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。未設定なら全モデルが `domain.DefaultVeoPriceUSDPerSecond`（0.40）になります。あくまで目安で、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して設定してください |
 | `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成の同時実行数（`errgroup.SetLimit`） |
 | `KEYFRAME_RATE_INTERVAL` | `60s` | キーフレーム生成のレート制御間隔（`golang.org/x/time/rate`） |
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
-モデル名にアプリ側の既定値を置かないのは意図的です。モデル ID が古くなるのは Google のリリース周期であってこのリポジトリの都合ではないため、既定値があると「デプロイ設定を変えていないのに古いモデルを使い続ける」状態に誰も気付けません。`GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` は役割を問わず必須で、空だと起動時に落とします（`VEO_PRICE_USD_PER_SEC` の単価表はモデル選択ではないため既定値を持ちます）。
+モデル名にアプリ側の既定値を置かないのは意図的です。モデル ID が古くなるのは Google のリリース周期であってこのリポジトリの都合ではないため、既定値があると「デプロイ設定を変えていないのに古いモデルを使い続ける」状態に誰も気付けません。`GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` は役割を問わず必須で、空だと起動時に落とします単価表（`VEO_PRICE_USD_PER_SEC`）も同じ理由で既定値を持ちません — モデル名と価格のどちらも Google 側の都合で変わるためです。
 
 Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントは web / worker で分かれており、必要な権限も異なります。
 

@@ -214,10 +214,10 @@ func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromEnvVeoPricingDefaults verifies the built-in Veo price table parses into a
-// usable map. The default is written as a struct tag, so a malformed one would only surface at
-// runtime as a silently empty table (every job priced at the fallback rate).
-func TestLoadConfigFromEnvVeoPricingDefaults(t *testing.T) {
+// TestLoadConfigFromEnvVeoPricingUnset は、単価表に組み込みの既定値が無いことを確認します。
+// モデル名も価格も Google 側の都合で変わるため、表そのものはデプロイ設定に置きます。
+// 空表が既定単価へ落ちることは domain.VeoPricing 側のテストが見ています。
+func TestLoadConfigFromEnvVeoPricingUnset(t *testing.T) {
 	clearConfigEnv(t)
 
 	cfg, err := LoadConfigFromEnv()
@@ -225,14 +225,8 @@ func TestLoadConfigFromEnvVeoPricingDefaults(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	// 単価表はモデル選択とは別物で、既定値を持ち続けます（概算コスト表示のためだけの目安で、
-	// 表に無いモデルは "" キーのフォールバック単価に落ちるため、古くても壊れません）。
-	const knownModel = "veo-3.1-generate-001"
-	if got := cfg.AI.VeoPriceUSDPerSec[knownModel]; got <= 0 {
-		t.Fatalf("VeoPriceUSDPerSec[%q] = %v, want a positive default rate", knownModel, got)
-	}
-	if len(cfg.AI.VeoPriceUSDPerSec) < 2 {
-		t.Fatalf("VeoPriceUSDPerSec = %v, want the full default table", cfg.AI.VeoPriceUSDPerSec)
+	if len(cfg.AI.VeoPriceUSDPerSec) != 0 {
+		t.Fatalf("VeoPriceUSDPerSec = %v, want empty", cfg.AI.VeoPriceUSDPerSec)
 	}
 }
 
