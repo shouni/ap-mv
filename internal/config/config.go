@@ -90,14 +90,18 @@ type StorageConfig struct {
 type AIConfig struct {
 	// モデル名に既定値は持ちません。モデル ID が古くなるのは Google のリリース周期で
 	// あってこのリポジトリの都合ではないため、既定値を置くと「デプロイ設定を変えて
-	// いないのに古いモデルを使い続ける」状態が隠れます。単数形は一覧の先頭（または
-	// 単数形の env 自体）から埋まり、どちらも空なら ValidateEssentialConfig が落とします。
-	GeminiModel         string        `env:"GEMINI_MODEL"`
-	ImageModel          string        `env:"IMAGE_MODEL"`
-	GeminiModels        []string      `env:"GEMINI_MODELS"`
-	ImageModels         []string      `env:"IMAGE_MODELS"`
-	VeoModel            string        `env:"VEO_MODEL"`
-	VeoModels           []string      `env:"VEO_MODELS"`
+	// いないのに古いモデルを使い続ける」状態が隠れます。
+	//
+	// 一覧はカンマ区切りで、先頭が既定モデルです。単数形は自身の env が優先で、
+	// 空なら一覧の先頭から埋まります（ap-comp と違い env からも読みます）。
+	// どちらも空なら ValidateEssentialConfig が起動時に落とします。
+	GeminiModels []string `env:"GEMINI_MODELS"`
+	ImageModels  []string `env:"IMAGE_MODELS"`
+	VeoModels    []string `env:"VEO_MODELS"`
+	GeminiModel  string   `env:"GEMINI_MODEL"`
+	ImageModel   string   `env:"IMAGE_MODEL"`
+	VeoModel     string   `env:"VEO_MODEL"`
+
 	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
