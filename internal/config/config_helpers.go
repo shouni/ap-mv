@@ -79,9 +79,7 @@ func (c *Config) ValidateEssentialConfig() error {
 		return fmt.Errorf("AP_MV_BUCKET が設定されていません")
 	}
 	// モデル一覧は役割を問わず必須です。worker は生成に、web は投稿フォームの選択肢に
-	// 使うためで、どちらか片方だけを検証すると、もう一方が空のまま起動してしまいます。
-	// 単数形（GEMINI_MODEL など）だけを設定した場合も NormalizeModelList が一覧へ入れるため、
-	// ここは一覧だけを見れば足ります。
+	// 使うためで、片方だけを検証するともう一方が空のまま起動してしまいます。
 	for _, m := range []struct {
 		envKey string
 		models []string

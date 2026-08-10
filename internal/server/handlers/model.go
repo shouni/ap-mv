@@ -17,9 +17,8 @@ type ModelOptions struct {
 	DefaultVeoModel    string
 }
 
-// normalize normalizes the provided values. 既定値で埋めることはしません。
-// 設定漏れは config.ValidateEssentialConfig が起動時に落とすため、ここで埋めると
-// 「設定が無いのにフォームは正常に見える」抜け道を作ることになります。
+// normalize normalizes the provided values. 既定値で埋めることはしません
+// （埋めると、設定漏れなのにフォームは正常に見えてしまいます）。
 func (o *ModelOptions) normalize() {
 	o.GeminiModels = domain.NormalizeModelList(o.GeminiModels, o.DefaultGeminiModel)
 	o.ImageModels = domain.NormalizeModelList(o.ImageModels, o.DefaultImageModel)

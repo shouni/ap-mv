@@ -88,13 +88,9 @@ type StorageConfig struct {
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
 type AIConfig struct {
-	// モデル名に既定値は持ちません。モデル ID が古くなるのは Google のリリース周期で
-	// あってこのリポジトリの都合ではないため、既定値を置くと「デプロイ設定を変えて
-	// いないのに古いモデルを使い続ける」状態が隠れます。
-	//
-	// 一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が一覧の
-	// 先頭から埋めるので、環境変数からは読みません（ap-comp と同じ形）。
-	// 一覧が空なら ValidateEssentialConfig が起動時に落とします。
+	// モデル一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が
+	// 一覧の先頭から埋めるので、環境変数からは読みません。既定値は持たず、
+	// 空なら ValidateEssentialConfig が起動時に落とします。
 	GeminiModels []string `env:"GEMINI_MODELS"`
 	ImageModels  []string `env:"IMAGE_MODELS"`
 	VeoModels    []string `env:"VEO_MODELS"`

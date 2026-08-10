@@ -256,11 +256,8 @@ func parseLyricsSections(lyricsText string) map[string][]string {
 }
 
 // NormalizeModelList returns a deduplicated model list with `preferred` first (if non-empty),
-// followed by the remaining unique values in order.
-//
-// An empty result stays empty: model IDs age on Google's release schedule, not this repo's,
-// so a built-in fallback would keep an outdated model in use unnoticed. A missing list is a
-// configuration error and Config.ValidateEssentialConfig reports it at startup.
+// followed by the remaining unique values in order. An empty result stays empty — there is no
+// built-in fallback model; Config.ValidateEssentialConfig reports a missing list at startup.
 func NormalizeModelList(values []string, preferred string) []string {
 	seen := make(map[string]bool, len(values)+1)
 	result := make([]string, 0, len(values)+1)
