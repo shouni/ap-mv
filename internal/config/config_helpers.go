@@ -78,8 +78,21 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.Storage.GCSBucket == "" {
 		return fmt.Errorf("AP_MV_BUCKET が設定されていません")
 	}
-	if c.AI.VeoModel == "" {
-		return fmt.Errorf("VEO_MODEL が設定されていません")
+	// モデル一覧は役割を問わず必須です。worker は生成に、web は投稿フォームの選択肢に
+	// 使うためで、どちらか片方だけを検証すると、もう一方が空のまま起動してしまいます。
+	// 単数形（GEMINI_MODEL など）だけを設定した場合も NormalizeModelList が一覧へ入れるため、
+	// ここは一覧だけを見れば足ります。
+	for _, m := range []struct {
+		envKey string
+		models []string
+	}{
+		{"GEMINI_MODELS", c.AI.GeminiModels},
+		{"IMAGE_MODELS", c.AI.ImageModels},
+		{"VEO_MODELS", c.AI.VeoModels},
+	} {
+		if len(m.models) == 0 {
+			return fmt.Errorf("%s が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）", m.envKey)
+		}
 	}
 	if c.AI.VeoOutputPrefix == "" {
 		return fmt.Errorf("VEO_OUTPUT_PREFIX が設定されていません")

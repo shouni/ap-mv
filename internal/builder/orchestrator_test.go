@@ -36,11 +36,16 @@ func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	}
 }
 
-// TestBuildOrchestratorConfigSatisfiesLibraryValidation verifies that a config built from
-// ap-mv's own model defaults meets go-veo-orchestrator's required fields. The library keeps
-// no default model names, so this is the guard that a bare config still constructs.
+// TestBuildOrchestratorConfigSatisfiesLibraryValidation verifies that a configured ap-mv config
+// meets go-veo-orchestrator's required fields. Neither side keeps default model names, so this
+// guards that buildOrchestratorConfig actually carries the configured ones across.
 func TestBuildOrchestratorConfigSatisfiesLibraryValidation(t *testing.T) {
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		AI: config.AIConfig{
+			GeminiModels: []string{"gemini-text"},
+			ImageModels:  []string{"gemini-image"},
+		},
+	}
 	cfg.NormalizeModels()
 
 	got := buildOrchestratorConfig(cfg)

@@ -115,14 +115,18 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.AI.KeyframeRateInterval != 60*time.Second {
 		t.Fatalf("KeyframeRateInterval = %s, want 60s", cfg.AI.KeyframeRateInterval)
 	}
-	if cfg.AI.ImageModel != "gemini-3.1-flash-image" {
-		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
+	// モデル名に組み込みの既定値はありません。既定値へ黙って落ちると、
+	// 古いモデルを使い続けたまま気付けません。
+	if cfg.AI.GeminiModel != "" || cfg.AI.ImageModel != "" || cfg.AI.VeoModel != "" {
+		t.Fatalf("既定のモデル名が入っています: gemini=%q image=%q veo=%q",
+			cfg.AI.GeminiModel, cfg.AI.ImageModel, cfg.AI.VeoModel)
 	}
-	if len(cfg.AI.GeminiModels) != 1 || cfg.AI.GeminiModels[0] != "gemini-3.6-flash" {
-		t.Fatalf("GeminiModels = %#v", cfg.AI.GeminiModels)
+	if len(cfg.AI.GeminiModels) != 0 || len(cfg.AI.ImageModels) != 0 || len(cfg.AI.VeoModels) != 0 {
+		t.Fatalf("既定のモデル一覧が入っています: gemini=%#v image=%#v veo=%#v",
+			cfg.AI.GeminiModels, cfg.AI.ImageModels, cfg.AI.VeoModels)
 	}
-	if len(cfg.AI.ImageModels) != 1 || cfg.AI.ImageModels[0] != "gemini-3.1-flash-image" {
-		t.Fatalf("ImageModels = %#v", cfg.AI.ImageModels)
+	if err := cfg.ValidateEssentialConfig(); err == nil {
+		t.Fatal("モデル未設定が起動時検証を通ってしまいました")
 	}
 }
 
@@ -226,8 +230,11 @@ func TestLoadConfigFromEnvVeoPricingDefaults(t *testing.T) {
 		t.Fatalf("LoadConfigFromEnv() error = %v", err)
 	}
 
-	if got := cfg.AI.VeoPriceUSDPerSec[cfg.AI.VeoModel]; got <= 0 {
-		t.Fatalf("VeoPriceUSDPerSec[%q] = %v, want a positive default rate for the default model", cfg.AI.VeoModel, got)
+	// 単価表はモデル選択とは別物で、既定値を持ち続けます（概算コスト表示のためだけの目安で、
+	// 表に無いモデルは "" キーのフォールバック単価に落ちるため、古くても壊れません）。
+	const knownModel = "veo-3.1-generate-001"
+	if got := cfg.AI.VeoPriceUSDPerSec[knownModel]; got <= 0 {
+		t.Fatalf("VeoPriceUSDPerSec[%q] = %v, want a positive default rate", knownModel, got)
 	}
 	if len(cfg.AI.VeoPriceUSDPerSec) < 2 {
 		t.Fatalf("VeoPriceUSDPerSec = %v, want the full default table", cfg.AI.VeoPriceUSDPerSec)

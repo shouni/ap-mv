@@ -17,16 +17,16 @@ type ModelOptions struct {
 	DefaultVeoModel    string
 }
 
-// normalize normalizes the provided values. フォールバックは config.NormalizeModels と同じ
-// domain.Default*Model を参照します（builder 経由では config 側で正規化済みのため、ここの
-// フォールバックが効くのは ModelOptions を直接構築した場合の防御です）。
+// normalize normalizes the provided values. 既定値で埋めることはしません。
+// 設定漏れは config.ValidateEssentialConfig が起動時に落とすため、ここで埋めると
+// 「設定が無いのにフォームは正常に見える」抜け道を作ることになります。
 func (o *ModelOptions) normalize() {
-	o.GeminiModels = domain.NormalizeModelList(o.GeminiModels, o.DefaultGeminiModel, domain.DefaultGeminiModel)
-	o.ImageModels = domain.NormalizeModelList(o.ImageModels, o.DefaultImageModel, domain.DefaultImageModel)
-	o.VeoModels = domain.NormalizeModelList(o.VeoModels, o.DefaultVeoModel, domain.DefaultVeoModel)
-	o.DefaultGeminiModel = domain.NormalizeDefaultModel(o.DefaultGeminiModel, o.GeminiModels, "")
-	o.DefaultImageModel = domain.NormalizeDefaultModel(o.DefaultImageModel, o.ImageModels, "")
-	o.DefaultVeoModel = domain.NormalizeDefaultModel(o.DefaultVeoModel, o.VeoModels, "")
+	o.GeminiModels = domain.NormalizeModelList(o.GeminiModels, o.DefaultGeminiModel)
+	o.ImageModels = domain.NormalizeModelList(o.ImageModels, o.DefaultImageModel)
+	o.VeoModels = domain.NormalizeModelList(o.VeoModels, o.DefaultVeoModel)
+	o.DefaultGeminiModel = domain.NormalizeDefaultModel(o.DefaultGeminiModel, o.GeminiModels)
+	o.DefaultImageModel = domain.NormalizeDefaultModel(o.DefaultImageModel, o.ImageModels)
+	o.DefaultVeoModel = domain.NormalizeDefaultModel(o.DefaultVeoModel, o.VeoModels)
 }
 
 // firstModelOptions returns the first matching model options.

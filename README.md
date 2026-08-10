@@ -130,7 +130,6 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 
 | 変数 | デフォルト | 用途 |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP server の listen port |
 | `PORT` | `8080` | HTTP サーバの待ち受けポート。Cloud Run が注入するため通常は設定不要です |
 | `LOG_LEVEL` | `INFO` | ログ出力レベル（`DEBUG` / `INFO` / `WARN` / `ERROR`）。ログは Cloud Logging が解釈する `severity` / `message` 形式で出力され、`X-Cloud-Trace-Context` があればリクエスト単位でトレースに紐付きます |
 | `SERVER_ROLE` | なし（必須） | このプロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」節を参照 |
@@ -139,17 +138,17 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
 | `AP_MV_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
 | `AP_MUSIC_BUCKET` | `ap-music` | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json`（ap-comp と同じ規則）を解決するための GCS bucket |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | 台本生成などのテキスト生成モデル。未設定時は `GEMINI_MODELS` の先頭を使います |
-| `GEMINI_MODELS` | `gemini-3.6-flash` | Web UI の Gemini Model 選択肢 |
-| `IMAGE_MODEL` | `gemini-3.1-flash-image` | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |
-| `IMAGE_MODELS` | `gemini-3.1-flash-image` | Web UI の Image Model 選択肢 |
+| `GEMINI_MODEL` | なし | 台本生成などのテキスト生成モデル。未設定時は `GEMINI_MODELS` の先頭を使います |
+| `GEMINI_MODELS` | なし（必須） | Web UI の Gemini Model 選択肢。`GEMINI_MODEL` だけでも可。**両方空だと起動時エラー** |
+| `IMAGE_MODEL` | なし | 標準キーフレーム生成モデル。未設定時は `IMAGE_MODELS` の先頭を使います |
+| `IMAGE_MODELS` | なし（必須） | Web UI の Image Model 選択肢。`IMAGE_MODEL` だけでも可。**両方空だと起動時エラー** |
 | `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。ap-mv は worker も継続カットを投入するため、どちらの役割でも必要です。必須です（旧 `SERVICE_ACCOUNT_EMAIL` へのフォールバックは撤去済み） |
 | `ALLOWED_TASK_SERVICE_ACCOUNTS` | なし（worker で必須） | worker が**受け付ける** caller SA の許可リスト（カンマ区切り）。web と worker で caller SA が別になるため 2 件必要です（ap-mv は worker も継続カットを投入するため） |
-| `VEO_MODEL` | `veo-3.1-generate-001` | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
-| `VEO_MODELS` | `veo-3.1-generate-001` | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢 |
+| `VEO_MODEL` | なし | Vertex AI Publisher Model ID。未設定時は `VEO_MODELS` の先頭を使います |
+| `VEO_MODELS` | なし（必須） | Web UI（ショート動画生成フォーム等）の Veo Model 選択肢。`VEO_MODEL` だけでも可。**両方空だと起動時エラー** |
 | `VEO_LOCATION_ID` | `GCP_LOCATION_ID` の値 | Veo API を呼び出す Vertex AI location。`global` も指定可能（グローバルエンドポイント `aiplatform.googleapis.com` を使用）。Veo は提供リージョンが限られるため、データ所在地の要件がなければ `global` を、リージョン固定が必要なら `us-central1` 等を指定します |
 | `VEO_OUTPUT_PREFIX` | `ap-mv/veo` | Veo 生成物の GCS 出力 prefix |
 | `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16`。タスク側の指定（ショート動画生成の `veo_aspect_ratio`）があればそちらを優先 |
@@ -164,6 +163,8 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `KEYFRAME_RATE_INTERVAL` | `60s` | キーフレーム生成のレート制御間隔（`golang.org/x/time/rate`） |
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
+
+モデル名にアプリ側の既定値を置かないのは意図的です。モデル ID が古くなるのは Google のリリース周期であってこのリポジトリの都合ではないため、既定値があると「デプロイ設定を変えていないのに古いモデルを使い続ける」状態に誰も気付けません。`GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` は役割を問わず必須で、空だと起動時に落とします（`VEO_PRICE_USD_PER_SEC` の単価表はモデル選択ではないため既定値を持ちます）。
 
 Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントは web / worker で分かれており、必要な権限も異なります。
 

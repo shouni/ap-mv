@@ -88,12 +88,16 @@ type StorageConfig struct {
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
 type AIConfig struct {
+	// モデル名に既定値は持ちません。モデル ID が古くなるのは Google のリリース周期で
+	// あってこのリポジトリの都合ではないため、既定値を置くと「デプロイ設定を変えて
+	// いないのに古いモデルを使い続ける」状態が隠れます。単数形は一覧の先頭（または
+	// 単数形の env 自体）から埋まり、どちらも空なら ValidateEssentialConfig が落とします。
 	GeminiModel         string        `env:"GEMINI_MODEL"`
 	ImageModel          string        `env:"IMAGE_MODEL"`
-	GeminiModels        []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.6-flash"`
-	ImageModels         []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
-	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoModels           []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
+	GeminiModels        []string      `env:"GEMINI_MODELS"`
+	ImageModels         []string      `env:"IMAGE_MODELS"`
+	VeoModel            string        `env:"VEO_MODEL"`
+	VeoModels           []string      `env:"VEO_MODELS"`
 	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
@@ -181,12 +185,12 @@ func (c *Config) normalize() error {
 
 // NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
-	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, c.AI.GeminiModel, domain.DefaultGeminiModel)
-	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, c.AI.ImageModel, domain.DefaultImageModel)
-	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, c.AI.VeoModel, domain.DefaultVeoModel)
-	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels, domain.DefaultGeminiModel)
-	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels, domain.DefaultImageModel)
-	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels, domain.DefaultVeoModel)
+	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, c.AI.GeminiModel)
+	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, c.AI.ImageModel)
+	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, c.AI.VeoModel)
+	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels)
+	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels)
+	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels)
 }
 
 // LoadConfigFromEnv は環境変数から設定を読み込み、変換エラーを返します。

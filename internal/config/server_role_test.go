@@ -20,7 +20,11 @@ func newRoleTestConfig(role ServerRole) *Config {
 	cfg.GCP.ProjectID = "test-project"
 	cfg.GCP.LocationID = "asia-northeast1"
 	cfg.Storage.GCSBucket = "ap-mv"
-	cfg.AI.VeoModel = "veo-3.1-generate-001"
+	// モデル一覧は役割を問わず必須です（web は選択肢、worker は生成に使います）。
+	cfg.AI.GeminiModels = []string{"gemini-test-flash"}
+	cfg.AI.ImageModels = []string{"gemini-test-image"}
+	cfg.AI.VeoModels = []string{"veo-test"}
+	cfg.AI.VeoModel = "veo-test"
 	cfg.AI.VeoOutputPrefix = "veo"
 	cfg.AI.VeoAspectRatio = "16:9"
 	cfg.AI.VeoPollInterval = 5 * time.Second
