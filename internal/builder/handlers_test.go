@@ -29,6 +29,8 @@ func newRoleTestConfig(role config.ServerRole) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.Role = role
 	cfg.Server.ServiceURL = "https://web.example.test"
+	// Web 面は M2M 検証器の構成に許可リストを要求します（newM2MVerifier 参照）。
+	cfg.Auth.AllowedM2MServiceAccounts = []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://worker.example.test"
@@ -154,6 +156,55 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 			err := tt.h.Validate()
 			if gotErr := err != nil; gotErr != tt.wantErr {
 				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// M2M 検証器は、audience と許可リストの両方が揃ってはじめて機能します。
+//
+// 片方でも欠けると ProtectedMiddleware は毎回セッション認証へフォールバックし、
+// ブラウザは正常なまま ap-mcp からの呼び出しだけがログイン画面の HTML を受け取ります。
+// リクエストからは設定漏れだと分からないので、起動時に落ちることを固定します。
+func TestNewM2MVerifierRejectsIncompleteConfiguration(t *testing.T) {
+	t.Parallel()
+
+	const serviceURL = "https://service.example.com"
+	allowed := []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
+
+	tests := map[string]struct {
+		serviceURL string
+		allowed    []string
+		wantErr    bool
+	}{
+		"両方そろっていれば構成できる":         {serviceURL: serviceURL, allowed: allowed},
+		"許可リストが空なら起動を止める":        {serviceURL: serviceURL, allowed: nil, wantErr: true},
+		"SERVICE_URL が空なら起動を止める": {serviceURL: "", allowed: allowed, wantErr: true},
+		"どちらも空なら起動を止める":          {serviceURL: "", allowed: nil, wantErr: true},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := newM2MVerifier(tt.serviceURL, tt.allowed)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("設定が欠けているのにエラーになりません")
+				}
+				if !strings.Contains(err.Error(), "ALLOWED_M2M_SERVICE_ACCOUNTS") {
+					t.Errorf("err = %v, want 環境変数名を含むメッセージ", err)
+				}
+				if got != nil {
+					t.Error("エラー時に検証器を返してはいけません")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("newM2MVerifier() error = %v", err)
+			}
+			if !got.Configured() {
+				t.Error("構成済みの検証器が Configured() = false を返しています")
 			}
 		})
 	}

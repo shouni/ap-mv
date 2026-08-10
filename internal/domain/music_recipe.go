@@ -256,9 +256,9 @@ func parseLyricsSections(lyricsText string) map[string][]string {
 }
 
 // NormalizeModelList returns a deduplicated model list with `preferred` first (if non-empty),
-// followed by the remaining unique values in order. Returns a single-element list containing
-// fallback if the result would otherwise be empty.
-func NormalizeModelList(values []string, preferred, fallback string) []string {
+// followed by the remaining unique values in order. An empty result stays empty — there is no
+// built-in fallback model; Config.ValidateEssentialConfig reports a missing list at startup.
+func NormalizeModelList(values []string, preferred string) []string {
 	seen := make(map[string]bool, len(values)+1)
 	result := make([]string, 0, len(values)+1)
 	if preferred = strings.TrimSpace(preferred); preferred != "" {
@@ -272,15 +272,12 @@ func NormalizeModelList(values []string, preferred, fallback string) []string {
 			seen[value] = true
 		}
 	}
-	if len(result) == 0 {
-		result = append(result, fallback)
-	}
 	return result
 }
 
 // NormalizeDefaultModel selects a valid default model: value if non-empty, otherwise the first
-// entry of models, otherwise fallback.
-func NormalizeDefaultModel(value string, models []string, fallback string) string {
+// entry of models. Returns an empty string when neither is set — see NormalizeModelList.
+func NormalizeDefaultModel(value string, models []string) string {
 	value = strings.TrimSpace(value)
 	if value != "" {
 		return value
@@ -288,7 +285,7 @@ func NormalizeDefaultModel(value string, models []string, fallback string) strin
 	if len(models) > 0 {
 		return models[0]
 	}
-	return fallback
+	return ""
 }
 
 // SectionEndSeconds derives a section's end time in seconds, falling back to

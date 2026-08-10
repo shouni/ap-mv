@@ -36,6 +36,25 @@ func TestBuildOrchestratorConfigMapsModels(t *testing.T) {
 	}
 }
 
+// TestBuildOrchestratorConfigSatisfiesLibraryValidation verifies that a configured ap-mv config
+// meets go-veo-orchestrator's required fields. Neither side keeps default model names, so this
+// guards that buildOrchestratorConfig actually carries the configured ones across.
+func TestBuildOrchestratorConfigSatisfiesLibraryValidation(t *testing.T) {
+	cfg := &config.Config{
+		AI: config.AIConfig{
+			GeminiModels: []string{"gemini-text"},
+			ImageModels:  []string{"gemini-image"},
+		},
+	}
+	cfg.NormalizeModels()
+
+	got := buildOrchestratorConfig(cfg)
+
+	if err := got.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 // TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter verifies the seed override is scoped
 // to the requested character and leaves the base Characters (and other entries) untouched.
 func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {

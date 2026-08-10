@@ -88,12 +88,16 @@ type StorageConfig struct {
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
 type AIConfig struct {
-	GeminiModel         string        `env:"GEMINI_MODEL"`
-	ImageModel          string        `env:"IMAGE_MODEL"`
-	GeminiModels        []string      `env:"GEMINI_MODELS" envDefault:"gemini-3.6-flash"`
-	ImageModels         []string      `env:"IMAGE_MODELS" envDefault:"gemini-3.1-flash-image"`
-	VeoModel            string        `env:"VEO_MODEL" envDefault:"veo-3.1-generate-001"`
-	VeoModels           []string      `env:"VEO_MODELS" envDefault:"veo-3.1-generate-001"`
+	// モデル一覧はカンマ区切りで、先頭が既定モデルです。単数形は LoadConfig が
+	// 一覧の先頭から埋めるので、環境変数からは読みません。既定値は持たず、
+	// 空なら ValidateEssentialConfig が起動時に落とします。
+	GeminiModels []string `env:"GEMINI_MODELS"`
+	ImageModels  []string `env:"IMAGE_MODELS"`
+	VeoModels    []string `env:"VEO_MODELS"`
+	GeminiModel  string   `env:"-"`
+	ImageModel   string   `env:"-"`
+	VeoModel     string   `env:"-"`
+
 	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
 	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
 	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
@@ -108,13 +112,13 @@ type AIConfig struct {
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
 	KeyframeRateInterval   time.Duration `env:"KEYFRAME_RATE_INTERVAL" envDefault:"60s"`
-	// VeoPriceUSDPerSec は履歴画面に出す概算コストの単価表です（モデル名=USD/生成1秒）。
-	// 空キー（"=0.40" のように書く）は表に無いモデルへのフォールバックになります。
+	// VeoPriceUSDPerSec は履歴画面に出す概算コストの単価表です（モデル名:USD/生成1秒）。
+	// 空キー（":0.40" のように書く）は表に無いモデルへのフォールバックになります。
 	//
-	// 既定値は目安であり、実際の単価はモデル・音声生成の有無・契約で変わります。請求額と
-	// 突き合わせる用途には使えません（ジョブ間の比較と無駄の検出用）。正確な数字は
-	// Vertex AI の価格表を確認して、この環境変数で上書きしてください。
-	VeoPriceUSDPerSec map[string]float64 `env:"VEO_PRICE_USD_PER_SEC" envDefault:"veo-3.1-generate-001:0.40,veo-3.1-fast-generate-001:0.15,veo-3.0-generate-001:0.75,veo-3.0-fast-generate-001:0.40,veo-2.0-generate-001:0.50" envSeparator:"," envKeyValSeparator:":"`
+	// 既定値は持ちません。モデル名と価格はどちらも Google 側の都合で変わるため、
+	// 表そのものをデプロイ設定（ap-infra）に置きます。未設定なら全モデルが
+	// domain.DefaultVeoPriceUSDPerSecond になり、表示は壊れません。
+	VeoPriceUSDPerSec map[string]float64 `env:"VEO_PRICE_USD_PER_SEC" envSeparator:"," envKeyValSeparator:":"`
 }
 
 // NotificationConfig は外部通知先の設定です。
@@ -181,12 +185,14 @@ func (c *Config) normalize() error {
 
 // NormalizeModels normalizes configured model lists and defaults.
 func (c *Config) NormalizeModels() {
-	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, c.AI.GeminiModel, domain.DefaultGeminiModel)
-	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, c.AI.ImageModel, domain.DefaultImageModel)
-	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, c.AI.VeoModel, domain.DefaultVeoModel)
-	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels, domain.DefaultGeminiModel)
-	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels, domain.DefaultImageModel)
-	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels, domain.DefaultVeoModel)
+	// 単数形は env から読まないので、先頭に置きたいモデル（preferred）はありません。
+	// ModelOptions 側は選択中のモデルを先頭へ寄せるために preferred を使います。
+	c.AI.GeminiModels = domain.NormalizeModelList(c.AI.GeminiModels, "")
+	c.AI.ImageModels = domain.NormalizeModelList(c.AI.ImageModels, "")
+	c.AI.VeoModels = domain.NormalizeModelList(c.AI.VeoModels, "")
+	c.AI.GeminiModel = domain.NormalizeDefaultModel(c.AI.GeminiModel, c.AI.GeminiModels)
+	c.AI.ImageModel = domain.NormalizeDefaultModel(c.AI.ImageModel, c.AI.ImageModels)
+	c.AI.VeoModel = domain.NormalizeDefaultModel(c.AI.VeoModel, c.AI.VeoModels)
 }
 
 // LoadConfigFromEnv は環境変数から設定を読み込み、変換エラーを返します。
