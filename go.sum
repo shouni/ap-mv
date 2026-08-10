@@ -105,8 +105,6 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rivo/uniseg v0.4.7 h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ=
 github.com/rivo/uniseg v0.4.7/go.mod h1:FN3SvrM+Zdj16jyLfmOkMNblXMcoc8DfTHruCPUcx88=
-github.com/shouni/gcp-kit v1.7.0 h1:17ZfINWf8ZtebFkwDfx247QsceTfv2VwIajinq7qTGo=
-github.com/shouni/gcp-kit v1.7.0/go.mod h1:fSuKO+LvoL155WE4N8UbmSW8dodyDvT92J/u6V2Ztqo=
 github.com/shouni/gcp-kit v1.8.0 h1:AVVCKb0/S42lbJAELU707Lo20jtg3z7ampwX68jcD8I=
 github.com/shouni/gcp-kit v1.8.0/go.mod h1:fSuKO+LvoL155WE4N8UbmSW8dodyDvT92J/u6V2Ztqo=
 github.com/shouni/gemini-image-kit v1.13.0 h1:WhR2JzWbSt2a3Rb/tZP6H1XiHRY22Fwb4fgG+P6vdxk=
@@ -127,8 +125,8 @@ github.com/shouni/go-remote-io v1.8.0 h1:+YbK9w1KIJccF+SzfMJS7odUVyIVd0iSTaQ37MG
 github.com/shouni/go-remote-io v1.8.0/go.mod h1:xlyZSdei+CtCN80OCWl9es7aagglMyCesJubEscyDt4=
 github.com/shouni/go-utils v1.5.0 h1:uYjAMebKGDoZFDBZxugndcyTyaCpmNXd8KgnzueqnOg=
 github.com/shouni/go-utils v1.5.0/go.mod h1:MRR3X08kWJ+sSS2+KRuvWEikXui5Tixg9vta6r30SnE=
-github.com/shouni/go-veo-orchestrator v1.11.0 h1:g9lD6HXgOgCtQI2Sn4gv6QRcYX/EbwY7mo395qQPDKo=
-github.com/shouni/go-veo-orchestrator v1.11.0/go.mod h1:AnszddQ771uKpVR2TAJVPSvyOWJ+6FrmU5dBrW8eVyU=
+github.com/shouni/go-veo-orchestrator v1.11.1 h1:MdzZkWR0Dox0hrVJHfBQL7JAIHpU278p/xR/6vtOOFE=
+github.com/shouni/go-veo-orchestrator v1.11.1/go.mod h1:AnszddQ771uKpVR2TAJVPSvyOWJ+6FrmU5dBrW8eVyU=
 github.com/shouni/netarmor v1.2.0 h1:dubvM231CMkYz6bhYNB29Gp4YA3UnP6Wq0wfwzMFxnI=
 github.com/shouni/netarmor v1.2.0/go.mod h1:WxojUH0M+Z2lqZH2vw572A1zn5l1VkH7V47rnTnZmVY=
 github.com/slack-go/slack v0.27.0 h1:VWOpUzOK6UAPCCQlFxl79jhv8a/b+GOSJMnWziDJ8B8=
