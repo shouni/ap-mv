@@ -3,12 +3,14 @@ package config
 import (
 	"testing"
 	"time"
+
+	"github.com/shouni/gcp-kit/serverrole"
 )
 
 // newRoleTestConfig は、役割ごとの検証だけを見たいときの土台になる設定を返します。
 // Web 面に固有の設定（OAuth・認可リスト）はあえて空にしてあり、
 // 各テストが必要に応じて埋めます。
-func newRoleTestConfig(role ServerRole) *Config {
+func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg := &Config{}
 	cfg.Server.ServiceURL = "https://ap-mv.example.run.app"
 	cfg.Server.Role = role
@@ -41,71 +43,11 @@ func withWebAuth(cfg *Config) *Config {
 	return cfg
 }
 
-// TestParseServerRole は、SERVER_ROLE の明示を必須にしていることを確認します。
-//
-// 未設定が both に落ちると、本番の環境変数が 1 つ欠けただけで公開 web に
-// /tasks/generate が復活します。ここが退行すると、その設定漏れが黙って通ります。
-func TestParseServerRole(t *testing.T) {
-	t.Run("有効な値", func(t *testing.T) {
-		tests := []struct {
-			raw  string
-			want ServerRole
-		}{
-			{raw: "web", want: ServerRoleWeb},
-			{raw: "worker", want: ServerRoleWorker},
-			{raw: "both", want: ServerRoleBoth},
-			// 大文字と前後の空白は正規化して受け付ける。
-			{raw: " WEB ", want: ServerRoleWeb},
-		}
-
-		for _, tt := range tests {
-			got, err := ParseServerRole(tt.raw)
-			if err != nil {
-				t.Fatalf("ParseServerRole(%q) error = %v", tt.raw, err)
-			}
-			if got != tt.want {
-				t.Errorf("ParseServerRole(%q) = %q, want %q", tt.raw, got, tt.want)
-			}
-		}
-	})
-
-	t.Run("空文字と未知の値はエラー", func(t *testing.T) {
-		for _, raw := range []string{"", "   ", "wrker", "all", "true"} {
-			if _, err := ParseServerRole(raw); err == nil {
-				t.Errorf("ParseServerRole(%q) が受理されている", raw)
-			}
-		}
-	})
-}
-
-func TestServerRolePredicates(t *testing.T) {
-	tests := []struct {
-		role       ServerRole
-		servesWeb  bool
-		servesWork bool
-	}{
-		{ServerRoleBoth, true, true},
-		{ServerRoleWeb, true, false},
-		{ServerRoleWorker, false, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.role), func(t *testing.T) {
-			if got := tt.role.ServesWeb(); got != tt.servesWeb {
-				t.Fatalf("ServesWeb() = %v, want %v", got, tt.servesWeb)
-			}
-			if got := tt.role.ServesWorker(); got != tt.servesWork {
-				t.Fatalf("ServesWorker() = %v, want %v", got, tt.servesWork)
-			}
-		})
-	}
-}
-
 // TestValidateEssentialConfigSkipsWebRequirementsForWorker は、Worker 専用プロセスが
 // OAuth 設定なしで起動できることを確認します。これが成り立たないと、
 // 使いもしない認証情報へのアクセス権を Worker のサービスアカウントに与える必要が生じます。
 func TestValidateEssentialConfigSkipsWebRequirementsForWorker(t *testing.T) {
-	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg := newRoleTestConfig(serverrole.Worker)
 
 	if err := cfg.ValidateEssentialConfig(); err != nil {
 		t.Fatalf("worker role should not require web settings: %v", err)
@@ -113,7 +55,7 @@ func TestValidateEssentialConfigSkipsWebRequirementsForWorker(t *testing.T) {
 }
 
 func TestValidateEssentialConfigRequiresWebSettings(t *testing.T) {
-	for _, role := range []ServerRole{ServerRoleWeb, ServerRoleBoth} {
+	for _, role := range []serverrole.Role{serverrole.Web, serverrole.Both} {
 		t.Run(string(role), func(t *testing.T) {
 			cfg := newRoleTestConfig(role)
 
@@ -132,7 +74,7 @@ func TestValidateEssentialConfigRequiresWebSettings(t *testing.T) {
 // 残りがあれば次のカットを自分で積み直すため、投入側でもあります
 // （internal/worker/filter/video_gen.go）。
 func TestValidateEssentialConfigRequiresQueueForBothRoles(t *testing.T) {
-	for _, role := range []ServerRole{ServerRoleWeb, ServerRoleWorker} {
+	for _, role := range []serverrole.Role{serverrole.Web, serverrole.Worker} {
 		t.Run(string(role), func(t *testing.T) {
 			cfg := withWebAuth(newRoleTestConfig(role))
 			cfg.Tasks.QueueID = ""
@@ -149,7 +91,7 @@ func TestValidateEssentialConfigRequiresQueueForBothRoles(t *testing.T) {
 // audience 未設定のまま起動しないことを確認します。未設定だと OIDC 検証器が
 // fail-closed になり、全タスクが 500 で失敗し続けます。
 func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
-	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.TaskAudienceURL = ""
 
 	if err := cfg.ValidateEssentialConfig(); err == nil {
@@ -161,7 +103,7 @@ func TestValidateEssentialConfigRequiresTaskAudienceForWorker(t *testing.T) {
 // Worker が起動しないことを確認します。空だと検証器が fail-closed になり、
 // 全タスクが 500 で失敗し続けます。
 func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
-	cfg := newRoleTestConfig(ServerRoleWorker)
+	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.AllowedServiceAccounts = nil
 
 	if err := cfg.ValidateEssentialConfig(); err == nil {

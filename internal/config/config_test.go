@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/shouni/gcp-kit/serverrole"
 )
 
 var configEnvKeys = []string{
@@ -60,7 +62,7 @@ func clearConfigEnv(t *testing.T) {
 	// SERVER_ROLE は明示が必須。役割に関心のないテストはローカル開発と同じ both で読む。
 	// t.Setenv ではなく os.Setenv を使うのは、下の Cleanup が configEnvKeys 全体を
 	// 元の値へ戻すため。t.Setenv を混ぜると復元が二重になり、順序に依存する。
-	if err := os.Setenv("SERVER_ROLE", string(ServerRoleBoth)); err != nil {
+	if err := os.Setenv("SERVER_ROLE", string(serverrole.Both)); err != nil {
 		t.Fatalf("set SERVER_ROLE: %v", err)
 	}
 

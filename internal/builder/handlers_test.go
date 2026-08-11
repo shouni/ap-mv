@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shouni/gcp-kit/serverrole"
+
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
 
@@ -25,7 +27,7 @@ func (stubPipeline) Close() error { return nil }
 var _ ports.Pipeline = stubPipeline{}
 
 // newRoleTestConfig は、SERVER_ROLE の分岐だけを見るための最小構成を返します。
-func newRoleTestConfig(role config.ServerRole) *config.Config {
+func newRoleTestConfig(role serverrole.Role) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.Role = role
 	cfg.Server.ServiceURL = "https://web.example.test"
@@ -53,13 +55,13 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		role       config.ServerRole
+		role       serverrole.Role
 		wantWeb    bool
 		wantWorker bool
 	}{
-		{name: "web", role: config.ServerRoleWeb, wantWeb: true, wantWorker: false},
-		{name: "worker", role: config.ServerRoleWorker, wantWeb: false, wantWorker: true},
-		{name: "both", role: config.ServerRoleBoth, wantWeb: true, wantWorker: true},
+		{name: "web", role: serverrole.Web, wantWeb: true, wantWorker: false},
+		{name: "worker", role: serverrole.Worker, wantWeb: false, wantWorker: true},
+		{name: "both", role: serverrole.Both, wantWeb: true, wantWorker: true},
 	}
 
 	for _, tt := range tests {
@@ -99,7 +101,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 	t.Parallel()
 
-	appCtx := &app.Container{Config: newRoleTestConfig(config.ServerRoleWeb)}
+	appCtx := &app.Container{Config: newRoleTestConfig(serverrole.Web)}
 	h, err := BuildHandlers(assets.Templates, assets.StaticFiles, appCtx)
 	if err != nil {
 		t.Fatalf("BuildHandlers() error = %v", err)
@@ -114,7 +116,7 @@ func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 	t.Parallel()
 
-	cfg := newRoleTestConfig(config.ServerRoleWorker)
+	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.TaskAudienceURL = ""
 
 	appCtx := &app.Container{Config: cfg, Pipeline: stubPipeline{}}
