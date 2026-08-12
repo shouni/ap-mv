@@ -25,7 +25,14 @@ func newFakeJobStatusStore() *fakeJobStatusStore {
 	return &fakeJobStatusStore{statuses: map[string]domain.JobStatus{}}
 }
 
-func (s *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.JobStatus) error {
+// 本物の GCS クライアントと同じく context を尊重します。ここを無視すると、
+// 打ち切られたジョブの終端記録がキャンセル済み context で行われていてもテストが
+// 通ってしまい、状態が running のまま固着するバグを見逃します。
+func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.JobStatus) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -34,7 +41,11 @@ func (s *fakeJobStatusStore) Save(_ context.Context, _ string, status domain.Job
 	return nil
 }
 
-func (s *fakeJobStatusStore) Get(_ context.Context, jobID string) (domain.JobStatus, error) {
+func (s *fakeJobStatusStore) Get(ctx context.Context, jobID string) (domain.JobStatus, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.JobStatus{}, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -249,6 +260,83 @@ func TestExecuteTimesOutAndRecordsFailure(t *testing.T) {
 	if final.IsTerminal() {
 		t.Fatal("タイムアウトしたジョブが終了扱いになっている")
 	}
+}
+
+// 期限（PIPELINE_TIMEOUT）の発火とほぼ同時に生成が完了したジョブも、succeeded として
+// 記録され通知されること。
+//
+// 締切はフィルターの実行にだけ被せる必要があります。ctx 全体を締切で上書きすると、
+// 期限と前後して完了したジョブの成功記録が DeadlineExceeded で失敗し、動画は GCS に
+// あるのに状態は running のまま固着します。mv-queue は max_attempts = 1 なので
+// 再試行も来ず、手で直すしかありません。
+func TestExecuteRecordsSuccessCompletedAtDeadline(t *testing.T) {
+	store := newFakeJobStatusStore()
+	notifier := &recordingNotifier{}
+	runner := &Runner{deps: Dependencies{
+		Planner:          StaticPlanner{deadlineFilter{}},
+		WorkflowResolver: StaticWorkflowResolver{Workflows: &orchestrator.Workflows{}},
+		OutputBaseURI:    "gs://bucket/ap-mv/veo/jobs",
+		JobStatus:        store,
+		Notifier:         notifier,
+		Timeout:          50 * time.Millisecond,
+	}}
+
+	if err := runner.Execute(context.Background(), videoTask()); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
+	if len(notifier.completed) != 1 {
+		t.Fatalf("completion notifications = %d, want 1 (期限際の完了が通知されていない)", len(notifier.completed))
+	}
+}
+
+// 呼び出し元の切断（Cloud Tasks の dispatch deadline 超過）とほぼ同時に生成が完了した
+// ジョブも、succeeded として記録され通知されること。PIPELINE_TIMEOUT と違い、こちらは
+// パイプラインが上限を設けていなくても起きます。
+func TestExecuteRecordsSuccessWhenCallerCancelsAtCompletion(t *testing.T) {
+	store := newFakeJobStatusStore()
+	notifier := &recordingNotifier{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runner := &Runner{deps: Dependencies{
+		Planner:          StaticPlanner{cancelFilter{cancel: cancel}},
+		WorkflowResolver: StaticWorkflowResolver{Workflows: &orchestrator.Workflows{}},
+		OutputBaseURI:    "gs://bucket/ap-mv/veo/jobs",
+		JobStatus:        store,
+		Notifier:         notifier,
+	}}
+
+	if err := runner.Execute(ctx, videoTask()); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
+	if len(notifier.completed) != 1 {
+		t.Fatalf("completion notifications = %d, want 1 (切断と同時の完了が通知されていない)", len(notifier.completed))
+	}
+}
+
+// deadlineFilter は context の期限まで待ってから成功します。
+// PIPELINE_TIMEOUT の発火とほぼ同時に生成が完了した状況を再現します。
+type deadlineFilter struct{}
+
+func (deadlineFilter) Name() string { return "deadline" }
+
+func (deadlineFilter) Execute(ctx context.Context, _ *filter.Context) error {
+	<-ctx.Done()
+	return nil
+}
+
+// cancelFilter は成功を返す直前に cancel を呼びます。呼び出し元 context の切断
+// （Cloud Tasks の dispatch deadline 超過）と同時に生成が完了した状況を再現します。
+type cancelFilter struct{ cancel context.CancelFunc }
+
+func (cancelFilter) Name() string { return "cancel" }
+
+func (f cancelFilter) Execute(context.Context, *filter.Context) error {
+	f.cancel()
+	return nil
 }
 
 // countingFilter は実行回数を数えるフィルターです。

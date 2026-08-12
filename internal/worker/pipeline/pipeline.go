@@ -94,8 +94,9 @@ func New(deps Dependencies) (*Runner, error) {
 
 // Execute は gcp-kit/worker.TaskExecutor に適合するためのエントリーポイントです。
 //
-// worker は MusicRecipe の戻り値を使わないため、Run の結果から error だけを返します。
-// task は TaskExecutor のシグネチャに合わせて値で受け取り、Run へ渡す時点でポインタ化します。
+// worker は MusicRecipe の戻り値を使わないため、run の結果から error だけを返します。
+// task は TaskExecutor のシグネチャに合わせて値で受け取り、run へ渡す時点でポインタ化します。
+// 終端状態（succeeded / failed）の記録と通知は recordOutcome が一手に行います。
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	// 以降このジョブから出るログすべてに job_id / command を載せ、
 	// 各フィルターのログを 1 ジョブ単位で追えるようにする。
@@ -105,18 +106,6 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 		slog.String("job_id", task.JobID),
 		slog.String("command", string(task.Command)),
 	)
-
-	// Veo の動画生成が応答しなくなった場合に Cloud Run のインスタンスを占有し続けないよう、
-	// タスク 1 件に上限を設ける。打ち切られたタスクは下で failed として記録されるため、
-	// 画面には理由が残り、Slack にも通知が飛ぶ。
-	//
-	// この上限は Cloud Tasks の dispatch deadline より**短く**保つこと。長いと先に
-	// Cloud Tasks がリクエストを打ち切り、アプリが自分の失敗を書く機会を失う。
-	if r.deps.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, r.deps.Timeout)
-		defer cancel()
-	}
 
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
@@ -133,30 +122,72 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	}
 	status.markRunning(ctx, &task)
 
-	result, err := r.run(ctx, &task)
-	req := notificationRequest(&task, result)
-	if err != nil {
-		// 失敗の記録は打ち切られた context から切り離して行う。打ち切りこそが失敗理由で
-		// ある場面（Timeout の発火、Cloud Tasks の dispatch deadline 超過によるリクエストの
-		// キャンセル）では ctx は既に Done で、そのまま使うと GCS への状態書き込みが失敗する。
-		// 状態は running のまま固着し、mv-queue は max_attempts = 1 なので再試行も来ない。
-		// 記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように見える。
-		// 通知側は notifyError が notificationContext で同じことをしている。
+	result, err := r.runWithTimeout(ctx, &task)
+	return r.recordOutcome(ctx, &task, status, result, err)
+}
+
+// runWithTimeout はフィルター列を実行時間の上限つきで実行します。
+//
+// 上限は、Veo の動画生成が応答しなくなった場合に Cloud Run のインスタンスを占有し
+// 続けないためのものです。締切はフィルターの実行にだけ被せ、呼び出し元の ctx には
+// 影響させません。ctx を上書きすると、打ち切られた直後の終端記録まで期限切れの
+// context で行うことになり、いちばん記録が要る場面で残りません。
+//
+// この上限は Cloud Tasks の dispatch deadline より**短く**保つこと。長いと先に
+// Cloud Tasks がリクエストを打ち切り、アプリが自分の失敗を書く機会を失う。
+func (r *Runner) runWithTimeout(ctx context.Context, task *domain.Task) (*runResult, error) {
+	if r.deps.Timeout <= 0 {
+		return r.run(ctx, task)
+	}
+
+	runCtx, cancel := context.WithTimeout(ctx, r.deps.Timeout)
+	defer cancel()
+
+	return r.run(runCtx, task)
+}
+
+// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います。
+//
+// 記録も通知も打ち切られた context から切り離して行います。打ち切りこそが終端の理由で
+// ある場面（Timeout の発火、Cloud Tasks の dispatch deadline 超過によるリクエストの
+// キャンセル）では ctx は既に Done で、そのまま使うと GCS への状態書き込みも Slack 通知も
+// 失敗する。状態は running のまま固着し、mv-queue は max_attempts = 1 なので再試行も
+// 来ない。記録失敗は Recorder が握り潰すため、ジョブが黙って消えたように見える。
+// これは失敗だけでなく、期限や切断と前後して完了したジョブの「成功」の記録にも
+// そのまま当てはまる。
+func (r *Runner) recordOutcome(
+	ctx context.Context,
+	task *domain.Task,
+	status statusRecorder,
+	result *runResult,
+	cause error,
+) error {
+	req := notificationRequest(task, result)
+
+	switch {
+	case cause != nil:
 		statusCtx, cancel := statusContext(ctx)
 		defer cancel()
 
-		status.markFailed(statusCtx, &task, err)
-		r.notifyError(ctx, err, req)
-		return err
-	}
-	if result == nil || !result.deferred {
-		// deferred のときは継続タスクが同じ job_id で処理を引き継ぐため、
-		// ここで succeeded にすると再配信ガードが途中で発動して残りのカットが生成されなくなる。
+		status.markFailed(statusCtx, task, cause)
+		r.notifyError(ctx, cause, req)
+		return cause
+
+	case result != nil && result.deferred:
+		// 継続タスクが同じ job_id で処理を引き継ぐため、ここで succeeded にすると
+		// 再配信ガードが途中で発動して残りのカットが生成されなくなる。
 		// 完了通知を送らない条件とまったく同じ判定を使う。
-		status.markSucceeded(ctx, &task, req)
+		return nil
+
+	default:
+		statusCtx, cancel := statusContext(ctx)
+		defer cancel()
+
+		// 記録 → 通知の順。記録できていないジョブの成功を人に知らせない。
+		status.markSucceeded(statusCtx, task, req)
 		r.notifyComplete(ctx, req)
+		return nil
 	}
-	return err
 }
 
 // Close は Runner が保持する実行時リソースを解放します。
