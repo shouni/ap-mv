@@ -149,7 +149,9 @@ func TestRegenerateSectionKeyframesFormRendersSectionCuts(t *testing.T) {
 		t.Fatalf("RegenerateSectionKeyframesForm status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Verse", "/web/history/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2"} {
+	// モード切り替えはカット単位のフォームと共通の外部スクリプトが受け持ちます。
+	for _, want := range []string{"Verse", "/web/history/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2",
+		`src="/static/js/regenerate_mode.js"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("form body missing %q: %s", want, body)
 		}
@@ -263,7 +265,7 @@ func TestRegenerateCutKeyframeFormRendersCutData(t *testing.T) {
 		t.Fatalf("RegenerateCutKeyframeForm status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"original anchor", "zundamon"} {
+	for _, want := range []string{"original anchor", "zundamon", `src="/static/js/regenerate_mode.js"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("RegenerateCutKeyframeForm body missing %q: %s", want, body)
 		}

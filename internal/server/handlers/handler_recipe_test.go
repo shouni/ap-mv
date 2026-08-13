@@ -55,8 +55,11 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 	// 投入後の画面はジョブ状態をポーリングして queued → running → succeeded/failed を
 	// 表示する（サーバー側の /web/jobs/{jobID} は以前から存在し、UI 側が未接続だった）。
-	if !strings.Contains(rec.Body.String(), "/web/jobs/") {
-		t.Fatalf("queued page is missing the job-status polling script: %s", rec.Body.String())
+	// スクリプトは外部ファイルなので、読み込みとジョブ ID の受け渡しの両方を確認する。
+	for _, want := range []string{`src="/static/js/job_status.js"`, `data-job-id="`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("queued page is missing %s: %s", want, rec.Body.String())
+		}
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
