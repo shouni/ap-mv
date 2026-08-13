@@ -1,4 +1,6 @@
 {{define "content"}}
+<!-- 削除は fetch で送るため、フォームの外からも読める形で CSRF トークンを置きます。 -->
+<input type="hidden" id="csrf_token" value="{{.CSRFToken}}">
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
@@ -22,7 +24,7 @@
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <a class="btn btn-outline-secondary" href="/web/history">Back</a>
-                <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{.HistoryDetail.JobID}}', this)">Copy MV Job ID</button>
+                <button type="button" class="btn btn-outline-secondary" data-copy-text="{{.HistoryDetail.JobID}}">Copy MV Job ID</button>
                 {{if .HistoryDetail.SignedURL}}
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
@@ -37,7 +39,10 @@
                     </div>
                     <button type="submit" class="btn btn-outline-primary">ZIP再作成</button>
                 </form>
-                <button class="btn btn-outline-danger ms-auto" onclick="deleteHistory('{{.HistoryDetail.JobID}}', '{{.CSRFToken}}')">Delete</button>
+                <button type="button" class="btn btn-outline-danger ms-auto"
+                        data-delete-url="/web/history/{{.HistoryDetail.JobID}}"
+                        data-delete-confirm="Delete job {{.HistoryDetail.JobID}}?"
+                        data-delete-redirect="/web/history">Delete</button>
             </div>
         </div>
 
@@ -111,7 +116,7 @@
                 </video>
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
                     <a class="btn btn-outline-primary btn-sm" href="{{.HistoryDetail.FinalVideoSignedURL}}" target="_blank" rel="noopener">動画を開く</a>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="copyToClipboard('{{.HistoryDetail.JobID}}', this)">Copy MV Job ID</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-text="{{.HistoryDetail.JobID}}">Copy MV Job ID</button>
                 </div>
                 <p class="small text-muted mb-0 mt-2">複数の継続チェーンをハードカットで結合した完成版です。</p>
             </div>
@@ -194,39 +199,6 @@
     </div>
 </div>
 
-<script>
-async function deleteHistory(jobID, csrfToken) {
-    if (!confirm('Delete job ' + jobID + '?')) return;
-    const resp = await fetch('/web/history/' + jobID, {
-        method: 'DELETE',
-        headers: { 'X-CSRF-Token': csrfToken }
-    });
-    if (resp.ok) {
-        window.location.href = '/web/history';
-    } else {
-        alert('Delete failed: ' + resp.statusText);
-    }
-}
-
-async function copyToClipboard(uri, btn) {
-    try {
-        await navigator.clipboard.writeText(uri);
-        const original = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = original; }, 1500);
-    } catch (err) {
-        console.error('Failed to copy to clipboard:', err);
-        alert('Copy failed. Please copy manually:\n' + uri);
-    }
-}
-
-document.getElementById('gen-target')?.addEventListener('change', function () {
-    const target = this.value;
-    document.querySelectorAll('[data-section-group]').forEach(function (group) {
-        group.classList.toggle('d-none', target !== 'full' && group.dataset.sectionGroup !== target);
-    });
-});
-</script>
 {{end}}
 
 {{define "historyCutCard"}}
@@ -260,7 +232,7 @@ document.getElementById('gen-target')?.addEventListener('change', function () {
                     <a href="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
                     {{if $cut.VideoURL}}
                     <form method="POST" action="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate-video" class="d-inline"
-                          onsubmit="return confirm('Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?');">
+                          data-confirm="Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?">
                         <input type="hidden" name="csrf_token" value="{{$csrfToken}}">
                         <button type="submit" class="btn btn-sm btn-outline-warning"
                                 title="このカットの動画だけを作り直します。キーフレームはそのまま使い、結果は新しいジョブになります">動画を作り直す</button>

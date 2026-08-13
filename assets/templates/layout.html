@@ -36,9 +36,13 @@
                     <a class="nav-link" href="/web/history">History</a>
                 </li>
             </ul>
-            <span class="navbar-text text-white-50 small">
-                2026 Edition | <i class="bi bi-lightning-charge-fill"></i> Gemini 3 Flash
+            <!-- モデル名は設定（GEMINI_MODELS）から出します。文言で書くと、モデルを
+                 入れ替えても表示だけが古いモデルを指し続けます。 -->
+            {{if .SelectedGeminiModel}}
+            <span class="navbar-text text-white-50 small text-truncate">
+                2026 Edition | <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i> {{.SelectedGeminiModel}}
             </span>
+            {{end}}
         </div>
     </div>
 </nav>
@@ -62,5 +66,8 @@
         integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
         crossorigin="anonymous"></script>
 <script src="/static/js/app.js" defer></script>
+{{range .JS}}
+<script src="{{.}}" defer></script>
+{{end}}
 </body>
 </html>

@@ -1,7 +1,8 @@
 {{define "content"}}
 <div class="row justify-content-center">
     <div class="col-12 col-lg-8">
-        <div class="card border-0 shadow-sm">
+        <!-- ジョブ ID はスクリプトへ data 属性で渡します（/static/js/job_status.js）。 -->
+        <div class="card border-0 shadow-sm" id="job-status-panel" data-job-id="{{.JobID}}">
             <div class="card-body p-4 p-md-5">
                 <div class="d-flex align-items-center gap-3 mb-4">
                     <i id="job-status-icon" class="bi bi-check-circle-fill text-success fs-2"></i>
@@ -29,67 +30,5 @@
         </div>
     </div>
 </div>
-<script>
-(function () {
-    // /web/jobs/{jobID} をポーリングして queued → running → succeeded/failed を反映する。
-    // サーバー側の記録（statusRecorder）は以前から動いており、この画面が唯一の未接続点だった。
-    var jobID = {{.JobID}};
-    var stateEl = document.getElementById("job-status-state");
-    var iconEl = document.getElementById("job-status-icon");
-    var spinnerEl = document.getElementById("job-status-spinner");
-    var errorEl = document.getElementById("job-status-error");
-    var historyLink = document.getElementById("job-status-history-link");
-    var interval = 5000;
-    var timer = null;
 
-    function render(status) {
-        var state = status.state || "queued";
-        stateEl.textContent = state;
-        stateEl.className = "badge " + ({
-            queued: "text-bg-secondary",
-            running: "text-bg-info",
-            succeeded: "text-bg-success",
-            failed: "text-bg-danger"
-        }[state] || "text-bg-secondary");
-        if (state === "succeeded") {
-            iconEl.className = "bi bi-check-circle-fill text-success fs-2";
-            spinnerEl.classList.add("d-none");
-            // 再生成系は成果物が元ジョブ側に書かれるため、そちらの履歴へ案内する。
-            var jobForHistory = status.original_job_id || jobID;
-            historyLink.href = "/web/history/" + encodeURIComponent(jobForHistory);
-            historyLink.classList.remove("d-none");
-            stop();
-        } else if (state === "failed") {
-            iconEl.className = "bi bi-x-circle-fill text-danger fs-2";
-            spinnerEl.classList.add("d-none");
-            if (status.error) {
-                errorEl.textContent = status.error;
-                errorEl.classList.remove("d-none");
-            }
-            stop();
-        }
-    }
-
-    function stop() {
-        if (timer !== null) {
-            clearInterval(timer);
-            timer = null;
-        }
-    }
-
-    function poll() {
-        fetch("/web/jobs/" + encodeURIComponent(jobID), { headers: { "Accept": "application/json" } })
-            .then(function (res) {
-                // 404 は「この機能より前のジョブ」や記録前の一瞬でも起こるため、静かに続行。
-                if (!res.ok) { return null; }
-                return res.json();
-            })
-            .then(function (status) { if (status) { render(status); } })
-            .catch(function () { /* 一時的な失敗は次のポーリングに任せる */ });
-    }
-
-    poll();
-    timer = setInterval(poll, interval);
-})();
-</script>
 {{end}}

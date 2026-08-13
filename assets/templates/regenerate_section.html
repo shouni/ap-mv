@@ -70,26 +70,5 @@
         </form>
     </div>
 </div>
-<script>
-(function () {
-    const editFields = document.getElementById('edit-fields');
-    const editPrompt = document.getElementById('edit_prompt');
-    function applyMode(radio) {
-        const isEdit = radio.value === 'edit' && radio.checked;
-        editFields.classList.toggle('d-none', !isEdit);
-        editPrompt.required = isEdit;
-        // Disabled fields are excluded from form submission, so leftover edit_prompt text
-        // can't be submitted after switching back to full-regenerate mode.
-        editPrompt.disabled = !isEdit;
-    }
-    document.querySelectorAll('input[name="mode"]').forEach(function (radio) {
-        radio.addEventListener('change', function () {
-            applyMode(radio);
-        });
-        if (radio.checked) {
-            applyMode(radio);
-        }
-    });
-})();
-</script>
+
 {{end}}

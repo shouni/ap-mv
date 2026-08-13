@@ -64,8 +64,11 @@ func (h *Handler) applyCostEstimate(ctx context.Context, jobID string, detail *d
 
 // PageData は、HTMLテンプレートに渡す共通の描画データです。
 type PageData struct {
-	Title                 string
-	CSRFToken             string
+	Title     string
+	CSRFToken string
+	// JS はこのページで追加読み込みする JavaScript のパスです。renderPage が
+	// pageScripts から埋めるため、各ハンドラは指定しません。
+	JS                    []string
 	JobID                 string
 	Status                string
 	Message               string
@@ -215,6 +218,19 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, message stri
 	http.Error(w, message, status)
 }
 
+// pageScripts は、ページごとに追加で読み込む JavaScript です。
+//
+// スクリプトは以前テンプレート内に直接書かれていましたが、そうすると
+// {{.JobID}} のようなテンプレート値を JS の中へ埋め込むことになり、画面の構造と
+// 振る舞いが 1 ファイルに混ざります。外部ファイルにした分の受け渡しは data 属性で行います。
+// ページとスクリプトの対応は固定なので、各ハンドラに書かせずここで一元的に決めます。
+var pageScripts = map[string][]string{
+	"queued.html":             {"/static/js/job_status.js"},
+	"history_detail.html":     {"/static/js/history_detail.js"},
+	"regenerate_cut.html":     {"/static/js/regenerate_mode.js"},
+	"regenerate_section.html": {"/static/js/regenerate_mode.js"},
+}
+
 // renderPage renders a named HTML template.
 func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -222,6 +238,13 @@ func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName 
 	if !ok {
 		http.Error(w, "Template Not Found", http.StatusInternalServerError)
 		return
+	}
+
+	data.JS = pageScripts[templateName]
+	// ナビの表示に使うモデル名は、フォームを持たないページ（履歴・受付など）でも必要です。
+	// 選択肢を組み立てるハンドラだけが埋めるため、未設定ならここで既定値に落とします。
+	if data.SelectedGeminiModel == "" {
+		data.SelectedGeminiModel = h.ModelOptions.DefaultGeminiModel
 	}
 	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)

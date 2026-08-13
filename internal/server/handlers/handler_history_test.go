@@ -153,10 +153,9 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 		"完成動画",
 		`src="https://signed.example/final.mp4"`,
 		"Copy MV Job ID",
-		// JobID is rendered inside onclick="copyToClipboard('...')", a JS string-literal
-		// context, so html/template would escape "/" as "\/" to defend against "</script>"-style
-		// breakout sequences; job-1 has no such characters so it renders unescaped here.
-		`copyToClipboard('job-1', this)`,
+		// コピー対象は data 属性で渡す。JS の引数にテンプレート値を埋めていた頃は、
+		// JS 文字列リテラル文脈のエスケープ（"/" → "\/" など）が絡んでいた。
+		`data-copy-text="job-1"`,
 		"カット別詳細",
 	} {
 		if !strings.Contains(body, want) {
