@@ -37,7 +37,7 @@
                         <label class="small text-muted mb-0" title="未歌唱文字の色">未歌唱</label>
                         <input type="color" name="secondary_color" value="#ffffff" class="form-control form-control-color p-0 border-0" style="width:28px;height:28px" title="未歌唱（Secondary）色">
                     </div>
-                    <button type="submit" class="btn btn-outline-primary">ZIP再作成</button>
+                    <button type="submit" class="btn btn-outline-primary">Queue ZIP Job</button>
                 </form>
                 <button type="button" class="btn btn-outline-danger ms-auto"
                         data-delete-url="/web/history/{{.HistoryDetail.JobID}}"
@@ -153,7 +153,7 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary btn-sm w-100">生成開始</button>
+                        <button type="submit" class="btn btn-primary btn-sm w-100">Queue Video Job</button>
                     </div>
                 </form>
                 {{if .HistoryDetail.AspectRatio}}
@@ -235,7 +235,7 @@
                           data-confirm="Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?">
                         <input type="hidden" name="csrf_token" value="{{$csrfToken}}">
                         <button type="submit" class="btn btn-sm btn-outline-warning"
-                                title="このカットの動画だけを作り直します。キーフレームはそのまま使い、結果は新しいジョブになります">動画を作り直す</button>
+                                title="このカットの動画だけを作り直します。キーフレームはそのまま使い、結果は新しいジョブになります">Queue Cut Video Job</button>
                     </form>
                     {{end}}
                 </div>
