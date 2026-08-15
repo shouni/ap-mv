@@ -139,6 +139,10 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 // submits music_job_id (ap-comp と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
 // M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts
 // plain text/image sources unrelated to a music job.
+//
+// 両者は同じ Task.SourceURL に畳まれ、指す対象も同じです（url は music_job_id が組み立てる
+// URI を手で書いたもの）。両方来た場合は music_job_id を優先します。そのため Web UI の
+// 入力欄は music_job_id だけで、生の url は M2M 専用です。
 func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	musicJobID := strings.TrimSpace(r.FormValue("music_job_id"))
 	if musicJobID == "" {
