@@ -212,6 +212,21 @@ var AllowedAspectRatios = []string{"16:9", "9:16"}
 // 既定はアプリ側のこの1箇所で決めます。
 const DefaultAspectRatio = "16:9"
 
+// AllowedImageSizes はキーフレーム画像の出力解像度として受け付ける値の唯一の定義です。
+// AllowedAspectRatios と同じく、go-veo-orchestrator が既定値を持たなくなったため
+// アプリ側がこの語彙を持ちます。
+var AllowedImageSizes = []string{"1K", "2K", "4K"}
+
+// IsAllowedImageSize は value が許可された解像度かを返します。
+func IsAllowedImageSize(value string) bool {
+	for _, allowed := range AllowedImageSizes {
+		if value == allowed {
+			return true
+		}
+	}
+	return false
+}
+
 // IsAllowedAspectRatio は value が許可されたアスペクト比かを返します。
 func IsAllowedAspectRatio(value string) bool {
 	for _, allowed := range AllowedAspectRatios {

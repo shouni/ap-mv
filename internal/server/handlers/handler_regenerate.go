@@ -115,6 +115,18 @@ func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request,
 	return history, true
 }
 
+// mintJobID issues a new job ID for a task, writing the error response itself when minting
+// fails. It follows loadHistoryForMutation's shape — the caller checks ok and returns — because
+// the same five-line block was repeated at every enqueue site in this package.
+func mintJobID(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
+	jobID, err := jobid.New(prefix)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, err.Error())
+		return "", false
+	}
+	return jobID, true
+}
+
 // RegenerateCutKeyframeForm renders a dedicated page for configuring a single cut's
 // keyframe regeneration (prompt override, seed override, overwrite) before submitting it.
 func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Request) {
@@ -170,9 +182,8 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 		writeError(w, r, http.StatusNotFound, "cut not found")
 		return
 	}
-	newJobID, err := jobid.New("regen-keyframe")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	newJobID, ok := mintJobID(w, r, "regen-keyframe")
+	if !ok {
 		return
 	}
 	task := &domain.Task{
@@ -253,9 +264,8 @@ func (h *Handler) PostRegenerateSectionKeyframes(w http.ResponseWriter, r *http.
 		writeError(w, r, http.StatusBadRequest, "section has no cuts to regenerate")
 		return
 	}
-	newJobID, err := jobid.New("regen-section")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	newJobID, ok := mintJobID(w, r, "regen-section")
+	if !ok {
 		return
 	}
 	task := &domain.Task{
@@ -302,9 +312,8 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	newJobID, err := jobid.New("regen-zip")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	newJobID, ok := mintJobID(w, r, "regen-zip")
+	if !ok {
 		return
 	}
 	task := &domain.Task{
@@ -340,9 +349,8 @@ func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request)
 		writeError(w, r, http.StatusBadRequest, "cut not found in this job")
 		return
 	}
-	newJobID, err := jobid.New("regen-video")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	newJobID, ok := mintJobID(w, r, "regen-video")
+	if !ok {
 		return
 	}
 	task := &domain.Task{
@@ -394,11 +402,11 @@ func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Re
 	if command == domain.CommandShortVideoFromSection {
 		jobIDPrefix = "short"
 	}
-	task.JobID, err = jobid.New(jobIDPrefix)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	newJobID, ok := mintJobID(w, r, jobIDPrefix)
+	if !ok {
 		return
 	}
+	task.JobID = newJobID
 	h.enqueue(w, r, task)
 }
 

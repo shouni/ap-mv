@@ -29,6 +29,8 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg.AI.VeoModel = "veo-test"
 	cfg.AI.VeoOutputPrefix = "veo"
 	cfg.AI.VeoAspectRatio = "16:9"
+	// 画作りの値は go-veo-orchestrator が既定を持たないため、アプリ側で必須です。
+	cfg.AI.KeyframeImageSize = "2K"
 	cfg.AI.VeoPollInterval = 5 * time.Second
 	cfg.AI.VeoOperationTimeout = 10 * time.Minute
 	return cfg
@@ -142,6 +144,56 @@ func TestTaskCallerServiceAccount(t *testing.T) {
 			if got := cfg.TaskCallerServiceAccount(); got != tt.want {
 				t.Errorf("TaskCallerServiceAccount() = %q, want %q", got, tt.want)
 			}
+		})
+	}
+}
+
+// TestValidateEssentialConfigRequiresKeyframeImageSize は、解像度が不正なら起動時に落ちる
+// ことを確認します。go-veo-orchestrator は画作りの既定値を持たないため、ここを黙って
+// 通すとモデルが選んだ解像度で焼かれ、誰も気付きません。
+func TestValidateEssentialConfigRequiresKeyframeImageSize(t *testing.T) {
+	for name, value := range map[string]string{
+		"empty":   "",
+		"unknown": "8K",
+		"lowcase": "2k",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := withWebAuth(newRoleTestConfig(serverrole.Both))
+			cfg.AI.KeyframeImageSize = value
+
+			if err := cfg.ValidateEssentialConfig(); err == nil {
+				t.Errorf("KEYFRAME_IMAGE_SIZE=%q should be rejected", value)
+			}
+		})
+	}
+}
+
+// TestWarnContradictoryKeyframeThroughput は、並列度と発射間隔を両方上げた設定を検知する
+// 条件を確認します。スループットは並列度によらず発射間隔で頭打ちになるため、この組み合わせは
+// 「効いているつもりで効いていない」状態になります（エラーにはしません。運用上は有効な設定で、
+// 意図的に絞っている場合もあるためです）。
+func TestWarnContradictoryKeyframeThroughput(t *testing.T) {
+	tests := map[string]struct {
+		concurrency int
+		interval    time.Duration
+		wantWarn    bool
+	}{
+		"並列度1なら矛盾しない":  {concurrency: 1, interval: 60 * time.Second, wantWarn: false},
+		"間隔なしなら矛盾しない":  {concurrency: 4, interval: 0, wantWarn: false},
+		"両方大きいと頭打ちになる": {concurrency: 4, interval: 60 * time.Second, wantWarn: true},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := newRoleTestConfig(serverrole.Worker)
+			cfg.AI.KeyframeMaxConcurrency = tt.concurrency
+			cfg.AI.KeyframeRateInterval = tt.interval
+
+			// 警告そのものは slog へ出るだけなので、判定条件を直接確認する。
+			got := cfg.AI.KeyframeMaxConcurrency > 1 && cfg.AI.KeyframeRateInterval > 0
+			if got != tt.wantWarn {
+				t.Errorf("warn = %v, want %v", got, tt.wantWarn)
+			}
+			cfg.warnContradictoryKeyframeThroughput() // panic しないこと
 		})
 	}
 }

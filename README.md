@@ -158,7 +158,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `VEO_PRICE_USD_PER_SEC` | なし | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。未設定なら全モデルが `domain.DefaultVeoPriceUSDPerSecond`（0.40）になります。あくまで目安で、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して設定してください |
 | `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成のカット間の同時実行数。1 カットの「生成 → 保存」が 1 goroutine で完結します |
 | `KEYFRAME_RATE_INTERVAL` | `60s` | AI 呼び出しの発射間隔の下限。**キーフレームの画像生成だけでなく台本のテキスト生成にも掛かります**（クォータはプロジェクト単位のため）。0 で無制限。なおスループットは並列度によらずこの間隔で頭打ちになるので、両方を上げる設定は矛盾します |
-| `KEYFRAME_IMAGE_SIZE` | `2K` | キーフレーム画像の出力解像度（`1K` / `2K` / `4K`）|
+| `KEYFRAME_IMAGE_SIZE` | `2K` | キーフレーム画像の出力解像度。`1K` / `2K` / `4K` のいずれか（**それ以外は起動時に落ちます**）|
 | `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 

@@ -111,9 +111,8 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
-	jobID, err := jobid.New(jobPrefix)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	jobID, ok := mintJobID(w, r, jobPrefix)
+	if !ok {
 		return
 	}
 	sourceURL, err := h.musicRecipeSourceURL(r)
@@ -174,9 +173,8 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		recipe = parsedRecipe
 		videoRecipe = parsedVideoRecipe
 	}
-	jobID, err := jobid.New("recipe")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	jobID, ok := mintJobID(w, r, "recipe")
+	if !ok {
 		return
 	}
 	task := &domain.Task{

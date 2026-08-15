@@ -114,18 +114,16 @@ type workflowResolver struct {
 }
 
 // Resolve はタスクに応じた Workflows を返します。
-func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, func(), error) {
+func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 	// 共有インスタンスはプロセス全体で使い回すので閉じない。
 	if r.build == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
-		return r.shared, func() {}, nil
+		return r.shared, nil
 	}
 	workflows, err := r.build(ctx, task)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("build workflow for selected models: %w", err)
+		return nil, fmt.Errorf("build workflow for selected models: %w", err)
 	}
-	// Workflows に Close はありません。参照画像を gs:// のまま渡すようになり、
-	// 停止すべき画像キャッシュの goroutine が無くなったためです。
-	return workflows, func() {}, nil
+	return workflows, nil
 }
 
 // usesCustomModels はタスクが既定モデル以外を指定しているかを判定します。
