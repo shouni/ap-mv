@@ -19,7 +19,7 @@ const homeRecentJobs = 10
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "Home"}
 	if h.HistoryRepository != nil {
-		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs)
+		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs, "")
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to load recent history for home", "error", err)
 		} else {
@@ -101,7 +101,7 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 // 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
 // ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
 func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
-	h.postMusicRecipeTask(w, r, "video-draft", domain.CommandVideoRecipeDraft)
+	h.postMusicRecipeTask(w, r, "recipe", domain.CommandVideoRecipeDraft)
 }
 
 // postMusicRecipeTask は、Music Recipe を入力とする作成系フォーム（本生成と下書き）の

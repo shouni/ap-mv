@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -16,7 +18,7 @@ import (
 func TestPagesLoadTheirScripts(t *testing.T) {
 	t.Parallel()
 
-	body := renderDraftsPage(t)
+	body := renderHistoryDetailPage(t)
 	if strings.Contains(body, "<script>") {
 		t.Error("インラインスクリプトが残っています")
 	}
@@ -29,7 +31,7 @@ func TestPagesLoadTheirScripts(t *testing.T) {
 	if !strings.Contains(body, `id="csrf_token"`) {
 		t.Error("CSRF トークンの hidden input がありません")
 	}
-	if !strings.Contains(body, `data-delete-url="/web/drafts/`) {
+	if !strings.Contains(body, `data-delete-url="/web/history/`) {
 		t.Error("削除ボタンに data-delete-url がありません")
 	}
 }
@@ -39,16 +41,16 @@ func TestPagesLoadTheirScripts(t *testing.T) {
 func TestNavShowsConfiguredGeminiModel(t *testing.T) {
 	t.Parallel()
 
-	if body := renderDraftsPage(t); !strings.Contains(body, "gemini-test-model") {
+	if body := renderHistoryPage(t); !strings.Contains(body, "gemini-test-model") {
 		t.Error("ナビに設定した Gemini モデルが出ていません")
 	} else if strings.Contains(body, "Gemini 3 Flash") {
 		t.Error("固定のモデル名が残っています")
 	}
 }
 
-// renderDraftsPage は、フォームを持たないページの代表として下書き一覧を描きます。
+// renderHistoryPage は、フォームを持たないページの代表として履歴一覧を描きます。
 // モデル選択肢を組み立てないページでも、ナビにはモデル名が出る必要があります。
-func renderDraftsPage(t *testing.T) string {
+func renderHistoryPage(t *testing.T) string {
 	t.Helper()
 
 	h, err := NewHandlerWithOptions(assets.Templates, nil,
@@ -61,17 +63,47 @@ func renderDraftsPage(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("NewHandlerWithOptions() error = %v", err)
 	}
-	h.DraftRepository = &fakeDraftRepository{
-		page: domain.VideoDraftPage{Items: []domain.VideoDraft{{
-			JobID: draftTestJobID,
+	h.HistoryRepository = fakeHistoryRepository{
+		page: domain.VideoHistoryPage{Items: []domain.VideoHistory{{
+			JobID: "recipe-20260618-081931-abcdef123456",
 			Title: "スクリプト外出しの確認",
 		}}},
 	}
 
 	rec := httptest.NewRecorder()
-	h.Drafts(rec, httptest.NewRequest(http.MethodGet, "/web/drafts", nil))
+	h.History(rec, httptest.NewRequest(http.MethodGet, "/web/history", nil))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Drafts status = %d; body=%s", rec.Code, rec.Body.String())
+		t.Fatalf("History status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	return rec.Body.String()
+}
+
+// renderHistoryDetailPage は、削除ボタンと CSRF トークンを持つページの代表として
+// 履歴詳細を描きます。一覧からの削除は下書き専用の導線だったため、統合後は
+// 詳細画面がこの検証の対象です。
+func renderHistoryDetailPage(t *testing.T) string {
+	t.Helper()
+
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+	const jobID = "recipe-20260618-081931-abcdef123456"
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{JobID: jobID, Title: "削除導線の確認"},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/"+jobID, nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", jobID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HistoryDetail status = %d; body=%s", rec.Code, rec.Body.String())
 	}
 	return rec.Body.String()
 }

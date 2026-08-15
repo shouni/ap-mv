@@ -33,10 +33,7 @@ type Container struct {
 
 	// Data Access
 	HistoryRepository ports.HistoryRepository
-	// DraftRepository は VideoRecipe 下書きの読み書き先です。実装は
-	// HistoryRepository と同じインスタンスですが、扱う名前空間は別です。
-	DraftRepository ports.DraftRepository
-	JobStatus       ports.JobStatusStore
+	JobStatus         ports.JobStatusStore
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。

@@ -93,3 +93,13 @@ func NewJobProgress(cuts []VideoCut) JobProgress {
 	}
 	return progress
 }
+
+// TotalDurationSecOfCuts は全カットの尺の合計を返します。GeneratedSecondsOfCuts と違い
+// 生成済みかどうかを問わないため、まだ 1 カットも生成していないジョブでも使えます。
+func TotalDurationSecOfCuts(cuts []VideoCut) float64 {
+	total := 0.0
+	for _, cut := range cuts {
+		total += cut.DurationSec
+	}
+	return total
+}

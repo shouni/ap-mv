@@ -41,12 +41,20 @@ func (r fakeHistoryRepository) GetVeoUsage(context.Context, string) (*domain.Veo
 	return r.usage, r.usageErr
 }
 
-func (r fakeHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {
+func (r fakeHistoryRepository) ListHistoryPage(context.Context, int, int, domain.JobStage) (domain.VideoHistoryPage, error) {
 	return r.page, nil
 }
 
 func (r fakeHistoryRepository) GetHistory(context.Context, string) (domain.VideoHistoryDetail, error) {
 	return r.detail, nil
+}
+
+func (r fakeHistoryRepository) GetRecipe(context.Context, string) (*domain.VideoRecipe, error) {
+	return &domain.VideoRecipe{}, nil
+}
+
+func (r fakeHistoryRepository) SaveRecipe(context.Context, string, *domain.VideoRecipe) error {
+	return nil
 }
 
 func (r fakeHistoryRepository) DeleteHistory(context.Context, string) error {

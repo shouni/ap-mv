@@ -150,14 +150,3 @@ func workflowOutputBaseURI(cfg *config.Config) string {
 	}
 	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.AI.VeoOutputPrefix), "jobs"))
 }
-
-// workflowDraftBaseURI returns the GCS base URI for VideoRecipe drafts.
-//
-// 完成ジョブ（jobs/）の兄弟プレフィックスにします。同じ配下に置くと、履歴一覧の走査が
-// 下書きのディレクトリまで舐めることになり、ジョブ削除の対象範囲とも重なります。
-func workflowDraftBaseURI(cfg *config.Config) string {
-	if cfg == nil || strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
-		return ""
-	}
-	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.AI.VeoOutputPrefix), "drafts"))
-}

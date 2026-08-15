@@ -120,12 +120,20 @@ type fakeInvalidatingHistoryRepository struct {
 	invalidatedJobIDs []string
 }
 
-func (f *fakeInvalidatingHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {
+func (f *fakeInvalidatingHistoryRepository) ListHistoryPage(context.Context, int, int, domain.JobStage) (domain.VideoHistoryPage, error) {
 	return domain.VideoHistoryPage{}, nil
 }
 
 func (f *fakeInvalidatingHistoryRepository) GetHistory(context.Context, string) (domain.VideoHistoryDetail, error) {
 	return domain.VideoHistoryDetail{}, nil
+}
+
+func (f *fakeInvalidatingHistoryRepository) GetRecipe(context.Context, string) (*domain.VideoRecipe, error) {
+	return &domain.VideoRecipe{}, nil
+}
+
+func (f *fakeInvalidatingHistoryRepository) SaveRecipe(context.Context, string, *domain.VideoRecipe) error {
+	return nil
 }
 
 func (f *fakeInvalidatingHistoryRepository) DeleteHistory(context.Context, string) error {

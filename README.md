@@ -68,7 +68,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 | コマンド | 主な投入元 | フィルター列 |
 | --- | --- | --- |
-| `video_recipe_draft` | `/web/compose-draft`（作成フォームの「下書きだけ作る」）、ap-mcp の `compose_video_recipe` | Scripting → Scene Split → Draft Save（**キーフレームを1枚も焼かずに停止**） |
+| `video_recipe_draft` | `/web/compose-draft`（作成フォームの「下書きだけ作る」）、ap-mcp の `compose_video_recipe` | Scripting → Scene Split → Recipe Save（**キーフレームを1枚も焼かずに停止**） |
 | `video_recipe_create` | `/web/video-recipe-create`（`/web/compose` も同じフォーム）、ap-mcp | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload（キーフレームまでで停止） |
 | `mv_from_keyframe_video_recipe` | `/web/mv-from-keyframe-video-recipe`（M2M）、履歴詳細の動画生成フォーム（`target=full`） | Recipe Load → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
 | `short_video_from_section` | 履歴詳細の動画生成フォーム（`target=<セクション>`） | Recipe Load → Section Select → Video Gen → Chain Finalize → Publishing |
@@ -91,7 +91,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | **Chain Finalize** | `chain_finalize.go` | 全カット生成完了後（Video Gen が `ErrPipelineDeferred` を返さず正常終了した回のみ）、Video Gen → Publishing の間で1度だけ実行されます。各継続チェーンの最終カット動画（次カットが `IsChainStart` の位置、`video_gen.go` のマーキングと対）を登場順に集め、`VideoProcessor.ConcatHardCut`（FFmpeg）でハードカット結合して `FinalVideoURL` に設定します。結合後は `VideoProcessor.Probe` で完成動画の実尺と音声トラックの有無を実測し、台本の総尺と食い違う場合や無音の場合は警告ログを残します（動画自体は生成できているためジョブは失敗させません）。動画生成を伴わないコマンド（キーフレームのみのパス）には含まれません。 |
 | **Publishing** | `publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
 | **Regen Cut Keyframe** | `regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成・編集します。`EditPrompt` が指定されている場合は「編集モード」となり、既存の `keyframe_reference` を編集元画像として `CutKeyframe.EditAndSave`（内部的には `vertex-image-kit` の `ImageGenerator.Generate` に既存画像を参照として渡す会話型編集、通常生成と同じ画像生成モデル（`IMAGE_MODELS` の先頭）を使用）を呼び、構図・ポーズ・背景を保ったまま指示内容だけを反映します（このとき `VisualAnchorOverride` は無視されます）。`EditPrompt` が空の場合は「フル再生成モード」で、`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替えたうえで `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、どちらのモードでもこの 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）を更新して `Publish.Run` で metadata を上書き保存します。 |
-| **Draft Save** | `draft_save.go` | `video_recipe_draft` コマンド専用。Scene Split を通したあとの `VideoRecipe` を `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/drafts/<jobID>/video_recipe_draft.json` に保存し、キーフレーム生成の手前でパイプラインを終わらせます。保存するのが Scripting 直後ではなく Scene Split 後なのは、台本直後のカット列は尺が未確定（Scene Split が達成可能なチェーン長へ割り付け、丸め誤差を次カットへ送り、`StartSec`/`EndSec` を連結後の映像タイムラインへ振り直す）で、見せても実際に焼かれるカット割りとは別物になるためです。保存前に `domain.ValidateVideoRecipe` を通し、下書きとしては読めるがキーフレーム生成で落ちるレシピが一覧に残らないようにします。 |
+| **Recipe Save** | `recipe_save.go` | `video_recipe_draft` コマンド専用。Scene Split を通したあとの `VideoRecipe` を 完成ジョブと同じ `video_music_meta.json` に保存し、キーフレーム生成の手前でパイプラインを終わらせます。保存するのが Scripting 直後ではなく Scene Split 後なのは、台本直後のカット列は尺が未確定（Scene Split が達成可能なチェーン長へ割り付け、丸め誤差を次カットへ送り、`StartSec`/`EndSec` を連結後の映像タイムラインへ振り直す）で、見せても実際に焼かれるカット割りとは別物になるためです。保存前に `domain.ValidateVideoRecipe` を通し、一覧には載るがキーフレーム生成で落ちるレシピが残らないようにします。 |
 | **Cut Video Select** | `cut_video_select.go` | `regenerate_cut_video` コマンド専用。保存済みレシピの全カットを残したまま、対象カット（`CutIndex`）の生成状態だけを初期化して動画生成の対象へ戻します。キーフレームは元ジョブのものをそのまま使い（相対参照は元ジョブのルートで絶対URI化）、作り直さないカットは `status=generated` のままなので `VideoTimelineRunner` がスキップし、`ChainFinalizeFilter` が既存の動画と合わせて1本へ結合し直します。`UsePreviousVideo=true`（継続チェーン方式）では、対象カットの動画を差し替えるとそれを `PreviousVideoURI` として参照する後続カットの入力が古くなるため、**次のチェーン起点の手前までをまとめて初期化します**（対象がチェーン末尾なら1カットだけ）。`SectionSelectFilter` と違ってカットを絞り込まないのは、完成動画が全カットの結合だからです（絞り込むとその部分だけのショート動画になります）。 |
 | **Section Select** | `section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。Veo の image_to_video はカット尺 4/6/8 秒のみサポートするため、8 秒超のカット（キーフレームのみ生成したレシピはセクション尺のままのことがある）は同じキーフレームを引き継いだサブカット列へ分割し、各尺をサポート値に丸め、歌詞は行単位でサブカットへ均等配分します（`CutIndex` は 1 から振り直し。この尺の正規化は Video Gen フィルタでフルMVフローにも適用され、生成済みカットは変更されません）。さらにショートは YouTube ショートの上限 60 秒に収まるよう超過カットを切り詰めます。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
 
@@ -196,7 +196,7 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 
 生成履歴は `AP_MV_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下を参照します。ジョブごとの `video_music_meta.json` を一覧対象とし、詳細画面では同じ JSON の `cuts[]` から keyframe / video / status などを表示します。
 
-**下書き**（`video_recipe_draft`）は同じバケットの兄弟プレフィックス `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/drafts/<jobID>/video_recipe_draft.json` に保存します。`jobs/` 配下に置かないのは、履歴一覧の走査（`video_music_meta.json` を目印にする）とジョブ削除（プレフィックス一括削除）の対象範囲が重なるためです。下書きは `/web/drafts` の一覧にのみ現れ、`list_video_history` には出ません。ジョブ ID の用途プレフィックスも `video-draft-` で分けているため、ID だけでどちらのものか判別できます。
+**台本のみのジョブ**（`video_recipe_draft`）も、完成ジョブと同じ `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。以前は `drafts/` という兄弟プレフィックスと専用ファイル名に分けていましたが、中身は同じ `VideoRecipe` で走査規則も同じだったため、一覧・取得・削除を 2 系統維持するだけの分離でした。進行段階は `domain.JobProgress` がカット列（キーフレームの有無・動画の生成状況）から導くので、保存場所で区別する必要がありません。台本のみのジョブは履歴一覧に `script` 段階として並び、`/web/history?stage=script` で絞り込めます。
 
 **履歴一覧**（`ListHistoryPage`）は、多数の job を毎回読み直すコストを抑えるため、metadata JSON を短時間 TTL cache に保持します。**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は、regenerate/編集ジョブ完了直後に最新状態を確認したいケースで stale なキャッシュを返さないよう、常に GCS から直接読み込みます（キャッシュを一切経由しません）。Cloud Run が複数インスタンスで動く場合、ワーカーインスタンスでのキャッシュ無効化が他インスタンスの一覧キャッシュには届かないことがありますが、詳細・ダウンロードは常に最新なので実害はありません。署名付き URL は表示ごとに生成し、期限付き URL 自体は cache しません。
 
@@ -325,8 +325,8 @@ sequenceDiagram
 キーフレーム画像はカット数ぶん生成されるため、カット割りが的外れだとその枚数がまるごと無駄になります。確認してから進めたい場合は次の順で操作します。
 
 1. 作成フォーム（`/web/video-recipe-create`）で入力し、**「下書きだけ作る」** を押します（`POST /web/compose-draft`）。`Scripting -> Scene Split -> Draft Save` まで走り、キーフレームは1枚も生成されません。
-2. `/web/drafts` で一覧を開き、カット数・セクション数・尺の合計を確認します。**尺の合計が曲尺と大きくズレていればカット割りの取り違え**なので、ここで捨てて作り直します。中身（`cuts[]` の `visual_anchor` / `audio_cue` / `duration_sec`）まで読む場合は ap-mcp の `get_video_draft` を使います（詳細画面は用意しておらず、`GET /web/drafts/{jobID}` は `Accept: application/json` のときだけ JSON を返します）。
-3. 直したい場合は ap-mcp の `update_video_draft`（`PUT /web/drafts/{jobID}`）で書き戻します。**キーフレームを1枚も生成しないため、読む→直す→読み直すは何周してもコストがかかりません。** 直して効くのは `visual_anchor`（キーフレームと Veo のプロンプト）・`audio_cue`（曲の展開との対応）・`character_id`・`dialogue` です。尺（`duration_sec` / `start_sec` / `end_sec`）を書き換えても、生成時に `SceneSplitFilter` が楽曲タイムラインを正として割り付け直すため、そのままは反映されません。
+2. `/web/history?stage=script` で一覧を開き、カット数・尺の合計を確認します。**尺の合計が曲尺と大きくズレていればカット割りの取り違え**なので、ここで捨てて作り直します。詳細画面（`/web/history/{jobID}`）ではカットごとの `visual_anchor` を確認でき、そのままカット単位・セクション単位でキーフレームを焼けます。レシピ全体を読む場合は ap-mcp の `get_video_recipe`（`GET /web/history/{jobID}/recipe`）を使います。
+3. 直したい場合は ap-mcp の `update_video_recipe`（`PUT /web/history/{jobID}/recipe`）で書き戻します。**キーフレームを焼いた後は 409 で拒否されます**（カット割りを差し替えると、保存済みの `keyframe_reference` が別のカットを指すため）。**キーフレームを1枚も生成しないため、読む→直す→読み直すは何周してもコストがかかりません。** 直して効くのは `visual_anchor`（キーフレームと Veo のプロンプト）・`audio_cue`（曲の展開との対応）・`character_id`・`dialogue` です。尺（`duration_sec` / `start_sec` / `end_sec`）を書き換えても、生成時に `SceneSplitFilter` が楽曲タイムラインを正として割り付け直すため、そのままは反映されません。
 4. 進める場合は一覧の **「この下書きからMVを作る」** を押します。下書きの GCS URI が `recipe_url` として `mv_from_keyframe_video_recipe` に渡り、別の Job ID で本生成が走ります（下書きは残ります）。
 
 `SceneSplitFilter` は同じレシピを二度通しても結果が変わらないため（`TestSceneSplitFilterIsIdempotent` / `TestDraftSaveRoundTripKeepsCutPlan`）、本生成側で Scene Split が再実行されてもカット割りは下書きで確認したまま保たれます。
@@ -413,10 +413,9 @@ PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
 | `GET` | `/web/video-recipe-create` | VideoRecipe 作成フォーム（`/web/compose` も同じ handler） |
 | `POST` | `/web/video-recipe-create` | VideoRecipe 作成サブミット（`/web/compose` も同じ handler） |
 | `POST` | `/web/compose-draft` | 下書き作成サブミット（`/web/video-recipe-draft` も同じ handler）。入力は VideoRecipe 作成と同一で、キーフレームを焼かずにカット割りまでで止まる |
-| `GET` | `/web/drafts` | 下書き一覧。カット数・セクション数・尺の合計を表示する |
-| `GET` | `/web/drafts/{jobID}` | 下書きの `VideoRecipe` を JSON で返す（`Accept: application/json`、ap-mcp 用）。ブラウザからは一覧へリダイレクト（詳細画面は用意していない） |
-| `PUT` | `/web/drafts/{jobID}` | 下書きを上書き保存。本文は `{"recipe": {...}}`（GET の応答と同じ形）または `VideoRecipe` 単体。保存前に `Normalize` と `ValidateVideoRecipe` を通し、保存後のカット数と尺を返す |
-| `DELETE` | `/web/drafts/{jobID}` | 下書き削除。`X-CSRF-Token` ヘッダーが必要 |
+| `GET` | `/web/history?stage=script` | 台本のみのジョブ一覧（旧「下書き一覧」）。`stage` は `script` / `keyframes` / `keyframes_done` / `videos` / `completed` |
+| `GET` | `/web/history/{jobID}/recipe` | ジョブの `VideoRecipe` を JSON で返す。表示用に整形した詳細とは別経路で、そのまま直して PUT へ返せる |
+| `PUT` | `/web/history/{jobID}/recipe` | レシピを上書き保存。本文は `{"recipe": {...}}`（GET の応答と同じ形）または `VideoRecipe` 単体。**台本のみの段階でのみ許可**（それ以降は 409）。保存前に `Normalize` と `ValidateVideoRecipe` を通し、保存後のカット数と尺を返す |
 | `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成（`/web/generate-from-recipe` も同じ handler）。フォーム画面は履歴詳細の動画生成フォームへ統合済みで、ap-mcp 等の M2M 呼び出し互換のために残している |
 | `GET` | `/web/jobs/{jobID}` | ジョブの進行状況（`queued` / `running` / `succeeded` / `failed`）を JSON で返します。失敗時は理由と試行回数も含みます。未記録のジョブは 404 |
 | `GET` | `/web/history` | 履歴一覧 |

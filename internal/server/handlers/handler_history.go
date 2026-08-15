@@ -21,7 +21,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
 		return
 	}
-	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20)
+	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20, stageFromQuery(r))
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, err.Error())
 		return
@@ -162,4 +162,16 @@ func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
+}
+
+// stageFromQuery reads the optional ?stage= filter. An unknown value is treated as no filter
+// rather than an error, so a stale bookmark shows the full list instead of an error page.
+func stageFromQuery(r *http.Request) domain.JobStage {
+	switch stage := domain.JobStage(strings.TrimSpace(r.URL.Query().Get("stage"))); stage {
+	case domain.StageScript, domain.StageKeyframes, domain.StageKeyframesDone,
+		domain.StageVideos, domain.StageCompleted:
+		return stage
+	default:
+		return ""
+	}
 }

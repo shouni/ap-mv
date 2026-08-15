@@ -23,10 +23,6 @@ type State struct {
 	Recipe      *domain.MusicRecipe
 	VideoRecipe *video.Recipe
 	OutputPath  string
-	// DraftPath は下書き（video_recipe_draft.json）の保存先ディレクトリ URI です。
-	// OutputPath とは別のプレフィックスを指します。下書きは成果物を1つも持たないため、
-	// 完成ジョブと同じ場所に置くと履歴走査とジョブ削除の対象範囲が混ざります。
-	DraftPath string
 }
 
 // Services は、パイプライン実行中は固定の外部依存です。フィルターは参照するだけで

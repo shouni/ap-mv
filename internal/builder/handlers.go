@@ -115,7 +115,6 @@ func buildWebHandlers(templates fs.FS, appCtx *app.Container, h *AppHandlers) er
 		return fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
 	}
 	webHandler.HistoryRepository = appCtx.HistoryRepository
-	webHandler.DraftRepository = appCtx.DraftRepository
 	webHandler.JobStatus = appCtx.JobStatus
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 	webHandler.VeoPricing = domain.VeoPricing(appCtx.Config.AI.VeoPriceUSDPerSec)

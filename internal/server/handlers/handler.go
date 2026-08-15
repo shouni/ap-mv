@@ -19,9 +19,6 @@ import (
 type Handler struct {
 	Queue             ports.TaskQueue
 	HistoryRepository ports.HistoryRepository
-	// DraftRepository は VideoRecipe 下書きの一覧・取得・削除先です。
-	// 未設定なら下書き機能は無効です（一覧は設定案内を表示します）。
-	DraftRepository ports.DraftRepository
 	// JobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
 	JobStatus        ports.JobStatusStore
 	Templates        map[string]*template.Template
@@ -83,7 +80,6 @@ type PageData struct {
 	SelectedCharacterID   string
 	SelectedVisualMode    string
 	HistoryItems          []domain.VideoHistory
-	DraftItems            []domain.VideoDraft
 	HistoryDetail         domain.VideoHistoryDetail
 	PageMeta              domain.PageMeta
 	RegenerateCut         domain.VideoHistoryCut
@@ -115,7 +111,6 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"history_detail.html",
 		"regenerate_cut.html",
 		"regenerate_section.html",
-		"drafts.html",
 		"queued.html",
 	} {
 		tmpl, err := template.New(name).Funcs(template.FuncMap{

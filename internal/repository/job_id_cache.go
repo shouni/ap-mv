@@ -6,13 +6,9 @@ import (
 	"github.com/shouni/go-job-kit/cache"
 )
 
-// 一覧対象は baseURI 配下の完成ジョブと draftBaseURI 配下の下書きの 2 種類で、
-// 走査するプレフィックスが違うためキャッシュキーも分けます。片方の削除でもう片方の
-// 一覧が捨てられると、無関係なバケット全体の走査がやり直しになります。
-const (
-	jobIDListCacheKey      = "job-ids"
-	draftJobIDListCacheKey = "draft-job-ids"
-)
+// 一覧対象は baseURI 配下のジョブだけです。台本のみのジョブも同じ場所に保存されるため、
+// 下書き用に分けていたキャッシュキーは不要になりました。
+const jobIDListCacheKey = "job-ids"
 
 // NewJobIDListCache はジョブ ID 一覧用のキャッシュを生成します。
 // 保持期間・複製を返す理由・期限切れ要素を回収しない理由は cache.IDList を参照してください。
