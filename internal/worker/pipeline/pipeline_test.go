@@ -177,20 +177,18 @@ func TestExecuteSkipsCompletionNotificationWhenDeferred(t *testing.T) {
 	}
 }
 
-// TestNotificationOutputURIPointsAtDraftPath pins that a draft job's notification reports where
-// the draft actually is. Drafts write nothing under the jobs prefix, so reporting outputPath
-// would send the reader to an empty directory.
-func TestNotificationOutputURIPointsAtDraftPath(t *testing.T) {
-	task := &domain.Task{JobID: "video-draft-1", Command: domain.CommandVideoRecipeDraft}
-	result := &runResult{
-		outputPath: "gs://ap-mv/veo/jobs/video-draft-1/",
-		draftPath:  "gs://ap-mv/veo/drafts/video-draft-1/",
-	}
+// TestNotificationOutputURIPointsAtJobPathForScriptOnlyJobs pins that a script-only job's
+// notification points at the same jobs path as every other command. Drafts used to be written
+// under a separate prefix, so the notification had to special-case them; the storage is unified
+// now and the special case is gone.
+func TestNotificationOutputURIPointsAtJobPathForScriptOnlyJobs(t *testing.T) {
+	task := &domain.Task{JobID: "recipe-1", Command: domain.CommandVideoRecipeDraft}
+	result := &runResult{outputPath: "gs://ap-mv/veo/jobs/recipe-1/"}
 
 	req := notificationRequest(task, result)
 
-	if req.OutputURI != "gs://ap-mv/veo/drafts/video-draft-1/" {
-		t.Errorf("OutputURI = %q, want the drafts path", req.OutputURI)
+	if want := "gs://ap-mv/veo/jobs/recipe-1/"; req.OutputURI != want {
+		t.Errorf("OutputURI = %q, want %q", req.OutputURI, want)
 	}
 }
 

@@ -27,7 +27,7 @@ func TestListHistoryPageCachesJobIDList(t *testing.T) {
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: reader, HistoryCache: NewHistoryCache()})
 
 	for range 3 {
-		if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
+		if _, err := repo.ListHistoryPage(context.Background(), 1, 10, ""); err != nil {
 			t.Fatalf("ListHistoryPage() error = %v", err)
 		}
 	}
@@ -44,13 +44,13 @@ func TestDeleteHistoryInvalidatesJobIDList(t *testing.T) {
 	reader := jobListReaderFixture()
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: reader, Writer: &fakeHistoryWriter{}, HistoryCache: NewHistoryCache()})
 
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 10, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 	if err := repo.DeleteHistory(context.Background(), "job-20260501-123456-aaaa"); err != nil {
 		t.Fatalf("DeleteHistory() error = %v", err)
 	}
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 10, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestListJobIDsIsSafeForConcurrentUse(t *testing.T) {
 	t.Parallel()
 
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: jobListReaderFixture(), HistoryCache: NewHistoryCache()})
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 10); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 10, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 
@@ -74,7 +74,7 @@ func TestListJobIDsIsSafeForConcurrentUse(t *testing.T) {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for range 20 {
-				if _, err := repo.ListHistoryPage(context.Background(), 1, 1); err != nil {
+				if _, err := repo.ListHistoryPage(context.Background(), 1, 1, ""); err != nil {
 					t.Errorf("ListHistoryPage() error = %v", err)
 					return
 				}

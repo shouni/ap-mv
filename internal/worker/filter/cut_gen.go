@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shouni/go-veo-orchestrator/keyframe"
-
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -45,7 +43,7 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 	// RunAndSave は keyframe_reference を持つカットを焼き直しません
 	// （go-veo-orchestrator v1.10.0 以降）。SceneSplitFilter が 1:1 で再割り当てされた
 	// カットの参照を残すため、保存済みレシピからの動画生成は画像を作り直さずに済みます。
-	recipe, err := fc.Workflows.CutKeyframe.RunAndSave(ctx, fc.VideoRecipe, outputPath)
+	recipe, err := fc.Workflows.CutKeyframe.GenerateAndSave(ctx, fc.VideoRecipe, outputPath)
 	if err != nil {
 		return err
 	}
@@ -58,14 +56,15 @@ func (CutKeyframeFilter) Execute(ctx context.Context, fc *Context) error {
 // resolvedAspectRatio returns the aspect ratio a keyframe generation task actually used: the
 // task's explicit choice (set once at recipe creation, or inherited from an existing recipe for
 // operations on an existing job — see PostVideoRecipeCreate / PostGenerateVideoFromHistory /
-// PostRegenerateCutKeyframe), falling back to keyframe.CutAspectRatio (the same default the
-// Generator itself applies) when the task has none. Recording this on the recipe lets later
-// video generation steps read a single source of truth instead of choosing independently.
+// PostRegenerateCutKeyframe), falling back to domain.DefaultAspectRatio when the task has none.
+// The kit holds no art-direction default any more, so this app owns the fallback. Recording it
+// on the recipe lets later video generation steps read a single source of truth instead of
+// choosing independently.
 func resolvedAspectRatio(task *domain.Task) string {
 	if task != nil {
 		if aspectRatio := strings.TrimSpace(task.VeoAspectRatio); aspectRatio != "" {
 			return aspectRatio
 		}
 	}
-	return keyframe.CutAspectRatio
+	return domain.DefaultAspectRatio
 }

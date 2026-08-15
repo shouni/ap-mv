@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -32,7 +32,7 @@ var videoGenGuidance = sync.OnceValue(func() map[string]string {
 // ことで、存在しない入力への言及（例: video_extension で「参照画像に合わせろ」）を
 // 避けます。VisualAnchor と AudioCue が両方空の場合は従来通り空文字を返し、
 // validateVertexVeoRequest の「prompt is required」検証で壊れたレシピを検出できるままにします。
-func videoPrompt(cut orchestrator.Cut, mode ports.VeoGenerationMode) string {
+func videoPrompt(cut video.Cut, mode ports.VeoGenerationMode) string {
 	anchor := strings.TrimSpace(cut.VisualAnchor)
 	cue := strings.TrimSpace(cut.AudioCue)
 	if anchor == "" && cue == "" {

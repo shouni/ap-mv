@@ -3,7 +3,7 @@
     <div class="card-body p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
             <div>
-                <h1 class="h3 fw-bold mb-1">History</h1>
+                <h1 class="h3 fw-bold mb-1"><i class="bi bi-clock-history me-2" aria-hidden="true"></i>History</h1>
                 {{if .Message}}
                 <p class="text-muted mb-0">{{.Message}}</p>
                 {{else}}
@@ -48,11 +48,7 @@
                         {{end}}
                     </td>
                     <td>
-                        {{if .Generated}}
-                        <span class="badge text-bg-success">generated</span>
-                        {{else}}
-                        <span class="badge text-bg-secondary">keyframes</span>
-                        {{end}}
+                        {{template "jobStageBadge" .Progress}}
                     </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-primary" href="/web/history/{{.JobID}}">Detail</a>

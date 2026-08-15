@@ -19,7 +19,7 @@ const homeRecentJobs = 10
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "Home"}
 	if h.HistoryRepository != nil {
-		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs)
+		page, err := h.HistoryRepository.ListHistoryPage(r.Context(), 1, homeRecentJobs, "")
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to load recent history for home", "error", err)
 		} else {
@@ -27,7 +27,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 			data.LatestVideo = h.latestVideoForHome(r, page.Items)
 		}
 	}
-	h.renderPage(w, data, "index.html")
+	h.renderPage(w, r, data, "index.html")
 }
 
 // latestVideoForHome は直近ジョブのうち最初に動画を持つジョブから、ホーム掲載用の
@@ -83,7 +83,7 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 
 // VideoRecipeCreateForm renders the video recipe creation form.
 func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, h.withModelOptions(PageData{
+	h.renderPage(w, r, h.withModelOptions(PageData{
 		Title:     "Video Recipe Create",
 		CSRFToken: csrfTokenFromContext(r.Context()),
 	}), "compose.html")
@@ -101,7 +101,7 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 // 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
 // ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
 func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
-	h.postMusicRecipeTask(w, r, "video-draft", domain.CommandVideoRecipeDraft)
+	h.postMusicRecipeTask(w, r, "recipe", domain.CommandVideoRecipeDraft)
 }
 
 // postMusicRecipeTask は、Music Recipe を入力とする作成系フォーム（本生成と下書き）の
@@ -111,9 +111,8 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 		writeError(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
-	jobID, err := jobid.New(jobPrefix)
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	jobID, ok := mintJobID(w, r, jobPrefix)
+	if !ok {
 		return
 	}
 	sourceURL, err := h.musicRecipeSourceURL(r)
@@ -174,9 +173,8 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 		recipe = parsedRecipe
 		videoRecipe = parsedVideoRecipe
 	}
-	jobID, err := jobid.New("recipe")
-	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+	jobID, ok := mintJobID(w, r, "recipe")
+	if !ok {
 		return
 	}
 	task := &domain.Task{

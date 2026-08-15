@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -15,7 +15,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
 		AspectRatio:  "9:16",
-		Cuts:         []orchestrator.Cut{{CutIndex: 1, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}}},
+		Cuts:         []video.Cut{{CutIndex: 1, Result: video.Result{Status: video.CutStatusGenerated}}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
@@ -32,7 +32,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
-		Cuts:         []orchestrator.Cut{{CutIndex: 1, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}}},
+		Cuts:         []video.Cut{{CutIndex: 1, Result: video.Result{Status: video.CutStatusGenerated}}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
@@ -50,16 +50,16 @@ func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
-		Cuts: []orchestrator.Cut{
+		Cuts: []video.Cut{
 			{
-				CutIndex:    1,
-				AudioSync:   orchestrator.AudioSync{DurationSec: 8},
-				VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated},
+				CutIndex:  1,
+				AudioSync: video.AudioSync{DurationSec: 8},
+				Result:    video.Result{Status: video.CutStatusGenerated},
 			},
 			{
-				CutIndex:    2,
-				AudioSync:   orchestrator.AudioSync{DurationSec: 6},
-				VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusPending},
+				CutIndex:  2,
+				AudioSync: video.AudioSync{DurationSec: 6},
+				Result:    video.Result{Status: video.CutStatusPending},
 			},
 		},
 	}

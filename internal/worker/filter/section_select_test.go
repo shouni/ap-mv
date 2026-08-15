@@ -5,13 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-func newSectionSelectRecipe() *orchestrator.VideoRecipe {
-	return &orchestrator.VideoRecipe{
+func newSectionSelectRecipe() *video.Recipe {
+	return &video.Recipe{
 		ProjectTitle: "test",
 		MusicRecipe: domain.MusicRecipe{
 			Title: "test",
@@ -20,23 +21,23 @@ func newSectionSelectRecipe() *orchestrator.VideoRecipe {
 				{Name: "サビ", StartSeconds: 10, EndSeconds: 20},
 			},
 		},
-		Cuts: []orchestrator.Cut{
+		Cuts: []video.Cut{
 			{
 				CutIndex:       1,
-				AudioSync:      orchestrator.AudioSync{StartSec: 0, EndSec: 10, DurationSec: 10},
-				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png"},
-				VideoResult: orchestrator.VideoResult{
-					Status:   orchestrator.CutStatusGenerated,
+				AudioSync:      video.AudioSync{StartSec: 0, EndSec: 10, DurationSec: 10},
+				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png"},
+				Result: video.Result{
+					Status:   video.CutStatusGenerated,
 					VideoID:  "video-1",
 					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_1.mp4",
 				},
 			},
 			{
 				CutIndex:       2,
-				AudioSync:      orchestrator.AudioSync{StartSec: 10, EndSec: 20, DurationSec: 10},
-				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "images/cut_2.png"},
-				VideoResult: orchestrator.VideoResult{
-					Status:   orchestrator.CutStatusGenerated,
+				AudioSync:      video.AudioSync{StartSec: 10, EndSec: 20, DurationSec: 10},
+				KeyframeResult: video.KeyframeResult{KeyframeReference: "images/cut_2.png"},
+				Result: video.Result{
+					Status:   video.CutStatusGenerated,
 					VideoID:  "video-2",
 					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_2.mp4",
 				},
@@ -78,8 +79,8 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 		if cut.DurationSec != wantDuration {
 			t.Errorf("cut[%d] duration = %v, want %v", i, cut.DurationSec, wantDuration)
 		}
-		if cut.Status != orchestrator.CutStatusPending {
-			t.Errorf("cut[%d] status = %q, want %q", i, cut.Status, orchestrator.CutStatusPending)
+		if cut.Status != video.CutStatusPending {
+			t.Errorf("cut[%d] status = %q, want %q", i, cut.Status, video.CutStatusPending)
 		}
 		if cut.VideoID != "" || cut.VideoURL != "" {
 			t.Errorf("cut[%d] video state not cleared: id=%q url=%q", i, cut.VideoID, cut.VideoURL)
@@ -99,14 +100,14 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 // TestSplitCutBySupportedDurations verifies long cuts are split into Veo-supported durations
 // and dialogue lines are distributed across the sub-cuts.
 func TestSplitCutBySupportedDurations(t *testing.T) {
-	cut := orchestrator.Cut{
+	cut := video.Cut{
 		CutIndex:       3,
 		Dialogue:       "line1\nline2\nline3\nline4\nline5",
-		AudioSync:      orchestrator.AudioSync{StartSec: 40, EndSec: 75, DurationSec: 35},
-		KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png"},
+		AudioSync:      video.AudioSync{StartSec: 40, EndSec: 75, DurationSec: 35},
+		KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png"},
 	}
 
-	subCuts := orchestrator.SplitCutBySupportedDurations(cut, orchestrator.ImageToVideoDurationsSec())
+	subCuts := veo.SplitCutBySupportedDurations(cut, veo.ImageToVideoDurationsSec())
 
 	wantDurations := []float64{8, 8, 8, 8, 4}
 	if len(subCuts) != len(wantDurations) {
@@ -133,24 +134,24 @@ func TestSplitCutBySupportedDurations(t *testing.T) {
 // TestCapCutsTotalDuration verifies the YouTube Shorts 60s cap keeps whole cuts within the
 // limit and always keeps at least the first cut.
 func TestCapCutsTotalDuration(t *testing.T) {
-	cuts := make([]orchestrator.Cut, 9)
+	cuts := make([]video.Cut, 9)
 	for i := range cuts {
-		cuts[i] = orchestrator.Cut{CutIndex: i + 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}}
+		cuts[i] = video.Cut{CutIndex: i + 1, AudioSync: video.AudioSync{DurationSec: 8}}
 	}
-	capped := orchestrator.CapCutsTotalDuration(cuts, 60)
+	capped := veo.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 7 {
 		t.Fatalf("capped cuts = %d, want 7 (7*8=56s <= 60s)", len(capped))
 	}
 
 	// 56s + 4s = 60s ちょうどは収まる。
-	cuts = append(cuts[:7], orchestrator.Cut{CutIndex: 8, AudioSync: orchestrator.AudioSync{DurationSec: 4}})
-	capped = orchestrator.CapCutsTotalDuration(cuts, 60)
+	cuts = append(cuts[:7], video.Cut{CutIndex: 8, AudioSync: video.AudioSync{DurationSec: 4}})
+	capped = veo.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 8 {
 		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
 	}
 
 	// 上限超えの単独カットでも先頭は必ず残す。
-	capped = orchestrator.CapCutsTotalDuration([]orchestrator.Cut{{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 90}}}, 60)
+	capped = veo.CapCutsTotalDuration([]video.Cut{{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 90}}}, 60)
 	if len(capped) != 1 {
 		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
 	}
@@ -171,8 +172,8 @@ func TestSnapToSupportedDuration(t *testing.T) {
 		{in: 8, want: 8},
 	}
 	for _, tt := range tests {
-		if got := orchestrator.SnapDuration(tt.in, orchestrator.ImageToVideoDurationsSec()); got != tt.want {
-			t.Errorf("orchestrator.SnapDuration(%v) = %v, want %v", tt.in, got, tt.want)
+		if got := veo.SnapDuration(tt.in, veo.ImageToVideoDurationsSec()); got != tt.want {
+			t.Errorf("veo.SnapDuration(%v) = %v, want %v", tt.in, got, tt.want)
 		}
 	}
 }

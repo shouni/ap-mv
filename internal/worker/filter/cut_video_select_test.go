@@ -4,45 +4,46 @@ import (
 	"context"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // generatedCut builds a cut in the state a finished job leaves behind.
-func generatedCut(index int, durationSec float64, chainStart bool) orchestrator.Cut {
-	return orchestrator.Cut{
+func generatedCut(index int, durationSec float64, chainStart bool) video.Cut {
+	return video.Cut{
 		CutIndex:       index,
 		SectionIndex:   1,
 		VisualAnchor:   "anchor",
-		AudioSync:      orchestrator.AudioSync{DurationSec: durationSec},
-		KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe.png"},
-		ChainControl:   orchestrator.ChainControl{IsChainStart: chainStart},
-		VideoResult: orchestrator.VideoResult{
+		AudioSync:      video.AudioSync{DurationSec: durationSec},
+		KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe.png"},
+		ChainControl:   video.ChainControl{IsChainStart: chainStart},
+		Result: video.Result{
 			VideoID:  "video-" + string(rune('0'+index)),
 			VideoURL: "gs://bucket/jobs/job-1/videos/cut.mp4",
-			Status:   orchestrator.CutStatusGenerated,
+			Status:   video.CutStatusGenerated,
 		},
 	}
 }
 
 // chainTestRecipe lays out two chains: cuts 1-3 (8s base + two 7s extensions) and cuts 4-5
 // (8s base + one 7s extension).
-func chainTestRecipe() *orchestrator.VideoRecipe {
-	return &orchestrator.VideoRecipe{
+func chainTestRecipe() *video.Recipe {
+	return &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
 			generatedCut(1, 8, true),
-			generatedCut(2, orchestrator.VeoVideoExtensionDurationSec, false),
-			generatedCut(3, orchestrator.VeoVideoExtensionDurationSec, false),
+			generatedCut(2, veo.VideoExtensionDurationSec, false),
+			generatedCut(3, veo.VideoExtensionDurationSec, false),
 			generatedCut(4, 8, true),
-			generatedCut(5, orchestrator.VeoVideoExtensionDurationSec, false),
+			generatedCut(5, veo.VideoExtensionDurationSec, false),
 		},
 	}
 }
 
-func runCutVideoSelect(t *testing.T, recipe *orchestrator.VideoRecipe, cutIndex int, usePreviousVideo bool) error {
+func runCutVideoSelect(t *testing.T, recipe *video.Recipe, cutIndex int, usePreviousVideo bool) error {
 	t.Helper()
 	return CutVideoSelectFilter{UsePreviousVideo: usePreviousVideo}.Execute(context.Background(), &Context{
 		State: State{
@@ -57,7 +58,7 @@ func runCutVideoSelect(t *testing.T, recipe *orchestrator.VideoRecipe, cutIndex 
 	})
 }
 
-func pendingCutIndexes(recipe *orchestrator.VideoRecipe) []int {
+func pendingCutIndexes(recipe *video.Recipe) []int {
 	var pending []int
 	for _, cut := range recipe.Cuts {
 		if !cut.IsGenerated() {

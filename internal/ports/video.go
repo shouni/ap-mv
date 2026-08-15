@@ -5,16 +5,17 @@ import (
 	"strings"
 
 	veoports "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // VideoRunner は go-veo-orchestrator が定義する Veo adapter 境界です。
 type VideoRunner = veoports.VideoRunner
 
 // VideoGenerationRequest は go-veo-orchestrator の動画生成リクエスト型です。
-type VideoGenerationRequest = veoports.VideoGenerationRequest
+type VideoGenerationRequest = video.GenerationRequest
 
 // VideoResponse は go-veo-orchestrator の動画生成レスポンス型です。
-type VideoResponse = veoports.VideoResponse
+type VideoResponse = video.Response
 
 // VideoRunnerConfigurator は、タスク単位で Veo モデルやアスペクト比を差し替えた
 // 派生 Runner を返せる VideoRunner のオプションインターフェースです。

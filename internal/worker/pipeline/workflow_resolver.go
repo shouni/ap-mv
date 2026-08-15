@@ -13,13 +13,11 @@ import (
 // 上書き）のためにタスク専用の Workflows を構築すべきか」の判定と構築は実装側
 // （builder.workflowResolver）に集約され、Runner は解決結果を使うだけです。
 //
-// 戻り値の release は、解決した Workflows の後始末です。タスク専用に構築した場合は
-// その Workflows を Close し（画像キャッシュのバックグラウンド goroutine が止まります）、
-// 共有 Workflows を返した場合は何もしません。呼び出し側は解決に成功したら必ず呼びます。
-// 「共有か専用か」を呼び出し側が判定できない以上、後始末は解決した側が返すのが唯一
-// 安全な形です。
+// 後始末はありません。以前は解決した Workflows を Close する release を返していましたが、
+// go-veo-orchestrator が参照画像を gs:// のまま渡すようになり、停止すべき画像キャッシュの
+// goroutine が無くなったため、Workflows から Close 自体が消えました。
 type WorkflowResolver interface {
-	Resolve(context.Context, *domain.Task) (workflows *orchestrator.Workflows, release func(), err error)
+	Resolve(context.Context, *domain.Task) (*orchestrator.Workflows, error)
 }
 
 // StaticWorkflowResolver は、常に固定の Workflows を返すテスト用の WorkflowResolver です。
@@ -27,8 +25,7 @@ type StaticWorkflowResolver struct {
 	Workflows *orchestrator.Workflows
 }
 
-// Resolve は保持している Workflows をそのまま返します。共有インスタンスなので
-// release は何もしません。
-func (r StaticWorkflowResolver) Resolve(context.Context, *domain.Task) (*orchestrator.Workflows, func(), error) {
-	return r.Workflows, func() {}, nil
+// Resolve は保持している Workflows をそのまま返します。
+func (r StaticWorkflowResolver) Resolve(context.Context, *domain.Task) (*orchestrator.Workflows, error) {
+	return r.Workflows, nil
 }

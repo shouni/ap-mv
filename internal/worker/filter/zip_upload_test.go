@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -43,23 +43,23 @@ func zipTestContext(writer *memoryWriter, reader *zipTestReader) *Context {
 				Command: domain.CommandVideoRecipeCreate,
 			},
 			OutputPath: "gs://bucket/jobs/video-recipe-20260618-081931-abcd1234/",
-			VideoRecipe: &orchestrator.VideoRecipe{
+			VideoRecipe: &video.Recipe{
 				ProjectTitle: "zip test",
 				MusicRecipe: domain.MusicRecipe{
 					Title: "zip test",
 					Tempo: 120,
 				},
-				Cuts: []orchestrator.Cut{
+				Cuts: []video.Cut{
 					{
 						CutIndex:       1,
 						Dialogue:       "サビの歌詞",
-						AudioSync:      orchestrator.AudioSync{DurationSec: 8, StartSec: 0, EndSec: 8},
-						KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/images/keyframe_1.png"},
+						AudioSync:      video.AudioSync{DurationSec: 8, StartSec: 0, EndSec: 8},
+						KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/images/keyframe_1.png"},
 					},
 					{
 						// キーフレームを持たないカットは ZIP に含まれない。
 						CutIndex:  2,
-						AudioSync: orchestrator.AudioSync{DurationSec: 8, StartSec: 8, EndSec: 16},
+						AudioSync: video.AudioSync{DurationSec: 8, StartSec: 8, EndSec: 16},
 					},
 				},
 			},

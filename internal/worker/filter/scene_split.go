@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	characterkit "github.com/shouni/go-character-kit/character"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -69,8 +70,8 @@ func (f SceneSplitFilter) Execute(_ context.Context, fc *Context) error {
 	return nil
 }
 
-func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
-	expanded := make([]orchestrator.Cut, 0, len(cuts))
+func expandCutsForKeyframeScenes(cuts []video.Cut) []video.Cut {
+	expanded := make([]video.Cut, 0, len(cuts))
 	videoEnd := 0.0
 	if len(cuts) > 0 {
 		videoEnd = cuts[0].StartSec
@@ -85,13 +86,13 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 		cut.StartSec = videoEnd
 		cut.DurationSec = target
 		cut.EndSec = videoEnd + target
-		subCuts := orchestrator.SplitCutBySupportedDurations(cut, orchestrator.ImageToVideoDurationsSec())
+		subCuts := veo.SplitCutBySupportedDurations(cut, veo.ImageToVideoDurationsSec())
 		if len(subCuts) > 1 {
-			lines := orchestrator.SplitDialogueLines(cut.Dialogue)
+			lines := veo.SplitDialogueLines(cut.Dialogue)
 			for i := range subCuts {
 				subCuts[i].AudioCue = sceneAudioCue(cut.AudioCue, i, len(subCuts))
 				subCuts[i].VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(subCuts))
-				subCuts[i].Dialogue = orchestrator.DistributeLines(lines, i, len(subCuts))
+				subCuts[i].Dialogue = veo.DistributeLines(lines, i, len(subCuts))
 			}
 		} else {
 			subCuts[0].KeyframeReference = priorKeyframe
@@ -106,7 +107,7 @@ func expandCutsForKeyframeScenes(cuts []orchestrator.Cut) []orchestrator.Cut {
 }
 
 // cutMusicalEndSec は、このカットが楽曲上で終わるべき時刻（秒）を返します。
-func cutMusicalEndSec(cut orchestrator.Cut) float64 {
+func cutMusicalEndSec(cut video.Cut) float64 {
 	if cut.EndSec > cut.StartSec {
 		return cut.EndSec
 	}
@@ -130,8 +131,8 @@ func cutMusicalEndSec(cut orchestrator.Cut) float64 {
 // characters と referenceImagesSupported は、各カットのチェーンベースが reference_to_video
 // （8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかの判定に使います
 // （expandCutsToSupportedDurations と同じ cutUsesReferenceImages の規則）。
-func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []orchestrator.Cut {
-	expanded := make([]orchestrator.Cut, 0, len(cuts))
+func expandCutsForVideoToVideoScenes(cuts []video.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []video.Cut {
+	expanded := make([]video.Cut, 0, len(cuts))
 	videoEnd := 0.0
 	if len(cuts) > 0 {
 		videoEnd = cuts[0].StartSec
@@ -153,12 +154,12 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
 		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
 		target := cutMusicalEndSec(cut) - videoEnd
-		bases := orchestrator.ImageToVideoDurationsSec()
-		if orchestrator.CutUsesReferenceImages(cut, characters, referenceImagesSupported) {
-			bases = orchestrator.ReferenceToVideoDurationsSec()
+		bases := veo.ImageToVideoDurationsSec()
+		if veo.CutUsesReferenceImages(cut, characters, referenceImagesSupported) {
+			bases = veo.ReferenceToVideoDurationsSec()
 		}
-		durations := allocateChainDurations(target, orchestrator.ChainDurations(bases))
-		lines := orchestrator.SplitDialogueLines(cut.Dialogue)
+		durations := allocateChainDurations(target, veo.ChainDurations(bases))
+		lines := veo.SplitDialogueLines(cut.Dialogue)
 		for i, d := range durations {
 			sub := cut
 			sub.StartSec = videoEnd
@@ -168,7 +169,7 @@ func expandCutsForVideoToVideoScenes(cuts []orchestrator.Cut, characters *charac
 			if len(durations) > 1 {
 				sub.AudioCue = sceneAudioCue(cut.AudioCue, i, len(durations))
 				sub.VisualAnchor = sceneVisualAnchor(cut.VisualAnchor, i, len(durations))
-				sub.Dialogue = orchestrator.DistributeLines(lines, i, len(durations))
+				sub.Dialogue = veo.DistributeLines(lines, i, len(durations))
 			} else {
 				sub.KeyframeReference = priorKeyframe
 			}
@@ -243,7 +244,7 @@ func allocateChainDurations(target float64, candidates []float64) []float64 {
 	return out
 }
 
-func resetCutForSceneKeyframe(cut orchestrator.Cut) orchestrator.Cut {
+func resetCutForSceneKeyframe(cut video.Cut) video.Cut {
 	cut.ResetGeneration(false)
 	return cut
 }

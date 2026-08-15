@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // CutVideoSelectFilter は、保存済みレシピのうち指定カット（とその継続チェーンの残り）だけを
@@ -51,7 +52,7 @@ func (f CutVideoSelectFilter) Execute(_ context.Context, fc *Context) error {
 		cuts[i].KeyframeReference = resolveRecipeObjectURI(originalBase, cuts[i].KeyframeReference)
 	}
 
-	end := orchestrator.ChainTailEnd(cuts, target, f.UsePreviousVideo)
+	end := veo.ChainTailEnd(cuts, target, f.UsePreviousVideo)
 	for i := target; i <= end; i++ {
 		// キーフレームは残す（作り直すのは動画だけ）。IsChainStart は
 		// VideoGenerationFilter が尺から組み直すため、ここで消えても問題ない
@@ -68,7 +69,7 @@ func (f CutVideoSelectFilter) Execute(_ context.Context, fc *Context) error {
 }
 
 // indexOfCutIndex returns the slice position of the cut whose CutIndex matches, or -1.
-func indexOfCutIndex(cuts []orchestrator.Cut, cutIndex int) int {
+func indexOfCutIndex(cuts []video.Cut, cutIndex int) int {
 	for i := range cuts {
 		if cuts[i].CutIndex == cutIndex {
 			return i

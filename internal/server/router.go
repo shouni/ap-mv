@@ -102,17 +102,11 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Post("/compose", h.PostVideoRecipeCreate)
 		r.Get("/video-recipe-create", h.VideoRecipeCreateForm)
 		r.Post("/video-recipe-create", h.PostVideoRecipeCreate)
-		// 下書き作成は compose と同じ入力で、キーフレームを焼かずにカット割りまでで止まります。
+		// 台本のみのジョブ（旧「下書き」）は compose と同じ入力で、キーフレームを焼かずに
+		// カット割りまでで止まります。成果物は完成ジョブと同じ場所に保存され、履歴一覧に
+		// script 段階として並びます（?stage=script で絞り込めます）。
 		r.Post("/compose-draft", h.PostVideoRecipeDraft)
 		r.Post("/video-recipe-draft", h.PostVideoRecipeDraft)
-		r.Route("/drafts", func(r chi.Router) {
-			r.Get("/", h.Drafts)
-			// 詳細画面は用意していません（JSON は ap-mcp 用、ブラウザは一覧へ戻ります）。
-			r.Get("/{jobID}", h.Draft)
-			// 直した下書きを保存し直す。読んで直して読み直すループを画像コスト0で回すため。
-			r.Put("/{jobID}", h.UpdateDraft)
-			r.Delete("/{jobID}", h.DeleteDraft)
-		})
 		// フォーム画面は履歴詳細の動画生成フォームへ統合済み。POST は ap-mcp 等の
 		// M2M 呼び出しの互換性のために残している。
 		r.Post("/generate-from-recipe", h.PostRecipe)
@@ -122,6 +116,10 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 		r.Get("/history/{jobID}/keyframes.zip", h.DownloadKeyframes)
+		// レシピの読み出しと編集。表示用に整形した履歴詳細とは別経路で、読んだものを
+		// そのまま直して返せます。編集は台本のみの段階に限られます（PutJobRecipe 参照）。
+		r.Get("/history/{jobID}/recipe", h.GetJobRecipe)
+		r.Put("/history/{jobID}/recipe", h.PutJobRecipe)
 		r.Get("/history/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-video", h.PostRegenerateCutVideo)

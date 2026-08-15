@@ -7,7 +7,7 @@ import (
 	"math"
 	"strings"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -63,7 +63,7 @@ const finalDurationToleranceSeconds = 5.0
 // ここで失敗にはしません。動画自体は生成できており、再生もできる状態なので、
 // 破棄の判断は運用側に委ねます。無言で通すと、尺が足りない、音が入っていないといった
 // 破綻に気付けるのが「完成品を再生したとき」だけになります。
-func (f ChainFinalizeFilter) inspectFinalVideo(ctx context.Context, recipe *orchestrator.VideoRecipe, finalURL string) {
+func (f ChainFinalizeFilter) inspectFinalVideo(ctx context.Context, recipe *video.Recipe, finalURL string) {
 	stats, err := f.VideoProcessor.Probe(ctx, finalURL)
 	if err != nil {
 		slog.WarnContext(ctx, "完成動画の解析に失敗しました", "url", finalURL, "err", err)
@@ -86,7 +86,7 @@ func (f ChainFinalizeFilter) inspectFinalVideo(ctx context.Context, recipe *orch
 
 // expectedDurationSeconds は台本が想定する総尺を返します。
 // 最終カットの EndSec は Normalize が各カットの尺から積み上げた値です。
-func expectedDurationSeconds(recipe *orchestrator.VideoRecipe) float64 {
+func expectedDurationSeconds(recipe *video.Recipe) float64 {
 	if recipe == nil || len(recipe.Cuts) == 0 {
 		return 0
 	}
@@ -104,7 +104,7 @@ func expectedDurationSeconds(recipe *orchestrator.VideoRecipe) float64 {
 // 独立に生成された8秒前後のクリップです。IsChainStart を立てる経路も usePreviousVideo の
 // 内側にあるため誰にも印が付きません。この判定を共有すると境界が最終カットだけになり、
 // 完成動画が末尾1カットぶんに縮みます。ここでは全カットが結合対象です。
-func chainEndVideoURLs(cuts []orchestrator.Cut, usePreviousVideo bool) []string {
+func chainEndVideoURLs(cuts []video.Cut, usePreviousVideo bool) []string {
 	var urls []string
 	for i, cut := range cuts {
 		isBoundary := !usePreviousVideo || i == len(cuts)-1 || cuts[i+1].IsChainStart

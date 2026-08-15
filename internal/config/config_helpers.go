@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/netarmor/securenet"
@@ -104,6 +106,12 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.AI.VeoOperationTimeout <= 0 {
 		return fmt.Errorf("VEO_OPERATION_TIMEOUT は正の duration である必要があります")
 	}
+	// go-veo-orchestrator は画作りの既定値を持たないため、ここが唯一の出所です。
+	// 不正値を黙って通すと、モデルが選んだ解像度で焼かれて誰も気付きません。
+	if !domain.IsAllowedImageSize(c.AI.KeyframeImageSize) {
+		return fmt.Errorf("KEYFRAME_IMAGE_SIZE は %s のいずれかである必要があります", strings.Join(domain.AllowedImageSizes, " / "))
+	}
+	c.warnContradictoryKeyframeThroughput()
 
 	if c.Server.Role.ServesWeb() {
 		if err := c.validateWebConfig(); err != nil {
@@ -122,6 +130,22 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 
 	return nil
+}
+
+// warnContradictoryKeyframeThroughput は、並列度と発射間隔を両方上げた設定を警告します。
+//
+// go-veo-orchestrator は 1 つのリミッターで AI 呼び出しの間隔を空けるため、スループットは
+// 並列度によらず 1/KEYFRAME_RATE_INTERVAL で頭打ちになります。並列度だけ上げても速く
+// ならず、しかもエラーにはならないので、設定した側は効いているつもりのまま待ち続けます。
+// 起動時に実効レートを出して、その取り違えに気付けるようにします。
+func (c *Config) warnContradictoryKeyframeThroughput() {
+	if c.AI.KeyframeMaxConcurrency <= 1 || c.AI.KeyframeRateInterval <= 0 {
+		return
+	}
+	slog.Warn("KEYFRAME_MAX_CONCURRENCY は KEYFRAME_RATE_INTERVAL に頭打ちにされます",
+		"keyframe_max_concurrency", c.AI.KeyframeMaxConcurrency,
+		"keyframe_rate_interval", c.AI.KeyframeRateInterval,
+		"effective_images_per_minute", int(time.Minute/c.AI.KeyframeRateInterval))
 }
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。

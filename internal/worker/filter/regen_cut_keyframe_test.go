@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -31,11 +32,7 @@ type fakeCutKeyframeRunner struct {
 	keyframeRefsAtRunAndSave []string
 }
 
-func (f *fakeCutKeyframeRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*orchestrator.KeyframeImage, error) {
-	return nil, nil
-}
-
-func (f *fakeCutKeyframeRunner) RunAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ string) (*orchestrator.VideoRecipe, error) {
+func (f *fakeCutKeyframeRunner) GenerateAndSave(_ context.Context, recipe *video.Recipe, _ string) (*video.Recipe, error) {
 	f.runAndSaveCalled = true
 	cutIndexes := make([]int, 0, len(recipe.Cuts))
 	for i := range recipe.Cuts {
@@ -47,7 +44,7 @@ func (f *fakeCutKeyframeRunner) RunAndSave(_ context.Context, recipe *orchestrat
 	return recipe, nil
 }
 
-func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *orchestrator.VideoRecipe, _ int, editPrompt string, outputPath string) (*orchestrator.VideoRecipe, error) {
+func (f *fakeCutKeyframeRunner) EditAndSave(_ context.Context, recipe *video.Recipe, _ int, editPrompt string, outputPath string) (*video.Recipe, error) {
 	f.editAndSaveCalled = true
 	f.editPromptSeen = editPrompt
 	f.keyframeSeenAtEdit = recipe.Cuts[0].KeyframeReference
@@ -61,13 +58,13 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 	if task.CutIndex == nil {
 		task.CutIndex = &cutIndex
 	}
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		Cuts: []orchestrator.Cut{
+		Cuts: []video.Cut{
 			{
 				CutIndex:       *task.CutIndex,
 				VisualAnchor:   "original anchor",
-				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
+				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
 			},
 		},
 	}
@@ -80,16 +77,16 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 // newRegenSectionTestContext builds a 3-cut recipe spanning two sections (cuts 1-2 in section 1,
 // cut 3 in section 2) for exercising the section-targeted regeneration path.
 func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Context {
-	cut := func(index, sectionIndex int, startSec float64) orchestrator.Cut {
-		return orchestrator.Cut{
+	cut := func(index, sectionIndex int, startSec float64) video.Cut {
+		return video.Cut{
 			CutIndex:       index,
 			SectionIndex:   sectionIndex,
 			VisualAnchor:   fmt.Sprintf("anchor %d", index),
-			AudioSync:      orchestrator.AudioSync{StartSec: startSec, EndSec: startSec + 8, DurationSec: 8},
-			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: fmt.Sprintf("gs://bucket/jobs/orig/images/keyframe_%d.png", index)},
+			AudioSync:      video.AudioSync{StartSec: startSec, EndSec: startSec + 8, DurationSec: 8},
+			KeyframeResult: video.KeyframeResult{KeyframeReference: fmt.Sprintf("gs://bucket/jobs/orig/images/keyframe_%d.png", index)},
 		}
 	}
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
 		MusicRecipe: domain.MusicRecipe{
 			Sections: []domain.MusicSection{
@@ -97,7 +94,7 @@ func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner
 				{Name: "Chorus", StartSeconds: 16, EndSeconds: 24},
 			},
 		},
-		Cuts: []orchestrator.Cut{cut(1, 1, 0), cut(2, 1, 8), cut(3, 2, 16)},
+		Cuts: []video.Cut{cut(1, 1, 0), cut(2, 1, 8), cut(3, 2, 16)},
 	}
 	return &Context{
 		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
@@ -109,11 +106,11 @@ func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner
 // orchestrator.VideoPublishRunner in tests that exercise the OverwriteKeyframe path.
 type fakePublishRunner struct{}
 
-func (fakePublishRunner) Run(_ context.Context, _ *orchestrator.VideoRecipe, _ string) (*orchestrator.PublishResult, error) {
-	return &orchestrator.PublishResult{}, nil
+func (fakePublishRunner) Run(_ context.Context, _ *video.Recipe, _ string) (*video.PublishResult, error) {
+	return &video.PublishResult{}, nil
 }
 
-func (fakePublishRunner) BuildMetadata(_ *orchestrator.VideoRecipe) ([]byte, error) {
+func (fakePublishRunner) BuildMetadata(_ *video.Recipe) ([]byte, error) {
 	return nil, nil
 }
 
@@ -123,12 +120,20 @@ type fakeInvalidatingHistoryRepository struct {
 	invalidatedJobIDs []string
 }
 
-func (f *fakeInvalidatingHistoryRepository) ListHistoryPage(context.Context, int, int) (domain.VideoHistoryPage, error) {
+func (f *fakeInvalidatingHistoryRepository) ListHistoryPage(context.Context, int, int, domain.JobStage) (domain.VideoHistoryPage, error) {
 	return domain.VideoHistoryPage{}, nil
 }
 
 func (f *fakeInvalidatingHistoryRepository) GetHistory(context.Context, string) (domain.VideoHistoryDetail, error) {
 	return domain.VideoHistoryDetail{}, nil
+}
+
+func (f *fakeInvalidatingHistoryRepository) GetRecipe(context.Context, string) (*domain.VideoRecipe, error) {
+	return &domain.VideoRecipe{}, nil
+}
+
+func (f *fakeInvalidatingHistoryRepository) SaveRecipe(context.Context, string, *domain.VideoRecipe) error {
+	return nil
 }
 
 func (f *fakeInvalidatingHistoryRepository) DeleteHistory(context.Context, string) error {

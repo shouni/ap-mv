@@ -7,6 +7,7 @@ import (
 
 	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
 )
@@ -109,17 +110,17 @@ func TestScriptPromptBuildUsesConfiguredVisualMode(t *testing.T) {
 
 // TestFormatSourceRecipeJSONDoesNotMutateSource verifies prompt formatting does not normalize the caller's recipe in place.
 func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{
 			Title: "source",
-			Sections: []orchestrator.Section{{
+			Sections: []video.Section{{
 				Name:     "Verse",
 				Duration: 8,
 				Prompt:   "quiet opening",
 			}},
 		},
-		Cuts: []orchestrator.Cut{{
-			AudioSync: orchestrator.AudioSync{DurationSec: 8},
+		Cuts: []video.Cut{{
+			AudioSync: video.AudioSync{DurationSec: 8},
 		}},
 	}
 
@@ -173,7 +174,7 @@ func TestScriptPromptRequiresSingleProtagonistAnchors(t *testing.T) {
 func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T) {
 	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
-	cut := orchestrator.Cut{CutIndex: 1, VisualAnchor: "sitting in a train car"}
+	cut := video.Cut{CutIndex: 1, VisualAnchor: "sitting in a train car"}
 
 	_, systemPrompt := p.BuildCut(cut, char)
 
@@ -202,7 +203,7 @@ func TestKeyframePromptBuildCutWarnsAgainstMultiViewReferenceSheets(t *testing.T
 func TestKeyframePromptBuildCutGroundsPromptInLocationAnchor(t *testing.T) {
 	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
-	cut := orchestrator.Cut{
+	cut := video.Cut{
 		CutIndex:       9,
 		VisualAnchor:   "close-up shot, reaches out her hand towards the camera",
 		LocationAnchor: "a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her",
@@ -223,7 +224,7 @@ func TestKeyframePromptBuildCutGroundsPromptInLocationAnchor(t *testing.T) {
 func TestKeyframePromptBuildEditReinforcesCharacterAndStyle(t *testing.T) {
 	p := Keyframe{styleSuffix: "Japanese anime style, cel-shaded"}
 	char := &characterkit.Character{Name: "Tsumugi", VisualCues: []string{"twin tails", "green eyes"}}
-	cut := orchestrator.Cut{CutIndex: 2}
+	cut := video.Cut{CutIndex: 2}
 
 	userPrompt, systemPrompt := p.BuildEdit(cut, char, "腕には絆創膏を1〜2枚のみにしてください")
 
@@ -251,19 +252,19 @@ func TestAllBundledVisualModesRender(t *testing.T) {
 		t.Fatalf("NewScript() error = %v", err)
 	}
 	data := &orchestrator.TemplateData{
-		SourceRecipe: &orchestrator.VideoRecipe{
-			MusicRecipe: orchestrator.MusicRecipe{
+		SourceRecipe: &video.Recipe{
+			MusicRecipe: video.MusicRecipe{
 				Title:       "Test Song",
 				Theme:       "journey",
 				Mood:        "energetic",
 				Tempo:       160,
 				Key:         "A minor",
 				Instruments: []string{"electric guitar", "drums", "bass"},
-				Sections: []orchestrator.Section{
+				Sections: []video.Section{
 					{Name: "Verse", Duration: 8, StartSeconds: 0, EndSeconds: 8, Prompt: "quiet opening"},
 					{Name: "Chorus", Duration: 16, StartSeconds: 8, EndSeconds: 24, Prompt: "full power"},
 				},
-				Lyrics: &orchestrator.Lyrics{
+				Lyrics: &video.Lyrics{
 					Hook:      "夜を駆け抜けろ",
 					Keywords:  []string{"夜", "疾走", "光"},
 					Narrative: "夜の街を走り続ける主人公",
@@ -344,10 +345,10 @@ func TestScriptPromptBuildOmitsProtagonistBlockWithoutCharacters(t *testing.T) {
 
 func scriptPromptTestData(title string) *orchestrator.TemplateData {
 	return &orchestrator.TemplateData{
-		SourceRecipe: &orchestrator.VideoRecipe{
-			MusicRecipe: orchestrator.MusicRecipe{
+		SourceRecipe: &video.Recipe{
+			MusicRecipe: video.MusicRecipe{
 				Title: title,
-				Sections: []orchestrator.Section{{
+				Sections: []video.Section{{
 					Name:     "Verse",
 					Duration: 8,
 					Prompt:   title,
@@ -378,10 +379,10 @@ func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewKeyframe(%q) error = %v", mode, err)
 			}
-			userPrompt, systemPrompt := kf.BuildCut(orchestrator.Cut{
+			userPrompt, systemPrompt := kf.BuildCut(video.Cut{
 				CutIndex:     1,
 				VisualAnchor: "rooftop at dawn",
-				AudioSync:    orchestrator.AudioSync{AudioCue: "intro pad"},
+				AudioSync:    video.AudioSync{AudioCue: "intro pad"},
 			}, nil)
 			for _, prompt := range []string{userPrompt, systemPrompt} {
 				if strings.Contains(prompt, "{{") || strings.Contains(prompt, "}}") {

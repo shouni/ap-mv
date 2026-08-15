@@ -82,10 +82,12 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 	case domain.CommandVideoRecipeDraft:
 		// キーフレームを1枚も焼かずに終わる唯一の生成系コマンド。scene_split まで通すのは
 		// カット割りを確定させてから見せるためで、台本直後のカット列は尺が未確定です。
+		// 保存先は完成ジョブと同じ video_music_meta.json で、段階は JobProgress が
+		// カット数から導きます（script 段階として履歴に並びます）。
 		return []filter.Filter{
 			filter.ScriptingFilter{},
 			sceneSplit,
-			filter.DraftSaveFilter{},
+			filter.RecipeSaveFilter{},
 		}, nil
 	case domain.CommandVideoRecipeCreate:
 		return []filter.Filter{

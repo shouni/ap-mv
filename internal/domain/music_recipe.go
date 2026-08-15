@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"github.com/shouni/go-gemini-client/music"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // LyricsDraft は go-gemini-client/music が定義する作詞フェーズの出力です。
@@ -21,13 +22,13 @@ type MusicRecipe = music.Recipe
 type MusicSection = music.Section
 
 // VideoRecipe は go-veo-orchestrator が定義する動画台本です。
-type VideoRecipe = orchestrator.VideoRecipe
+type VideoRecipe = video.Recipe
 
 // VideoCut は go-veo-orchestrator が定義する動画カットです。
-type VideoCut = orchestrator.Cut
+type VideoCut = video.Cut
 
 // CutStatusGenerated は、キーフレーム生成が完了したカットのステータス値です。
-const CutStatusGenerated = string(orchestrator.CutStatusGenerated)
+const CutStatusGenerated = string(video.CutStatusGenerated)
 
 // UnmarshalRecipeOrVideoRecipe parses either a MusicRecipe JSON or a VideoRecipe JSON.
 func UnmarshalRecipeOrVideoRecipe(raw []byte) (*MusicRecipe, *VideoRecipe, error) {
@@ -303,7 +304,7 @@ func SectionEndSeconds(startSeconds, endSeconds, duration int) int {
 // 実装は尺プランナーと共に go-veo-orchestrator へ移動しました（配分規則が
 // サブカット分割と一致している必要があるため、定義は1つにします）。
 func DistributeLines(lines []string, pos, total int) string {
-	return orchestrator.DistributeLines(lines, pos, total)
+	return veo.DistributeLines(lines, pos, total)
 }
 
 // NormalizeMusicRecipe fills section time ranges for a music recipe.

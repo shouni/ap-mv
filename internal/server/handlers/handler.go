@@ -19,9 +19,6 @@ import (
 type Handler struct {
 	Queue             ports.TaskQueue
 	HistoryRepository ports.HistoryRepository
-	// DraftRepository は VideoRecipe 下書きの一覧・取得・削除先です。
-	// 未設定なら下書き機能は無効です（一覧は設定案内を表示します）。
-	DraftRepository ports.DraftRepository
 	// JobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
 	JobStatus        ports.JobStatusStore
 	Templates        map[string]*template.Template
@@ -68,7 +65,11 @@ type PageData struct {
 	CSRFToken string
 	// JS はこのページで追加読み込みする JavaScript のパスです。renderPage が
 	// pageScripts から埋めるため、各ハンドラは指定しません。
-	JS                    []string
+	JS []string
+	// NavPath はナビの現在地を示すキーです。renderPage がリクエストから埋めるため、
+	// 各ハンドラは指定しません。履歴一覧は ?stage=script のときだけ Scripts を
+	// 現在地にするので、パスだけでは決まりません。
+	NavPath               string
 	JobID                 string
 	Status                string
 	Message               string
@@ -83,7 +84,6 @@ type PageData struct {
 	SelectedCharacterID   string
 	SelectedVisualMode    string
 	HistoryItems          []domain.VideoHistory
-	DraftItems            []domain.VideoDraft
 	HistoryDetail         domain.VideoHistoryDetail
 	PageMeta              domain.PageMeta
 	RegenerateCut         domain.VideoHistoryCut
@@ -115,7 +115,6 @@ func NewHandlerWithOptions(assets fs.FS, queue ports.TaskQueue, modelOptions Mod
 		"history_detail.html",
 		"regenerate_cut.html",
 		"regenerate_section.html",
-		"drafts.html",
 		"queued.html",
 	} {
 		tmpl, err := template.New(name).Funcs(template.FuncMap{
@@ -193,7 +192,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	if !wantsJSON(r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)
-		h.renderPage(w, PageData{
+		h.renderPage(w, r, PageData{
 			Title:  "Queued",
 			JobID:  task.JobID,
 			Status: "queued",
@@ -232,7 +231,7 @@ var pageScripts = map[string][]string{
 }
 
 // renderPage renders a named HTML template.
-func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName string) {
+func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, data PageData, templateName string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl, ok := h.Templates[templateName]
 	if !ok {
@@ -241,6 +240,7 @@ func (h *Handler) renderPage(w http.ResponseWriter, data PageData, templateName 
 	}
 
 	data.JS = pageScripts[templateName]
+	data.NavPath = navPathFor(r)
 	// ナビの表示に使うモデル名は、フォームを持たないページ（履歴・受付など）でも必要です。
 	// 選択肢を組み立てるハンドラだけが埋めるため、未設定ならここで既定値に落とします。
 	if data.SelectedGeminiModel == "" {
@@ -256,4 +256,19 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+// navPathFor はナビの現在地キーを返します。
+//
+// 履歴一覧は ?stage=script のとき Scripts、それ以外は History を現在地にします。
+// 同じテンプレートを 2 つのナビ項目が指すため、パスだけでは決まりません。
+func navPathFor(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	path := r.URL.Path
+	if path == "/web/history" && r.URL.Query().Get("stage") == "script" {
+		return "/web/history?stage=script"
+	}
+	return path
 }

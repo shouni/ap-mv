@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // SectionSelectFilter は、レシピを fc.Task.SectionIndex で指定されたセクションに属する
@@ -40,7 +41,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	// 新ジョブの出力パスで動画化する前に元ジョブのルートで絶対URI化する。
 	originalBase := originalJobOutputPath(fc.Task.RecipeURL)
 
-	cuts := make([]orchestrator.Cut, 0, len(fc.VideoRecipe.Cuts))
+	cuts := make([]video.Cut, 0, len(fc.VideoRecipe.Cuts))
 	for _, cut := range fc.VideoRecipe.Cuts {
 		if cut.SectionIndex != wantSectionIndex {
 			continue
@@ -63,7 +64,7 @@ func (SectionSelectFilter) Execute(_ context.Context, fc *Context) error {
 	// video_extension 用の 7 秒固定への正規化は、後続の VideoGenerationFilter が
 	// UsePreviousVideo を見て最終的に行うため、ここでは image_to_video/reference_to_video 用の
 	// 尺で分割・丸めるだけでよい。
-	fc.VideoRecipe.Cuts = orchestrator.CapCutsTotalDuration(orchestrator.ExpandCutsToSupportedDurations(cuts, false, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
+	fc.VideoRecipe.Cuts = veo.CapCutsTotalDuration(veo.ExpandCutsToSupportedDurations(cuts, false, fc.Characters, referenceImagesSupported(fc.VideoRunner)), youtubeShortMaxDurationSec)
 
 	recipe, err := toDomainRecipe(fc.VideoRecipe)
 	if err != nil {

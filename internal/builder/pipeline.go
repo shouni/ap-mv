@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/shouni/go-gemini-client/gemini"
@@ -54,7 +53,6 @@ func buildPipeline(
 		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, aiClient, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
-		DraftBaseURI:      workflowDraftBaseURI(cfg),
 		Timeout:           cfg.AI.PipelineTimeout,
 		JobStatus:         externals.jobStatus,
 	}
@@ -115,22 +113,16 @@ type workflowResolver struct {
 }
 
 // Resolve はタスクに応じた Workflows を返します。
-func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, func(), error) {
+func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 	// 共有インスタンスはプロセス全体で使い回すので閉じない。
 	if r.build == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
-		return r.shared, func() {}, nil
+		return r.shared, nil
 	}
 	workflows, err := r.build(ctx, task)
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("build workflow for selected models: %w", err)
+		return nil, fmt.Errorf("build workflow for selected models: %w", err)
 	}
-	// タスク専用に構築したものは、このタスクが終わったら閉じる。閉じないと
-	// 画像キャッシュのクリーンアップ goroutine がタスクごとに積み上がる。
-	return workflows, func() {
-		if err := workflows.Close(); err != nil {
-			slog.Warn("failed to close task-scoped workflows", "error", err)
-		}
-	}, nil
+	return workflows, nil
 }
 
 // usesCustomModels はタスクが既定モデル以外を指定しているかを判定します。

@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -19,11 +19,11 @@ func TestHistorySectionsFromRecipeMarksFullyGeneratedSections(t *testing.T) {
 				{Name: "Bridge", StartSeconds: 20, EndSeconds: 30},
 			},
 		},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, EndSec: 5}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
-			{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 5, EndSec: 10}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
-			{CutIndex: 3, AudioSync: orchestrator.AudioSync{StartSec: 10, EndSec: 15}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated}},
-			{CutIndex: 4, AudioSync: orchestrator.AudioSync{StartSec: 15, EndSec: 20}, VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusPending}},
+		Cuts: []video.Cut{
+			{CutIndex: 1, AudioSync: video.AudioSync{StartSec: 0, EndSec: 5}, Result: video.Result{Status: video.CutStatusGenerated}},
+			{CutIndex: 2, AudioSync: video.AudioSync{StartSec: 5, EndSec: 10}, Result: video.Result{Status: video.CutStatusGenerated}},
+			{CutIndex: 3, AudioSync: video.AudioSync{StartSec: 10, EndSec: 15}, Result: video.Result{Status: video.CutStatusGenerated}},
+			{CutIndex: 4, AudioSync: video.AudioSync{StartSec: 15, EndSec: 20}, Result: video.Result{Status: video.CutStatusPending}},
 			// セクション3（Bridge, 20-30s）にはこのレシピ上カットが存在しない
 			// （例: short_video_from_section で作られたジョブの保存済みレシピ）。
 		},

@@ -7,6 +7,7 @@ import (
 	characterkit "github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -20,12 +21,8 @@ var ErrPipelineDeferred = errors.New("pipeline deferred")
 type State struct {
 	Task        *domain.Task
 	Recipe      *domain.MusicRecipe
-	VideoRecipe *orchestrator.VideoRecipe
+	VideoRecipe *video.Recipe
 	OutputPath  string
-	// DraftPath は下書き（video_recipe_draft.json）の保存先ディレクトリ URI です。
-	// OutputPath とは別のプレフィックスを指します。下書きは成果物を1つも持たないため、
-	// 完成ジョブと同じ場所に置くと履歴走査とジョブ削除の対象範囲が混ざります。
-	DraftPath string
 }
 
 // Services は、パイプライン実行中は固定の外部依存です。フィルターは参照するだけで

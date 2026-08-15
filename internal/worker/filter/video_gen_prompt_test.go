@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -18,7 +18,7 @@ import (
 // an empty anchor+cue still yields an empty prompt so request validation keeps rejecting
 // broken recipes. Failing lookups here also catch missing/renamed prompt asset files.
 func TestVideoPromptAppendsModeGuidance(t *testing.T) {
-	cut := orchestrator.Cut{VisualAnchor: "anchor scene", AudioSync: orchestrator.AudioSync{AudioCue: "bass drop at 0:10"}}
+	cut := video.Cut{VisualAnchor: "anchor scene", AudioSync: video.AudioSync{AudioCue: "bass drop at 0:10"}}
 	prefix := "anchor scene\nSynchronize motion and camera timing with audio cue: bass drop at 0:10\n"
 
 	tests := []struct {
@@ -46,7 +46,7 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 		}
 	}
 
-	if got := videoPrompt(orchestrator.Cut{}, ports.VeoModeImageToVideo); got != "" {
+	if got := videoPrompt(video.Cut{}, ports.VeoModeImageToVideo); got != "" {
 		t.Errorf("videoPrompt(empty) = %q, want empty (keeps validation failing on broken recipes)", got)
 	}
 }
@@ -57,12 +57,12 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 // (interpolating across characters would morph them), and differ from the current cut's own
 // keyframe (duration-split cuts share one keyframe; forcing end == start kills motion).
 func TestNextCutLastFrameReference(t *testing.T) {
-	cuts := []orchestrator.Cut{
-		{CutIndex: 0, CharacterID: "zunda", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
-		{CutIndex: 1, CharacterID: "zunda", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
-		{CutIndex: 2, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf2.png"}},
-		{CutIndex: 3, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}, ChainControl: orchestrator.ChainControl{IsSectionStart: true}},
-		{CutIndex: 4, CharacterID: "metan", KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}},
+	cuts := []video.Cut{
+		{CutIndex: 0, CharacterID: "zunda", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
+		{CutIndex: 1, CharacterID: "zunda", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
+		{CutIndex: 2, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf2.png"}},
+		{CutIndex: 3, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}, ChainControl: video.ChainControl{IsSectionStart: true}},
+		{CutIndex: 4, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}},
 		{CutIndex: 5, CharacterID: "metan"},
 	}
 
@@ -79,7 +79,7 @@ func TestNextCutLastFrameReference(t *testing.T) {
 		{"last cut", 5, ""},
 	}
 	for _, tt := range tests {
-		if got := orchestrator.Cuts(cuts).NextLastFrameReference(tt.i); got != tt.want {
+		if got := video.Cuts(cuts).NextLastFrameReference(tt.i); got != tt.want {
 			t.Errorf("%s: NextLastFrameReference(%d) = %q, want %q", tt.name, tt.i, got, tt.want)
 		}
 	}
@@ -90,11 +90,11 @@ func TestNextCutLastFrameReference(t *testing.T) {
 // the next same-section/same-character cut's keyframe as LastFrameReference, and the final cut
 // receives none. The prompt must carry the frames_to_video guidance for exactly those requests.
 func TestRunDirectPassesNextKeyframeAsLastFrame(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 0, CharacterID: "zunda", VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
-			{CutIndex: 1, CharacterID: "zunda", VisualAnchor: "b", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 0, CharacterID: "zunda", VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
+			{CutIndex: 1, CharacterID: "zunda", VisualAnchor: "b", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}

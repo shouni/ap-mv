@@ -14,8 +14,16 @@ type KeyframeSink func(name string, r io.Reader) error
 
 // HistoryRepository loads and mutates generated MV history.
 type HistoryRepository interface {
-	ListHistoryPage(ctx context.Context, page int, perPage int) (domain.VideoHistoryPage, error)
+	// ListHistoryPage は MV ジョブを一覧します。stage が空なら全段階、指定すれば
+	// その段階のジョブだけを返します（台本のみのジョブは domain.StageScript）。
+	ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error)
 	GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error)
+	// GetRecipe は保存済みの VideoRecipe をそのまま返します。編集して SaveRecipe で
+	// 書き戻す往復のための読み出しで、表示用に整形した GetHistory とは別経路です。
+	GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error)
+	// SaveRecipe はジョブの VideoRecipe を上書き保存します。生成前（台本のみ）の
+	// カット割りを画像コスト 0 で直せるようにするための経路です。
+	SaveRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error
 	DeleteHistory(ctx context.Context, jobID string) error
 	DownloadKeyframes(ctx context.Context, jobID string, sink KeyframeSink) error
 	KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error)

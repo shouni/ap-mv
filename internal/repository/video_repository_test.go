@@ -131,7 +131,7 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 	}
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, HistoryCache: NewHistoryCache()})
 
-	page, err := repo.ListHistoryPage(context.Background(), 1, 20)
+	page, err := repo.ListHistoryPage(context.Background(), 1, 20, "")
 	if err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
@@ -216,7 +216,7 @@ func TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
 	}
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
 
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 	if _, err := repo.GetHistory(context.Background(), jobID); err != nil {
@@ -252,7 +252,7 @@ func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testin
 	}
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
 
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
 	if err := repo.DownloadKeyframes(context.Background(), jobID, func(string, io.Reader) error { return nil }); err != nil {
@@ -281,10 +281,10 @@ func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
 	signer := &countingHistorySigner{}
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: signer, HistoryCache: NewHistoryCache()})
 
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("first ListHistoryPage() error = %v", err)
 	}
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20); err != nil {
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("second ListHistoryPage() error = %v", err)
 	}
 	if got := signer.Count(metadataURI); got != 2 {

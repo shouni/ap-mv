@@ -51,11 +51,10 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
-		BaseURI:      workflowOutputBaseURI(cfg),
-		DraftBaseURI: workflowDraftBaseURI(cfg),
-		Reader:       rio.Reader,
-		Writer:       rio.Writer,
-		Signer:       rio.Signer,
+		BaseURI: workflowOutputBaseURI(cfg),
+		Reader:  rio.Reader,
+		Writer:  rio.Writer,
+		Signer:  rio.Signer,
 	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
@@ -110,7 +109,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		TaskQueue:         queue,
 		Pipeline:          pipe,
 		HistoryRepository: historyRepository,
-		DraftRepository:   historyRepository,
 		JobStatus:         jobStatus,
 	}, nil
 }

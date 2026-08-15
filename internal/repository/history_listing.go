@@ -30,10 +30,7 @@ const (
 
 // VideoHistoryRepository lists generated MV metadata from the workflow output directory.
 type VideoHistoryRepository struct {
-	baseURI string
-	// draftBaseURI は下書き（video_recipe_draft.json）を走査する起点です。baseURI とは
-	// 別プレフィックスで、履歴の走査・削除とは対象範囲が重なりません。
-	draftBaseURI string
+	baseURI      string
 	reader       remoteio.InputReader
 	writer       remoteio.OutputWriter
 	signer       remoteio.URLSigner
@@ -52,10 +49,7 @@ type VideoHistoryRepository struct {
 type VideoHistoryRepositoryConfig struct {
 	// BaseURI は履歴を走査する起点です（末尾のスラッシュは正規化します）。
 	BaseURI string
-	// DraftBaseURI は下書きを走査する起点です（末尾のスラッシュは正規化します）。
-	// 空の場合、下書き機能は無効になります（一覧は空を返します）。
-	DraftBaseURI string
-	Reader       remoteio.InputReader
+	Reader  remoteio.InputReader
 	// Writer は履歴の削除・更新に使います。読み取り専用の用途では nil を許容します。
 	Writer remoteio.OutputWriter
 	// Signer は再生用の署名付き URL を発行します。発行しない用途では nil を許容します。
@@ -72,7 +66,6 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 	}
 	return &VideoHistoryRepository{
 		baseURI:      strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
-		draftBaseURI: strings.TrimRight(strings.TrimSpace(cfg.DraftBaseURI), "/"),
 		reader:       cfg.Reader,
 		writer:       cfg.Writer,
 		signer:       cfg.Signer,
@@ -133,14 +126,25 @@ func (r *VideoHistoryRepository) collectJobIDsUnder(ctx context.Context, baseURI
 	return jobIDs, nil
 }
 
-// ListHistoryPage lists generated MV jobs with paging.
-func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int) (domain.VideoHistoryPage, error) {
+// ListHistoryPage lists MV jobs with paging, optionally narrowed to one progress stage.
+//
+// stage が空なら全ジョブを返します。指定した場合は、その段階のジョブだけを対象に
+// ページングします。段階はレシピのカット列からしか導けないため、絞り込むときは
+// 先に全ジョブのメタデータを読みます。下書きが別プレフィックスだった頃も一覧は
+// そのプレフィックスの全走査だったので、コストは同等です。
+func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error) {
 	if r == nil || r.reader == nil || r.baseURI == "" {
 		return domain.VideoHistoryPage{}, nil
 	}
 	jobIDs, err := r.listJobIDs(ctx, jobIDListCacheKey, r.collectJobIDs)
 	if err != nil {
 		return domain.VideoHistoryPage{}, err
+	}
+	if stage != "" {
+		jobIDs, err = r.jobIDsAtStage(ctx, jobIDs, stage)
+		if err != nil {
+			return domain.VideoHistoryPage{}, err
+		}
 	}
 
 	// 読み込めなかったジョブも一覧には残したいので、代替値は load の中で返します
@@ -177,6 +181,25 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		Items:    histories,
 		PageMeta: meta,
 	}, nil
+}
+
+// jobIDsAtStage は、指定した進行段階にあるジョブの ID だけを、入力順を保って返します。
+// 読み込めなかったジョブは段階が判定できないため除外します（一覧の未読込プレースホルダは
+// 段階を持てないので、絞り込みの対象にすると常に漏れます）。
+func (r *VideoHistoryRepository) jobIDsAtStage(ctx context.Context, jobIDs []string, stage domain.JobStage) ([]string, error) {
+	matched := make([]string, 0, len(jobIDs))
+	for _, id := range jobIDs {
+		history, err := r.buildHistory(ctx, id)
+		if err != nil {
+			slog.WarnContext(ctx, "skipping job while filtering by stage",
+				"job_id", id, "stage", stage, "error", err)
+			continue
+		}
+		if history.Progress.Stage == stage {
+			matched = append(matched, id)
+		}
+	}
+	return matched, nil
 }
 
 func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string) (domain.VideoHistory, error) {

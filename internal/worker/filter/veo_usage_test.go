@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/shouni/go-remote-io/remoteio"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -110,10 +110,10 @@ func TestRecordVeoUsageAccumulatesAcrossCuts(t *testing.T) {
 	writer := newMemoryWriter()
 	fc := newUsageContext(writer, &domain.Task{JobID: "job-1", VeoModel: "veo-test"})
 
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}})
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 2, AudioSync: orchestrator.AudioSync{DurationSec: 6}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 8}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 2, AudioSync: video.AudioSync{DurationSec: 6}})
 	// 再配信でカット1が焼き直された、という状況。
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 8}})
 
 	usage := writer.usage(t, testUsageURI)
 	if usage.Calls != 3 {
@@ -144,7 +144,7 @@ func TestRecordVeoUsageSurvivesWriteFailure(t *testing.T) {
 	writer.err = errors.New("storage unavailable")
 	fc := newUsageContext(writer, &domain.Task{JobID: "job-1"})
 
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 8}})
 
 	if len(writer.paths()) != 0 {
 		t.Fatalf("wrote %v despite the failure", writer.paths())
@@ -158,7 +158,7 @@ func TestRecordVeoUsageStartsFreshOnCorruptRecord(t *testing.T) {
 	writer.objects[testUsageURI] = []byte("{not json")
 	fc := newUsageContext(writer, &domain.Task{JobID: "job-1"})
 
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 8}})
 
 	usage := writer.usage(t, testUsageURI)
 	if usage.Calls != 1 || usage.SubmittedSeconds != 8 {
@@ -171,7 +171,7 @@ func TestRecordVeoUsageSkipsWithoutOutputPath(t *testing.T) {
 	fc := newUsageContext(writer, &domain.Task{JobID: "job-1"})
 	fc.OutputPath = ""
 
-	recordVeoUsage(context.Background(), fc, &orchestrator.Cut{CutIndex: 1, AudioSync: orchestrator.AudioSync{DurationSec: 8}})
+	recordVeoUsage(context.Background(), fc, &video.Cut{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 8}})
 
 	if len(writer.paths()) != 0 {
 		t.Fatalf("wrote %v, want nothing without an output path", writer.paths())
@@ -193,10 +193,10 @@ func TestVeoUsageURITrimsTrailingSlash(t *testing.T) {
 // TestVideoGenerationFilterRecordsUsagePerCut verifies the tally is written as part of normal
 // generation, not just when recordVeoUsage is called directly.
 func TestVideoGenerationFilterRecordsUsagePerCut(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
