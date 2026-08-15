@@ -55,6 +55,7 @@ func sectionCutsAllGenerated(cuts []domain.VideoCut, start, end float64) bool {
 }
 
 func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
+	progress := domain.NewJobProgress(recipe.Cuts)
 	history := domain.VideoHistory{
 		JobID:         jobID,
 		Title:         strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
@@ -64,7 +65,8 @@ func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.Vide
 		VisualMode:    strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
 		CutCount:      len(recipe.Cuts),
 		StorageURI:    metadataURI,
-		Generated:     allCutsGenerated(recipe.Cuts),
+		Generated:     progress.IsCompleted(),
+		Progress:      progress,
 		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
 		AspectRatio:   strings.TrimSpace(recipe.AspectRatio),
 		// 秒数はレシピだけで確定するのでここで入れる。単価を掛けるのは表示側
@@ -75,18 +77,6 @@ func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.Vide
 		history.Title = jobID
 	}
 	return history
-}
-
-func allCutsGenerated(cuts []domain.VideoCut) bool {
-	if len(cuts) == 0 {
-		return false
-	}
-	for _, cut := range cuts {
-		if !cut.IsGenerated() {
-			return false
-		}
-	}
-	return true
 }
 
 func firstNonEmpty(values ...string) string {

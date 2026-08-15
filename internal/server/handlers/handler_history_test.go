@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
@@ -459,5 +460,57 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 	}
 	if strings.Contains(body, `name="csrf_token" value=""`) {
 		t.Fatalf("an empty csrf_token input was rendered: %s", body)
+	}
+}
+
+// TestHistoryDetailRendersProgressBadge は、進捗バッジが段階と分数で描画されることを
+// 確認します。以前は Generated の真偽値だけだったため、動画をあと1本残すジョブと
+// 何も焼いていないジョブが同じ "keyframes" と表示され、残作業が読めませんでした。
+func TestHistoryDetailRendersProgressBadge(t *testing.T) {
+	h, err := NewHandler(assets.Templates, nil)
+	if err != nil {
+		t.Fatalf("NewHandler() error = %v", err)
+	}
+
+	// 3カット中2カットが動画生成済み = videos 2/3
+	cuts := []domain.VideoCut{}
+	for i := range 3 {
+		cut := domain.VideoCut{}
+		cut.CutIndex = i + 1
+		cut.KeyframeReference = "gs://bucket/k.png"
+		if i < 2 {
+			cut.Status = video.CutStatusGenerated
+			cut.VideoURL = "gs://bucket/v.mp4"
+			cut.VideoID = "gs://bucket/v.mp4"
+		}
+		cuts = append(cuts, cut)
+	}
+	progress := domain.NewJobProgress(cuts)
+
+	h.HistoryRepository = fakeHistoryRepository{
+		detail: domain.VideoHistoryDetail{
+			VideoHistory: domain.VideoHistory{
+				JobID:    "video-recipe-20260618-081931-abc",
+				Title:    "進捗テスト",
+				CutCount: 3,
+				Progress: progress,
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	routeContext := chi.NewRouteContext()
+	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
+	rec := httptest.NewRecorder()
+
+	h.HistoryDetail(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "videos 2/3") {
+		t.Errorf("body should show the videos 2/3 progress, got: %s", body)
+	}
+	if strings.Contains(body, ">keyframes<") {
+		t.Error("body still renders the old two-state keyframes badge")
 	}
 }

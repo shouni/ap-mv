@@ -48,11 +48,7 @@
                         {{end}}
                     </td>
                     <td>
-                        {{if .Generated}}
-                        <span class="badge text-bg-success">generated</span>
-                        {{else}}
-                        <span class="badge text-bg-secondary">keyframes</span>
-                        {{end}}
+                        {{template "jobStageBadge" .Progress}}
                     </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-primary" href="/web/history/{{.JobID}}">Detail</a>

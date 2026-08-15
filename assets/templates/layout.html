@@ -71,3 +71,22 @@
 {{end}}
 </body>
 </html>
+
+{{/* jobStageBadge renders a job's progress as one badge. Takes a domain.JobProgress.
+
+     以前は Generated の真偽値だけで generated / keyframes の 2 値を出していたため、
+     「まだ 1 枚も焼いていない」と「動画があと 1 本」が同じ表示でした。段階と分数を
+     出すことで、残作業と課金の進み具合が一覧から読めます。 */}}
+{{define "jobStageBadge"}}
+{{if eq .Stage "completed"}}
+<span class="badge text-bg-success">{{.Label}}</span>
+{{else if eq .Stage "videos"}}
+<span class="badge text-bg-primary">{{.Label}}</span>
+{{else if eq .Stage "keyframes_done"}}
+<span class="badge text-bg-info">{{.Label}}</span>
+{{else if eq .Stage "keyframes"}}
+<span class="badge text-bg-warning">{{.Label}}</span>
+{{else}}
+<span class="badge text-bg-secondary">{{.Label}}</span>
+{{end}}
+{{end}}

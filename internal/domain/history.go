@@ -8,17 +8,23 @@ import (
 
 // VideoHistory is the metadata shown in the generated MV history list.
 type VideoHistory struct {
-	JobID          string `json:"job_id"`
-	Title          string `json:"title"`
-	Mood           string `json:"mood,omitempty"`
-	Tempo          int    `json:"tempo,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	VisualMode     string `json:"visual_mode,omitempty"`
-	CutCount       int    `json:"cut_count,omitempty"`
-	StorageURI     string `json:"storage_uri,omitempty"`
-	SignedURL      string `json:"signed_url,omitempty"`
-	Generated      bool   `json:"generated,omitempty"`
-	KeyframeZipURI string `json:"keyframe_zip_uri,omitempty"`
+	JobID      string `json:"job_id"`
+	Title      string `json:"title"`
+	Mood       string `json:"mood,omitempty"`
+	Tempo      int    `json:"tempo,omitempty"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	VisualMode string `json:"visual_mode,omitempty"`
+	CutCount   int    `json:"cut_count,omitempty"`
+	StorageURI string `json:"storage_uri,omitempty"`
+	SignedURL  string `json:"signed_url,omitempty"`
+	// Generated は全カットの動画生成が終わったかです。Progress.IsCompleted() と同じ意味で、
+	// 既存の API 応答との互換のために残しています。画面は Progress を使ってください。
+	Generated bool `json:"generated,omitempty"`
+	// Progress は、台本のみ・キーフレーム途中・動画途中・完了という進行段階と、
+	// その根拠になるカット数です。Generated だけでは「まだ 1 枚も焼いていない」と
+	// 「あと 1 本で終わる」が区別できませんでした。
+	Progress       JobProgress `json:"progress"`
+	KeyframeZipURI string      `json:"keyframe_zip_uri,omitempty"`
 	// FinalVideoURL は、継続チェーンをハードカットで1本に結合した完成動画のGCS URIです
 	// (video.Recipe.FinalVideoURL、chain_finalize.goが設定)。
 	FinalVideoURL string `json:"final_video_url,omitempty"`
