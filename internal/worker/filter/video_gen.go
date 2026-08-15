@@ -24,6 +24,13 @@ type VideoGenerationFilter struct {
 	// VideoProcessor は、チェーンリセット時に直前チェーンの最終フレームを抽出するために
 	// 使います。nilの場合はフレーム抽出をスキップし、静的な立ち絵参照画像のまま生成します。
 	VideoProcessor ports.VideoProcessor
+	// SectionScoped が true のとき、生成対象を fc.Task.SectionIndex のセクションに属する
+	// カットだけに絞ります（section_video コマンド）。**レシピからは何も取り除きません**。
+	// 対象外のカットを削るのではなく飛ばすだけなのは、後続の Publishing が保存するのが
+	// この同じレシピで、削った状態を保存すれば他セクションのカットがそのまま消えるためです。
+	// 継続タスクはレシピをペイロードで持ち回る（enqueueContinuation 参照）ので、一度削れた
+	// レシピは最後まで削れたまま運ばれます。
+	SectionScoped bool
 }
 
 // Name returns the receiver name.
@@ -115,6 +122,11 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 		return fmt.Errorf("video runner is not configured")
 	}
 
+	inScope, err := f.cutScope(fc)
+	if err != nil {
+		return err
+	}
+
 	lastVideoID := ""
 	for i := range fc.VideoRecipe.Cuts {
 		cut := &fc.VideoRecipe.Cuts[i]
@@ -122,6 +134,13 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			if cut.VideoID != "" {
 				lastVideoID = cut.VideoID
 			}
+			continue
+		}
+		if !inScope(cut.SectionIndex) {
+			// 対象外セクションの未生成カット。ここには動画が存在しないので、次に生成する
+			// カットはこの穴を跨いで前の動画へ繋ぐことができない。チェーンの引き継ぎ元を
+			// 空へ戻し、穴の向こう側を新しいチェーンの起点として生成させる。
+			lastVideoID = ""
 			continue
 		}
 		// ExpandCutsToSupportedDurations は、video_extension の累積尺がVeoの上限に達する
@@ -145,6 +164,13 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				}
 			}
 		}
+		// 引き継ぐ動画が無い状態で生成するカットは、それ自体が新しいチェーンの起点です。
+		// ここで印を付けないと chain_finalize が境界を見落とし、直前のチェーンの最終動画を
+		// 結合対象から落とします（＝完成動画からそのぶんが丸ごと消えます）。尺の条件で
+		// リセットされた場合は上で既に立っているので、ここは冪等な念押しです。
+		if f.UsePreviousVideo && lastVideoID == "" {
+			cut.IsChainStart = true
+		}
 		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, video.Cuts(fc.VideoRecipe.Cuts).NextLastFrameReference(i)); err != nil {
 			return err
 		}
@@ -164,7 +190,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 		// 失敗したカットの再生成が Veo の課金をそのまま倍にすることを避けるため、
 		// この「止まる」挙動を選んでいる。定常運用へ移すときに max-attempts を
 		// 増やせば、ここは自動で再開されるようになる。
-		if hasPendingCuts(fc.VideoRecipe) && fc.TaskQueue != nil {
+		if hasPendingCuts(fc.VideoRecipe, inScope) && fc.TaskQueue != nil {
 			return enqueueContinuation(ctx, fc, cut.CutIndex)
 		}
 	}
@@ -246,6 +272,12 @@ func enqueueContinuation(ctx context.Context, fc *Context, cutIndex int) error {
 	}
 	fc.Recipe = domainRecipe
 	nextTask := *fc.Task
+	// Command を上書きする前に元のコマンドを控える。継続側の実行計画は「結合するか否か」を
+	// これで決めるため、失うと section_video の続きが結合まで走ってしまう。
+	// 既に継続タスクなら、その継続が持っている OriginCommand をそのまま引き継ぐ。
+	if fc.Task.Command != domain.CommandVideoGenContinuation {
+		nextTask.OriginCommand = fc.Task.Command
+	}
 	nextTask.Command = domain.CommandVideoGenContinuation
 	nextTask.Recipe = fc.Recipe
 	nextTask.VideoRecipe = fc.VideoRecipe
@@ -296,14 +328,54 @@ func videoOutputContext(ctx context.Context, fc *Context) context.Context {
 }
 
 // hasPendingCuts reports whether a recipe has cuts awaiting video generation.
-func hasPendingCuts(recipe *video.Recipe) bool {
+//
+// inScope は今回の実行が担当するカットの判定です（nil は全カット担当）。ここで範囲を見ないと、
+// セクション実行が担当外の未生成カットを「残っている」と数えて継続タスクを撒き、その継続が
+// 何も生成せず終わる、という空振りが毎回1本ぶん増えます。
+func hasPendingCuts(recipe *video.Recipe, inScope func(sectionIndex int) bool) bool {
 	if recipe == nil {
 		return false
 	}
 	for i := range recipe.Cuts {
-		if !recipe.Cuts[i].IsGenerated() {
+		if recipe.Cuts[i].IsGenerated() {
+			continue
+		}
+		if inScope == nil || inScope(recipe.Cuts[i].SectionIndex) {
 			return true
 		}
 	}
 	return false
+}
+
+// cutScope は、この実行が動画を生成すべきカットの判定関数を返します。
+// SectionScoped でないときは常に true を返す関数（＝全カット担当）です。
+func (f VideoGenerationFilter) cutScope(fc *Context) (func(sectionIndex int) bool, error) {
+	if !f.SectionScoped {
+		return func(int) bool { return true }, nil
+	}
+	if fc.Task.SectionIndex == nil {
+		return nil, fmt.Errorf("section-scoped video generation requires section_index")
+	}
+	sectionIndex := *fc.Task.SectionIndex
+	sections := fc.VideoRecipe.MusicRecipe.Sections
+	if sectionIndex < 0 || sectionIndex >= len(sections) {
+		return nil, fmt.Errorf("section_index %d is out of range (recipe has %d sections)", sectionIndex, len(sections))
+	}
+	// cut.SectionIndex は1始まりなので、0始まりの sectionIndex と比較する際は +1 する
+	// （SectionSelectFilter / resolveRegenTargets と同じ規則）。
+	wantSectionIndex := sectionIndex + 1
+
+	found := false
+	for i := range fc.VideoRecipe.Cuts {
+		if fc.VideoRecipe.Cuts[i].SectionIndex == wantSectionIndex {
+			found = true
+			break
+		}
+	}
+	// 該当カットが1つも無ければ、生成も保存もせずに正常終了してしまう。押した本人には
+	// 「動いたのに何も起きない」としか見えないので、ここで落とす。
+	if !found {
+		return nil, fmt.Errorf("no cuts found in section %d (%s)", sectionIndex, sections[sectionIndex].Name)
+	}
+	return func(cutSectionIndex int) bool { return cutSectionIndex == wantSectionIndex }, nil
 }

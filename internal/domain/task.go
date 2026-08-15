@@ -49,6 +49,25 @@ const (
 	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
 	// 動画化してショート動画を生成するコマンドです。
 	CommandShortVideoFromSection TaskCommand = "short_video_from_section"
+	// CommandSectionVideo は、指定セクションのカットだけを動画化し、結果を**元のジョブへ
+	// 書き戻す**コマンドです。MV を 1 セクションずつ積み上げるための操作で、画作りが
+	// 意図と違ったときの損失がそのセクション分に留まります。
+	//
+	// short_video_from_section との違いは出力先と切り出し方です。ショートは新しいジョブへ
+	// 60 秒に収めた独立作品を作るため、SectionSelectFilter がレシピのカット列そのものを
+	// そのセクションだけに差し替えます。こちらは元のレシピを一切削らず、対象外のカットを
+	// 「生成をスキップする」だけに留めます。削ったレシピをそのまま保存すると他セクションの
+	// カットが消えるうえ、継続タスクはレシピをペイロードで持ち回る（enqueueContinuation
+	// 参照）ため、削れた状態が最後の Publishing まで運ばれてしまいます。
+	//
+	// 結合（ChainFinalizeFilter）は実行しません。セクションを 1 つ焼くたびに結合し直すと
+	// final_video_url が「途中まで繋がった動画」になり、完成品と見分けが付かなくなります。
+	// 全セクションが揃ったところで finalize_video を実行して 1 本にまとめます。
+	CommandSectionVideo TaskCommand = "section_video"
+	// CommandFinalizeVideo は、生成済みカットの動画を 1 本の完成動画へ結合し直すコマンドです。
+	// section_video で積み上げた結果を仕上げるための操作で、生成は一切行いません
+	// （＝追加の課金は発生しません）。
+	CommandFinalizeVideo TaskCommand = "finalize_video"
 
 	// CommandVideoGenContinuation is enqueued internally by VideoGenerationFilter to resume
 	// per-cut video generation after a prior cut. It is never issued by HTTP handlers. Unlike
@@ -62,6 +81,10 @@ const (
 type Task struct {
 	JobID   string      `json:"job_id"`
 	Command TaskCommand `json:"command"`
+	// OriginCommand は、video_gen_continuation を生んだ元のコマンドです。継続タスクは
+	// Command を上書きしてしまうため、これが無いと「どのコマンドの続きなのか」が失われ、
+	// 実行計画（結合するか否か）を継続側で復元できません。継続タスク以外では空です。
+	OriginCommand TaskCommand `json:"origin_command,omitempty"`
 	AIModels
 	SourceURL string `json:"source_url,omitempty"`
 	Text      string `json:"text,omitempty"`
@@ -158,7 +181,7 @@ func (t *Task) Validate() error {
 			return fmt.Errorf("%s task requires cut_index", t.Command)
 		}
 		return nil
-	case CommandRegenerateSectionKeyframes, CommandShortVideoFromSection:
+	case CommandRegenerateSectionKeyframes, CommandShortVideoFromSection, CommandSectionVideo:
 		if err := t.validateRecipeSourceTask(); err != nil {
 			return err
 		}
@@ -166,6 +189,9 @@ func (t *Task) Validate() error {
 			return fmt.Errorf("%s task requires a non-negative section_index", t.Command)
 		}
 		return nil
+	case CommandFinalizeVideo:
+		// 生成を伴わないため、必要なのは仕上げ対象のレシピだけです。
+		return t.validateRecipeSourceTask()
 	case CommandRegenerateZip:
 		if strings.TrimSpace(t.RecipeURL) == "" {
 			return fmt.Errorf("%s task requires recipe_url", t.Command)

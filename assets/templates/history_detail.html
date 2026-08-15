@@ -156,6 +156,20 @@
                 <p class="small text-muted mb-0 mt-2">アスペクト比: {{.HistoryDetail.AspectRatio}}（キーフレーム作成時に決定済み）</p>
                 {{end}}
                 {{end}}
+                {{/* セクション単位で積み上げた場合、動画は生成しただけでは1本になりません。
+                     結合はここから明示的に実行します（生成を伴わないため追加課金なし）。 */}}
+                <hr class="my-3">
+                <h3 class="h6 fw-bold mb-1">完成動画の結合</h3>
+                <p class="small text-muted mb-2">
+                    生成済みカットを1本の完成動画へ結合し直します。動画生成は行わないため追加の課金はありません。
+                    セクションごとに「動画作成」で積み上げたあと、全セクションが揃ったところで実行してください。
+                </p>
+                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/finalize">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-film me-1"></i>完成動画を結合
+                    </button>
+                </form>
             </div>
         </div>
         {{end}}
@@ -171,7 +185,28 @@
                     {{if .Section.Name}}<span class="small">({{.Section.StartSeconds}}s–{{.Section.EndSeconds}}s)</span>{{end}}
                 </h3>
                 {{if and .Section.Name .Cuts}}
-                <a href="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate section</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-repeat me-1"></i>Regenerate section
+                    </a>
+                    {{/* このセクションだけを「キーフレーム → 動画」の順に生成し、このジョブへ書き戻します。
+                         ショート動画（上の「動画生成」フォーム）と違い、新しいジョブは作りません。 */}}
+                    {{if .Section.Generated}}
+                    {{/* 生成済みカットは videoGen がスキップするため、押しても何も起きません。
+                         作り直したいときはカード側の「動画を作り直す」（カット単位）を使います。 */}}
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                        <i class="bi bi-check2 me-1"></i>動画生成済み
+                    </button>
+                    {{else}}
+                    <form method="POST" action="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/video" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <input type="hidden" name="veo_model" value="{{$.SelectedVeoModel}}">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-camera-reels me-1"></i>動画作成
+                        </button>
+                    </form>
+                    {{end}}
+                </div>
                 {{end}}
             </div>
             <div class="row g-4 mb-4">

@@ -33,7 +33,15 @@ type DefaultPlanner struct {
 // regenerate_cut_keyframe は指定カット 1 枚、regenerate_section_keyframes は指定セクションの
 // 全カットのキーフレームのみ再生成します。
 // video_gen_continuation は VideoGenerationFilter が生成済み VideoRecipe を引き継いで内部的に
-// enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。
+// enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。継続は
+// Command を上書きしてしまうので、元の計画は OriginCommand から復元します。
+//
+// 動画を作る計画は「どの範囲を作るか」と「結合するか」の2軸で分かれます。
+// mv_from_keyframe_video_recipe（全カット）・regenerate_cut_video（1カット）・
+// short_video_from_section（セクションを独立ショートとして新ジョブへ）はいずれも結合まで
+// 通しますが、section_video は結合しません。1本の MV をセクションずつ積み上げる操作なので、
+// 焼くたびに結合すると final_video_url が「途中まで繋がった動画」になり、完成品と区別が
+// つかなくなるためです。仕上げは finalize_video が担当し、こちらは生成を一切行いません。
 //
 // 未知のコマンドは（domain.Task.Validate が先に弾くのが原則ですが、Validate にだけ追加されて
 // 実行計画が未登録の新コマンドが黙って既定のチェーンへ流れないよう）明示的にエラーを返します。
@@ -43,9 +51,45 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
 	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
 	chainFinalize := filter.ChainFinalizeFilter{VideoProcessor: p.VideoProcessor, UsePreviousVideo: p.UsePreviousVideo}
+	// section_video は結合しない代わりに生成対象をセクションへ絞ります。レシピは削らず、
+	// 対象外のカットを飛ばすだけです（VideoGenerationFilter.SectionScoped 参照）。
+	sectionVideoGen := videoGen
+	sectionVideoGen.SectionScoped = true
 	switch command := taskCommand(task); command {
 	case domain.CommandVideoGenContinuation:
+		// 継続タスクは元のコマンドの実行計画を引き継ぎます。Command は上書きされているため、
+		// 「どのコマンドの続きか」は OriginCommand でしか分かりません。
+		if originCommand(task) == domain.CommandSectionVideo {
+			// section_video の続きも結合しません。ここで chainFinalize を通すと、
+			// セクションを1つ焼き終えるたびに中途半端な final_video_url が生まれます。
+			return []filter.Filter{
+				filter.OriginalJobOutputFilter{},
+				sectionVideoGen,
+				filter.PublishingFilter{},
+			}, nil
+		}
 		return []filter.Filter{videoGen, chainFinalize, filter.PublishingFilter{}}, nil
+	case domain.CommandSectionVideo:
+		// 「キーフレーム → 動画」をセクション単位で一続きに進める計画です。出力先を元ジョブへ
+		// 戻したうえで、キーフレームは足りないぶんだけ焼き、動画はそのセクションだけ生成し、
+		// レシピ**全体**を元ジョブへ保存し直します。結合は finalize_video が別途担当します。
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
+			filter.OriginalJobOutputFilter{},
+			filter.SectionKeyframeFilter{},
+			filter.ZipUploadFilter{},
+			sectionVideoGen,
+			filter.PublishingFilter{},
+		}, nil
+	case domain.CommandFinalizeVideo:
+		// 生成を一切行わず、生成済みカットを1本へ結合し直すだけの計画です。
+		// videoGen を通さないため、未生成カットが残っていても課金は発生しません。
+		return []filter.Filter{
+			filter.RecipeLoadFilter{},
+			filter.OriginalJobOutputFilter{},
+			chainFinalize,
+			filter.PublishingFilter{},
+		}, nil
 	case domain.CommandRegenerateCutKeyframe, domain.CommandRegenerateSectionKeyframes:
 		// 対象が1カットかセクション内の全カットかは RegenerateCutKeyframeFilter が
 		// Task の cut_index / section_index から解決するため、実行計画は共通です。
@@ -117,6 +161,15 @@ func taskCommand(task *domain.Task) domain.TaskCommand {
 		return ""
 	}
 	return task.Command
+}
+
+// originCommand は、継続タスクを生んだ元のコマンドを返します。空（旧タスクや継続以外）は
+// 空コマンドとして扱い、従来どおりの実行計画へフォールバックします。
+func originCommand(task *domain.Task) domain.TaskCommand {
+	if task == nil {
+		return ""
+	}
+	return task.OriginCommand
 }
 
 // StaticPlanner は、常に固定のフィルター列を返すテスト用の FilterPlanner です。
