@@ -31,7 +31,12 @@ func (r *fakeHistoryReader) Open(_ context.Context, p string) (io.ReadCloser, er
 	return io.NopCloser(strings.NewReader(r.files[p])), nil
 }
 
-func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error, _ ...remoteio.ListOption) error {
+// List は GCS の一覧を模倣します。
+//
+// 区切り文字の扱いまで写しているのは、本番の一覧が WithDelimiter に乗っているためです。
+// フェイクが prefix を無視して全件返すと、プレフィックスの絞り込みも疑似ディレクトリの
+// 組み立ても素通りしてしまい、一覧のテストが何も確かめないものになります。
+func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error, opts ...remoteio.ListOption) error {
 	r.mu.Lock()
 	if r.listCount == nil {
 		r.listCount = map[string]int{}
@@ -39,8 +44,27 @@ func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func
 	r.listCount[prefix]++
 	r.mu.Unlock()
 
+	settings := remoteio.NewListSettings(opts...)
+	prefix = remoteio.ListPrefix(prefix, settings)
+
+	seen := map[string]bool{}
 	for _, p := range r.paths {
-		if err := callback(p); err != nil {
+		if !strings.HasPrefix(p, prefix) {
+			continue
+		}
+		entry := p
+		if settings.Delimiter != "" {
+			rest := strings.TrimPrefix(p, prefix)
+			if idx := strings.Index(rest, settings.Delimiter); idx >= 0 {
+				// 区切り文字より先は疑似ディレクトリへ畳まれます。
+				entry = prefix + rest[:idx] + settings.Delimiter
+			}
+		}
+		if seen[entry] {
+			continue
+		}
+		seen[entry] = true
+		if err := callback(entry); err != nil {
 			return err
 		}
 	}
