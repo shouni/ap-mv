@@ -425,8 +425,12 @@ README「タイムアウトの三段」にあります。
 | `DELETE` | `/web/history/{jobID}` | 履歴削除 |
 | `GET` | `/web/history/{jobID}/keyframes.zip` | 有効なキーフレームを zip 一括ダウンロード |
 | `GET` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
-| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット |
-| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-video` | 指定カットの動画だけを作り直す（キーフレームは再利用、結果は新ジョブ） |
+| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット。`edit_prompt` を送ると編集モード、空ならフル再生成（`visual_anchor` でプロンプト差し替え可）。`overwrite=on` でレシピを上書き。`seed` はこの 1 回だけのキャラクターシード上書き |
+| `POST` | `/web/history/{jobID}/cuts/{cutIndex}/regenerate-video` | 指定カットの動画だけを作り直す（キーフレームは再利用、結果は新ジョブ）。`veo_model` 指定可 |
+| `GET` | `/web/history/{jobID}/sections/{sectionIndex}/regenerate` | セクション単位のキーフレーム再生成フォーム（`sectionIndex` は 0 始まり） |
+| `POST` | `/web/history/{jobID}/sections/{sectionIndex}/regenerate-keyframes` | セクションの全カットのキーフレームをまとめて再生成。レシピの読み書きが 1 回で済むため、カット単位を並列投入したときの後勝ち上書きが起きない。`edit_prompt` / `overwrite` / `seed` はカット単位と同じ（`visual_anchor` は不可。アンカーはカットごとに違う文言なので各カットの保存済み値を使う） |
+| `POST` | `/web/history/{jobID}/sections/{sectionIndex}/video` | セクション 1 つ分を「キーフレーム → 動画」まで進め、結果を元ジョブへ書き戻す。仕上げの結合は `finalize` が担当 |
+| `POST` | `/web/history/{jobID}/finalize` | セクションごとに作った動画を 1 本へ結合して仕上げる |
 | `POST` | `/web/history/{jobID}/regenerate-zip` | 保存済みレシピから `keyframes.zip` を再生成して元ジョブの出力パスへ上書き |
 | `POST` | `/web/history/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
 | `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
