@@ -18,7 +18,7 @@ import (
 // History renders the history page, or returns JSON when Accept: application/json is set.
 func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 	if h.HistoryRepository == nil {
-		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
+		h.renderPage(w, r, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
 		return
 	}
 	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20, stageFromQuery(r))
@@ -32,7 +32,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, page)
 		return
 	}
-	h.renderPage(w, PageData{
+	h.renderPage(w, r, PageData{
 		Title:        "History",
 		HistoryItems: page.Items,
 		PageMeta:     page.PageMeta,
@@ -42,7 +42,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 // HistoryDetail renders a generated MV history detail page, or returns JSON when Accept: application/json is set.
 func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	if h.HistoryRepository == nil {
-		h.renderPage(w, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
+		h.renderPage(w, r, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
 		return
 	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
@@ -64,7 +64,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, history)
 		return
 	}
-	h.renderPage(w, h.withModelOptions(PageData{
+	h.renderPage(w, r, h.withModelOptions(PageData{
 		Title:         "History Detail",
 		CSRFToken:     csrfTokenFromContext(r.Context()),
 		HistoryDetail: history,

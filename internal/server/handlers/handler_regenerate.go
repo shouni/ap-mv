@@ -157,7 +157,7 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 	if seed := h.CharacterOptions.seed(cut.CharacterID); seed != nil {
 		seedDefault = strconv.FormatInt(*seed, 10)
 	}
-	h.renderPage(w, PageData{
+	h.renderPage(w, r, PageData{
 		Title:                 "Regenerate Cut",
 		CSRFToken:             csrfTokenFromContext(r.Context()),
 		HistoryDetail:         history,
@@ -235,7 +235,7 @@ func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.
 	if seed := h.CharacterOptions.seed(sectionCharacterID(group)); seed != nil {
 		seedDefault = strconv.FormatInt(*seed, 10)
 	}
-	h.renderPage(w, PageData{
+	h.renderPage(w, r, PageData{
 		Title:                 "Regenerate Section",
 		CSRFToken:             csrfTokenFromContext(r.Context()),
 		HistoryDetail:         history,

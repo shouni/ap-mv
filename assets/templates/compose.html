@@ -1,89 +1,85 @@
 {{define "content"}}
-<div class="row justify-content-center">
-    <div class="col-12 col-lg-9">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body p-4 p-md-5">
-                <h1 class="h3 fw-bold mb-4">Video Recipe Create</h1>
-                <form method="post" action="/web/video-recipe-create">
-                    <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <h1 class="h3 fw-bold mb-4"><i class="bi bi-film me-2" aria-hidden="true"></i>Video Recipe Create</h1>
+        <form method="post" action="/web/video-recipe-create">
+            <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Music Job ID</label>
-                        <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
-                        <div class="form-text">ap-comp で作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
-                    </div>
-                    {{/* handler / Task.Validate は url・text も受け付ける（source_url ∨ text ∨ image_url が必須）。
-                         以前はこのフォームが music_job_id しか出しておらず、他の入力は M2M 専用に見えていた。 */}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Recipe URL <span class="text-muted fw-normal">(Music Job ID の代わりに)</span></label>
-                        <input class="form-control" name="url" placeholder="gs://bucket/music/…/recipe.json">
-                        <div class="form-text">Music Recipe / Video Recipe JSON の GCS URI を直接指定できます。</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Free Text <span class="text-muted fw-normal">(実験用)</span></label>
-                        <textarea class="form-control" name="text" rows="3" placeholder="曲のテーマや構成の説明から台本を起こします"></textarea>
-                        <div class="form-text">Music Job ID / Recipe URL のどちらも無い場合に使われます。いずれか 1 つは必須です。</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Aspect Ratio</label>
-                        <select class="form-select" name="aspect_ratio">
-                            <option value="16:9" selected>16:9</option>
-                            <option value="9:16">9:16 (ショート)</option>
-                        </select>
-                        <div class="form-text">キーフレーム作成時に一度だけ決まります。以降の動画生成（フルMV・ショート・カット再生成）はこの値を引き継ぎ、選び直すことはできません。</div>
-                    </div>
-                    {{if .VisualModes}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Visual Mode</label>
-                        <select class="form-select" name="visual_mode">
-                            {{range .VisualModes}}
-                            <option value="{{.ID}}" {{if eq .ID $.SelectedVisualMode}}selected{{end}}>{{.Name}}</option>
-                            {{end}}
-                        </select>
-                    </div>
-                    {{end}}
-                    {{if .Characters}}
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Character</label>
-                        <select class="form-select" name="character_id">
-                            {{range .Characters}}
-                            <option value="{{.ID}}" {{if eq .ID $.SelectedCharacterID}}selected{{end}}>{{.Name}} ({{.ID}})</option>
-                            {{end}}
-                        </select>
-                    </div>
-                    {{end}}
-                    <div class="row g-3">
-                        <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold">Gemini Model</label>
-                            <select class="form-select" name="text_model">
-                                {{range .GeminiModels}}
-                                <option value="{{.}}" {{if eq . $.SelectedGeminiModel}}selected{{end}}>{{.}}</option>
-                                {{end}}
-                            </select>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label fw-semibold">Image Model</label>
-                            <select class="form-select" name="image_model">
-                                {{range .ImageModels}}
-                                <option value="{{.}}" {{if eq . $.SelectedImageModel}}selected{{end}}>{{.}}</option>
-                                {{end}}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- 下書きを先に置きます。カット割りを確かめてからキーフレームを焼く流れが
-                         通常運用で、本生成はカット数ぶんの画像生成コストがかかるためです。 -->
-                    <div class="d-grid gap-2 mt-4">
-                        <button class="btn btn-primary btn-lg" type="submit" formaction="/web/compose-draft">Queue Draft Job</button>
-                        <button class="btn btn-outline-primary" type="submit">Queue Video Recipe Job</button>
-                    </div>
-                    <div class="form-text mt-2">
-                        Draft Job はカット割りまでで止まり、キーフレーム画像を1枚も生成しません。
-                        カット数と尺を <a href="/web/history?stage=script">Scripts</a> で確認してから本生成へ進めます。
-                    </div>
-                </form>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Music Job ID</label>
+                <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
+                <div class="form-text">ap-comp で作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
             </div>
-        </div>
+            {{/* handler / Task.Validate は url・text も受け付ける（source_url ∨ text ∨ image_url が必須）。
+                 以前はこのフォームが music_job_id しか出しておらず、他の入力は M2M 専用に見えていた。 */}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Recipe URL <span class="text-muted fw-normal">(Music Job ID の代わりに)</span></label>
+                <input class="form-control" name="url" placeholder="gs://bucket/music/…/recipe.json">
+                <div class="form-text">Music Recipe / Video Recipe JSON の GCS URI を直接指定できます。</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Free Text <span class="text-muted fw-normal">(実験用)</span></label>
+                <textarea class="form-control" name="text" rows="3" placeholder="曲のテーマや構成の説明から台本を起こします"></textarea>
+                <div class="form-text">Music Job ID / Recipe URL のどちらも無い場合に使われます。いずれか 1 つは必須です。</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Aspect Ratio</label>
+                <select class="form-select" name="aspect_ratio">
+                    <option value="16:9" selected>16:9</option>
+                    <option value="9:16">9:16 (ショート)</option>
+                </select>
+                <div class="form-text">キーフレーム作成時に一度だけ決まります。以降の動画生成（フルMV・ショート・カット再生成）はこの値を引き継ぎ、選び直すことはできません。</div>
+            </div>
+            {{if .VisualModes}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Visual Mode</label>
+                <select class="form-select" name="visual_mode">
+                    {{range .VisualModes}}
+                    <option value="{{.ID}}" {{if eq .ID $.SelectedVisualMode}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
+            {{if .Characters}}
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Character</label>
+                <select class="form-select" name="character_id">
+                    {{range .Characters}}
+                    <option value="{{.ID}}" {{if eq .ID $.SelectedCharacterID}}selected{{end}}>{{.Name}} ({{.ID}})</option>
+                    {{end}}
+                </select>
+            </div>
+            {{end}}
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Gemini Model</label>
+                    <select class="form-select" name="text_model">
+                        {{range .GeminiModels}}
+                        <option value="{{.}}" {{if eq . $.SelectedGeminiModel}}selected{{end}}>{{.}}</option>
+                        {{end}}
+                    </select>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-semibold">Image Model</label>
+                    <select class="form-select" name="image_model">
+                        {{range .ImageModels}}
+                        <option value="{{.}}" {{if eq . $.SelectedImageModel}}selected{{end}}>{{.}}</option>
+                        {{end}}
+                    </select>
+                </div>
+            </div>
+
+            <!-- 下書きを先に置きます。カット割りを確かめてからキーフレームを焼く流れが
+                 通常運用で、本生成はカット数ぶんの画像生成コストがかかるためです。 -->
+            <div class="d-grid gap-2 mt-4">
+                <button class="btn btn-primary btn-lg" type="submit" formaction="/web/compose-draft">Queue Draft Job</button>
+                <button class="btn btn-outline-primary" type="submit">Queue Video Recipe Job</button>
+            </div>
+            <div class="form-text mt-2">
+                Draft Job はカット割りまでで止まり、キーフレーム画像を1枚も生成しません。
+                カット数と尺を <a href="/web/history?stage=script">Scripts</a> で確認してから本生成へ進めます。
+            </div>
+        </form>
     </div>
 </div>
 {{end}}

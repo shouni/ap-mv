@@ -24,16 +24,24 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link" href="/">Home</a>
+                    <a class="nav-link{{if eq .NavPath "/"}} active{{end}}" {{if eq .NavPath "/"}}aria-current="page" {{end}}href="/">
+                        <i class="bi bi-house me-1" aria-hidden="true"></i>Home
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/web/video-recipe-create">Video Recipe</a>
+                    <a class="nav-link{{if eq .NavPath "/web/video-recipe-create"}} active{{end}}" {{if eq .NavPath "/web/video-recipe-create"}}aria-current="page" {{end}}href="/web/video-recipe-create">
+                        <i class="bi bi-film me-1" aria-hidden="true"></i>Video Recipe
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/web/history?stage=script">Scripts</a>
+                    <a class="nav-link{{if eq .NavPath "/web/history?stage=script"}} active{{end}}" {{if eq .NavPath "/web/history?stage=script"}}aria-current="page" {{end}}href="/web/history?stage=script">
+                        <i class="bi bi-file-earmark-text me-1" aria-hidden="true"></i>Scripts
+                    </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" href="/web/history">History</a>
+                    <a class="nav-link{{if eq .NavPath "/web/history"}} active{{end}}" {{if eq .NavPath "/web/history"}}aria-current="page" {{end}}href="/web/history">
+                        <i class="bi bi-clock-history me-1" aria-hidden="true"></i>History
+                    </a>
                 </li>
             </ul>
             <!-- モデル名は設定（GEMINI_MODELS）から出します。文言で書くと、モデルを

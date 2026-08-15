@@ -27,7 +27,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 			data.LatestVideo = h.latestVideoForHome(r, page.Items)
 		}
 	}
-	h.renderPage(w, data, "index.html")
+	h.renderPage(w, r, data, "index.html")
 }
 
 // latestVideoForHome は直近ジョブのうち最初に動画を持つジョブから、ホーム掲載用の
@@ -83,7 +83,7 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 
 // VideoRecipeCreateForm renders the video recipe creation form.
 func (h *Handler) VideoRecipeCreateForm(w http.ResponseWriter, r *http.Request) {
-	h.renderPage(w, h.withModelOptions(PageData{
+	h.renderPage(w, r, h.withModelOptions(PageData{
 		Title:     "Video Recipe Create",
 		CSRFToken: csrfTokenFromContext(r.Context()),
 	}), "compose.html")

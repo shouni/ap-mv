@@ -107,3 +107,52 @@ func renderHistoryDetailPage(t *testing.T) string {
 	}
 	return rec.Body.String()
 }
+
+// TestNavMarksCurrentPage は、ナビが現在地を active + aria-current で示すことを確認します。
+// 兄弟アプリ（ap-comp / ap-story / ap-voice）はいずれも持っていて ap-mv だけ無く、
+// どの画面にいるかがナビから読めませんでした。
+func TestNavMarksCurrentPage(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		target   string
+		wantHref string
+	}{
+		"履歴":     {target: "/web/history", wantHref: `href="/web/history"`},
+		"台本のみ一覧": {target: "/web/history?stage=script", wantHref: `href="/web/history?stage=script"`},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			h, err := NewHandler(assets.Templates, nil)
+			if err != nil {
+				t.Fatalf("NewHandler() error = %v", err)
+			}
+			h.HistoryRepository = fakeHistoryRepository{}
+
+			rec := httptest.NewRecorder()
+			h.History(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			body := rec.Body.String()
+			if !strings.Contains(body, `aria-current="page" `+tt.wantHref) {
+				t.Errorf("%s should be marked as the current page; body=%s", tt.wantHref, body)
+			}
+			// active は 1 つだけ。両方が現在地になると、どこにいるか読めません。
+			if got := strings.Count(body, `aria-current="page"`); got != 1 {
+				t.Errorf("aria-current count = %d, want exactly 1", got)
+			}
+		})
+	}
+}
+
+// TestNavLinksCarryIcons pins that every nav item has a Bootstrap icon, matching ap-story and
+// ap-voice. The stylesheet was already loaded but only the brand and footer used it.
+func TestNavLinksCarryIcons(t *testing.T) {
+	t.Parallel()
+
+	body := renderHistoryPage(t)
+	for _, icon := range []string{"bi-house", "bi-film", "bi-file-earmark-text", "bi-clock-history"} {
+		if !strings.Contains(body, icon) {
+			t.Errorf("nav is missing the %s icon", icon)
+		}
+	}
+}
