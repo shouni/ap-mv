@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 func TestVeoPricingRateForFallsBackThroughTable(t *testing.T) {
@@ -37,21 +37,21 @@ func TestVeoPricingRateForFallsBackThroughTable(t *testing.T) {
 func TestGeneratedSecondsOfCutsCountsOnlyGeneratedCuts(t *testing.T) {
 	cuts := []VideoCut{
 		{
-			AudioSync:   orchestrator.AudioSync{DurationSec: 8},
-			VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusGenerated},
+			AudioSync: video.AudioSync{DurationSec: 8},
+			Result:    video.Result{Status: video.CutStatusGenerated},
 		},
 		{
-			AudioSync:   orchestrator.AudioSync{DurationSec: 6},
-			VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusPending},
+			AudioSync: video.AudioSync{DurationSec: 6},
+			Result:    video.Result{Status: video.CutStatusPending},
 		},
 		{
-			AudioSync:   orchestrator.AudioSync{DurationSec: 4},
-			VideoResult: orchestrator.VideoResult{Status: orchestrator.CutStatusFailed},
+			AudioSync: video.AudioSync{DurationSec: 4},
+			Result:    video.Result{Status: video.CutStatusFailed},
 		},
 		{
 			// status 未設定でも video_id + video_url が揃っていれば生成済み扱い。
-			AudioSync:   orchestrator.AudioSync{DurationSec: 7},
-			VideoResult: orchestrator.VideoResult{VideoID: "v1", VideoURL: "gs://b/v1.mp4"},
+			AudioSync: video.AudioSync{DurationSec: 7},
+			Result:    video.Result{VideoID: "v1", VideoURL: "gs://b/v1.mp4"},
 		},
 	}
 

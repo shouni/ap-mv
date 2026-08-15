@@ -5,17 +5,18 @@ import (
 	"strings"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
 func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe: orchestrator.MusicRecipe{
+		MusicRecipe: video.MusicRecipe{
 			Title: "test",
-			Sections: []orchestrator.Section{{
+			Sections: []video.Section{{
 				Name:         "Chorus",
 				Duration:     20,
 				StartSeconds: 0,
@@ -23,16 +24,16 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 				Prompt:       "chorus lift",
 			}},
 		},
-		Cuts: []orchestrator.Cut{{
+		Cuts: []video.Cut{{
 			CutIndex:       1,
 			VisualAnchor:   "protagonist on a glowing rooftop",
 			Dialogue:       "line one\nline two\nline three",
-			AudioSync:      orchestrator.AudioSync{DurationSec: 20, AudioCue: "chorus lift"},
-			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/old.png"},
-			VideoResult: orchestrator.VideoResult{
+			AudioSync:      video.AudioSync{DurationSec: 20, AudioCue: "chorus lift"},
+			KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/old.png"},
+			Result: video.Result{
 				VideoID:  "old-video",
 				VideoURL: "gs://bucket/old.mp4",
-				Status:   orchestrator.CutStatusGenerated,
+				Status:   video.CutStatusGenerated,
 			},
 		}},
 	}
@@ -57,7 +58,7 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 		if cut.DurationSec != wantDurations[i] {
 			t.Errorf("cut[%d].DurationSec = %v, want %v", i, cut.DurationSec, wantDurations[i])
 		}
-		if cut.Status != orchestrator.CutStatusPending {
+		if cut.Status != video.CutStatusPending {
 			t.Errorf("cut[%d].Status = %q, want pending", i, cut.Status)
 		}
 		if cut.KeyframeReference != "" || cut.VideoID != "" || cut.VideoURL != "" {
@@ -73,14 +74,14 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 }
 
 func TestSceneSplitFilterAllocatesVideoToVideoChainBlocks(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{{
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{{
 			CutIndex:     1,
 			VisualAnchor: "protagonist crossing a luminous city stage",
 			Dialogue:     "a\nb\nc\nd\ne",
-			AudioSync:    orchestrator.AudioSync{DurationSec: 50, AudioCue: "long chorus"},
+			AudioSync:    video.AudioSync{DurationSec: 50, AudioCue: "long chorus"},
 		}},
 	}
 
@@ -132,12 +133,12 @@ func TestSceneSplitFilterAllocatesVideoToVideoChainBlocks(t *testing.T) {
 // error-diffusing allocation the pair must cover its 19 musical seconds exactly and stay
 // contiguous on the concatenated-video timeline.
 func TestSceneSplitFilterVideoToVideoTracksMusicTimeline(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, Dialogue: "line five", AudioSync: orchestrator.AudioSync{StartSec: 28, DurationSec: 9, AudioCue: "0:28 to 0:37"}},
-			{CutIndex: 2, Dialogue: "line six", AudioSync: orchestrator.AudioSync{StartSec: 37, DurationSec: 10, AudioCue: "0:37 to 0:47"}},
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, Dialogue: "line five", AudioSync: video.AudioSync{StartSec: 28, DurationSec: 9, AudioCue: "0:28 to 0:37"}},
+			{CutIndex: 2, Dialogue: "line six", AudioSync: video.AudioSync{StartSec: 37, DurationSec: 10, AudioCue: "0:37 to 0:47"}},
 		},
 	}
 
@@ -176,12 +177,12 @@ func TestSceneSplitFilterVideoToVideoTracksMusicTimeline(t *testing.T) {
 // path also re-bases cuts onto the concatenated timeline and carries rounding error forward:
 // a 9s cut splits to 8+4=12s (+3s), so the following 10s cut's target shrinks to 7s.
 func TestSceneSplitFilterKeyframeScenesDiffusesRoundingError(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 28, DurationSec: 9}},
-			{CutIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 37, DurationSec: 10}},
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, AudioSync: video.AudioSync{StartSec: 28, DurationSec: 9}},
+			{CutIndex: 2, AudioSync: video.AudioSync{StartSec: 37, DurationSec: 10}},
 		},
 	}
 
@@ -215,13 +216,13 @@ func TestSceneSplitFilterKeyframeScenesDiffusesRoundingError(t *testing.T) {
 // final generated-cut durations sum to the song's musical length with no overlap, across a
 // real section boundary.
 func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, SectionIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}},
-			{CutIndex: 2, SectionIndex: 1, AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 9}},
-			{CutIndex: 3, SectionIndex: 2, AudioSync: orchestrator.AudioSync{StartSec: 17, DurationSec: 11}},
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, SectionIndex: 1, AudioSync: video.AudioSync{StartSec: 0, DurationSec: 8}},
+			{CutIndex: 2, SectionIndex: 1, AudioSync: video.AudioSync{StartSec: 8, DurationSec: 9}},
+			{CutIndex: 3, SectionIndex: 2, AudioSync: video.AudioSync{StartSec: 17, DurationSec: 11}},
 		},
 	}
 
@@ -235,12 +236,12 @@ func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	got := orchestrator.ExpandCutsToSupportedDurations(recipe.Cuts, true, nil, false)
+	got := veo.ExpandCutsToSupportedDurations(recipe.Cuts, true, nil, false)
 
 	total := 0.0
 	for i := range got {
 		total += got[i].DurationSec
-		if got[i].DurationSec != orchestrator.VeoVideoExtensionDurationSec && got[i].DurationSec != 4 && got[i].DurationSec != 6 && got[i].DurationSec != 8 {
+		if got[i].DurationSec != veo.VideoExtensionDurationSec && got[i].DurationSec != 4 && got[i].DurationSec != 6 && got[i].DurationSec != 8 {
 			t.Errorf("cut[%d].DurationSec = %v, want a Veo-supported value (4/6/8 base or 7 extension)", i, got[i].DurationSec)
 		}
 		if i > 0 && got[i].StartSec != got[i-1].EndSec {
@@ -278,12 +279,12 @@ func TestSceneSplitFilterIsIdempotent(t *testing.T) {
 		{"video-to-video chains", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			recipe := &orchestrator.VideoRecipe{
+			recipe := &video.Recipe{
 				ProjectTitle: "test",
-				MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-				Cuts: []orchestrator.Cut{
-					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
-					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"}},
+				MusicRecipe:  video.MusicRecipe{Title: "test"},
+				Cuts: []video.Cut{
+					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
+					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"}},
 				},
 			}
 
@@ -298,7 +299,7 @@ func TestSceneSplitFilterIsIdempotent(t *testing.T) {
 			if err := filter.Execute(context.Background(), newContext()); err != nil {
 				t.Fatalf("first Execute() error = %v", err)
 			}
-			first := append([]orchestrator.Cut(nil), recipe.Cuts...)
+			first := append([]video.Cut(nil), recipe.Cuts...)
 
 			if err := filter.Execute(context.Background(), newContext()); err != nil {
 				t.Fatalf("second Execute() error = %v", err)
@@ -347,15 +348,15 @@ func TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
 		{"video-to-video chains", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			recipe := &orchestrator.VideoRecipe{
+			recipe := &video.Recipe{
 				ProjectTitle: "test",
-				MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-				Cuts: []orchestrator.Cut{{
+				MusicRecipe:  video.MusicRecipe{Title: "test"},
+				Cuts: []video.Cut{{
 					CutIndex:       1,
 					VisualAnchor:   "rooftop",
-					AudioSync:      orchestrator.AudioSync{StartSec: 0, DurationSec: 8, AudioCue: "0:00 to 0:08"},
-					KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
-					ChainControl:   orchestrator.ChainControl{IsChainStart: true},
+					AudioSync:      video.AudioSync{StartSec: 0, DurationSec: 8, AudioCue: "0:00 to 0:08"},
+					KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
+					ChainControl:   video.ChainControl{IsChainStart: true},
 				}},
 			}
 
@@ -375,7 +376,7 @@ func TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
 				t.Errorf("KeyframeReference = %q, want the existing image to be kept", got)
 			}
 			// 生成状態は落とす（動画は作り直す）が、絵は使い回す、が意図。
-			if recipe.Cuts[0].Status != orchestrator.CutStatusPending || recipe.Cuts[0].VideoID != "" {
+			if recipe.Cuts[0].Status != video.CutStatusPending || recipe.Cuts[0].VideoID != "" {
 				t.Errorf("video generation state was not reset: status=%q videoID=%q", recipe.Cuts[0].Status, recipe.Cuts[0].VideoID)
 			}
 		})
@@ -385,14 +386,14 @@ func TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
 // TestSceneSplitFilterDropsKeyframeWhenCutIsResplit pins the conservative half: once a cut is
 // divided, one image can no longer stand for several cuts that each get their own scene beat.
 func TestSceneSplitFilterDropsKeyframeWhenCutIsResplit(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "test",
-		MusicRecipe:  orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{{
+		MusicRecipe:  video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{{
 			CutIndex:       1,
 			VisualAnchor:   "rooftop",
-			AudioSync:      orchestrator.AudioSync{StartSec: 0, DurationSec: 20, AudioCue: "0:00 to 0:20"},
-			KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
+			AudioSync:      video.AudioSync{StartSec: 0, DurationSec: 20, AudioCue: "0:00 to 0:20"},
+			KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
 		}},
 	}
 
@@ -416,8 +417,8 @@ func TestSceneSplitFilterDropsKeyframeWhenCutIsResplit(t *testing.T) {
 }
 
 func TestAllocateChainDurations(t *testing.T) {
-	full := orchestrator.ChainDurations(orchestrator.ImageToVideoDurationsSec())
-	reference := orchestrator.ChainDurations(orchestrator.ReferenceToVideoDurationsSec())
+	full := veo.ChainDurations(veo.ImageToVideoDurationsSec())
+	reference := veo.ChainDurations(veo.ReferenceToVideoDurationsSec())
 	cases := []struct {
 		name       string
 		target     float64

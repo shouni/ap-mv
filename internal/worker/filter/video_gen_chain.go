@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // このファイルは video_extension（video-to-video 継続）チェーンの品質維持処理を集めています:
@@ -16,7 +16,7 @@ import (
 // applyChainResetKeyframe は、チェーンリセット後の新規ベースカットの参照画像を、静的な
 // 立ち絵ではなく直前チェーンの実際の生成結果の最終フレームへ差し替えます。VideoProcessor
 // が未設定、または直前動画のURLが空の場合は何もしません（従来通り静的な立ち絵のまま生成）。
-func (f VideoGenerationFilter) applyChainResetKeyframe(ctx context.Context, fc *Context, cut *orchestrator.Cut, previousVideoURL string) error {
+func (f VideoGenerationFilter) applyChainResetKeyframe(ctx context.Context, fc *Context, cut *video.Cut, previousVideoURL string) error {
 	if f.VideoProcessor == nil || strings.TrimSpace(previousVideoURL) == "" {
 		return nil
 	}
@@ -57,7 +57,7 @@ func chainFrameDestURI(outputPath string, cutIndex int) string {
 //
 // VideoProcessor未設定、またはカットにキーフレーム参照が無い場合は何もしません
 // （従来通り無補正のまま）。
-func (f VideoGenerationFilter) colorCorrectExtensionCut(ctx context.Context, fc *Context, cut *orchestrator.Cut) error {
+func (f VideoGenerationFilter) colorCorrectExtensionCut(ctx context.Context, fc *Context, cut *video.Cut) error {
 	if f.VideoProcessor == nil {
 		return nil
 	}

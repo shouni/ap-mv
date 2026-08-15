@@ -20,7 +20,7 @@ type VideoHistory struct {
 	Generated      bool   `json:"generated,omitempty"`
 	KeyframeZipURI string `json:"keyframe_zip_uri,omitempty"`
 	// FinalVideoURL は、継続チェーンをハードカットで1本に結合した完成動画のGCS URIです
-	// (orchestrator.VideoRecipe.FinalVideoURL、chain_finalize.goが設定)。
+	// (video.Recipe.FinalVideoURL、chain_finalize.goが設定)。
 	FinalVideoURL string `json:"final_video_url,omitempty"`
 	// FinalVideoSignedURL は FinalVideoURL をブラウザ再生用に署名したURLです。期限付きのため
 	// キャッシュされず、表示ごとに再生成されます（SignedURLと同じ扱い）。

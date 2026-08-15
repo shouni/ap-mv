@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 )
 
 // RegenerateCutKeyframeFilter は、既存ジョブのキーフレームを再生成するパイプラインステップです。
@@ -36,7 +37,7 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 	}
 	basePath := fmt.Sprintf("%sregens/%s/", fc.OutputPath, label)
 
-	var regenerated []orchestrator.Cut
+	var regenerated []video.Cut
 	if editPrompt := strings.TrimSpace(fc.Task.EditPrompt); editPrompt != "" {
 		regenerated, err = editTargetKeyframes(ctx, fc, targets, editPrompt, basePath)
 	} else {
@@ -118,8 +119,8 @@ func resolveRegenTargets(fc *Context) (targets []int, label string, err error) {
 // regenerateTargetKeyframes は対象カットをプロンプトから作り直します（フル再生成）。
 // RunAndSave は元々複数カットを並列生成するため、セクション対象でも呼び出しは1回で済み、
 // セクション内のカットが同時に焼き直されることで scene beat の役割分担も揃います。
-func regenerateTargetKeyframes(ctx context.Context, fc *Context, targets []int, basePath string) ([]orchestrator.Cut, error) {
-	cuts := make([]orchestrator.Cut, 0, len(targets))
+func regenerateTargetKeyframes(ctx context.Context, fc *Context, targets []int, basePath string) ([]video.Cut, error) {
+	cuts := make([]video.Cut, 0, len(targets))
 	for _, idx := range targets {
 		cut := fc.VideoRecipe.Cuts[idx]
 		cut.KeyframeReference = ""
@@ -132,7 +133,7 @@ func regenerateTargetKeyframes(ctx context.Context, fc *Context, targets []int, 
 		}
 		cuts = append(cuts, cut)
 	}
-	updated, err := fc.Workflows.CutKeyframe.RunAndSave(ctx, newRegenTempRecipe(fc, cuts), basePath)
+	updated, err := fc.Workflows.CutKeyframe.GenerateAndSave(ctx, newRegenTempRecipe(fc, cuts), basePath)
 	if err != nil {
 		return nil, fmt.Errorf("regenerate keyframes: %w", err)
 	}
@@ -145,11 +146,11 @@ func regenerateTargetKeyframes(ctx context.Context, fc *Context, targets []int, 
 // editTargetKeyframes は対象カットを1枚ずつ編集モードで焼き直します。EditAndSave は既存画像を
 // 編集ソースにする都合上、単一カットのレシピしか受け付けないため、セクション対象でもカットごとに
 // 呼び出します（同じ指示を各カットへ順に適用する）。
-func editTargetKeyframes(ctx context.Context, fc *Context, targets []int, editPrompt, basePath string) ([]orchestrator.Cut, error) {
-	edited := make([]orchestrator.Cut, 0, len(targets))
+func editTargetKeyframes(ctx context.Context, fc *Context, targets []int, editPrompt, basePath string) ([]video.Cut, error) {
+	edited := make([]video.Cut, 0, len(targets))
 	for _, idx := range targets {
 		cut := fc.VideoRecipe.Cuts[idx]
-		tempRecipe := newRegenTempRecipe(fc, []orchestrator.Cut{cut})
+		tempRecipe := newRegenTempRecipe(fc, []video.Cut{cut})
 		outputPath := regenCutOutputPath(basePath, cut.CutIndex, len(targets))
 
 		updated, err := fc.Workflows.CutKeyframe.EditAndSave(ctx, tempRecipe, 0, editPrompt, outputPath)
@@ -159,7 +160,7 @@ func editTargetKeyframes(ctx context.Context, fc *Context, targets []int, editPr
 			// 構図・ポーズの保持は失われるが、編集指示自体は反映を試みる。
 			tempRecipe.Cuts[0].KeyframeReference = ""
 			tempRecipe.Cuts[0].VisualAnchor = strings.TrimSpace(tempRecipe.Cuts[0].VisualAnchor + "\n" + editPrompt)
-			updated, err = fc.Workflows.CutKeyframe.RunAndSave(ctx, tempRecipe, outputPath)
+			updated, err = fc.Workflows.CutKeyframe.GenerateAndSave(ctx, tempRecipe, outputPath)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("edit cut %d keyframe: %w", cut.CutIndex, err)
@@ -174,8 +175,8 @@ func editTargetKeyframes(ctx context.Context, fc *Context, targets []int, editPr
 
 // newRegenTempRecipe は再生成対象カットだけを載せた一時レシピを組み立てます。MusicRecipe を
 // 引き継ぐのは、キーフレームのプロンプト構築が曲側の情報（セクション・歌詞）を参照するためです。
-func newRegenTempRecipe(fc *Context, cuts []orchestrator.Cut) *orchestrator.VideoRecipe {
-	return &orchestrator.VideoRecipe{
+func newRegenTempRecipe(fc *Context, cuts []video.Cut) *video.Recipe {
+	return &video.Recipe{
 		ProjectTitle: fc.VideoRecipe.ProjectTitle,
 		MusicRecipe:  fc.VideoRecipe.MusicRecipe,
 		Cuts:         cuts,

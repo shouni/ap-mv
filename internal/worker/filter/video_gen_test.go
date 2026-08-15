@@ -8,6 +8,7 @@ import (
 
 	characterkit "github.com/shouni/go-character-kit/character"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -15,11 +16,11 @@ import (
 
 // TestVideoGenerationFilterEnqueuesContinuationAfterOneCut verifies continuation task enqueueing after one cut.
 func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -42,10 +43,10 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
 	}
-	if recipe.Cuts[0].Status != orchestrator.CutStatusGenerated {
-		t.Fatalf("first cut status = %q, want %q", recipe.Cuts[0].Status, orchestrator.CutStatusGenerated)
+	if recipe.Cuts[0].Status != video.CutStatusGenerated {
+		t.Fatalf("first cut status = %q, want %q", recipe.Cuts[0].Status, video.CutStatusGenerated)
 	}
-	if recipe.Cuts[1].Status == orchestrator.CutStatusGenerated {
+	if recipe.Cuts[1].Status == video.CutStatusGenerated {
 		t.Fatalf("second cut should not be generated in the same invocation")
 	}
 	if len(queue.tasks) != 1 {
@@ -86,11 +87,11 @@ func TestEnqueueContinuationUsesDeterministicTaskIDPerCut(t *testing.T) {
 // EnqueueWithName failure (not a duplicate-name rejection, which the TaskQueue implementation
 // already treats as success) surfaces as an error from Execute.
 func TestVideoGenerationFilterPropagatesContinuationEnqueueFailure(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -109,11 +110,11 @@ func TestVideoGenerationFilterPropagatesContinuationEnqueueFailure(t *testing.T)
 // TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists verifies the production
 // path keeps using per-cut continuation even when orchestrator workflows are configured.
 func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -152,11 +153,11 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 // (which would discard the keyframes reused from the original job).
 func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationCommand(t *testing.T) {
 	sectionIndex := 0
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -190,10 +191,10 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 
 // TestVideoGenerationFilterAddsOutputPathToContext verifies that video generation receives the output path through context.
 func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	task := &domain.Task{
@@ -222,14 +223,14 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 // TestVideoGenerationFilterExpandsUnsupportedDurations verifies that cuts longer than Veo's
 // supported durations are split into sub-cuts before generation in the full MV flow.
 func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
 			{
 				CutIndex:       1,
 				VisualAnchor:   "long cut",
-				AudioSync:      orchestrator.AudioSync{DurationSec: 10},
-				KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
+				AudioSync:      video.AudioSync{DurationSec: 10},
+				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
 			},
 		},
 	}
@@ -256,7 +257,7 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 		if recipe.Cuts[i].DurationSec != wantDuration {
 			t.Errorf("cut[%d] duration = %v, want %v", i, recipe.Cuts[i].DurationSec, wantDuration)
 		}
-		if recipe.Cuts[i].Status != orchestrator.CutStatusGenerated {
+		if recipe.Cuts[i].Status != video.CutStatusGenerated {
 			t.Errorf("cut[%d] status = %q, want generated", i, recipe.Cuts[i].Status)
 		}
 	}
@@ -279,10 +280,10 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	}
 
 	recipeSeed := int64(777)
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}},
 		},
 	}
 	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
@@ -322,10 +323,10 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 			"tsumugi": {ID: "tsumugi", ReferenceURL: "gs://bucket/characters/tsumugi.png"},
 		},
 	}
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 5, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 6}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 5, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 6}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -349,10 +350,10 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 
 	// A character without reference art, or a runner that doesn't support referenceImages,
 	// must keep the ordinary image_to_video snapping ({4,6,8}) and leave 6s untouched.
-	recipe2 := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 5, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{StartSec: 30, DurationSec: 6}},
+	recipe2 := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 5, VisualAnchor: "a", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 6}},
 		},
 	}
 	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}
@@ -487,7 +488,7 @@ type recordingVideoWorkflow struct {
 	runCalled bool
 }
 
-func (w *recordingVideoWorkflow) Run(_ context.Context, _ *orchestrator.VideoRecipe) ([]*orchestrator.VideoResponse, error) {
+func (w *recordingVideoWorkflow) Run(_ context.Context, _ *video.Recipe) ([]*video.Response, error) {
 	w.runCalled = true
 	return nil, nil
 }

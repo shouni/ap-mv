@@ -96,7 +96,6 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
 		Config:      p.orchCfg,
-		HTTPClient:  p.httpClient,
 		Reader:      workflowReader{delegate: p.rio.Reader},
 		Writer:      p.rio.Writer,
 		AIClient:    p.aiClient,

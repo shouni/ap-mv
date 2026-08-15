@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/shouni/go-remote-io/remoteio"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -31,18 +31,18 @@ func (w *draftWriter) Write(_ context.Context, path string, contentReader io.Rea
 
 func (w *draftWriter) Delete(context.Context, string) error { return nil }
 
-func draftTestRecipe() *orchestrator.VideoRecipe {
-	return &orchestrator.VideoRecipe{
+func draftTestRecipe() *video.Recipe {
+	return &video.Recipe{
 		ProjectTitle: "draft test",
-		MusicRecipe: orchestrator.MusicRecipe{
+		MusicRecipe: video.MusicRecipe{
 			Title:    "draft test",
-			Sections: []orchestrator.Section{{Name: "Chorus", Duration: 8, StartSeconds: 0, EndSeconds: 8, Prompt: "lift"}},
+			Sections: []video.Section{{Name: "Chorus", Duration: 8, StartSeconds: 0, EndSeconds: 8, Prompt: "lift"}},
 		},
-		Cuts: []orchestrator.Cut{{
+		Cuts: []video.Cut{{
 			CutIndex:     1,
 			SectionIndex: 1,
 			VisualAnchor: "rooftop at dawn",
-			AudioSync:    orchestrator.AudioSync{StartSec: 0, EndSec: 8, DurationSec: 8, AudioCue: "0:00 to 0:08"},
+			AudioSync:    video.AudioSync{StartSec: 0, EndSec: 8, DurationSec: 8, AudioCue: "0:00 to 0:08"},
 		}},
 	}
 }
@@ -86,14 +86,14 @@ func TestDraftSaveFilterWritesRecipeToDraftPath(t *testing.T) {
 // keyframe count and the chain layout between review and generation.
 func TestDraftSaveRoundTripKeepsCutPlan(t *testing.T) {
 	sceneSplit := SceneSplitFilter{UsePreviousVideo: true}
-	recipe := &orchestrator.VideoRecipe{
+	recipe := &video.Recipe{
 		ProjectTitle: "round trip",
-		MusicRecipe: orchestrator.MusicRecipe{
+		MusicRecipe: video.MusicRecipe{
 			Title:    "round trip",
-			Sections: []orchestrator.Section{{Name: "Verse", Duration: 30, StartSeconds: 0, EndSeconds: 30, Prompt: "verse"}},
+			Sections: []video.Section{{Name: "Verse", Duration: 30, StartSeconds: 0, EndSeconds: 30, Prompt: "verse"}},
 		},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
+		Cuts: []video.Cut{
+			{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
 		},
 	}
 	task := &domain.Task{JobID: "video-draft-20260804-101112-abc", Command: domain.CommandVideoRecipeDraft}
@@ -104,7 +104,7 @@ func TestDraftSaveRoundTripKeepsCutPlan(t *testing.T) {
 	if err := sceneSplit.Execute(context.Background(), newContext()); err != nil {
 		t.Fatalf("scene split error = %v", err)
 	}
-	planned := append([]orchestrator.Cut(nil), recipe.Cuts...)
+	planned := append([]video.Cut(nil), recipe.Cuts...)
 
 	writer := &draftWriter{}
 	saveContext := newContext()

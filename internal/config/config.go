@@ -79,6 +79,9 @@ type AIConfig struct {
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
 	KeyframeRateInterval   time.Duration `env:"KEYFRAME_RATE_INTERVAL" envDefault:"60s"`
+	// KeyframeImageSize はキーフレーム画像の出力解像度です（"1K" / "2K" / "4K"）。
+	// go-veo-orchestrator は画作りの既定値を持たないため、ここが唯一の出所です。
+	KeyframeImageSize string `env:"KEYFRAME_IMAGE_SIZE" envDefault:"2K"`
 	// VeoPriceUSDPerSec は履歴画面に出す概算コストの単価表です（モデル名:USD/生成1秒）。
 	// 空キー（":0.40" のように書く）は表に無いモデルへのフォールバックになります。
 	//

@@ -13,7 +13,7 @@ import (
 
 	"github.com/shouni/go-utils/jobid"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -126,7 +126,7 @@ func (h *Handler) UpdateDraft(w http.ResponseWriter, r *http.Request) {
 		// 検証失敗（ErrRecipeInvalid）だけが呼び出し側の誤りで、ストレージ障害を
 		// 400 で返すと「あなたのレシピが悪い」という嘘になる（以前は全部 400 だった）。
 		status := http.StatusInternalServerError
-		if errors.Is(err, orchestrator.ErrRecipeInvalid) {
+		if errors.Is(err, video.ErrRecipeInvalid) {
 			status = http.StatusBadRequest
 		}
 		writeError(w, r, status, err.Error())

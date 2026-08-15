@@ -8,6 +8,8 @@ import (
 	"time"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -44,9 +46,9 @@ func (f VideoGenerationFilter) Execute(ctx context.Context, fc *Context) error {
 	// Veo がサポートしない尺（reference_to_videoなら8秒以外、image_to_videoなら4/6/8秒以外）の
 	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
 	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
-	// (orchestrator.VeoContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
-	// （詳細は orchestrator.ExpandCutsToSupportedDurations のコメント参照）。
-	fc.VideoRecipe.Cuts = orchestrator.ExpandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
+	// (veo.ContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
+	// （詳細は veo.ExpandCutsToSupportedDurations のコメント参照）。
+	fc.VideoRecipe.Cuts = veo.ExpandCutsToSupportedDurations(fc.VideoRecipe.Cuts, f.UsePreviousVideo, fc.Characters, referenceImagesSupported(f.resolvedVideoRunner(fc)))
 	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
 	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
 	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
@@ -126,7 +128,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 		// 手前でチェーンをリセットし、そのカットを7秒固定ではなく{4,6,8}秒のいずれかに
 		// 揃える。7秒固定でない = チェーンリセット後の新規ベースカットなので、
 		// PreviousVideoURI を引き継がずに生成する。
-		if f.UsePreviousVideo && cut.DurationSec != orchestrator.VeoVideoExtensionDurationSec {
+		if f.UsePreviousVideo && cut.DurationSec != veo.VideoExtensionDurationSec {
 			lastVideoID = ""
 			cut.IsChainStart = true
 			// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成された
@@ -134,7 +136,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 			// 参照画像として引き継ぎ、静的な立ち絵からの独立生成による見た目の
 			// ブレ（衣装ズレ等）を抑える。ただし IsSectionStart は「意図的な場面転換」
 			// （実際の曲のセクション境界、または scene_split.go によるシーン内リセット
-			// のどちらか。詳細は orchestrator.ExpandCutsToSupportedDurations の
+			// のどちらか。詳細は veo.ExpandCutsToSupportedDurations の
 			// コメント参照）なので、どちらの理由でも直前の絵を引き継がず、そのカット
 			// 自身に割り当てられたキーフレーム参照のまま生成する。
 			if i > 0 && !cut.IsSectionStart {
@@ -143,10 +145,10 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 				}
 			}
 		}
-		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, orchestrator.Cuts(fc.VideoRecipe.Cuts).NextLastFrameReference(i)); err != nil {
+		if err := f.generateCut(ctx, runner, fc, cut, lastVideoID, video.Cuts(fc.VideoRecipe.Cuts).NextLastFrameReference(i)); err != nil {
 			return err
 		}
-		if f.UsePreviousVideo && cut.DurationSec == orchestrator.VeoVideoExtensionDurationSec {
+		if f.UsePreviousVideo && cut.DurationSec == veo.VideoExtensionDurationSec {
 			if err := f.colorCorrectExtensionCut(ctx, fc, cut); err != nil {
 				return err
 			}
@@ -180,7 +182,7 @@ func (f VideoGenerationFilter) runDirect(ctx context.Context, fc *Context) error
 // 省略）の独立生成はチェーン起点ごとに見た目が確率的にブレるため、少なくともキャラクター
 // 単位で固定したシードを常に渡すことで、同一ジョブ内・ジョブ間のキャラ一貫性を高めます。
 // キャラクターにシードが無い場合のみ 0 を返します（従来挙動）。
-func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
+func videoSeed(fc *Context, cut *video.Cut) int64 {
 	if fc.Characters != nil {
 		if char := fc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil && char.Seed != nil {
 			return *char.Seed
@@ -195,7 +197,7 @@ func videoSeed(fc *Context, cut *orchestrator.Cut) int64 {
 // cut's ending frame (frames_to_video interpolation). The request is built first and then
 // classified via ports.ClassifyVeoRequest — the same decision the adapter makes when building
 // the Veo body — so the prompt guidance always matches how Veo actually interprets the request.
-func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *orchestrator.Cut, lastVideoID, lastFrameRef string) error {
+func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.VideoRunner, fc *Context, cut *video.Cut, lastVideoID, lastFrameRef string) error {
 	req := ports.VideoGenerationRequest{
 		CutIndex:           cut.CutIndex,
 		DurationSec:        cut.DurationSec,
@@ -203,7 +205,7 @@ func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.Vid
 		PreviousVideoURI:   lastVideoID,
 		ImageReference:     cut.KeyframeReference,
 		LastFrameReference: lastFrameRef,
-		ReferenceImages:    orchestrator.CutReferenceImages(*cut, fc.Characters),
+		ReferenceImages:    video.CutReferenceImages(*cut, fc.Characters),
 		AudioReference:     cut.AudioReference,
 	}
 	mode := ports.ClassifyVeoRequest(req, f.UsePreviousVideo, ports.RunnerCapabilities(runner))
@@ -217,7 +219,7 @@ func (f VideoGenerationFilter) generateCut(ctx context.Context, runner ports.Vid
 	if err != nil {
 		return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
 	}
-	cut.Status = orchestrator.CutStatusGenerated
+	cut.Status = video.CutStatusGenerated
 	cut.VideoID = res.VideoID
 	cut.VideoURL = res.CloudURL
 	// 課金が発生した直後に記録する。完成品の尺（レシピから常に算出できる）と違い、
@@ -294,7 +296,7 @@ func videoOutputContext(ctx context.Context, fc *Context) context.Context {
 }
 
 // hasPendingCuts reports whether a recipe has cuts awaiting video generation.
-func hasPendingCuts(recipe *orchestrator.VideoRecipe) bool {
+func hasPendingCuts(recipe *video.Recipe) bool {
 	if recipe == nil {
 		return false
 	}

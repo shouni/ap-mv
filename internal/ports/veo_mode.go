@@ -1,7 +1,7 @@
 package ports
 
 import (
-	veoports "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/veo"
 )
 
 // このファイルは Veo リクエスト分類を go-veo-orchestrator へ委譲します。
@@ -17,33 +17,33 @@ import (
 // VeoGenerationMode は、1つの動画生成リクエストが Veo のどの生成機能で解釈されるかを
 // 表します。値は assets/prompts/video_gen/ 配下のプロンプトファイル名（拡張子なし）と
 // 一致します。
-type VeoGenerationMode = veoports.VeoGenerationMode
+type VeoGenerationMode = veo.GenerationMode
 
 const (
 	// VeoModeImageToVideo はキーフレーム画像を image 入力とする image_to_video です。
-	VeoModeImageToVideo = veoports.VeoModeImageToVideo
+	VeoModeImageToVideo = veo.ModeImageToVideo
 	// VeoModeFramesToVideo は開始フレームを image 入力、終了フレームを lastFrame 入力と
 	// する first/last frame 補間です（Veo 2 / Veo 3.1 系のみ、Fast も対応）。
-	VeoModeFramesToVideo = veoports.VeoModeFramesToVideo
+	VeoModeFramesToVideo = veo.ModeFramesToVideo
 	// VeoModeReferenceToVideo は [キャラ立ち絵, キーフレーム] を referenceImages とする
 	// reference_to_video です（Veo 3 系の非Fastモデルのみ、8秒固定）。
-	VeoModeReferenceToVideo = veoports.VeoModeReferenceToVideo
+	VeoModeReferenceToVideo = veo.ModeReferenceToVideo
 	// VeoModeVideoExtension は前カット動画を video 入力とする video_extension
 	// （video-to-video継続）です。このモードでは画像参照は一切送られません。
-	VeoModeVideoExtension = veoports.VeoModeVideoExtension
+	VeoModeVideoExtension = veo.ModeVideoExtension
 )
 
 // VeoCapabilities は、実際に使われる Runner／モデルが Veo のオプション機能に対応して
 // いるかを表します。ClassifyVeoRequest の入力で、adapter はモデル名から、filter は
 // Runner のオプションインターフェースから導出します。
-type VeoCapabilities = veoports.VeoCapabilities
+type VeoCapabilities = veo.Capabilities
 
 // RunnerCapabilities は Runner のオプションインターフェース
 // （ReferenceImagesSupporter / LastFrameSupporter）から VeoCapabilities を導出します。
 // インターフェースを実装しない Runner（テストダブル等）は各機能とも false になり、
 // image_to_video 側へ倒れます。
 func RunnerCapabilities(runner VideoRunner) VeoCapabilities {
-	return veoports.RunnerCapabilities(runner)
+	return veo.RunnerCapabilities(runner)
 }
 
 // ClassifyVeoRequest は、このリクエストが Veo のどの生成機能で解釈されるかを判定します。
@@ -60,11 +60,11 @@ func RunnerCapabilities(runner VideoRunner) VeoCapabilities {
 //     （Veo の lastFrame は image とセットでのみ有効）。
 //  4. image_to_video — それ以外すべて。
 func ClassifyVeoRequest(req VideoGenerationRequest, usePreviousVideo bool, caps VeoCapabilities) VeoGenerationMode {
-	return veoports.ClassifyVeoRequest(req, usePreviousVideo, caps)
+	return veo.ClassifyRequest(req, usePreviousVideo, caps)
 }
 
 // VeoModelCapabilities は、Veo のモデル名からオプション機能への対応を導出します。
 // モデル名→対応機能の規則はライブラリ側が唯一の定義元です。
 func VeoModelCapabilities(model string) VeoCapabilities {
-	return veoports.VeoModelCapabilities(model)
+	return veo.ModelCapabilities(model)
 }

@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -95,7 +95,7 @@ func (RecipeLoadFilter) Execute(ctx context.Context, fc *Context) error {
 // 解決前に渡すと、指し先の壊れた参照をそのまま再利用してしまいます。
 //
 // base が空（レシピ JSON を直接渡された場合など）や、すでにスキーム付きの参照はそのままです。
-func absolutizeKeyframeReferences(recipe *orchestrator.VideoRecipe, base string) {
+func absolutizeKeyframeReferences(recipe *video.Recipe, base string) {
 	if recipe == nil || base == "" {
 		return
 	}

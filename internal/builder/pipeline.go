@@ -3,7 +3,6 @@ package builder
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/shouni/go-gemini-client/gemini"
@@ -124,13 +123,9 @@ func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orc
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("build workflow for selected models: %w", err)
 	}
-	// タスク専用に構築したものは、このタスクが終わったら閉じる。閉じないと
-	// 画像キャッシュのクリーンアップ goroutine がタスクごとに積み上がる。
-	return workflows, func() {
-		if err := workflows.Close(); err != nil {
-			slog.Warn("failed to close task-scoped workflows", "error", err)
-		}
-	}, nil
+	// Workflows に Close はありません。参照画像を gs:// のまま渡すようになり、
+	// 停止すべき画像キャッシュの goroutine が無くなったためです。
+	return workflows, func() {}, nil
 }
 
 // usesCustomModels はタスクが既定モデル以外を指定しているかを判定します。

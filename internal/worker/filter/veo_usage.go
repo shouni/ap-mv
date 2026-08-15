@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/shouni/go-remote-io/remoteio"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -27,7 +27,7 @@ import (
 // 記録の失敗は返しません。会計のために生成を止めるのは本末転倒だからです（呼び出し側は
 // 既に Veo へ課金済みで、ここで失敗を返すと Cloud Tasks が同じカットを焼き直しにきます）。
 // 失敗はログに残し、実績が過小になることを受け入れます。
-func recordVeoUsage(ctx context.Context, fc *Context, cut *orchestrator.Cut) {
+func recordVeoUsage(ctx context.Context, fc *Context, cut *video.Cut) {
 	if fc == nil || cut == nil || fc.Writer == nil {
 		return
 	}

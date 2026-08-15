@@ -20,6 +20,7 @@ import (
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
 	"github.com/shouni/go-prompt-kit/resource"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
 )
@@ -51,18 +52,18 @@ type scriptPromptData struct {
 // runner always carries it over from the source recipe instead) and cut_index (computed by
 // VideoRecipe.Normalize) from the grammar the model is allowed to emit. Showing them here would
 // instruct the model to fill in a shape it is structurally prevented from outputting. Cuts reuses
-// orchestrator.Cut directly (no leakage issue there — it has no embedded, untagged fields), so a
+// video.Cut directly (no leakage issue there — it has no embedded, untagged fields), so a
 // rename or removal of a Cut field breaks this build instead of silently drifting from a
 // copy-pasted schema in the prompt template.
 type videoRecipeSchemaExample struct {
 	ProjectTitle string `json:"project_title,omitempty"`
 	Description  string `json:"description,omitempty"`
 	// LocationAnchor is set once for the whole video and propagated onto every cut by
-	// orchestrator.VideoRecipe.Normalize (see ports/recipe.go in go-veo-orchestrator); it grounds
+	// video.Recipe.Normalize (see ports/recipe.go in go-veo-orchestrator); it grounds
 	// each cut's keyframe prompt in the same persistent setting so a cut whose own VisualAnchor
 	// omits the location doesn't leave the image model free to hallucinate an unrelated one.
-	LocationAnchor string             `json:"location_anchor,omitempty"`
-	Cuts           []orchestrator.Cut `json:"cuts"`
+	LocationAnchor string      `json:"location_anchor,omitempty"`
+	Cuts           []video.Cut `json:"cuts"`
 }
 
 // recipeOutputSchema builds the example JSON schema shown to the script-generation LLM by
@@ -76,11 +77,11 @@ func recipeOutputSchema() (string, error) {
 		ProjectTitle:   "short title",
 		Description:    "short description of the video concept",
 		LocationAnchor: "the single persistent core setting for the whole video: location plus any recurring prop, e.g. 'a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her'",
-		Cuts: []orchestrator.Cut{
+		Cuts: []video.Cut{
 			{
 				VisualAnchor: "visual scene prompt for keyframe and video",
 				CharacterID:  "",
-				AudioSync: orchestrator.AudioSync{
+				AudioSync: video.AudioSync{
 					DurationSec:    8,
 					AudioCue:       "musical timing cue",
 					AudioReference: "optional gs:// audio segment or full music file",
@@ -103,7 +104,7 @@ type visualModeData struct {
 	Tempo               int
 	Key                 string
 	Instruments         []string
-	Sections            []orchestrator.Section
+	Sections            []video.Section
 	Hook                string
 	LyricText           string
 	Keywords            []string
@@ -112,7 +113,7 @@ type visualModeData struct {
 	CharacterVisualCues []string
 }
 
-func newVisualModeData(recipe *orchestrator.VideoRecipe, char *characterkit.Character) visualModeData {
+func newVisualModeData(recipe *video.Recipe, char *characterkit.Character) visualModeData {
 	if recipe == nil {
 		return visualModeData{}
 	}
@@ -244,7 +245,7 @@ func (p *Script) Build(mode string, data *orchestrator.TemplateData) (string, er
 	})
 }
 
-func formatSourceRecipeJSON(recipe *orchestrator.VideoRecipe) (string, error) {
+func formatSourceRecipeJSON(recipe *video.Recipe) (string, error) {
 	if recipe == nil {
 		return "", fmt.Errorf("source recipe is required")
 	}
@@ -261,12 +262,12 @@ func formatSourceRecipeJSON(recipe *orchestrator.VideoRecipe) (string, error) {
 	return string(data), nil
 }
 
-func cloneVideoRecipe(recipe *orchestrator.VideoRecipe) (*orchestrator.VideoRecipe, error) {
+func cloneVideoRecipe(recipe *video.Recipe) (*video.Recipe, error) {
 	data, err := json.Marshal(recipe)
 	if err != nil {
 		return nil, fmt.Errorf("clone source recipe json: %w", err)
 	}
-	var cloned orchestrator.VideoRecipe
+	var cloned video.Recipe
 	if err := json.Unmarshal(data, &cloned); err != nil {
 		return nil, fmt.Errorf("clone source recipe json: %w", err)
 	}
@@ -316,6 +317,16 @@ type Keyframe struct {
 // プロンプト文言の所有者であるここへ移しました。
 const DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, expressive eyes, cinematic lighting, consistent character design, high resolution"
 
+// DefaultKeyframeNegativePrompt は、キーフレーム画像で排除する要素の既定指定です。
+//
+// go-veo-orchestrator が持っていた文言をそのまま移してきました。キット側から外したのは、
+// 前半（フキダシ・文字の排除）が動画のキーフレームとして普遍的なのに対し、後半の
+// monochrome / black and white / greyscale が**画風の指定そのもの**だからです。
+// キットに置いたままだと、モノクロの MV を作りたいときにキットのリリースを待つことに
+// なります。DefaultStyleSuffix と対になる値なので、画風を差し替えるときは両方を
+// 一緒に見直してください（片方だけ変えると指示が矛盾します）。
+const DefaultKeyframeNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, low quality, distorted, bad anatomy, monochrome, black and white, greyscale"
+
 // NewKeyframe は埋め込みアセットからキーフレームプロンプトを組み立てます。
 func NewKeyframe(styleSuffix, visualMode string) (Keyframe, error) {
 	visualTemplates, err := assets.LoadVisualModeFiles()
@@ -344,7 +355,7 @@ func resolveCharacterPromptFields(char *characterkit.Character) (name, cues stri
 }
 
 // BuildCut builds prompts for a single keyframe cut.
-func (p Keyframe) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (string, string) {
+func (p Keyframe) BuildCut(cut video.Cut, char *characterkit.Character) (string, string) {
 	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		fmt.Sprintf("Create a clean keyframe image for cut %d.", cut.CutIndex),
@@ -367,7 +378,7 @@ func (p Keyframe) BuildCut(cut orchestrator.Cut, char *characterkit.Character) (
 // BuildEdit builds prompts for editing an existing keyframe image with editPrompt, reinforcing
 // character identity and art style the same way BuildCut does so the edited result doesn't
 // drift from the rest of the cuts.
-func (p Keyframe) BuildEdit(_ orchestrator.Cut, char *characterkit.Character, editPrompt string) (string, string) {
+func (p Keyframe) BuildEdit(_ video.Cut, char *characterkit.Character, editPrompt string) (string, string) {
 	character, cues := resolveCharacterPromptFields(char)
 	userPrompt := strings.Join(nonEmptyStrings(
 		"Edit the provided keyframe image. Keep the composition, pose, background, and art style exactly as they are; apply only this change.",

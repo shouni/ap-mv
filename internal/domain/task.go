@@ -205,6 +205,13 @@ func (t *Task) ASSColors() ASSColors {
 // TestComposeTemplateOffersAllAspectRatios が同期を検証します）。
 var AllowedAspectRatios = []string{"16:9", "9:16"}
 
+// DefaultAspectRatio は、タスクにも設定にも指定が無いときに使うアスペクト比です。
+//
+// go-veo-orchestrator は画作りの既定値を持たなくなったため（キットが既定を持つと
+// VEO_ASPECT_RATIO と出所が二重になり、片方だけ変えたときに黙って食い違うため）、
+// 既定はアプリ側のこの1箇所で決めます。
+const DefaultAspectRatio = "16:9"
+
 // IsAllowedAspectRatio は value が許可されたアスペクト比かを返します。
 func IsAllowedAspectRatio(value string) bool {
 	for _, allowed := range AllowedAspectRatios {

@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
@@ -126,7 +126,7 @@ func TestDraftReturnsJSONRecipe(t *testing.T) {
 	h := newDraftHandler(t, &fakeDraftRepository{
 		recipe: &domain.VideoRecipe{
 			ProjectTitle: "draft test",
-			Cuts:         []orchestrator.Cut{{CutIndex: 1, VisualAnchor: "rooftop"}},
+			Cuts:         []video.Cut{{CutIndex: 1, VisualAnchor: "rooftop"}},
 		},
 	})
 
@@ -241,10 +241,10 @@ func TestUpdateDraftAcceptsBareRecipe(t *testing.T) {
 
 // TestUpdateDraftRejectsInvalidRecipe pins that a repository-level validation failure surfaces as
 // a 400 rather than overwriting the draft with something keyframe generation would choke on.
-// 検証失敗は orchestrator.ErrRecipeInvalid を包んで返るのが実リポジトリの挙動で、
+// 検証失敗は video.ErrRecipeInvalid を包んで返るのが実リポジトリの挙動で、
 // ストレージ障害（500 になる）とはこのセンチネルで区別される。
 func TestUpdateDraftRejectsInvalidRecipe(t *testing.T) {
-	repo := &fakeDraftRepository{saveErr: fmt.Errorf("%w: video recipe requires cuts", orchestrator.ErrRecipeInvalid)}
+	repo := &fakeDraftRepository{saveErr: fmt.Errorf("%w: video recipe requires cuts", video.ErrRecipeInvalid)}
 	h := newDraftHandler(t, repo)
 
 	rec := httptest.NewRecorder()

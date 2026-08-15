@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/shouni/go-remote-io/remoteio"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -102,9 +102,9 @@ func draftTestRecipe() *domain.VideoRecipe {
 				{Name: "Verse", Duration: 12, StartSeconds: 0, EndSeconds: 12, Prompt: "pulse"},
 			},
 		},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "rooftop", AudioSync: orchestrator.AudioSync{DurationSec: 6}},
-			{CutIndex: 2, VisualAnchor: "street", AudioSync: orchestrator.AudioSync{DurationSec: 6}},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "rooftop", AudioSync: video.AudioSync{DurationSec: 6}},
+			{CutIndex: 2, VisualAnchor: "street", AudioSync: video.AudioSync{DurationSec: 6}},
 		},
 	}
 }
@@ -147,7 +147,7 @@ func TestSaveDraftRecipeRejectsInvalidRecipe(t *testing.T) {
 	if err == nil {
 		t.Fatal("SaveDraftRecipe() must reject a recipe with no cuts")
 	}
-	if !errors.Is(err, orchestrator.ErrRecipeInvalid) {
+	if !errors.Is(err, video.ErrRecipeInvalid) {
 		t.Fatalf("error = %v, want ErrRecipeInvalid for validation failures", err)
 	}
 	if len(store.files) != 0 {

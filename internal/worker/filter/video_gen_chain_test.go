@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -16,14 +16,14 @@ import (
 // frame is extracted from the previous cut's color-corrected video rather than the raw Veo
 // output.
 func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 2, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 3, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 4, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 5, VisualAnchor: "a", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 2, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 3, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 4, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 5, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -42,7 +42,7 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	}
 
 	// 8,7,7,8(reset),7: cumulative 8->15->22, then 22+7>24 so cut4 resets.
-	// orchestrator.VeoContinuationMaxDurationSec=24 caps each chain at 2 video_extension continuations
+	// veo.ContinuationMaxDurationSec=24 caps each chain at 2 video_extension continuations
 	// (not 3) to limit color-drift accumulation, so this chain is shorter than Veo's ~30s
 	// hard API limit would otherwise allow.
 	wantChainStart := []bool{true, false, false, true, false}
@@ -85,12 +85,12 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 // scene keyframe (a fully rendered "Cinematic anime style" image, SATAVG~28.6) is the
 // correct target.
 func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{Title: "test"},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
-			{CutIndex: 2, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
-			{CutIndex: 3, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: orchestrator.AudioSync{DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{Title: "test"},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+			{CutIndex: 2, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+			{CutIndex: 3, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -150,19 +150,19 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 // treats it as a hard-cut boundary), but does NOT extract the previous chain's last frame —
 // the section's own intended keyframe is used instead, since the scene is meant to change.
 func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
-	recipe := &orchestrator.VideoRecipe{
-		MusicRecipe: orchestrator.MusicRecipe{
+	recipe := &video.Recipe{
+		MusicRecipe: video.MusicRecipe{
 			Title: "test",
-			Sections: []orchestrator.Section{
+			Sections: []video.Section{
 				{Name: "Verse", StartSeconds: 0, EndSeconds: 16},
 				{Name: "Chorus", StartSeconds: 16, EndSeconds: 32},
 			},
 		},
-		Cuts: []orchestrator.Cut{
-			{CutIndex: 1, VisualAnchor: "verse", AudioSync: orchestrator.AudioSync{StartSec: 0, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
-			{CutIndex: 2, VisualAnchor: "verse", AudioSync: orchestrator.AudioSync{StartSec: 8, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
-			{CutIndex: 3, VisualAnchor: "chorus", AudioSync: orchestrator.AudioSync{StartSec: 16, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
-			{CutIndex: 4, VisualAnchor: "chorus", AudioSync: orchestrator.AudioSync{StartSec: 24, DurationSec: 8}, KeyframeResult: orchestrator.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
+		Cuts: []video.Cut{
+			{CutIndex: 1, VisualAnchor: "verse", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
+			{CutIndex: 2, VisualAnchor: "verse", AudioSync: video.AudioSync{StartSec: 8, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
+			{CutIndex: 3, VisualAnchor: "chorus", AudioSync: video.AudioSync{StartSec: 16, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
+			{CutIndex: 4, VisualAnchor: "chorus", AudioSync: video.AudioSync{StartSec: 24, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
