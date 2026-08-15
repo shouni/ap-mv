@@ -125,6 +125,10 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-video", h.PostRegenerateCutVideo)
 		r.Get("/history/{jobID}/sections/{sectionIndex}/regenerate", h.RegenerateSectionKeyframesForm)
 		r.Post("/history/{jobID}/sections/{sectionIndex}/regenerate-keyframes", h.PostRegenerateSectionKeyframes)
+		// セクション単位で「キーフレーム → 動画」を進め、結果を元ジョブへ書き戻します。
+		// 仕上げの結合は finalize が別途担当します（PostSectionVideo 参照）。
+		r.Post("/history/{jobID}/sections/{sectionIndex}/video", h.PostSectionVideo)
+		r.Post("/history/{jobID}/finalize", h.PostFinalizeVideo)
 		r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
 		r.Post("/history/{jobID}/generate-video", h.PostGenerateVideoFromHistory)
 	})

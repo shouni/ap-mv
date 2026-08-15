@@ -12,7 +12,9 @@ import (
 func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 	tests := []struct {
 		command domain.TaskCommand
-		want    []string
+		// origin は継続タスクが引き継ぐ元コマンドです（継続以外では空）。
+		origin domain.TaskCommand
+		want   []string
 	}{
 		{
 			// 下書きはキーフレームを1枚も焼かずに終わる唯一の生成系コマンド。cut_keyframe_gen が
@@ -59,10 +61,34 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			command: domain.CommandVideoGenContinuation,
 			want:    []string{"video_gen", "chain_finalize", "publishing"},
 		},
+		{
+			// セクション単位の積み上げ。scene_split を通さないのは cut_video と同じ理由で、
+			// 保存済みのカット割りを再計画すると既存カットの動画と対応が崩れるため。
+			// chain_finalize が**入っていない**ことがこの計画の要点で、通してしまうと
+			// セクションを1つ焼くたびに中途半端な final_video_url が生まれる。
+			command: domain.CommandSectionVideo,
+			want:    []string{"recipe_load", "original_job_output", "section_keyframe", "zip_upload", "video_gen", "publishing"},
+		},
+		{
+			// section_video の続きも結合しない。ここが素の継続計画へ落ちると、
+			// セクションを焼き終えた瞬間に結合まで走ってしまう。
+			command: domain.CommandVideoGenContinuation,
+			origin:  domain.CommandSectionVideo,
+			want:    []string{"original_job_output", "video_gen", "publishing"},
+		},
+		{
+			// 仕上げ専用。video_gen を通さないので、未生成カットが残っていても課金されない。
+			command: domain.CommandFinalizeVideo,
+			want:    []string{"recipe_load", "original_job_output", "chain_finalize", "publishing"},
+		},
 	}
 	for _, tt := range tests {
-		t.Run(string(tt.command), func(t *testing.T) {
-			filters, err := DefaultPlanner{}.Plan(&domain.Task{Command: tt.command}, nil)
+		name := string(tt.command)
+		if tt.origin != "" {
+			name += "_from_" + string(tt.origin)
+		}
+		t.Run(name, func(t *testing.T) {
+			filters, err := DefaultPlanner{}.Plan(&domain.Task{Command: tt.command, OriginCommand: tt.origin}, nil)
 			if err != nil {
 				t.Fatalf("Plan() error = %v", err)
 			}

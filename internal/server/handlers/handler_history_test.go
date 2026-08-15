@@ -63,8 +63,10 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
 		}
 	}
-	if strings.Contains(body, "完成動画") {
-		t.Fatalf("HistoryDetail body unexpectedly rendered 完成動画 block without FinalVideoSignedURL: %s", body)
+	// 見出し文言ではなくプレイヤーそのもので判定する。「完成動画」という語は結合フォームの
+	// 説明文にも出るため、文言で見るとプレイヤーと無関係な文章の追加だけで落ちる。
+	if strings.Contains(body, "<video") {
+		t.Fatalf("HistoryDetail body unexpectedly rendered the final-video player without FinalVideoSignedURL: %s", body)
 	}
 }
 
