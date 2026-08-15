@@ -127,8 +127,28 @@ func (c *Config) ValidateEssentialConfig() error {
 		if len(c.Tasks.AllowedServiceAccounts) == 0 {
 			return fmt.Errorf("許可する caller SA が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS を設定してください")
 		}
+		if err := c.validatePipelineTimeout(); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+// validatePipelineTimeout は、パイプラインを走らせる役割で PIPELINE_TIMEOUT が
+// TaskDispatchDeadline より確実に短いことを検査します。
+//
+// アプリが自分で先に諦めることが要点です。逆順（等号を含む）だと Cloud Tasks が先に
+// リクエストを打ち切り、失敗の記録も Slack 通知も走らないまま、キューは max_attempts = 1 で
+// 再試行しないため、タスクが running のまま残ります。無制限（0 以下）も同じ理由で拒みます。
+// 打ち切りの実効上限は 3 つのうち最小値なので、この 1 本だけは起動時に強制します。
+func (c *Config) validatePipelineTimeout() error {
+	if c.AI.PipelineTimeout <= 0 {
+		return fmt.Errorf("PIPELINE_TIMEOUT は worker では無制限にできません。Cloud Tasks の打ち切り（%s）より短い値を設定してください", TaskDispatchDeadline)
+	}
+	if c.AI.PipelineTimeout >= TaskDispatchDeadline {
+		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.AI.PipelineTimeout, TaskDispatchDeadline)
+	}
 	return nil
 }
 
