@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path"
 	"strings"
 
 	"github.com/shouni/go-job-kit/cache"
+	"github.com/shouni/go-job-kit/joblist"
 	"github.com/shouni/go-job-kit/paging"
 	"github.com/shouni/go-remote-io/remoteio"
 
@@ -77,43 +77,26 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 
 // collectJobIDs は baseURI 直下のジョブディレクトリを走査して MV ジョブの ID を集めます。
 // バケット全体の List になるため、呼び出しは listJobIDs のキャッシュ越しに行います。
-// regen-keyframe- で始まる ID は再生成用の作業ジョブなので一覧から除外します。
 //
-// 区切り文字を指定して、ジョブ 1 件を 1 エントリとして受け取ります。指定しないと
-// 配下の成果物（カットごとのキーフレーム・動画・最終 MV）が全件返るため、1 ジョブに
-// つき数十〜数百のパスを受け取ったうえで、呼び出し側でジョブ ID の重複を潰すことに
-// なります。同じ走査をサーバー側へ寄せています。regens/cut-N/ のようなサブディレクトリも
-// ジョブの疑似ディレクトリへ畳まれるため、階層の深さを数える必要はなくなります。
+// 走査そのものは joblist が担います。区切り文字を指定してジョブ 1 件を 1 エントリで
+// 受け取る形なので、配下の成果物（カットごとのキーフレーム・動画・最終 MV）が全件
+// 返ることはなく、regens/cut-N/ のようなサブディレクトリもジョブの疑似ディレクトリへ
+// 畳まれます。ここが与えるのは 2 つの絞り込みだけです。
+//
+//   - regen-keyframe- で始まる ID は再生成用の作業ジョブなので一覧から除外する
+//   - ID の形を満たさないディレクトリは落とす
 //
 // 拾えるのはディレクトリ名だけなので、video_music_meta.json を持たないジョブ
-// （メタデータの保存前に落ちたもの）も ID としては現れます。ID の形を満たさない
-// ディレクトリは jobid.Validate で落ちますが、それを通ったものは ListHistoryPage の
+// （メタデータの保存前に落ちたもの）も ID としては現れます。それらは ListHistoryPage の
 // フォールバック値（ジョブ ID のみの行）として一覧に並びます。生成に失敗したジョブが
 // 一覧から完全に消えるより、行として見えているほうが追跡できるためです。
 func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
-	// コンストラクタで末尾スラッシュは除去済みだが、防御的に再度除去する。
-	baseURI := strings.TrimSuffix(r.baseURI, "/")
-	seen := map[string]bool{}
-	var jobIDs []string
-	err := r.reader.List(ctx, baseURI+"/", func(gcsPath string) error {
-		// 疑似ディレクトリだけを拾う。baseURI 直下に置かれたオブジェクトはジョブではない。
-		if !strings.HasSuffix(gcsPath, "/") {
-			return nil
-		}
-		jobID := path.Base(strings.TrimSuffix(gcsPath, "/"))
-		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
-			return nil
-		}
-		if strings.HasPrefix(jobID, regenKeyframePrefix) {
-			return nil
-		}
-		if err := jobid.Validate(jobID); err != nil {
-			return nil
-		}
-		seen[jobID] = true
-		jobIDs = append(jobIDs, jobID)
-		return nil
-	}, remoteio.WithDelimiter("/"))
+	jobIDs, err := joblist.Collect(ctx, r.reader, r.baseURI,
+		joblist.WithKeep(func(jobID string) bool {
+			return !strings.HasPrefix(jobID, regenKeyframePrefix)
+		}),
+		joblist.WithValidIDsOnly(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("list history objects: %w", err)
 	}
