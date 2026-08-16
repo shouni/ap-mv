@@ -6,6 +6,7 @@ import (
 	"testing/fstest"
 
 	characterkit "github.com/shouni/go-character-kit/character"
+	promptkit "github.com/shouni/go-prompt-kit/prompts"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/video"
 
@@ -369,9 +370,9 @@ func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
 		t.Fatalf("LoadVisualModeFiles() error = %v", err)
 	}
 	for mode := range modes {
-		// アンダースコア始まりは他テンプレートから参照されるパーシャルで、
+		// パーシャルは他テンプレートから参照される部品で、
 		// visual mode として選択される名前ではない。
-		if strings.HasPrefix(mode, "_") {
+		if promptkit.IsPartial(mode, promptkit.DefaultPartialPrefix) {
 			continue
 		}
 		t.Run(mode, func(t *testing.T) {

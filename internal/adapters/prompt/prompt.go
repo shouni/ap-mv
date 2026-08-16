@@ -297,7 +297,7 @@ func (p *Script) visualPrompt(mode string, data *orchestrator.TemplateData) (str
 // loadPromptTemplates loads prompt templates. Mode names come from the file name
 // without its extension.
 func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, error) {
-	templates, err := resource.Load(fileSystem, rootDir, "", resource.WithExtensions(".md"))
+	templates, err := resource.Load(fileSystem, rootDir, resource.WithExtensions(".md"))
 	if err != nil {
 		return nil, fmt.Errorf("read prompt directory: %w", err)
 	}
