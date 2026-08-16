@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
-	"strings"
 
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
+	promptkit "github.com/shouni/go-prompt-kit/prompts"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/app"
@@ -139,7 +139,9 @@ func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
 		Modes: make([]handlers.VisualModeOption, 0, len(templates)),
 	}
 	for mode := range templates {
-		if strings.HasPrefix(mode, "_") {
+		// 部品は他テンプレートからの参照専用で、選択肢に出す名前ではありません。
+		// 判定は Builder が Build の対象を決めるのと同じ関数に任せます。
+		if promptkit.IsPartial(mode, promptkit.DefaultPartialPrefix) {
 			continue
 		}
 		options.Modes = append(options.Modes, handlers.VisualModeOption{

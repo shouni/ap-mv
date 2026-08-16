@@ -15,6 +15,12 @@ import (
 
 const taskGeneratePath = "/tasks/generate"
 
+// TaskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
+// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。投入時にタスクへ
+// 焼き込む値ですが、PIPELINE_TIMEOUT の上限としても効くため builder ではなくここに
+// 置いています（ValidateEssentialConfig が検査します）。
+const TaskDispatchDeadline = 30 * time.Minute
+
 // ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
@@ -71,10 +77,14 @@ type AIConfig struct {
 	VeoGenerateAudio    bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
 	VeoPollInterval     time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
 	VeoOperationTimeout time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
-	// PipelineTimeout はワーカータスク 1 件の実行時間の上限です。0 以下は無制限を意味します。
+	// PipelineTimeout はワーカータスク 1 件の実行時間の上限です。
 	// VEO_OPERATION_TIMEOUT が Veo の 1 オペレーション単位の上限であるのに対し、
 	// こちらはフィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限です。
-	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"45m"`
+	//
+	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
+	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
+	// （worker では validatePipelineTimeout が起動時に拒否します）。
+	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"25m"`
 	VeoPollMaxErrors       int           `env:"VEO_POLL_MAX_ERRORS" envDefault:"10"`
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"slices"
 	"testing"
 )
 
@@ -15,6 +16,38 @@ func jobListReaderFixture() *fakeHistoryReader {
 			"gs://bucket/ap-mv/veo/jobs/job-20260502-123456-bbbb/video_music_meta.json",
 		},
 		files: map[string]string{},
+	}
+}
+
+// 一覧は区切り文字付きの List に乗るため、1 ジョブが成果物の数だけ重複して現れず、
+// ジョブの疑似ディレクトリ 1 件として集まること。カットごとのキーフレーム・動画で
+// 1 ジョブが数百オブジェクトになるため、ここが崩れると一覧走査がその倍数で効きます。
+func TestCollectJobIDsFoldsJobArtifactsIntoOneEntry(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeHistoryReader{
+		paths: []string{
+			"gs://bucket/ap-mv/veo/jobs/job-20260501-123456-aaaa/video_music_meta.json",
+			"gs://bucket/ap-mv/veo/jobs/job-20260501-123456-aaaa/cuts/cut-1.mp4",
+			"gs://bucket/ap-mv/veo/jobs/job-20260501-123456-aaaa/regens/cut-2/keyframe.png",
+			"gs://bucket/ap-mv/veo/jobs/job-20260502-123456-bbbb/video_music_meta.json",
+			// 再生成用の作業ジョブは一覧に出さない
+			"gs://bucket/ap-mv/veo/jobs/regen-keyframe-20260503-123456-cccc/video_music_meta.json",
+			// ジョブディレクトリではない直下のオブジェクト
+			"gs://bucket/ap-mv/veo/jobs/stray.json",
+		},
+		files: map[string]string{},
+	}
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: testBaseURI, Reader: reader, HistoryCache: NewHistoryCache()})
+
+	jobIDs, err := repo.collectJobIDs(context.Background())
+	if err != nil {
+		t.Fatalf("collectJobIDs() error = %v", err)
+	}
+
+	want := []string{"job-20260501-123456-aaaa", "job-20260502-123456-bbbb"}
+	if !slices.Equal(jobIDs, want) {
+		t.Errorf("collectJobIDs() = %v, want %v", jobIDs, want)
 	}
 }
 

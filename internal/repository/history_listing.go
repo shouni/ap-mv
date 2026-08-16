@@ -75,42 +75,36 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 	}
 }
 
-// collectJobIDs は baseURI 直下を走査して MV ジョブの ID を集めます。
+// collectJobIDs は baseURI 直下のジョブディレクトリを走査して MV ジョブの ID を集めます。
 // バケット全体の List になるため、呼び出しは listJobIDs のキャッシュ越しに行います。
 // regen-keyframe- で始まる ID は再生成用の作業ジョブなので一覧から除外します。
+//
+// 区切り文字を指定して、ジョブ 1 件を 1 エントリとして受け取ります。指定しないと
+// 配下の成果物（カットごとのキーフレーム・動画・最終 MV）が全件返るため、1 ジョブに
+// つき数十〜数百のパスを受け取ったうえで、呼び出し側でジョブ ID の重複を潰すことに
+// なります。同じ走査をサーバー側へ寄せています。regens/cut-N/ のようなサブディレクトリも
+// ジョブの疑似ディレクトリへ畳まれるため、階層の深さを数える必要はなくなります。
+//
+// 拾えるのはディレクトリ名だけなので、video_music_meta.json を持たないジョブ
+// （メタデータの保存前に落ちたもの）も ID としては現れます。ID の形を満たさない
+// ディレクトリは jobid.Validate で落ちますが、それを通ったものは ListHistoryPage の
+// フォールバック値（ジョブ ID のみの行）として一覧に並びます。生成に失敗したジョブが
+// 一覧から完全に消えるより、行として見えているほうが追跡できるためです。
 func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
-	jobIDs, err := r.collectJobIDsUnder(ctx, r.baseURI, videoMetadataFile, regenKeyframePrefix)
-	if err != nil {
-		return nil, fmt.Errorf("list history objects: %w", err)
-	}
-	return jobIDs, nil
-}
-
-// collectJobIDsUnder は、baseURI 直下の {jobID}/{metadataFile} を1階層だけ走査して
-// ジョブ ID を集める共通実装です。履歴（video_music_meta.json）と下書き
-// （video_recipe_draft.json）は走査プレフィックスとファイル名が違うだけで
-// 同じ規則を共有します。excludePrefix が非空の場合、その接頭辞の ID を除外します。
-func (r *VideoHistoryRepository) collectJobIDsUnder(ctx context.Context, baseURI, metadataFile, excludePrefix string) ([]string, error) {
-	// path.Dir は gs:// の // を潰すため strings ベースで深さを確認する。
 	// コンストラクタで末尾スラッシュは除去済みだが、防御的に再度除去する。
-	baseURI = strings.TrimSuffix(baseURI, "/")
+	baseURI := strings.TrimSuffix(r.baseURI, "/")
 	seen := map[string]bool{}
 	var jobIDs []string
 	err := r.reader.List(ctx, baseURI+"/", func(gcsPath string) error {
-		if path.Base(gcsPath) != metadataFile {
+		// 疑似ディレクトリだけを拾う。baseURI 直下に置かれたオブジェクトはジョブではない。
+		if !strings.HasSuffix(gcsPath, "/") {
 			return nil
 		}
-		// {baseURI}/{jobID}/{metadataFile} の1階層のみ対象にする。
-		// サブディレクトリ（regens/cut-N/ 等）の metadata は除外する。
-		rel := strings.TrimPrefix(gcsPath, baseURI+"/")
-		if strings.Count(rel, "/") != 1 {
-			return nil
-		}
-		jobID := path.Base(path.Dir(gcsPath))
+		jobID := path.Base(strings.TrimSuffix(gcsPath, "/"))
 		if jobID == "." || jobID == "/" || jobID == "" || seen[jobID] {
 			return nil
 		}
-		if excludePrefix != "" && strings.HasPrefix(jobID, excludePrefix) {
+		if strings.HasPrefix(jobID, regenKeyframePrefix) {
 			return nil
 		}
 		if err := jobid.Validate(jobID); err != nil {
@@ -119,9 +113,9 @@ func (r *VideoHistoryRepository) collectJobIDsUnder(ctx context.Context, baseURI
 		seen[jobID] = true
 		jobIDs = append(jobIDs, jobID)
 		return nil
-	})
+	}, remoteio.WithDelimiter("/"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list history objects: %w", err)
 	}
 	return jobIDs, nil
 }

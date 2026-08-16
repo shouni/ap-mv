@@ -44,12 +44,12 @@ var (
 
 // LoadVisualModeFiles は埋め込まれた映像スタイル用プロンプトファイルを読み込みます。
 func LoadVisualModeFiles() (map[string]string, error) {
-	return resource.Load(visualModeFiles, visualModePromptDir, "")
+	return resource.Load(visualModeFiles, visualModePromptDir)
 }
 
 // LoadVideoGenPrompts は埋め込まれた Veo 動画生成モード別プロンプトを読み込みます。
 // キーはファイル名（拡張子なし）: image_to_video / frames_to_video / reference_to_video /
 // video_extension。
 func LoadVideoGenPrompts() (map[string]string, error) {
-	return resource.Load(videoGenPromptFiles, videoGenPromptDir, "")
+	return resource.Load(videoGenPromptFiles, videoGenPromptDir)
 }
