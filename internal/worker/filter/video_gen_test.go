@@ -273,10 +273,17 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 // (always character-seeded) and video generation to silently diverge on legacy-migrated recipes.
 func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	charSeed := int64(208222065)
-	characters := &characterkit.Characters{
-		ByID: map[string]*characterkit.Character{
-			"tsumugi": {ID: "tsumugi", Seed: &charSeed},
+	characters, err := characterkit.NewCharacters([]characterkit.Character{
+		{
+			ID:           "tsumugi",
+			Name:         "Tsumugi",
+			ReferenceURL: "gs://bucket/characters/tsumugi.png",
+			VisualCues:   []string{"orange hair"},
+			Seed:         &charSeed,
 		},
+	})
+	if err != nil {
+		t.Fatalf("NewCharacters() error = %v", err)
 	}
 
 	recipeSeed := int64(777)
@@ -294,7 +301,7 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	runner := &seedCaptureRunner{}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	err := flt.Execute(context.Background(), &Context{
+	err = flt.Execute(context.Background(), &Context{
 		State: State{
 			Task:        task,
 			VideoRecipe: recipe,
@@ -318,10 +325,16 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 // durations are [8] for feature reference_to_video". A cut naturally 6s long (from the recipe's
 // section timing) must instead be forced to Veo's only reference_to_video duration, 8s.
 func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T) {
-	characters := &characterkit.Characters{
-		ByID: map[string]*characterkit.Character{
-			"tsumugi": {ID: "tsumugi", ReferenceURL: "gs://bucket/characters/tsumugi.png"},
+	characters, err := characterkit.NewCharacters([]characterkit.Character{
+		{
+			ID:           "tsumugi",
+			Name:         "Tsumugi",
+			ReferenceURL: "gs://bucket/characters/tsumugi.png",
+			VisualCues:   []string{"orange hair"},
 		},
+	})
+	if err != nil {
+		t.Fatalf("NewCharacters() error = %v", err)
 	}
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},

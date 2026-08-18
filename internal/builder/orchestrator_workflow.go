@@ -83,7 +83,7 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 		return nil, err
 	}
 	if p.seedOverride != nil {
-		characters = withCharacterSeedOverride(characters, p.seedOverride.characterID, p.seedOverride.seed)
+		characters = characters.WithSeedOverride(p.seedOverride.characterID, p.seedOverride.seed)
 	}
 	scriptPrompt, err := prompt.NewScript(p.visualMode, characters)
 	if err != nil {
@@ -119,28 +119,6 @@ func buildCharacters() (*character.Characters, error) {
 		return nil, fmt.Errorf("load bundled characters: %w", err)
 	}
 	return chars, nil
-}
-
-// withCharacterSeedOverride は base の該当キャラクターだけ Seed を差し替えたコピーを返します。
-// 対象IDが見つからない場合は base をそのまま返します。
-func withCharacterSeedOverride(base *character.Characters, characterID string, seed int64) *character.Characters {
-	if base == nil || characterID == "" {
-		return base
-	}
-	if _, ok := base.ByID[characterID]; !ok {
-		return base
-	}
-	list := make([]character.Character, len(base.List))
-	copy(list, base.List)
-	byID := make(map[string]*character.Character, len(list))
-	for i := range list {
-		if list[i].ID == characterID {
-			overridden := seed
-			list[i].Seed = &overridden
-		}
-		byID[list[i].ID] = &list[i]
-	}
-	return &character.Characters{List: list, ByID: byID}
 }
 
 // workflowOutputBaseURI returns the GCS base URI for workflow outputs.
