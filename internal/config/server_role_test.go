@@ -213,17 +213,14 @@ func TestWarnContradictoryKeyframeThroughput(t *testing.T) {
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
 	// 既定値は envDefault タグにしか無いため、タグそのものを読んで検査します。
 	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
-	t.Run("既定値は打ち切りより短い", func(t *testing.T) {
+	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
+	t.Run("既定値を持たない", func(t *testing.T) {
 		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
 		if !ok {
 			t.Fatal("AIConfig.PipelineTimeout not found")
 		}
-		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
-		if err != nil {
-			t.Fatalf("envDefault is not a duration: %v", err)
-		}
-		if got >= testDispatchDeadline {
-			t.Fatalf("default PIPELINE_TIMEOUT = %s, want < %s", got, testDispatchDeadline)
+		if got := field.Tag.Get("envDefault"); got != "" {
+			t.Errorf("envDefault = %q, 既定値を持たせないでください", got)
 		}
 		if err := newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig(); err != nil {
 			t.Fatalf("worker should start with a valid timeout: %v", err)

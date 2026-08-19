@@ -90,7 +90,7 @@ type AIConfig struct {
 	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
 	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
 	// （worker では validatePipelineTimeout が起動時に拒否します）。
-	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"25m"`
+	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT"`
 	VeoPollMaxErrors       int           `env:"VEO_POLL_MAX_ERRORS" envDefault:"10"`
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
