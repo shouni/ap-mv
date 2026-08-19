@@ -3,14 +3,11 @@ package config
 import (
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 	"time"
 
-	"github.com/shouni/go-remote-io/remoteio"
-	"github.com/shouni/netarmor/securenet"
-
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/netarmor/securenet"
 )
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
@@ -21,35 +18,6 @@ func (c *Config) IsSecureServiceURL() bool {
 // IsSecureWorkerURL は、Cloud Tasks の配送先URLが安全なスキームを使用しているか確認します。
 func (c *Config) IsSecureWorkerURL() bool {
 	return securenet.IsSecureServiceURL(c.Tasks.WorkerURL)
-}
-
-// normalizeGCSBucket normalizes a GCS bucket name.
-func normalizeGCSBucket(bucket string) string {
-	bucket = strings.TrimSpace(bucket)
-	bucket = strings.TrimPrefix(bucket, "gs://")
-	return strings.Trim(bucket, "/")
-}
-
-// normalizeWorkerURL normalizes the worker URL or derives it from the service URL.
-func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
-	workerURL = strings.TrimSpace(workerURL)
-	if workerURL != "" {
-		return workerURL, nil
-	}
-	return joinWorkerPath(serviceURL)
-}
-
-// joinWorkerPath returns the default worker endpoint for a service URL.
-func joinWorkerPath(serviceURL string) (string, error) {
-	serviceURL = strings.TrimSpace(serviceURL)
-	if serviceURL == "" {
-		return taskGeneratePath, nil
-	}
-	joined, err := url.JoinPath(serviceURL, taskGeneratePath)
-	if err != nil {
-		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
-	}
-	return joined, nil
 }
 
 // ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
@@ -76,7 +44,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureWorkerURL() {
 		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
 	}
-	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
+	// 正規化は normalize() が済ませています（検証は設定を書き換えません）。
 	if c.Storage.GCSBucket == "" {
 		return fmt.Errorf("AP_MV_BUCKET が設定されていません")
 	}
@@ -171,11 +139,6 @@ func (c *Config) warnContradictoryKeyframeThroughput() {
 		"effective_images_per_minute", int(time.Minute/c.AI.KeyframeRateInterval))
 }
 
-// GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
-func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(normalizeGCSBucket(c.Storage.GCSBucket), path)
-}
-
 // validateWebConfig は Web 面（OAuth ログインとセッション）に必要な設定を検証します。
 // Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
 // 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
@@ -199,10 +162,4 @@ func (c *Config) validateWebConfig() error {
 	}
 
 	return nil
-}
-
-// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
-// 値は env から読んだままなので、前後の空白だけ落とします。
-func (c *Config) TaskCallerServiceAccount() string {
-	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
 }
