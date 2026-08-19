@@ -146,11 +146,6 @@ func (c *Config) validatePipelineTimeout() error {
 	if c.Tasks.DispatchDeadline <= 0 {
 		return fmt.Errorf("TASK_DISPATCH_DEADLINE が設定されていません（三段のタイムアウトはデプロイ設定が決めます。例: 30m）")
 	}
-	if c.Tasks.DispatchDeadline > MaxTaskDispatchDeadline {
-		return fmt.Errorf(
-			"TASK_DISPATCH_DEADLINE (%s) が Cloud Tasks の上限 (%s) を超えています。投入時に拒否されます",
-			c.Tasks.DispatchDeadline, MaxTaskDispatchDeadline)
-	}
 	if c.AI.PipelineTimeout <= 0 {
 		return fmt.Errorf("PIPELINE_TIMEOUT は worker では無制限にできません。Cloud Tasks の打ち切り（%s）より短い値を設定してください", c.Tasks.DispatchDeadline)
 	}

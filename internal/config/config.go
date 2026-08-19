@@ -15,10 +15,6 @@ import (
 
 const taskGeneratePath = "/tasks/generate"
 
-// MaxTaskDispatchDeadline は Cloud Tasks の HTTP ターゲットに指定できる上限です。
-// プラットフォームの制約なのでアプリが持ちます（デプロイ設定ではありません）。
-const MaxTaskDispatchDeadline = 30 * time.Minute
-
 // ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
