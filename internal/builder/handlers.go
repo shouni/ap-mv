@@ -161,12 +161,12 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 		return handlers.CharacterOptions{}, err
 	}
 	options := handlers.CharacterOptions{
-		Characters: make([]handlers.CharacterOption, 0, len(chars.List)),
+		Characters: make([]handlers.CharacterOption, 0, chars.Len()),
 	}
 	if defaultChar := chars.GetDefault(); defaultChar != nil {
 		options.DefaultCharacterID = defaultChar.ID
 	}
-	for _, char := range chars.List {
+	for _, char := range chars.All() {
 		options.Characters = append(options.Characters, handlers.CharacterOption{
 			ID:        char.ID,
 			Name:      char.Name,

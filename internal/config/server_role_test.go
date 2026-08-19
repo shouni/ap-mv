@@ -38,6 +38,7 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
 	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
 	cfg.AI.PipelineTimeout = 25 * time.Minute
+	cfg.Tasks.DispatchDeadline = testDispatchDeadline
 	return cfg
 }
 
@@ -212,17 +213,14 @@ func TestWarnContradictoryKeyframeThroughput(t *testing.T) {
 func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *testing.T) {
 	// 既定値は envDefault タグにしか無いため、タグそのものを読んで検査します。
 	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
-	t.Run("既定値は打ち切りより短い", func(t *testing.T) {
+	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
+	t.Run("既定値を持たない", func(t *testing.T) {
 		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
 		if !ok {
 			t.Fatal("AIConfig.PipelineTimeout not found")
 		}
-		got, err := time.ParseDuration(field.Tag.Get("envDefault"))
-		if err != nil {
-			t.Fatalf("envDefault is not a duration: %v", err)
-		}
-		if got >= TaskDispatchDeadline {
-			t.Fatalf("default PIPELINE_TIMEOUT = %s, want < %s", got, TaskDispatchDeadline)
+		if got := field.Tag.Get("envDefault"); got != "" {
+			t.Errorf("envDefault = %q, 既定値を持たせないでください", got)
 		}
 		if err := newRoleTestConfig(serverrole.Worker).ValidateEssentialConfig(); err != nil {
 			t.Fatalf("worker should start with a valid timeout: %v", err)
@@ -233,8 +231,8 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		name    string
 		timeout time.Duration
 	}{
-		{name: "打ち切りと等しいと落ちる", timeout: TaskDispatchDeadline},
-		{name: "打ち切りより長いと落ちる", timeout: TaskDispatchDeadline + time.Minute},
+		{name: "打ち切りと等しいと落ちる", timeout: testDispatchDeadline},
+		{name: "打ち切りより長いと落ちる", timeout: testDispatchDeadline + time.Minute},
 		{name: "無制限は落ちる", timeout: 0},
 		{name: "負の無制限も落ちる", timeout: -1},
 	} {
@@ -262,3 +260,52 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 		}
 	})
 }
+
+// 打ち切りに既定値を持たせないこと。
+//
+// 三段のタイムアウトはデプロイ先の事情で決まるので、出どころは Terraform 1 箇所に
+// 閉じます。アプリが既定を持つと同じ数字が 2 箇所に現れ、設定漏れが
+// 「誰も選んでいない値」で動いてしまいます。
+func TestDispatchDeadlineHasNoDefault(t *testing.T) {
+	field, ok := reflect.TypeOf(TasksConfig{}).FieldByName("DispatchDeadline")
+	if !ok {
+		t.Fatal("TasksConfig.DispatchDeadline not found")
+	}
+	if got := field.Tag.Get("envDefault"); got != "" {
+		t.Errorf("envDefault = %q, 既定値を持たせないでください", got)
+	}
+}
+
+// 未設定なら起動時に落ちること。
+func TestDispatchDeadlineIsRequired(t *testing.T) {
+	cfg := newRoleTestConfig(serverrole.Worker)
+	cfg.Tasks.DispatchDeadline = 0
+
+	err := cfg.ValidateEssentialConfig()
+	if err == nil {
+		t.Fatal("未設定が素通りしました")
+	}
+	if !strings.Contains(err.Error(), "TASK_DISPATCH_DEADLINE") {
+		t.Errorf("エラーに変数名がありません: %v", err)
+	}
+}
+
+// 打ち切りは env で伸ばせること。定数だった頃は再ビルドが要りました。
+func TestDispatchDeadlineIsConfigurable(t *testing.T) {
+	cfg := newRoleTestConfig(serverrole.Worker)
+	cfg.Tasks.DispatchDeadline = 20 * time.Minute
+	cfg.AI.PipelineTimeout = 25 * time.Minute
+
+	if err := cfg.ValidateEssentialConfig(); err == nil {
+		t.Fatal("縮めた打ち切りより長い PIPELINE_TIMEOUT が通ってしまいました")
+	}
+
+	cfg.Tasks.DispatchDeadline = 30 * time.Minute
+	if err := cfg.ValidateEssentialConfig(); err != nil {
+		t.Fatalf("伸ばした組み合わせで失敗しました: %v", err)
+	}
+}
+
+// testDispatchDeadline は、テストで使う打ち切りです。アプリは既定値を持たないため、
+// 実際のデプロイ設定と同じく明示します。
+const testDispatchDeadline = 30 * time.Minute

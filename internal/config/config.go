@@ -15,12 +15,6 @@ import (
 
 const taskGeneratePath = "/tasks/generate"
 
-// TaskDispatchDeadline は Cloud Tasks がワーカーの応答を待つ上限です。
-// HTTP ターゲットに指定できる最大値で、これ以上は伸ばせません。投入時にタスクへ
-// 焼き込む値ですが、PIPELINE_TIMEOUT の上限としても効くため builder ではなくここに
-// 置いています（ValidateEssentialConfig が検査します）。
-const TaskDispatchDeadline = 30 * time.Minute
-
 // ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
 type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
@@ -49,6 +43,18 @@ type TasksConfig struct {
 	// AllowedServiceAccounts は、worker が受け付ける caller SA の許可リストです。
 	// ap-mv は worker も継続カットを投入するため、web と worker の両方を並べます。
 	AllowedServiceAccounts []string `env:"ALLOWED_TASK_SERVICE_ACCOUNTS"`
+	// DispatchDeadline は、投入するタスクに載せる応答待ちの上限です。
+	//
+	// 「待つ時間」ではなく **ワーカーの実行時間の実効上限** です。これを超えると
+	// ワーカーがまだ処理中でも Cloud Tasks が待受を打ち切り、キューは max_attempts = 1 なので
+	// 再試行も来ません。Cloud Run の timeout をいくら伸ばしてもこの上限は動きません。
+	// 定数ではなく env なのは、この値をインフラ側（Terraform）が唯一の出どころとして
+	// 持てるようにするためです。定数だとインフラが写しを抱え、ズレても誰も気付きません。
+	//
+	// **既定値は持ちません。** 三段のタイムアウトはデプロイ先の事情で決まる値なので、
+	// 出どころは Terraform 1 箇所に閉じます。アプリが既定を持つと同じ数字が 2 箇所に
+	// 現れ、設定漏れが「誰も選んでいない値」で動いてしまいます。
+	DispatchDeadline time.Duration `env:"TASK_DISPATCH_DEADLINE"`
 }
 
 // StorageConfig は GCS バケットの設定です。
@@ -84,7 +90,7 @@ type AIConfig struct {
 	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
 	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
 	// （worker では validatePipelineTimeout が起動時に拒否します）。
-	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT" envDefault:"25m"`
+	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT"`
 	VeoPollMaxErrors       int           `env:"VEO_POLL_MAX_ERRORS" envDefault:"10"`
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`

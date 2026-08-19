@@ -90,73 +90,9 @@ func TestBuildCompleteContentLinksHistoryForNormalJobs(t *testing.T) {
 	})
 }
 
-// TestGCSConsoleURL pins the mapping from a gs:// URI to a page a browser can open.
-// Slack only auto-links http/https, so a bare gs:// line renders as dead text.
-func TestGCSConsoleURL(t *testing.T) {
-	cases := []struct {
-		name string
-		uri  string
-		want string
-	}{
-		{
-			name: "directory goes to the bucket browser",
-			uri:  "gs://ap-mv/veo/drafts/video-draft-1/",
-			want: "https://console.cloud.google.com/storage/browser/ap-mv/veo/drafts/video-draft-1/",
-		},
-		{
-			name: "single object goes to its details page",
-			uri:  "gs://ap-music/music/comp-1/recipe.json",
-			want: "https://console.cloud.google.com/storage/browser/_details/ap-music/music/comp-1/recipe.json",
-		},
-		{
-			// http(s) は Slack が自前でリンク化するため、変換先を持たない。
-			name: "http URLs have no console URL",
-			uri:  "https://example.com/a.json",
-			want: "",
-		},
-		{name: "empty stays empty", uri: "", want: ""},
-		{name: "scheme only stays empty", uri: "gs://", want: ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := gcsConsoleURL(tc.uri); got != tc.want {
-				t.Errorf("gcsConsoleURL(%q) = %q, want %q", tc.uri, got, tc.want)
-			}
-		})
-	}
-}
-
-// TestWriteURIField pins how a URI becomes a line: gs:// turns into a link whose
-// visible label is still the gs:// URI, http(s) stays plain, empty writes nothing.
-func TestWriteURIField(t *testing.T) {
-	cases := []struct {
-		name string
-		uri  string
-		want string
-	}{
-		{
-			name: "gs:// becomes a link keeping the URI as the label",
-			uri:  "gs://ap-music/music/comp-1/recipe.json",
-			want: "**Source:** [gs://ap-music/music/comp-1/recipe.json](https://console.cloud.google.com/storage/browser/_details/ap-music/music/comp-1/recipe.json)",
-		},
-		{
-			name: "http URLs are left as plain text",
-			uri:  "https://example.com/a.json",
-			want: "**Source:** https://example.com/a.json",
-		},
-		{name: "empty writes no line", uri: "", want: notify.NotAvailable},
-		{name: "blank writes no line", uri: "   ", want: notify.NotAvailable},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			body := notify.NewBody()
-			writeURIField(body, "Source", tc.uri)
-			if got := body.String(); got != tc.want {
-				t.Errorf("body = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
+// The gs:// URI → Cloud Console URL mapping and the URI-line shape moved to
+// notify.Body.URIField; go-notify's own tests pin those rules. The wiring test
+// below keeps guarding that this adapter routes URIs through it.
 
 // TestBuildCompleteContentLinksGCSPaths checks the wiring: the notification's Output and Source
 // lines carry the clickable form, and the gs:// URI stays visible for copy/paste.

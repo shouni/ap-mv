@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-notify/notify"
@@ -99,41 +98,12 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) *not
 	if req.CutCount > 0 {
 		body.Code("Cuts", strconv.Itoa(req.CutCount))
 	}
-	writeURIField(body, "Output", req.OutputURI)
+	// gs:// は表示のまま Cloud Console へリンクされます（notify.Body.URIField）。
+	body.URIField("Output", req.OutputURI)
 
 	writeSlackRequestSource(body, req)
 
 	return body
-}
-
-// gcsConsoleURL は gs:// URI に対応する Cloud Console の URL を返します。
-// gs:// 以外（http(s) や空文字）の場合は空文字を返します。
-//
-// 末尾がスラッシュのものはディレクトリ扱いでバケットブラウザへ、
-// 単体オブジェクトは詳細ページへ飛ばします。
-func gcsConsoleURL(uri string) string {
-	const scheme = "gs://"
-
-	objectPath, ok := strings.CutPrefix(strings.TrimSpace(uri), scheme)
-	if !ok || objectPath == "" {
-		return ""
-	}
-
-	if strings.HasSuffix(objectPath, "/") {
-		return "https://console.cloud.google.com/storage/browser/" + objectPath
-	}
-	return "https://console.cloud.google.com/storage/browser/_details/" + objectPath
-}
-
-// writeURIField は URI の行を追記します。URI が空の場合は何もしません。
-//
-// gs:// の場合は Cloud Console へのリンクにし、表示は gs:// のまま残します。
-// Slack が自動リンク化するのは http/https だけで、gs:// はただの文字列として
-// 表示されます（押しても何も起きません）。一方で表示まで Console の URL に
-// してしまうと、コピーして gsutil などにそのまま渡せなくなります。
-func writeURIField(body *notify.Body, label, uri string) {
-	uri = strings.TrimSpace(uri)
-	body.LinkOrField(label, gcsConsoleURL(uri), uri)
 }
 
 // writeSlackRequestSummary はジョブの識別情報を追記します。
@@ -153,9 +123,9 @@ func writeSlackRequestGenerationMetadata(body *notify.Body, req domain.Notificat
 
 // writeSlackRequestSource は入力ソースを追記します。
 func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) {
-	writeURIField(body, "Source", req.SourceURL)
-	writeURIField(body, "Recipe", req.RecipeURL)
-	writeURIField(body, "Audio", req.AudioURL)
+	body.URIField("Source", req.SourceURL).
+		URIField("Recipe", req.RecipeURL).
+		URIField("Audio", req.AudioURL)
 }
 
 // draftsURL は下書き一覧のURLを返します。下書きには専用の詳細画面が無いため

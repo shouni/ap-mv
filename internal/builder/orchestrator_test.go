@@ -55,9 +55,10 @@ func TestBuildOrchestratorConfigSatisfiesLibraryValidation(t *testing.T) {
 	}
 }
 
-// TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter verifies the seed override is scoped
-// to the requested character and leaves the base Characters (and other entries) untouched.
-func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
+// TestSeedOverrideReplacesOnlyTargetCharacter verifies go-character-kit's WithSeedOverride
+// keeps the semantics this workflow depends on: the override is scoped to the requested
+// character and leaves the base Characters (and other entries) untouched.
+func TestSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
 	base, err := buildCharacters()
 	if err != nil {
 		t.Fatalf("buildCharacters() error = %v", err)
@@ -69,7 +70,7 @@ func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
 		originalSeed = &s
 	}
 
-	overridden := withCharacterSeedOverride(base, "zundamon", 999999)
+	overridden := base.WithSeedOverride("zundamon", 999999)
 
 	got := requireCharacter(t, overridden, "zundamon")
 	if got.Seed == nil || *got.Seed != 999999 {
@@ -87,15 +88,15 @@ func TestWithCharacterSeedOverrideReplacesOnlyTargetCharacter(t *testing.T) {
 	}
 }
 
-// TestWithCharacterSeedOverrideUnknownCharacterReturnsBase verifies an unknown character ID
+// TestSeedOverrideUnknownCharacterReturnsBase verifies an unknown character ID
 // is a no-op rather than silently dropping the whole roster.
-func TestWithCharacterSeedOverrideUnknownCharacterReturnsBase(t *testing.T) {
+func TestSeedOverrideUnknownCharacterReturnsBase(t *testing.T) {
 	base, err := buildCharacters()
 	if err != nil {
 		t.Fatalf("buildCharacters() error = %v", err)
 	}
 
-	got := withCharacterSeedOverride(base, "no-such-character", 1)
+	got := base.WithSeedOverride("no-such-character", 1)
 
 	if got != base {
 		t.Fatal("expected unknown character ID to return the base Characters unchanged")
