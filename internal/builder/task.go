@@ -26,7 +26,7 @@ func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer
 		// worker 側の Cloud Run timeout をいくら長くしてもそこで打ち切られます。
 		// 継続カットの自己投入もこのエンキューアを通るので、カット 1 本ぶんに同じ上限がかかります。
 		// PIPELINE_TIMEOUT をこれより短く保つ検査は config.ValidateEssentialConfig にあります。
-		DispatchDeadline: config.TaskDispatchDeadline,
+		DispatchDeadline: cfg.Tasks.DispatchDeadline,
 	}
 	return tasks.NewEnqueuer[domain.Task](ctx, taskCfg)
 }
