@@ -3,10 +3,13 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-utils/strlist"
 
 	"github.com/caarlos0/env/v11"
 
@@ -155,12 +158,12 @@ func (c *Config) normalize() error {
 	if c.Tasks.TaskAudienceURL == "" {
 		c.Tasks.TaskAudienceURL = c.Server.ServiceURL
 	}
-	c.Storage.GCSBucket = normalizeGCSBucket(c.Storage.GCSBucket)
-	c.Storage.MusicBucket = normalizeGCSBucket(c.Storage.MusicBucket)
-	c.Auth.AllowedEmails = normalizeStringSlice(c.Auth.AllowedEmails)
-	c.Auth.AllowedDomains = normalizeStringSlice(c.Auth.AllowedDomains)
-	c.Auth.AllowedM2MServiceAccounts = normalizeStringSlice(c.Auth.AllowedM2MServiceAccounts)
-	c.Tasks.AllowedServiceAccounts = normalizeStringSlice(c.Tasks.AllowedServiceAccounts)
+	c.Storage.GCSBucket = remoteio.NormalizeBucketName(c.Storage.GCSBucket)
+	c.Storage.MusicBucket = remoteio.NormalizeBucketName(c.Storage.MusicBucket)
+	c.Auth.AllowedEmails = strlist.Normalize(c.Auth.AllowedEmails)
+	c.Auth.AllowedDomains = strlist.Normalize(c.Auth.AllowedDomains)
+	c.Auth.AllowedM2MServiceAccounts = strlist.Normalize(c.Auth.AllowedM2MServiceAccounts)
+	c.Tasks.AllowedServiceAccounts = strlist.Normalize(c.Tasks.AllowedServiceAccounts)
 	// Veo は提供リージョンが限られる（例: us-central1）ため、Cloud Tasks 等と共有する
 	// GCP_LOCATION_ID とは別に VEO_LOCATION_ID で上書きできる。未設定なら共通値を使う。
 	if strings.TrimSpace(c.AI.VeoLocationID) == "" {
@@ -194,14 +197,35 @@ func LoadConfigFromEnv() (*Config, error) {
 	return &cfg, nil
 }
 
-// normalizeStringSlice trims strings and removes empty values.
-func normalizeStringSlice(values []string) []string {
-	normalized := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			normalized = append(normalized, value)
-		}
+// normalizeWorkerURL normalizes the worker URL or derives it from the service URL.
+func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
+	workerURL = strings.TrimSpace(workerURL)
+	if workerURL != "" {
+		return workerURL, nil
 	}
-	return normalized
+	return joinWorkerPath(serviceURL)
+}
+
+// joinWorkerPath returns the default worker endpoint for a service URL.
+func joinWorkerPath(serviceURL string) (string, error) {
+	serviceURL = strings.TrimSpace(serviceURL)
+	if serviceURL == "" {
+		return taskGeneratePath, nil
+	}
+	joined, err := url.JoinPath(serviceURL, taskGeneratePath)
+	if err != nil {
+		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
+	}
+	return joined, nil
+}
+
+// GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
+func (c *Config) GetGCSObjectURL(path string) string {
+	return remoteio.BuildGCSURI(remoteio.NormalizeBucketName(c.Storage.GCSBucket), path)
+}
+
+// TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
+// 値は env から読んだままなので、前後の空白だけ落とします。
+func (c *Config) TaskCallerServiceAccount() string {
+	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
 }
