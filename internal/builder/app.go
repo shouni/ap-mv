@@ -41,12 +41,18 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", err)
 	}
+	// resources は組み立て中の巻き戻し用で、成功して返ったあとは誰も見ません。
+	// 実行中の解放は closers（app.Container.Close）が受け持つため、成功後も
+	// 生き続ける資源は両方へ入れます。rio は成功後の storage の所有者です
+	// （Bundle.Close が factory を閉じます）。
+	closers := []io.Closer{rio}
 
 	enqueuer, err := buildTaskEnqueuer(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize task enqueuer: %w", err)
 	}
 	resources = append(resources, enqueuer)
+	closers = append(closers, enqueuer)
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
 	queue := taskQueueAdapter{enqueuer: enqueuer}
@@ -58,6 +64,8 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
+	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
+	closers = append(closers, historyRepository)
 
 	// 生成系（Vertex AI・Veo・Slack 通知・パイプライン）を組み立てるのは Worker 面だけです。
 	// Web 面で組み立てないことで、ap-mv-web-runner が aiplatform.user も
@@ -99,6 +107,9 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize worker pipeline: %w", pipeErr)
 		}
 		pipe = builtPipe
+		// videoRunner は Pipeline.Close が閉じるため、closers へは入れません
+		// （入れると二重に閉じます）。
+		closers = append(closers, builtPipe)
 	}
 
 	return &app.Container{
@@ -110,5 +121,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		Pipeline:          pipe,
 		HistoryRepository: historyRepository,
 		JobStatus:         jobStatus,
+		Closers:           closers,
 	}, nil
 }

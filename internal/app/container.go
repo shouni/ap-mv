@@ -34,6 +34,11 @@ type Container struct {
 	// Data Access
 	HistoryRepository ports.HistoryRepository
 	JobStatus         ports.JobStatusStore
+
+	// Closers は、組み立て時に開いた資源です。Container.Close がまとめて閉じます。
+	// Close が個々のフィールドを見ないのは、資源が増えたときに builder が append
+	// するだけで済ませるためです。
+	Closers []io.Closer
 }
 
 // RemoteIO は外部ストレージ操作に関するコンポーネントをまとめます。
@@ -44,26 +49,16 @@ type Container struct {
 type RemoteIO = remoteio.Bundle
 
 // Close は、Container が保持するすべての外部接続リソースを安全に解放します。
+//
+// エラーを返さないのは、呼び出し元が server.Run の defer 1 箇所きりで、返したところで
+// slog.Error 以外の行き先が無いためです。
 func (c *Container) Close() {
-	if c.RemoteIO != nil {
-		if err := c.RemoteIO.Close(); err != nil {
-			slog.Error("failed to close RemoteIO", "error", err)
+	for _, closer := range c.Closers {
+		if closer == nil {
+			continue
 		}
-	}
-	if c.TaskEnqueuer != nil {
-		if err := c.TaskEnqueuer.Close(); err != nil {
-			slog.Error("failed to close task enqueuer", "error", err)
-		}
-	}
-	if c.Pipeline != nil {
-		if err := c.Pipeline.Close(); err != nil {
-			slog.Error("failed to close pipeline", "error", err)
-		}
-	}
-	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
-	if closer, ok := c.HistoryRepository.(io.Closer); ok && closer != nil {
 		if err := closer.Close(); err != nil {
-			slog.Error("failed to close history repository", "error", err)
+			slog.Error("failed to close resource", "error", err)
 		}
 	}
 }
