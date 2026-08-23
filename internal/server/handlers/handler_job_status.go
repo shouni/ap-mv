@@ -11,7 +11,6 @@ import (
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
-	"github.com/shouni/ap-mv/internal/repository"
 )
 
 // recordQueuedStatus は投入直後のジョブ状態を記録します。
@@ -48,7 +47,7 @@ func (h *Handler) JobStatusDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// 状態が無いのは異常ではなく「この機能より前に作られたジョブ」でも起こるため、
 		// 404 で明確に区別できるようにします。
-		if errors.Is(err, repository.ErrJobStatusNotFound) {
+		if errors.Is(err, domain.ErrJobStatusNotFound) {
 			writeError(w, r, http.StatusNotFound, "job status not found")
 			return
 		}
