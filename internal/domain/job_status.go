@@ -22,6 +22,15 @@ const (
 	JobStateFailed = jobstatus.StateFailed
 )
 
+// ErrJobStatusNotFound は、ジョブ状態がまだ記録されていないことを表します。
+// 「状態が無い」は異常ではなく正常な状態（記録前の投入や、この機能より前に作られた
+// ジョブ）なので、呼び出し側がストレージ障害と区別できるよう独立したエラーにしています。
+//
+// JobState と同じく go-job-kit の値をそのまま指しています。状態の定数だけを domain で
+// 別名にしてエラーを repository に置いていたため、同じ jobstatus の面を扱うのに
+// 「状態は domain 経由・エラーは具象パッケージ経由」と参照先が割れていました。
+var ErrJobStatusNotFound = jobstatus.ErrNotFound
+
 // JobStatus はジョブの進行状況です。
 //
 // 生成の成否はこれまで Slack 通知にしか残らず、失敗したジョブは UI から完全に消えていました。

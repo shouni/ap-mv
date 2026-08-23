@@ -7,11 +7,6 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// ErrJobStatusNotFound は、ジョブ状態がまだ記録されていないことを表します。
-// 「状態が無い」は正常な状態（記録前の投入や、この機能より前に作られたジョブ）なので、
-// 呼び出し側がストレージ障害と区別できるよう独立したエラーにしています。
-var ErrJobStatusNotFound = jobstatus.ErrNotFound
-
 // NewJobStatusRepository は、GCS を裏付けとしたジョブ進行状況の読み書きを構築します。
 //
 // 保存形式・ジョブ ID の正規化・キャッシュ抑止（no-store）は go-job-kit の jobstatus が
