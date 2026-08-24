@@ -21,8 +21,8 @@
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <a class="btn btn-outline-secondary" href="/web/history">Back</a>
                 <button type="button" class="btn btn-outline-secondary" data-copy-text="{{.HistoryDetail.JobID}}">Copy MV Job ID</button>
-                {{if .HistoryDetail.SignedURL}}
-                <a class="btn btn-outline-primary" href="{{.HistoryDetail.SignedURL}}" target="_blank" rel="noopener">Metadata</a>
+                {{if .HistoryDetail.MetadataWebURL}}
+                <a class="btn btn-outline-primary" href="{{.HistoryDetail.MetadataWebURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
                 <a class="btn btn-outline-success" href="/web/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
                 <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/regenerate-zip" class="d-flex align-items-center gap-2">
@@ -103,15 +103,15 @@
         </div>
         {{end}}
 
-        {{if .HistoryDetail.FinalVideoSignedURL}}
+        {{if .HistoryDetail.FinalVideoWebURL}}
         <div class="card bg-body-tertiary border-0 mb-4">
             <div class="card-body">
                 <h2 class="h6 fw-bold mb-3">🎬 完成動画</h2>
                 <video class="w-100 rounded" style="max-height: 480px; background: #000; object-fit: contain; aspect-ratio: {{if eq .HistoryDetail.AspectRatio "9:16"}}9 / 16{{else}}16 / 9{{end}};" controls preload="metadata">
-                    <source src="{{.HistoryDetail.FinalVideoSignedURL}}" type="video/mp4">
+                    <source src="{{.HistoryDetail.FinalVideoWebURL}}" type="video/mp4">
                 </video>
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                    <a class="btn btn-outline-primary btn-sm" href="{{.HistoryDetail.FinalVideoSignedURL}}" target="_blank" rel="noopener">動画を開く</a>
+                    <a class="btn btn-outline-primary btn-sm" href="{{.HistoryDetail.FinalVideoWebURL}}" target="_blank" rel="noopener">動画を開く</a>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-text="{{.HistoryDetail.JobID}}">Copy MV Job ID</button>
                 </div>
                 <p class="small text-muted mb-0 mt-2">複数の継続チェーンをハードカットで結合した完成版です。</p>
@@ -241,12 +241,12 @@
 {{$csrfToken := .CSRFToken}}
 <div class="col-md-6 col-xl-4">
     <div class="card h-100 history-cut-card">
-        {{if $cut.VideoSignedURL}}
-        <video class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" controls preload="metadata" {{if $cut.KeyframeURL}}poster="{{$cut.KeyframeURL}}"{{end}}>
-            <source src="{{$cut.VideoSignedURL}}" type="video/mp4">
+        {{if $cut.VideoWebURL}}
+        <video class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" controls preload="metadata" {{if $cut.KeyframeWebURL}}poster="{{$cut.KeyframeWebURL}}"{{end}}>
+            <source src="{{$cut.VideoWebURL}}" type="video/mp4">
         </video>
-        {{else if $cut.KeyframeURL}}
-        <img src="{{$cut.KeyframeURL}}" class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" alt="Cut {{$cut.CutIndex}} keyframe" loading="lazy">
+        {{else if $cut.KeyframeWebURL}}
+        <img src="{{$cut.KeyframeWebURL}}" class="card-img-top history-keyframe{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}}" alt="Cut {{$cut.CutIndex}} keyframe" loading="lazy">
         {{else}}
         <div class="history-keyframe history-keyframe-empty{{if eq $detail.AspectRatio "9:16"}} history-keyframe--9x16{{end}} d-flex align-items-center justify-content-center text-muted">
             No keyframe
@@ -275,8 +275,8 @@
                 {{if $cut.KeyframeReference}}
                 <dt class="col-5 text-muted fw-normal">Keyframe</dt>
                 <dd class="col-7 mb-1 text-break">
-                    {{if $cut.KeyframeURL}}
-                    <a href="{{$cut.KeyframeURL}}" target="_blank" rel="noopener">Open image</a>
+                    {{if $cut.KeyframeWebURL}}
+                    <a href="{{$cut.KeyframeWebURL}}" target="_blank" rel="noopener">Open image</a>
                     {{else}}
                     <code>{{$cut.KeyframeReference}}</code>
                     {{end}}
@@ -310,9 +310,9 @@
                 <dd class="col-7 mb-1">{{$audioCue.SceneBeat}}</dd>
                 {{end}}
                 {{end}}
-                {{if $cut.VideoSignedURL}}
+                {{if $cut.VideoWebURL}}
                 <dt class="col-5 text-muted fw-normal">Video</dt>
-                <dd class="col-7 mb-1 text-break"><a href="{{$cut.VideoSignedURL}}" target="_blank" rel="noopener">Open video</a></dd>
+                <dd class="col-7 mb-1 text-break"><a href="{{$cut.VideoWebURL}}" target="_blank" rel="noopener">Open video</a></dd>
                 {{else if $cut.VideoURL}}
                 <dt class="col-5 text-muted fw-normal">Video</dt>
                 <dd class="col-7 mb-1 text-break"><code>{{$cut.VideoURL}}</code></dd>

@@ -58,8 +58,10 @@ const compressionLevel = 5
 // style-src にだけ 'unsafe-inline' が要ります。テンプレートに style= 属性が残っており、
 // Bootstrap の JS（collapse / tab）も遷移中にインラインスタイルを当てるためです。
 //
-// img-src / media-src の storage.googleapis.com は必須です。ap-mv はキーフレームと動画を
-// GCS の署名付き URL としてテンプレートへ直接埋めます（同一オリジンのパスを経由しません）。
+// img-src / media-src の storage.googleapis.com は、キーフレームと動画の実体です。
+// 画面が指すのは同一オリジンのパス（/web/history/{jobID}/cuts/{i}/video など）ですが、
+// どれも GCS の署名付き URL へ 302 します。リダイレクト先を CSP がどう扱うかは
+// ブラウザ実装に幅があるため、送り先を明示して依存しないようにしています。
 const contentSecurityPolicy = "default-src 'self'; " +
 	"script-src 'self'; " +
 	"style-src 'self' 'unsafe-inline'; " +
@@ -188,6 +190,13 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 		r.Get("/history/{jobID}/keyframes.zip", h.DownloadKeyframes)
+		// 画面が指すメディアの入口。GCS の署名付き URL は HTML に出さず、ここで 302 します
+		// （handler_media.go に理由）。認証グループの中にあるので、アセット 1 本ごとに
+		// セッション検証が効きます。
+		r.Get("/history/{jobID}/metadata", h.HistoryMetadata)
+		r.Get("/history/{jobID}/video", h.HistoryVideo)
+		r.Get("/history/{jobID}/cuts/{cutIndex}/video", h.CutVideo)
+		r.Get("/history/{jobID}/cuts/{cutIndex}/keyframe", h.CutKeyframe)
 		// レシピの読み出しと編集。表示用に整形した履歴詳細とは別経路で、読んだものを
 		// そのまま直して返せます。編集は台本のみの段階に限られます（PutJobRecipe 参照）。
 		r.Get("/history/{jobID}/recipe", h.GetJobRecipe)

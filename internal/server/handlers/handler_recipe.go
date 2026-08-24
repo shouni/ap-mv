@@ -51,26 +51,28 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 		// 注意: 旧フォールバックは「チェーンが1本だけ」という前提に基づいており、チェーンが
 		// リセットされたジョブでは末尾チェーンの断片だけが表示されてしまう
 		// （video_music_meta.jsonがfinal_video_urlを持つ新しいジョブでは発生しない）。
-		if detail.FinalVideoSignedURL != "" {
+		// 指すのは同一オリジンのパスです（署名は 302 の時点で 1 本だけ）。
+		applyWebMediaURLs(&detail)
+		if detail.FinalVideoWebURL != "" {
 			poster := ""
 			if len(detail.Cuts) > 0 {
-				poster = detail.Cuts[0].KeyframeURL
+				poster = detail.Cuts[0].KeyframeWebURL
 			}
 			return &HomeLatestVideo{
 				JobID:     detail.JobID,
 				Title:     detail.Title,
-				VideoURL:  detail.FinalVideoSignedURL,
+				VideoURL:  detail.FinalVideoWebURL,
 				PosterURL: poster,
 			}
 		}
 		for i := len(detail.Cuts) - 1; i >= 0; i-- {
 			cut := detail.Cuts[i]
-			if cut.VideoSignedURL != "" {
+			if cut.VideoWebURL != "" {
 				return &HomeLatestVideo{
 					JobID:     detail.JobID,
 					Title:     detail.Title,
-					VideoURL:  cut.VideoSignedURL,
-					PosterURL: cut.KeyframeURL,
+					VideoURL:  cut.VideoWebURL,
+					PosterURL: cut.KeyframeWebURL,
 				}
 			}
 		}

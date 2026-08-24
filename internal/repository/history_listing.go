@@ -227,10 +227,10 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 		})
 	}
 	detail.Sections = historySectionsFromRecipe(recipe)
-	signedCuts, err := r.signHistoryCutURLs(ctx, detail.Cuts)
-	if err != nil {
-		return domain.VideoHistoryDetail{}, err
-	}
-	detail.Cuts = signedCuts
+	// 署名はここでは行いません。画面は同一オリジンのパスを辿り、リダイレクトの時点で
+	// 1 本だけ署名します。カット 1 本ごとに署名すると、詳細 1 画面で数十回の
+	// IAM SignBlob 往復を前払いすることになります（Cloud Run は秘密鍵を持たないため、
+	// 署名はローカル計算ではなくネットワーク呼び出しです）。
+	// JSON の呼び出し元だけが SignHistoryURLs を明示的に呼びます。
 	return detail, nil
 }

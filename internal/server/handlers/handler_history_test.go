@@ -34,7 +34,6 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 					CutIndex:          1,
 					VisualAnchor:      "blue stage",
 					KeyframeReference: "gs://bucket/keyframe.png",
-					KeyframeURL:       "https://signed.example/keyframe.png",
 					Status:            "pending",
 				},
 			},
@@ -55,13 +54,19 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"軌跡のアーキテクト",
-		`src="https://signed.example/keyframe.png"`,
+		// 画面が指すのは同一オリジンのパスです。実体へはハンドラーが 302 で送ります。
+		`src="/web/history/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
 		"blue stage",
 		"Cut 1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
 		}
+	}
+	// 署名付き URL が HTML に出ないこと。出ると期限内は認証の外側で使え、
+	// 期限が切れた後は画面を開き直すまで再生できません。
+	if strings.Contains(body, "storage.googleapis.com") || strings.Contains(body, "X-Goog-Signature") {
+		t.Fatalf("署名付き URL が HTML に漏れています: %s", body)
 	}
 	// 見出し文言ではなくプレイヤーそのもので判定する。「完成動画」という語は結合フォームの
 	// 説明文にも出るため、文言で見るとプレイヤーと無関係な文章の追加だけで落ちる。
@@ -82,14 +87,13 @@ func TestHistoryDetailAppliesAspectRatioClass(t *testing.T) {
 	h.HistoryRepository = fakeHistoryRepository{
 		detail: domain.VideoHistoryDetail{
 			VideoHistory: domain.VideoHistory{
-				JobID:               "job-1",
-				Title:               "Test Short",
-				AspectRatio:         "9:16",
-				FinalVideoURL:       "gs://bucket/jobs/job-1/videos/final.mp4",
-				FinalVideoSignedURL: "https://signed.example/final.mp4",
+				JobID:         "job-1",
+				Title:         "Test Short",
+				AspectRatio:   "9:16",
+				FinalVideoURL: "gs://bucket/jobs/job-1/videos/final.mp4",
 			},
 			Cuts: []domain.VideoHistoryCut{
-				{CutIndex: 1, KeyframeURL: "https://signed.example/cut1.png"},
+				{CutIndex: 1, KeyframeReference: "gs://bucket/jobs/job-1/images/cut1.png"},
 			},
 		},
 	}
@@ -129,13 +133,12 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	h.HistoryRepository = fakeHistoryRepository{
 		detail: domain.VideoHistoryDetail{
 			VideoHistory: domain.VideoHistory{
-				JobID:               "job-1",
-				Title:               "Test MV",
-				FinalVideoURL:       "gs://bucket/jobs/job-1/videos/final.mp4",
-				FinalVideoSignedURL: "https://signed.example/final.mp4",
+				JobID:         "job-1",
+				Title:         "Test MV",
+				FinalVideoURL: "gs://bucket/jobs/job-1/videos/final.mp4",
 			},
 			Cuts: []domain.VideoHistoryCut{
-				{CutIndex: 1, VideoSignedURL: "https://signed.example/cut1.mp4"},
+				{CutIndex: 1, VideoURL: "gs://bucket/jobs/job-1/videos/cut1.mp4"},
 			},
 		},
 	}
@@ -154,7 +157,7 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"完成動画",
-		`src="https://signed.example/final.mp4"`,
+		`src="/web/history/job-1/video"`,
 		"Copy MV Job ID",
 		// コピー対象は data 属性で渡す。JS の引数にテンプレート値を埋めていた頃は、
 		// JS 文字列リテラル文脈のエスケープ（"/" → "\/" など）が絡んでいた。

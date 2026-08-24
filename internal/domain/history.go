@@ -16,7 +16,13 @@ type VideoHistory struct {
 	VisualMode string `json:"visual_mode,omitempty"`
 	CutCount   int    `json:"cut_count,omitempty"`
 	StorageURI string `json:"storage_uri,omitempty"`
-	SignedURL  string `json:"signed_url,omitempty"`
+	// SignedURL は StorageURI の署名付き URL です。**JSON 応答にだけ入ります。**
+	// 画面は同一オリジンのパス（MetadataWebURL）を辿り、ハンドラーが 302 で GCS へ送ります。
+	// 署名を画面に埋めると、その URL が期限内は認証の外側で使えてしまい、
+	// 期限が切れた後は画面を開き直すまで復旧しません。
+	SignedURL string `json:"signed_url,omitempty"`
+	// MetadataWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	MetadataWebURL string `json:"-"`
 	// Generated は全カットの動画生成が終わったかです。Progress.IsCompleted() と同じ意味で、
 	// 既存の API 応答との互換のために残しています。画面は Progress を使ってください。
 	Generated bool `json:"generated,omitempty"`
@@ -28,9 +34,11 @@ type VideoHistory struct {
 	// FinalVideoURL は、継続チェーンをハードカットで1本に結合した完成動画のGCS URIです
 	// (video.Recipe.FinalVideoURL、chain_finalize.goが設定)。
 	FinalVideoURL string `json:"final_video_url,omitempty"`
-	// FinalVideoSignedURL は FinalVideoURL をブラウザ再生用に署名したURLです。期限付きのため
-	// キャッシュされず、表示ごとに再生成されます（SignedURLと同じ扱い）。
+	// FinalVideoSignedURL は FinalVideoURL の署名付き URL です。SignedURL と同じく
+	// **JSON 応答にだけ入ります**（画面は FinalVideoWebURL 経由の 302）。
 	FinalVideoSignedURL string `json:"final_video_signed_url,omitempty"`
+	// FinalVideoWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	FinalVideoWebURL string `json:"-"`
 	// AspectRatio は、このジョブのキーフレーム・動画生成に使われたアスペクト比です
 	// （例: "16:9", "9:16"）。キーフレーム作成時に一度だけ決まり、既存ジョブに対する
 	// 動画生成・カット再生成はこの値をそのまま引き継ぎます（アスペクト比を都度選び直すことはない）。
@@ -52,14 +60,18 @@ type VideoHistoryCut struct {
 	CharacterID       string  `json:"character_id,omitempty"`
 	Dialogue          string  `json:"dialogue,omitempty"`
 	KeyframeReference string  `json:"keyframe_reference,omitempty"`
-	KeyframeURL       string  `json:"keyframe_url,omitempty"`
-	VideoURL          string  `json:"video_url,omitempty"`
-	// VideoSignedURL は VideoURL（gs:// URI）をブラウザ再生用に署名した URL です。
-	// 署名 URL は期限付きのため cache されず、表示ごとに再生成されます。
-	VideoSignedURL string  `json:"video_signed_url,omitempty"`
-	Status         string  `json:"status,omitempty"`
-	StartSec       float64 `json:"start_sec,omitempty"`
-	EndSec         float64 `json:"end_sec,omitempty"`
+	// KeyframeURL は KeyframeReference の署名付き URL です。**JSON 応答にだけ入ります。**
+	KeyframeURL string `json:"keyframe_url,omitempty"`
+	// KeyframeWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	KeyframeWebURL string `json:"-"`
+	VideoURL       string `json:"video_url,omitempty"`
+	// VideoSignedURL は VideoURL（gs:// URI）の署名付き URL です。**JSON 応答にだけ入ります。**
+	VideoSignedURL string `json:"video_signed_url,omitempty"`
+	// VideoWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	VideoWebURL string  `json:"-"`
+	Status      string  `json:"status,omitempty"`
+	StartSec    float64 `json:"start_sec,omitempty"`
+	EndSec      float64 `json:"end_sec,omitempty"`
 	// EstimatedCostUSD は DurationSec × Veo 単価の概算です。未生成のカットは 0 です。
 	// 単価は設定から表示時に解決するため、リポジトリではなくハンドラーが埋めます
 	// （domain.ApplyVeoCostEstimate）。

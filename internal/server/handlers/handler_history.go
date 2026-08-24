@@ -61,9 +61,17 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.applyCostEstimate(r.Context(), jobID, &history)
 	if wantsJSON(r) {
+		// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らず URL 自体を受け取るため、
+		// ここでだけ署名します。画面はこの下で同一オリジンのパスを埋めます。
+		if err := h.HistoryRepository.SignHistoryURLs(r.Context(), &history); err != nil {
+			slog.ErrorContext(r.Context(), "failed to sign history URLs", "job_id", jobID, "error", err)
+			writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			return
+		}
 		writeJSON(w, http.StatusOK, history)
 		return
 	}
+	applyWebMediaURLs(&history)
 	h.renderPage(w, r, h.withModelOptions(PageData{
 		Title:         "History Detail",
 		CSRFToken:     csrfTokenFromContext(r.Context()),

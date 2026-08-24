@@ -152,6 +152,14 @@ func (f *fakeInvalidatingHistoryRepository) KeyframeZipSignedURL(context.Context
 	return "", nil
 }
 
+func (f *fakeInvalidatingHistoryRepository) SignHistoryURLs(context.Context, *domain.VideoHistoryDetail) error {
+	return nil
+}
+
+func (f *fakeInvalidatingHistoryRepository) SignedObjectURL(context.Context, string) (string, error) {
+	return "", nil
+}
+
 func (f *fakeInvalidatingHistoryRepository) InvalidateJob(jobID string) {
 	f.invalidatedJobIDs = append(f.invalidatedJobIDs, jobID)
 }
