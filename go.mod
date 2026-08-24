@@ -6,17 +6,18 @@ require (
 	cloud.google.com/go/storage v1.65.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
+	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/sessions v1.4.0
 	github.com/shouni/gcp-kit v1.10.3
 	github.com/shouni/go-character-kit v1.2.0
-	github.com/shouni/go-gemini-client v1.18.0
+	github.com/shouni/go-gemini-client v1.18.1
 	github.com/shouni/go-http-kit v1.8.4
-	github.com/shouni/go-job-kit v1.1.0
+	github.com/shouni/go-job-kit v1.1.1
 	github.com/shouni/go-notify v1.2.5
 	github.com/shouni/go-prompt-kit v1.5.2
 	github.com/shouni/go-remote-io v1.9.0
 	github.com/shouni/go-utils v1.6.0
-	github.com/shouni/go-veo-orchestrator v1.12.6
+	github.com/shouni/go-veo-orchestrator v1.12.7
 	github.com/shouni/netarmor v1.2.4
 	golang.org/x/sync v0.22.0
 )
@@ -42,7 +43,6 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
@@ -52,7 +52,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/shouni/gemini-image-kit v1.15.0 // indirect
+	github.com/shouni/gemini-image-kit v1.15.1 // indirect
 	github.com/slack-go/slack v0.29.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.8.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
