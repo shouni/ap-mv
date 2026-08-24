@@ -1,7 +1,9 @@
 package server
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -250,4 +252,158 @@ func newVideoRecipeCreatePostRequest(csrfToken string) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
+}
+
+// 画面が指す /static/... が実際に配信できること。テンプレートの参照とディレクトリ名は
+// vendor のバージョン更新のたびに両方を直す必要があり、片方だけ直すと 404 になります。
+// ブラウザで開くまで気付けない種類の欠落なので、参照を実際に引いて確かめます。
+func TestLayoutLocalAssetsAreServable(t *testing.T) {
+	layout, err := assets.Templates.ReadFile("templates/layout.html")
+	if err != nil {
+		t.Fatalf("layout.html を読めない: %v", err)
+	}
+
+	refs := regexp.MustCompile(`(?:href|src)="(/static/[^"]+)"`).FindAllStringSubmatch(string(layout), -1)
+	if len(refs) == 0 {
+		t.Fatal("layout.html に /static/ の参照が 1 つも無い（正規表現かテンプレートの変更を疑う）")
+	}
+
+	router, _ := newAuthenticatedTestRouter(t)
+	for _, ref := range refs {
+		target := ref[1]
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+			if rec.Code != http.StatusOK {
+				t.Errorf("%s = %d, want 200", target, rec.Code)
+			}
+		})
+	}
+}
+
+// 外部 CDN をやめて自前配信にした以上、layout.html から外部オリジンへの参照が
+// 復活していないこと。復活すると CSP がそれを実行時に落とすので、CI で気付けるようにします。
+func TestLayoutReferencesNoExternalOrigins(t *testing.T) {
+	layout, err := assets.Templates.ReadFile("templates/layout.html")
+	if err != nil {
+		t.Fatalf("layout.html を読めない: %v", err)
+	}
+
+	for _, ref := range regexp.MustCompile(`(?:href|src)="(https?://[^"]+)"`).FindAllStringSubmatch(string(layout), -1) {
+		t.Errorf("外部オリジンへの参照が復活しています: %s", ref[1])
+	}
+}
+
+// バージョン付きの vendor と、URL が変わらない自前アセットで Cache-Control を分けること。
+func TestStaticCacheControlSeparatesVendorFromOwnAssets(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	tests := []struct {
+		target string
+		want   string
+	}{
+		{"/static/vendor/bootstrap-5.3.8/bootstrap.min.css", vendorCacheControl},
+		{"/static/css/app.css", ownAssetCacheControl},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s = %d, want 200", tt.target, rec.Code)
+			}
+			if got := rec.Header().Get("Cache-Control"); got != tt.want {
+				t.Errorf("Cache-Control = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// CSP が全レスポンスに付き、script-src が緩められていないこと。
+func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	policy := rec.Header().Get("Content-Security-Policy")
+	if policy == "" {
+		t.Fatal("Content-Security-Policy が付いていない")
+	}
+	for _, want := range []string{"default-src 'self'", "script-src 'self'", "object-src 'none'", "frame-ancestors 'none'"} {
+		if !strings.Contains(policy, want) {
+			t.Errorf("CSP に %q が無い: %s", want, policy)
+		}
+	}
+	// script-src の 'unsafe-inline' はインラインスクリプト禁止（TestPagesLoadTheirScripts）
+	// を無意味にします。style-src 側の 'unsafe-inline' は許容しているので、区間を限って見ます。
+	scriptSrc := cspDirective(policy, "script-src")
+	if scriptSrc == "" {
+		t.Fatalf("script-src が無い: %s", policy)
+	}
+	if strings.Contains(scriptSrc, "unsafe-inline") || strings.Contains(scriptSrc, "unsafe-eval") {
+		t.Errorf("script-src が緩められています: %s", scriptSrc)
+	}
+}
+
+// キーフレームと動画は GCS の署名付き URL としてテンプレートへ直接埋まるため、
+// img-src / media-src がそのホストを許していないと画面上で読み込みが落ちます。
+func TestContentSecurityPolicyAllowsSignedMediaHost(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	policy := rec.Header().Get("Content-Security-Policy")
+
+	for _, directive := range []string{"img-src", "media-src"} {
+		if !strings.Contains(cspDirective(policy, directive), "https://storage.googleapis.com") {
+			t.Errorf("%s が署名付き URL のホストを許していない: %s", directive, policy)
+		}
+	}
+}
+
+// cspDirective は CSP から 1 ディレクティブ分を取り出します。無ければ空文字を返します。
+func cspDirective(policy, name string) string {
+	for _, directive := range strings.Split(policy, ";") {
+		directive = strings.TrimSpace(directive)
+		if after, ok := strings.CutPrefix(directive, name+" "); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+// 圧縮が効いていること。画面は日本語 UTF-8（1 文字 3 バイト）でよく縮むのに、
+// これまで無圧縮で配信していました。
+func TestCompressibleResponsesAreCompressed(t *testing.T) {
+	router, _ := newAuthenticatedTestRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/static/vendor/bootstrap-5.3.8/bootstrap.min.css", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+
+	reader, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatalf("gzip.NewReader() error = %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("解凍できない: %v", err)
+	}
+	if !strings.Contains(string(body), "Bootstrap") {
+		t.Error("解凍した中身が Bootstrap の CSS でない")
+	}
+	if len(body) <= rec.Body.Len() {
+		t.Errorf("圧縮後 %d バイトが元の %d バイトを下回っていない", rec.Body.Len(), len(body))
+	}
 }

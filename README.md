@@ -408,7 +408,7 @@ README「タイムアウトの三段」にあります。
 | メソッド | パス | 用途 |
 | --- | --- | --- |
 | `GET` | `/health` | ヘルスチェック |
-| `GET` | `/static/*` | embed.FS の静的ファイル配信 |
+| `GET` | `/static/*` | embed.FS の静的ファイル配信。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
 | `GET` | `/auth/login` | Google OAuth ログイン開始 |
 | `GET` | `/auth/callback` | OAuth コールバック |
 | `GET` | `/` | ホーム |
