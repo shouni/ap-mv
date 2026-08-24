@@ -3,8 +3,9 @@ package filter
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/shouni/go-veo-orchestrator/video"
 
@@ -23,8 +24,8 @@ func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 	}
 	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_4.mp4", "gs://bucket/cut_5.mp4"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("chainEndVideoURLs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -36,8 +37,8 @@ func TestChainEndVideoURLsSingleChain(t *testing.T) {
 	}
 	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_2.mp4"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("chainEndVideoURLs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -60,8 +61,8 @@ func TestChainEndVideoURLsJoinsEveryCutWithoutChaining(t *testing.T) {
 		"gs://bucket/cut_3.mp4",
 		"gs://bucket/cut_4.mp4",
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("chainEndVideoURLs() = %v, want every cut %v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("chainEndVideoURLs() mismatch (-want every cut +got):\n%s", diff)
 	}
 }
 
@@ -75,8 +76,8 @@ func TestChainEndVideoURLsIgnoresChainStartWithoutChaining(t *testing.T) {
 	}
 	got := chainEndVideoURLs(cuts, false)
 	want := []string{"gs://bucket/cut_1.mp4", "gs://bucket/cut_2.mp4"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("chainEndVideoURLs() = %v, want %v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("chainEndVideoURLs() mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -102,8 +103,8 @@ func TestChainFinalizeFilterConcatsEveryCutWithoutChaining(t *testing.T) {
 		t.Fatalf("ConcatHardCut calls = %d, want 1", len(vp.concatCalls))
 	}
 	want := []string{"gs://bucket/cut_1.mp4", "gs://bucket/cut_2.mp4", "gs://bucket/cut_3.mp4"}
-	if !reflect.DeepEqual(vp.concatCalls[0].videoURIs, want) {
-		t.Fatalf("ConcatHardCut videoURIs = %v, want every cut %v", vp.concatCalls[0].videoURIs, want)
+	if diff := cmp.Diff(want, vp.concatCalls[0].videoURIs); diff != "" {
+		t.Fatalf("ConcatHardCut videoURIs mismatch (-want every cut +got):\n%s", diff)
 	}
 }
 
@@ -133,8 +134,8 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 		t.Fatalf("ConcatHardCut calls = %d, want 1", len(vp.concatCalls))
 	}
 	wantURLs := []string{"gs://bucket/cut_2.mp4", "gs://bucket/cut_3.mp4"}
-	if !reflect.DeepEqual(vp.concatCalls[0].videoURIs, wantURLs) {
-		t.Errorf("ConcatHardCut videoURIs = %v, want %v", vp.concatCalls[0].videoURIs, wantURLs)
+	if diff := cmp.Diff(wantURLs, vp.concatCalls[0].videoURIs); diff != "" {
+		t.Errorf("ConcatHardCut videoURIs mismatch (-want +got):\n%s", diff)
 	}
 	if vp.concatCalls[0].destURI != "gs://bucket/jobs/job-1/videos/final.mp4" {
 		t.Errorf("ConcatHardCut destURI = %q", vp.concatCalls[0].destURI)
