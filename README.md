@@ -14,7 +14,7 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 
 「時間軸のタイムライン制御（Timeline Logic）」へと進化させ、映像指示、BGMの拍子・感情・盛り上がり（Audio Cue）がミリ秒単位で完全にシンクロした商業クオリティの映像パイプラインを提供します。
 
-生成済みジョブは `/web/history` から確認できます。GCS 上の `video_music_meta.json` をページング一覧し、詳細画面 `/web/history/{jobID}` では各 cut の `keyframe_reference` を署名付き URL に変換してキーフレーム画像を表示します。
+生成済みジョブは `/web/history` から確認できます。GCS 上の `video_music_meta.json` をページング一覧し、詳細画面 `/web/history/{jobID}` では各 cut のキーフレーム画像と動画を表示します。**画面が指すのは同一オリジンのパス**（`/web/history/{jobID}/cuts/{cutIndex}/keyframe` など）で、ハンドラーが GCS の署名付き URL へ 302 します。署名付き URL を HTML に埋めないのは、期限内はアプリの認証の外側で使えてしまうことと、詳細画面はカットを見比べて作り直す判断をするため滞在が長く、開いたまま期限を過ぎると再生が 403 になって手動リロードするまで戻らないためです。**JSON 応答（ap-mcp）だけは署名付き URL を返します** — リダイレクトを辿らずに URL 自体を使うためです。
 
 ---
 
@@ -340,7 +340,7 @@ sequenceDiagram
 ### 3. 履歴画面
 
 1. `/web/history` で生成済み job の一覧を確認します。GCS 上の `video_music_meta.json` を job 単位で列挙し、タイトル、作成時刻、cut 数、生成状態をページング表示します。`regen-keyframe-` プレフィックスで始まる再生成用の内部ジョブは一覧に表示しません。
-2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON への署名付き URL）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
+2. 一覧の `Detail` から `/web/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
 3. metadata と keyframe 画像は表示時に署名付き URL を発行します。署名 URL の期限切れを避けるため、URL そのものは cache せず、画面表示ごとに再生成します。
 4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
 5. 各カードの **Regenerate** ボタンから `/web/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
@@ -408,7 +408,7 @@ README「タイムアウトの三段」にあります。
 | メソッド | パス | 用途 |
 | --- | --- | --- |
 | `GET` | `/health` | ヘルスチェック |
-| `GET` | `/static/*` | embed.FS の静的ファイル配信 |
+| `GET` | `/static/*` | embed.FS の静的ファイル配信。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
 | `GET` | `/auth/login` | Google OAuth ログイン開始 |
 | `GET` | `/auth/callback` | OAuth コールバック |
 | `GET` | `/` | ホーム |
@@ -417,6 +417,10 @@ README「タイムアウトの三段」にあります。
 | `POST` | `/web/compose-draft` | 下書き作成サブミット（`/web/video-recipe-draft` も同じ handler）。入力は VideoRecipe 作成と同一で、キーフレームを焼かずにカット割りまでで止まる |
 | `GET` | `/web/history?stage=script` | 台本のみのジョブ一覧（旧「下書き一覧」）。`stage` は `script` / `keyframes` / `keyframes_done` / `videos` / `completed` |
 | `GET` | `/web/history/{jobID}/recipe` | ジョブの `VideoRecipe` を JSON で返す。表示用に整形した詳細とは別経路で、そのまま直して PUT へ返せる |
+| `GET` | `/web/history/{jobID}/metadata` | `video_music_meta.json` の署名付き URL へ 302。画面の **Metadata** リンクの実体 |
+| `GET` | `/web/history/{jobID}/video` | 結合済み完成動画の署名付き URL へ 302 |
+| `GET` | `/web/history/{jobID}/cuts/{cutIndex}/video` | カット単体の動画の署名付き URL へ 302 |
+| `GET` | `/web/history/{jobID}/cuts/{cutIndex}/keyframe` | カットのキーフレーム画像の署名付き URL へ 302 |
 | `PUT` | `/web/history/{jobID}/recipe` | レシピを上書き保存。本文は `{"recipe": {...}}`（GET の応答と同じ形）または `VideoRecipe` 単体。**台本のみの段階でのみ許可**（それ以降は 409）。保存前に `Normalize` と `ValidateVideoRecipe` を通し、保存後のカット数と尺を返す |
 | `POST` | `/web/mv-from-keyframe-video-recipe` | Keyframe VideoRecipe から MV 作成（`/web/generate-from-recipe` も同じ handler）。フォーム画面は履歴詳細の動画生成フォームへ統合済みで、ap-mcp 等の M2M 呼び出し互換のために残している |
 | `GET` | `/web/jobs/{jobID}` | ジョブの進行状況（`queued` / `running` / `succeeded` / `failed`）を JSON で返します。失敗時は理由と試行回数も含みます。未記録のジョブは 404 |

@@ -13,8 +13,8 @@
 
         <div class="row g-4">
             <div class="col-md-5">
-                {{if .RegenerateCut.KeyframeURL}}
-                <img src="{{.RegenerateCut.KeyframeURL}}" class="img-fluid rounded border" alt="Cut {{.RegenerateCut.CutIndex}} keyframe">
+                {{if .RegenerateCut.KeyframeWebURL}}
+                <img src="{{.RegenerateCut.KeyframeWebURL}}" class="img-fluid rounded border" alt="Cut {{.RegenerateCut.CutIndex}} keyframe">
                 {{else}}
                 <div class="border rounded d-flex align-items-center justify-content-center text-muted" style="aspect-ratio:1/1;">
                     No keyframe
@@ -30,12 +30,12 @@
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="mode" id="mode-regenerate" value="regenerate" checked>
                             <label class="btn btn-outline-secondary btn-sm" for="mode-regenerate">フル再生成</label>
-                            <input type="radio" class="btn-check" name="mode" id="mode-edit" value="edit" {{if not .RegenerateCut.KeyframeURL}}disabled{{end}}>
+                            <input type="radio" class="btn-check" name="mode" id="mode-edit" value="edit" {{if not .RegenerateCut.KeyframeWebURL}}disabled{{end}}>
                             <label class="btn btn-outline-secondary btn-sm" for="mode-edit">部分編集</label>
                         </div>
                         <div class="form-text">
                             フル再生成はプロンプトから作り直すため構図が変わりえます。部分編集は今の画像をそのまま保ち、指示した内容だけを直します。
-                            {{if not .RegenerateCut.KeyframeURL}}（このカットはまだキーフレームがないため部分編集は選べません）{{end}}
+                            {{if not .RegenerateCut.KeyframeWebURL}}（このカットはまだキーフレームがないため部分編集は選べません）{{end}}
                         </div>
                     </div>
 

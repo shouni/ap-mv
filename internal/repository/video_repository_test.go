@@ -177,7 +177,10 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 	}
 }
 
-func TestGetHistoryLoadsCutKeyframeURLs(t *testing.T) {
+// GetHistory はキーフレームの参照（gs:// URI）を絶対化するところまでを担い、**署名はしません**。
+// 画面は同一オリジンのパスを辿り、リダイレクトの時点で 1 本だけ署名します。署名は
+// SignHistoryURLs を明示的に呼んだときだけ入ります（JSON 応答の経路）。
+func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 	t.Parallel()
 
 	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
@@ -207,11 +210,19 @@ func TestGetHistoryLoadsCutKeyframeURLs(t *testing.T) {
 	if history.Cuts[0].KeyframeReference != "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_001.png" {
 		t.Fatalf("first keyframe reference = %q", history.Cuts[0].KeyframeReference)
 	}
-	if history.Cuts[0].KeyframeURL == "" || !strings.HasPrefix(history.Cuts[0].KeyframeURL, "https://signed.example/") {
-		t.Fatalf("first keyframe URL = %q", history.Cuts[0].KeyframeURL)
+	if history.Cuts[0].KeyframeURL != "" {
+		t.Fatalf("GetHistory が署名しています: %q（画面はリダイレクト経由で署名を受け取ります）", history.Cuts[0].KeyframeURL)
 	}
 	if history.Cuts[1].DurationSec != 7.5 {
 		t.Fatalf("second duration = %v", history.Cuts[1].DurationSec)
+	}
+
+	// JSON 応答の経路だけが署名を要求します。
+	if err := repo.SignHistoryURLs(context.Background(), &history); err != nil {
+		t.Fatalf("SignHistoryURLs() error = %v", err)
+	}
+	if !strings.HasPrefix(history.Cuts[0].KeyframeURL, "https://signed.example/") {
+		t.Fatalf("SignHistoryURLs 後の keyframe URL = %q", history.Cuts[0].KeyframeURL)
 	}
 }
 
@@ -287,7 +298,13 @@ func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testin
 	}
 }
 
-func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
+// 一覧はメタデータを TTL cache に載せますが、**署名は一切しません**。
+//
+// 以前は表示のたびに署名し直していました（期限付きの URL をキャッシュへ載せると、
+// 二度目の表示で期限切れの URL を配ってしまうため）。いまは署名そのものを画面から
+// 外したので、キャッシュに期限付きの値が入る余地がありません。メタデータの読み出しが
+// 1 回で済むこと（＝キャッシュが効いていること）は変わらず確かめます。
+func TestListHistoryPageCachesMetadataAndSignsNothing(t *testing.T) {
 	t.Parallel()
 
 	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
@@ -311,8 +328,8 @@ func TestListHistoryPageRegeneratesSignedURLAfterCacheHit(t *testing.T) {
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("second ListHistoryPage() error = %v", err)
 	}
-	if got := signer.Count(metadataURI); got != 2 {
-		t.Fatalf("metadata signed URL count = %d, want 2", got)
+	if got := signer.Count(metadataURI); got != 0 {
+		t.Fatalf("一覧が署名しています: count = %d, want 0（署名はリダイレクトの時点だけ）", got)
 	}
 	if got := reader.OpenCount(metadataURI); got != 1 {
 		t.Fatalf("metadata open count = %d, want 1", got)

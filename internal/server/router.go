@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -34,6 +35,51 @@ func setupCommonMiddleware(r *chi.Mux, projectID string) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)
+	// 画面は日本語 UTF-8（1 文字 3 バイト）なので圧縮がよく効くが、これまで無圧縮で
+	// 配信していた。静的ファイルも同じ経路に乗る（vendor は immutable なので再圧縮は稀）。
+	r.Use(middleware.Compress(compressionLevel))
+	r.Use(contentSecurityPolicyMiddleware)
+}
+
+// compressionLevel は gzip の圧縮レベルです。
+const compressionLevel = 5
+
+// contentSecurityPolicy は全レスポンスに付ける CSP です。
+//
+// 外部オリジンを 1 つも許可しないのは、Bootstrap を CDN から自前配信へ移したためです
+// （assets/static/vendor）。CDN を allowlist に載せる形だと、jsDelivr は npm の全パッケージを
+// 配信しているため「任意の npm パッケージの読み込みを許可する」に等しく、既知の
+// CSP バイパス・ガジェットを持ち込まれます。'self' だけにできるのが自前配信の主目的です。
+//
+// インラインの <script> と on* 属性はテンプレートに 1 つも無く、
+// handler_assets_test.go の TestPagesLoadTheirScripts が固定しているので、
+// script-src は 'self' だけで足ります。
+//
+// style-src にだけ 'unsafe-inline' が要ります。テンプレートに style= 属性が残っており、
+// Bootstrap の JS（collapse / tab）も遷移中にインラインスタイルを当てるためです。
+//
+// img-src / media-src の storage.googleapis.com は、キーフレームと動画の実体です。
+// 画面が指すのは同一オリジンのパス（/web/history/{jobID}/cuts/{i}/video など）ですが、
+// どれも GCS の署名付き URL へ 302 します。リダイレクト先を CSP がどう扱うかは
+// ブラウザ実装に幅があるため、送り先を明示して依存しないようにしています。
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: https://storage.googleapis.com; " +
+	"media-src 'self' https://storage.googleapis.com; " +
+	"font-src 'self'; " +
+	"connect-src 'self'; " +
+	"object-src 'none'; " +
+	"base-uri 'none'; " +
+	"frame-ancestors 'none'; " +
+	"form-action 'self'"
+
+// contentSecurityPolicyMiddleware attaches the CSP to every response.
+func contentSecurityPolicyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // setupRoutes configures routes.
@@ -91,7 +137,35 @@ func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
 		r.Handle("/static/*", http.NotFoundHandler())
 		return
 	}
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(subFS))))
+	fileServer := http.StripPrefix("/static/", http.FileServer(http.FS(subFS)))
+	r.Handle("/static/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", cacheControlFor(r.URL.Path))
+		fileServer.ServeHTTP(w, r)
+	}))
+}
+
+// vendorPathPrefix より下は第三者製の配布物で、パスにバージョンが入っています
+// （assets/static/vendor/bootstrap-5.3.8 など）。更新すれば必ず別の URL になるので、
+// 再検証させる理由がありません。
+const vendorPathPrefix = "/static/vendor/"
+
+const (
+	// ownAssetCacheControl は自前の CSS / JS 用です。URL を変えずに中身が変わるため短命にします。
+	ownAssetCacheControl = "public, max-age=300, must-revalidate"
+	// vendorCacheControl は vendorPathPrefix 配下用です。
+	vendorCacheControl = "public, max-age=31536000, immutable"
+)
+
+// cacheControlFor は、静的ファイルのパスに応じた Cache-Control を返します。
+//
+// //go:embed した FileServer は Last-Modified も ETag も出せない（embed の ModTime が
+// ゼロ値のため net/http が両方を省く）ので、期限が切れた時点で必ず全体を取り直します。
+// バージョン付きの vendor を分けているのは、その再取得を無くすためです。
+func cacheControlFor(path string) string {
+	if strings.HasPrefix(path, vendorPathPrefix) {
+		return vendorCacheControl
+	}
+	return ownAssetCacheControl
 }
 
 // registerWebRoutes registers web routes.
@@ -116,6 +190,13 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/history/{jobID}", h.HistoryDetail)
 		r.Delete("/history/{jobID}", h.DeleteHistory)
 		r.Get("/history/{jobID}/keyframes.zip", h.DownloadKeyframes)
+		// 画面が指すメディアの入口。GCS の署名付き URL は HTML に出さず、ここで 302 します
+		// （handler_media.go に理由）。認証グループの中にあるので、アセット 1 本ごとに
+		// セッション検証が効きます。
+		r.Get("/history/{jobID}/metadata", h.HistoryMetadata)
+		r.Get("/history/{jobID}/video", h.HistoryVideo)
+		r.Get("/history/{jobID}/cuts/{cutIndex}/video", h.CutVideo)
+		r.Get("/history/{jobID}/cuts/{cutIndex}/keyframe", h.CutKeyframe)
 		// レシピの読み出しと編集。表示用に整形した履歴詳細とは別経路で、読んだものを
 		// そのまま直して返せます。編集は台本のみの段階に限られます（PutJobRecipe 参照）。
 		r.Get("/history/{jobID}/recipe", h.GetJobRecipe)

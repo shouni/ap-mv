@@ -69,13 +69,43 @@ func (r fakeHistoryRepository) KeyframeZipSignedURL(context.Context, string) (st
 	return "", nil
 }
 
+// SignHistoryURLs は JSON 応答のためだけの経路です。署名の中身はここでは問わず、
+// 「画面は署名を要求しない」ことを確かめられれば足りるので、目印だけ入れます。
+func (r fakeHistoryRepository) SignHistoryURLs(_ context.Context, detail *domain.VideoHistoryDetail) error {
+	if detail == nil {
+		return nil
+	}
+	detail.SignedURL = "https://signed.example/metadata.json"
+	if detail.FinalVideoURL != "" {
+		detail.FinalVideoSignedURL = "https://signed.example/final.mp4"
+	}
+	for i := range detail.Cuts {
+		if detail.Cuts[i].VideoURL != "" {
+			detail.Cuts[i].VideoSignedURL = "https://signed.example/cut.mp4"
+		}
+		if detail.Cuts[i].KeyframeReference != "" {
+			detail.Cuts[i].KeyframeURL = "https://signed.example/cut.png"
+		}
+	}
+	return nil
+}
+
+func (r fakeHistoryRepository) SignedObjectURL(_ context.Context, uri string) (string, error) {
+	if uri == "" {
+		return "", nil
+	}
+	return "https://signed.example/object?src=" + uri, nil
+}
+
 func (r fakeHistoryRepository) InvalidateJob(string) {}
 
-// TestLatestVideoForHomePrefersFinalVideoSignedURL verifies that when a job's chain-finalize
-// result (FinalVideoSignedURL) is available, it is used instead of scanning cuts backward —
-// scanning the last cut alone would show only the last chain's fragment for jobs with more than
-// one continuation chain (see chain_finalize.go).
-func TestLatestVideoForHomePrefersFinalVideoSignedURL(t *testing.T) {
+// TestLatestVideoForHomePrefersFinalVideo verifies that when a job's chain-finalize result
+// (FinalVideoURL) is available, it is used instead of scanning cuts backward — scanning the
+// last cut alone would show only the last chain's fragment for jobs with more than one
+// continuation chain (see chain_finalize.go).
+//
+// 出るのは同一オリジンのパスです。署名付き URL は画面に埋めません。
+func TestLatestVideoForHomePrefersFinalVideo(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, &recordingQueue{}, ModelOptions{}, CharacterOptions{})
 	if err != nil {
 		t.Fatalf("NewHandlerWithOptions() error = %v", err)
@@ -83,14 +113,14 @@ func TestLatestVideoForHomePrefersFinalVideoSignedURL(t *testing.T) {
 	h.HistoryRepository = fakeHistoryRepository{
 		detail: domain.VideoHistoryDetail{
 			VideoHistory: domain.VideoHistory{
-				JobID:               "job-1",
-				Title:               "Test MV",
-				Generated:           true,
-				FinalVideoSignedURL: "https://signed.example/final.mp4",
+				JobID:         "job-1",
+				Title:         "Test MV",
+				Generated:     true,
+				FinalVideoURL: "gs://bucket/jobs/job-1/videos/final.mp4",
 			},
 			Cuts: []domain.VideoHistoryCut{
-				{CutIndex: 1, KeyframeURL: "https://signed.example/cut1.png", VideoSignedURL: "https://signed.example/cut1.mp4"},
-				{CutIndex: 2, VideoSignedURL: "https://signed.example/cut2.mp4"},
+				{CutIndex: 1, KeyframeReference: "gs://bucket/jobs/job-1/images/cut1.png", VideoURL: "gs://bucket/jobs/job-1/videos/cut1.mp4"},
+				{CutIndex: 2, VideoURL: "gs://bucket/jobs/job-1/videos/cut2.mp4"},
 			},
 		},
 	}
@@ -101,11 +131,11 @@ func TestLatestVideoForHomePrefersFinalVideoSignedURL(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "https://signed.example/final.mp4" {
-		t.Errorf("VideoURL = %q, want FinalVideoSignedURL", got.VideoURL)
+	if got.VideoURL != "/web/history/job-1/video" {
+		t.Errorf("VideoURL = %q, want the final-video web path", got.VideoURL)
 	}
-	if got.PosterURL != "https://signed.example/cut1.png" {
-		t.Errorf("PosterURL = %q, want first cut's keyframe", got.PosterURL)
+	if got.PosterURL != "/web/history/job-1/cuts/1/keyframe" {
+		t.Errorf("PosterURL = %q, want the first cut's keyframe web path", got.PosterURL)
 	}
 }
 
@@ -120,8 +150,8 @@ func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
 		detail: domain.VideoHistoryDetail{
 			VideoHistory: domain.VideoHistory{JobID: "job-1", Title: "Test MV", Generated: true},
 			Cuts: []domain.VideoHistoryCut{
-				{CutIndex: 1, VideoSignedURL: "https://signed.example/cut1.mp4"},
-				{CutIndex: 2, KeyframeURL: "https://signed.example/cut2.png", VideoSignedURL: "https://signed.example/cut2.mp4"},
+				{CutIndex: 1, VideoURL: "gs://bucket/jobs/job-1/videos/cut1.mp4"},
+				{CutIndex: 2, KeyframeReference: "gs://bucket/jobs/job-1/images/cut2.png", VideoURL: "gs://bucket/jobs/job-1/videos/cut2.mp4"},
 			},
 		},
 	}
@@ -132,11 +162,11 @@ func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "https://signed.example/cut2.mp4" {
-		t.Errorf("VideoURL = %q, want last cut's VideoSignedURL", got.VideoURL)
+	if got.VideoURL != "/web/history/job-1/cuts/2/video" {
+		t.Errorf("VideoURL = %q, want the last cut's video web path", got.VideoURL)
 	}
-	if got.PosterURL != "https://signed.example/cut2.png" {
-		t.Errorf("PosterURL = %q, want last cut's keyframe", got.PosterURL)
+	if got.PosterURL != "/web/history/job-1/cuts/2/keyframe" {
+		t.Errorf("PosterURL = %q, want the last cut's keyframe web path", got.PosterURL)
 	}
 }
 

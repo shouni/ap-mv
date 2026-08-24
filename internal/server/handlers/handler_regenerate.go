@@ -148,6 +148,8 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	// 画面が指すのは同一オリジンのパスです（署名は 302 の時点で 1 本だけ）。
+	applyWebMediaURLs(&history)
 	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
 	if !ok {
 		http.Error(w, "cut not found", http.StatusNotFound)
@@ -226,6 +228,8 @@ func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	// 画面が指すのは同一オリジンのパスです（署名は 302 の時点で 1 本だけ）。
+	applyWebMediaURLs(&history)
 	group, ok := findHistorySectionGroup(history, sectionIndex)
 	if !ok {
 		http.Error(w, "section not found", http.StatusNotFound)

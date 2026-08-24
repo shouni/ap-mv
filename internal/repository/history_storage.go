@@ -41,29 +41,48 @@ func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context
 	return r.finalizeHistory(ctx, jobID, history)
 }
 
-// finalizeHistory fills in the fields that are never cached (signed URLs expire, so they're
-// always regenerated; the keyframe zip URI is cheap to derive).
-func (r *VideoHistoryRepository) finalizeHistory(ctx context.Context, jobID string, history domain.VideoHistory) domain.VideoHistory {
+// finalizeHistory fills in the fields that are never cached.
+//
+// 署名付き URL はここでは作りません。画面は同一オリジンのパスを辿り、ハンドラーが
+// リダイレクトの時点で 1 本だけ署名します。JSON の呼び出し元だけが SignHistoryURLs を
+// 明示的に呼びます。
+func (r *VideoHistoryRepository) finalizeHistory(_ context.Context, jobID string, history domain.VideoHistory) domain.VideoHistory {
 	history.SignedURL = ""
-	if signedURL, err := r.signedURL(ctx, history.StorageURI); err == nil {
-		history.SignedURL = signedURL
-	} else {
-		slog.WarnContext(ctx, "failed to generate metadata signed URL",
-			"uri", history.StorageURI,
-			"error", err,
-		)
-	}
 	history.FinalVideoSignedURL = ""
-	if signedURL, err := r.signedURL(ctx, history.FinalVideoURL); err == nil {
-		history.FinalVideoSignedURL = signedURL
-	} else {
-		slog.WarnContext(ctx, "failed to generate final video signed URL",
-			"uri", history.FinalVideoURL,
-			"error", err,
-		)
-	}
 	history.KeyframeZipURI = r.keyframeZipURI(jobID)
 	return history
+}
+
+// SignHistoryURLs は、GetHistory が空のままにした署名付き URL を埋めます。
+// JSON 応答のためだけの経路で、画面は呼びません（リダイレクトで 1 本ずつ署名するため）。
+func (r *VideoHistoryRepository) SignHistoryURLs(ctx context.Context, detail *domain.VideoHistoryDetail) error {
+	if detail == nil {
+		return nil
+	}
+	if signedURL, err := r.signedURL(ctx, detail.StorageURI); err == nil {
+		detail.SignedURL = signedURL
+	} else {
+		slog.WarnContext(ctx, "failed to generate metadata signed URL", "uri", detail.StorageURI, "error", err)
+	}
+	if signedURL, err := r.signedURL(ctx, detail.FinalVideoURL); err == nil {
+		detail.FinalVideoSignedURL = signedURL
+	} else {
+		slog.WarnContext(ctx, "failed to generate final video signed URL", "uri", detail.FinalVideoURL, "error", err)
+	}
+
+	signedCuts, err := r.signHistoryCutURLs(ctx, detail.Cuts)
+	if err != nil {
+		return err
+	}
+	detail.Cuts = signedCuts
+	return nil
+}
+
+// SignedObjectURL は、ジョブのメタデータに記録された gs:// URI を署名します。
+// リダイレクトハンドラーが、読み込み済みの履歴から取り出した URI に対してだけ呼びます
+// （呼び出し元の入力をそのまま署名させないため）。
+func (r *VideoHistoryRepository) SignedObjectURL(ctx context.Context, uri string) (string, error) {
+	return r.signedURL(ctx, uri)
 }
 
 // keyframeZipURI returns the GCS URI for the pre-built keyframe zip of a job.

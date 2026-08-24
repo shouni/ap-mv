@@ -17,7 +17,18 @@ type HistoryRepository interface {
 	// ListHistoryPage は MV ジョブを一覧します。stage が空なら全段階、指定すれば
 	// その段階のジョブだけを返します（台本のみのジョブは domain.StageScript）。
 	ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error)
+	// GetHistory は表示用に整形した履歴を返します。**署名付き URL は空のままです。**
+	// 画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します。
+	// カット 1 本ずつ前払いすると、詳細 1 画面で数十回の IAM SignBlob 往復になります。
 	GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error)
+	// SignHistoryURLs は GetHistory が空のままにした署名付き URL を埋めます。
+	// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らずに URL 自体を受け取るため、
+	// この経路だけが署名を必要とします。
+	SignHistoryURLs(ctx context.Context, detail *domain.VideoHistoryDetail) error
+	// SignedObjectURL は、読み込み済みの履歴から取り出した gs:// URI を署名します。
+	// リダイレクトハンドラー専用で、呼び出し元の入力をそのまま署名させないために、
+	// 渡すのは必ず履歴に記録されていた URI に限ります。
+	SignedObjectURL(ctx context.Context, uri string) (string, error)
 	// GetRecipe は保存済みの VideoRecipe をそのまま返します。編集して SaveRecipe で
 	// 書き戻す往復のための読み出しで、表示用に整形した GetHistory とは別経路です。
 	GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error)
