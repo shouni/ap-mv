@@ -1,6 +1,6 @@
 module github.com/shouni/ap-mv
 
-go 1.26.6
+go 1.26
 
 require (
 	cloud.google.com/go/storage v1.65.0
@@ -8,16 +8,16 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
 	github.com/gorilla/sessions v1.4.0
-	github.com/shouni/gcp-kit v1.10.3
+	github.com/shouni/gcp-kit v1.10.4
 	github.com/shouni/go-character-kit v1.2.0
 	github.com/shouni/go-gemini-client v1.19.0
 	github.com/shouni/go-http-kit v1.8.5
 	github.com/shouni/go-job-kit v1.1.2
-	github.com/shouni/go-notify v1.2.5
-	github.com/shouni/go-prompt-kit v1.5.2
+	github.com/shouni/go-notify v1.2.6
+	github.com/shouni/go-prompt-kit v1.6.0
 	github.com/shouni/go-remote-io v1.9.0
 	github.com/shouni/go-utils v1.6.1
-	github.com/shouni/go-veo-orchestrator v1.12.8
+	github.com/shouni/go-veo-orchestrator v1.12.9
 	github.com/shouni/netarmor v1.2.4
 	golang.org/x/sync v0.22.0
 )
