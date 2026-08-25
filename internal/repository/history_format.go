@@ -15,5 +15,5 @@ func formatHistoryCreatedAt(jobID string) string {
 	if err != nil {
 		return ""
 	}
-	return jst.Format(createdAt, jst.LayoutDisplay)
+	return jst.FormatDisplay(createdAt)
 }

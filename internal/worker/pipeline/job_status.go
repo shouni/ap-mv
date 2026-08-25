@@ -29,21 +29,21 @@ func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 	return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](store)}
 }
 
-// alreadySucceeded は、そのジョブが既に完了しているかどうかを返します。
+// begin は、そのジョブが既に完了していれば true を返し、未完了なら処理開始を記録して
+// false を返します。判定と記録を前回の記録の 1 回の読みで行うので、間に別の配信が
+// 割り込む隙がありません。試行回数はここで 1 つ進みます。
 //
-// 状態を読めなかった場合はエラーを返します。呼び出し側はそのままエラーを返して
-// Cloud Tasks の再配信に委ねてください。ここで「未完了」に倒すと、完了済みジョブを
+// 状態を読めなかった場合はエラーを返し、記録もしません。呼び出し側はそのままエラーを
+// 返して Cloud Tasks の再配信に委ねてください。ここで「未完了」に倒すと、完了済みジョブを
 // 作り直してこのガードが防ぐはずのコストを発生させ、「完了済み」に倒すと未完了の
 // ジョブがタスクごと ACK されて二度と実行されません。
-func (s statusRecorder) alreadySucceeded(ctx context.Context, jobID string) (bool, error) {
-	return s.recorder.AlreadySucceeded(ctx, jobID)
-}
-
-// markRunning は処理開始を記録し、試行回数を 1 つ進めます。
-func (s statusRecorder) markRunning(ctx context.Context, task *domain.Task) {
-	s.record(ctx, task, domain.JobStateRunning, func(next, _ *domain.JobStatus) {
-		next.Attempts++
-	})
+func (s statusRecorder) begin(ctx context.Context, task *domain.Task) (bool, error) {
+	if task == nil {
+		return false, nil
+	}
+	return s.recorder.Begin(ctx, task.JobID, s.newStatus(task, domain.JobStateRunning),
+		func(next, _ *domain.JobStatus) { next.Attempts++ },
+	)
 }
 
 // markSucceeded は成功と成果物の保存先を記録します。
@@ -78,7 +78,11 @@ func (s statusRecorder) record(
 	if task == nil {
 		return
 	}
+	s.recorder.Record(ctx, task.JobID, s.newStatus(task, state), apply)
+}
 
+// newStatus は今回の記録ぶんの状態を組み立てます。
+func (s statusRecorder) newStatus(task *domain.Task, state domain.JobState) domain.JobStatus {
 	status := domain.JobStatus{
 		JobID:         task.JobID,
 		Command:       string(task.Command),
@@ -88,6 +92,5 @@ func (s statusRecorder) record(
 	if task.Recipe != nil {
 		status.Title = task.Recipe.Title
 	}
-
-	s.recorder.Record(ctx, task.JobID, status, apply)
+	return status
 }
