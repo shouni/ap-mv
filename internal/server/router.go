@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/shouni/gcp-kit/cloudlog"
 
+	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/builder"
 	"github.com/shouni/ap-mv/internal/server/handlers"
 )
@@ -116,9 +117,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-	if h != nil && h.StaticFiles != nil {
-		registerStaticRoutes(r, h.StaticFiles)
-	}
+	setupStaticRoutes(r)
 
 	if h != nil && h.Auth != nil {
 		r.Route("/auth", func(r chi.Router) {
@@ -156,10 +155,15 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	})
 }
 
-// registerStaticRoutes registers static routes.
-func registerStaticRoutes(r chi.Router, staticFiles fs.FS) {
-	subFS, err := fs.Sub(staticFiles, "static")
+// setupStaticRoutes は、埋め込み済みの静的ファイルを /static/* で配信します。
+//
+// assets を直接参照します。embed.FS はバイナリに焼き込まれた定数で本番で差し替わらないため、
+// 注入しても誰も通らない継ぎ目が増えるだけでした。引数で受けていた頃は、ハンドラーの
+// 組み立てに失敗すると CSS まで配信されないという理由のない結合も付いていました。
+func setupStaticRoutes(r chi.Router) {
+	subFS, err := fs.Sub(assets.StaticFiles, "static")
 	if err != nil {
+		slog.Error("static assets are unavailable", "error", err)
 		r.Handle("/static/*", http.NotFoundHandler())
 		return
 	}

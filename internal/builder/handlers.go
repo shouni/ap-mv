@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/url"
 
 	"github.com/shouni/gcp-kit/auth"
@@ -21,11 +20,10 @@ const defaultSessionName = "ap-mv-session"
 
 // AppHandlers は生成されたHTTPハンドラーを保持します。
 type AppHandlers struct {
-	Auth        *auth.Handler
-	Web         *handlers.Handler
-	Worker      *worker.Handler[domain.Task]
-	M2M         *auth.M2MVerifier
-	StaticFiles fs.FS
+	Auth   *auth.Handler
+	Web    *handlers.Handler
+	Worker *worker.Handler[domain.Task]
+	M2M    *auth.M2MVerifier
 	// TaskAuth は Cloud Tasks からの OIDC を検証します。Auth と違い OAuth 設定を
 	// 必要としないため、Web 面を持たない Worker プロセスでも構築できます。
 	TaskAuth *auth.TaskVerifier
@@ -46,7 +44,7 @@ func (h *AppHandlers) Validate() error {
 
 // BuildHandlers は各ハンドラーの依存関係を SERVER_ROLE に応じて組み立てます。
 // 担当しない面のハンドラーは nil のままにし、router 側でルート登録ごと省かれるようにします。
-func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*AppHandlers, error) {
+func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 	if appCtx == nil || appCtx.Config == nil {
 		return nil, fmt.Errorf("app container and config are required")
 	}
@@ -54,11 +52,11 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 		return nil, fmt.Errorf("認証リダイレクトのために ServiceURL の設定が必要です")
 	}
 
-	h := &AppHandlers{StaticFiles: staticFiles}
+	h := &AppHandlers{}
 	role := appCtx.Config.Server.Role
 
 	if role.ServesWeb() {
-		if err := buildWebHandlers(templates, appCtx, h); err != nil {
+		if err := buildWebHandlers(appCtx, h); err != nil {
 			return nil, err
 		}
 	}
@@ -88,7 +86,7 @@ func BuildHandlers(templates fs.FS, staticFiles fs.FS, appCtx *app.Container) (*
 }
 
 // buildWebHandlers は Web 面（OAuth・Web UI・M2M 検証）のハンドラーを組み立てます。
-func buildWebHandlers(templates fs.FS, appCtx *app.Container, h *AppHandlers) error {
+func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 	authHandler, err := createAuthHandler(appCtx.Config)
 	if err != nil {
 		return fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
@@ -103,7 +101,7 @@ func buildWebHandlers(templates fs.FS, appCtx *app.Container, h *AppHandlers) er
 		return fmt.Errorf("visual Mode選択肢の初期化に失敗しました: %w", err)
 	}
 
-	webHandler, err := handlers.NewHandlerWithOptions(templates, appCtx.TaskQueue, handlers.ModelOptions{
+	webHandler, err := handlers.NewHandlerWithOptions(assets.Templates, appCtx.TaskQueue, handlers.ModelOptions{
 		GeminiModels:       appCtx.Config.AI.GeminiModels,
 		ImageModels:        appCtx.Config.AI.ImageModels,
 		VeoModels:          appCtx.Config.AI.VeoModels,

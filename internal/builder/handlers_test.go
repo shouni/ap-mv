@@ -10,7 +10,6 @@ import (
 	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/worker"
 
-	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/domain"
@@ -69,7 +68,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 			t.Parallel()
 
 			appCtx := &app.Container{Config: newRoleTestConfig(tt.role), Pipeline: stubPipeline{}}
-			h, err := BuildHandlers(assets.Templates, assets.StaticFiles, appCtx)
+			h, err := BuildHandlers(appCtx)
 			if err != nil {
 				t.Fatalf("BuildHandlers() error = %v", err)
 			}
@@ -102,7 +101,7 @@ func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 	t.Parallel()
 
 	appCtx := &app.Container{Config: newRoleTestConfig(serverrole.Web)}
-	h, err := BuildHandlers(assets.Templates, assets.StaticFiles, appCtx)
+	h, err := BuildHandlers(appCtx)
 	if err != nil {
 		t.Fatalf("BuildHandlers() error = %v", err)
 	}
@@ -120,7 +119,7 @@ func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 	cfg.Tasks.TaskAudienceURL = ""
 
 	appCtx := &app.Container{Config: cfg, Pipeline: stubPipeline{}}
-	if _, err := BuildHandlers(assets.Templates, assets.StaticFiles, appCtx); err == nil {
+	if _, err := BuildHandlers(appCtx); err == nil {
 		t.Fatal("TASK_AUDIENCE_URL が無いのに BuildHandlers() が成功している")
 	}
 }

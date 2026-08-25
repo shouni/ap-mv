@@ -160,8 +160,7 @@ func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 // newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
 func newWorkerRoleTestRouter() http.Handler {
 	return NewRouter(&builder.AppHandlers{
-		TaskAuth:    auth.NewTaskVerifier("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
-		StaticFiles: assets.StaticFiles,
+		TaskAuth: auth.NewTaskVerifier("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 }
 
@@ -195,7 +194,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
-	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler, StaticFiles: assets.StaticFiles}, "")
+	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler}, "")
 	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
 }
 
