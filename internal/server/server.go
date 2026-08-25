@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -16,7 +15,7 @@ import (
 const defaultShutdownTimeout = 30 * time.Second
 
 // Run はサーバーの構築、起動、およびライフサイクル管理を行います。
-func Run(ctx context.Context, cfg *config.Config, templates fs.FS, staticFiles fs.FS) error {
+func Run(ctx context.Context, cfg *config.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("config is required")
 	}
@@ -33,7 +32,7 @@ func Run(ctx context.Context, cfg *config.Config, templates fs.FS, staticFiles f
 		appCtx.Close()
 	}()
 
-	h, err := builder.BuildHandlers(templates, staticFiles, appCtx)
+	h, err := builder.BuildHandlers(appCtx)
 	if err != nil {
 		return fmt.Errorf("failed to build handlers: %w", err)
 	}

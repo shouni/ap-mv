@@ -11,7 +11,6 @@ import (
 	"github.com/shouni/gcp-kit/cloudlog"
 	"github.com/shouni/go-utils/slogctx"
 
-	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/server"
 )
@@ -44,7 +43,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := server.Run(ctx, cfg, assets.Templates, assets.StaticFiles); err != nil {
+	if err := server.Run(ctx, cfg); err != nil {
 		slog.Error("server failed", "error", err)
 		return err
 	}
