@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -102,6 +103,14 @@ func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 		slog.String("job_id", task.JobID),
 		slog.String("command", string(task.Command)),
 	)
+
+	// ログの相関に加えて、pprof のゴルーチンラベルにも同じ値を載せます。
+	// Go 1.27 以降、ラベルは**パニックのトレースバックの見出し行にも出る**ため、
+	// 落ちたときにどのジョブだったかがスタックだけで分かります。slogctx は
+	// panic の経路では効かないので、そこを埋めるのがこちらの役目です。
+	// ラベルは子ゴルーチン（並列生成など）へも継承されます。
+	ctx = pprof.WithLabels(ctx, pprof.Labels("job_id", task.JobID, "command", string(task.Command)))
+	pprof.SetGoroutineLabels(ctx)
 
 	// Cloud Tasks の再配信で完了済みジョブを作り直さないためのガード。
 	// 通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで打ち切らないと
