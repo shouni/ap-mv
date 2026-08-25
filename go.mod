@@ -1,6 +1,6 @@
 module github.com/shouni/ap-mv
 
-go 1.26
+go 1.27
 
 require (
 	cloud.google.com/go/storage v1.65.0
