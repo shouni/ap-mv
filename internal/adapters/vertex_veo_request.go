@@ -184,10 +184,7 @@ func detectedAudioMimeType(data []byte) string {
 	if len(data) == 0 {
 		return "audio/mpeg"
 	}
-	limit := 512
-	if len(data) < limit {
-		limit = len(data)
-	}
+	limit := min(len(data), 512)
 	mimeType := http.DetectContentType(data[:limit])
 	switch mimeType {
 	case "audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4":

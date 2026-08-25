@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shouni/go-veo-orchestrator/video"
-
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
@@ -20,17 +18,13 @@ func TestRecipeLoadFilterLoadsRecipeURLAndAppliesAudioURL(t *testing.T) {
 		]
 	}`}
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:     "job-1",
-				Command:   domain.CommandMVFromKeyframeVideoRecipe,
-				RecipeURL: "gs://bucket/recipe.json",
-				AudioURL:  "gs://bucket/music.mp3",
-			},
+		Task: &domain.Task{
+			JobID:     "job-1",
+			Command:   domain.CommandMVFromKeyframeVideoRecipe,
+			RecipeURL: "gs://bucket/recipe.json",
+			AudioURL:  "gs://bucket/music.mp3",
 		},
-		Services: Services{
-			Reader: reader,
-		},
+		Reader: reader,
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -56,16 +50,12 @@ func TestRecipeLoadFilterLoadsVideoRecipeURL(t *testing.T) {
 		]
 	}`}
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:     "job-1",
-				Command:   domain.CommandMVFromKeyframeVideoRecipe,
-				RecipeURL: "gs://bucket/video_music_meta.json",
-			},
+		Task: &domain.Task{
+			JobID:     "job-1",
+			Command:   domain.CommandMVFromKeyframeVideoRecipe,
+			RecipeURL: "gs://bucket/video_music_meta.json",
 		},
-		Services: Services{
-			Reader: reader,
-		},
+		Reader: reader,
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -98,14 +88,12 @@ func TestRecipeLoadFilterAbsolutizesRelativeKeyframes(t *testing.T) {
 		]
 	}`}
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:     "mv-2",
-				Command:   domain.CommandMVFromKeyframeVideoRecipe,
-				RecipeURL: "gs://bucket/ap-mv/veo/jobs/job-1/video_music_meta.json",
-			},
+		Task: &domain.Task{
+			JobID:     "mv-2",
+			Command:   domain.CommandMVFromKeyframeVideoRecipe,
+			RecipeURL: "gs://bucket/ap-mv/veo/jobs/job-1/video_music_meta.json",
 		},
-		Services: Services{Reader: reader},
+		Reader: reader,
 	}
 
 	if err := (RecipeLoadFilter{}).Execute(context.Background(), fc); err != nil {
@@ -126,17 +114,15 @@ func TestRecipeLoadFilterAbsolutizesRelativeKeyframes(t *testing.T) {
 // TestCutKeyframeFilterAppliesTaskCharacterID verifies that task character IDs are applied during keyframe generation.
 func TestCutKeyframeFilterAppliesTaskCharacterID(t *testing.T) {
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:       "job-1",
-				Command:     domain.CommandMVFromKeyframeVideoRecipe,
-				CharacterID: "zundamon",
-			},
-			Recipe: &domain.MusicRecipe{
-				Title: "recipe",
-				Sections: []domain.MusicSection{
-					{Name: "intro", Duration: 8, Prompt: "blue light"},
-				},
+		Task: &domain.Task{
+			JobID:       "job-1",
+			Command:     domain.CommandMVFromKeyframeVideoRecipe,
+			CharacterID: "zundamon",
+		},
+		Recipe: &domain.MusicRecipe{
+			Title: "recipe",
+			Sections: []domain.MusicSection{
+				{Name: "intro", Duration: 8, Prompt: "blue light"},
 			},
 		},
 	}
@@ -160,7 +146,7 @@ func TestVideoRecipeCreateDoesNotApplyTaskAudioURL(t *testing.T) {
 	recipe := &domain.VideoRecipe{
 		MusicRecipe: domain.MusicRecipe{Title: "recipe"},
 		Cuts: []domain.VideoCut{
-			{CutIndex: 1, VisualAnchor: "blue light", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "blue light", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{

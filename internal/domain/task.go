@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -245,22 +246,12 @@ var AllowedImageSizes = []string{"1K", "2K", "4K"}
 
 // IsAllowedImageSize は value が許可された解像度かを返します。
 func IsAllowedImageSize(value string) bool {
-	for _, allowed := range AllowedImageSizes {
-		if value == allowed {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllowedImageSizes, value)
 }
 
 // IsAllowedAspectRatio は value が許可されたアスペクト比かを返します。
 func IsAllowedAspectRatio(value string) bool {
-	for _, allowed := range AllowedAspectRatios {
-		if value == allowed {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllowedAspectRatios, value)
 }
 
 // validateOptionalAspectRatio validates an optional Veo aspect ratio field.

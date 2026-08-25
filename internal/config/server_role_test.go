@@ -215,7 +215,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
 	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
 	t.Run("既定値を持たない", func(t *testing.T) {
-		field, ok := reflect.TypeOf(AIConfig{}).FieldByName("PipelineTimeout")
+		field, ok := reflect.TypeFor[AIConfig]().FieldByName("PipelineTimeout")
 		if !ok {
 			t.Fatal("AIConfig.PipelineTimeout not found")
 		}
@@ -267,7 +267,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 // 閉じます。アプリが既定を持つと同じ数字が 2 箇所に現れ、設定漏れが
 // 「誰も選んでいない値」で動いてしまいます。
 func TestDispatchDeadlineHasNoDefault(t *testing.T) {
-	field, ok := reflect.TypeOf(TasksConfig{}).FieldByName("DispatchDeadline")
+	field, ok := reflect.TypeFor[TasksConfig]().FieldByName("DispatchDeadline")
 	if !ok {
 		t.Fatal("TasksConfig.DispatchDeadline not found")
 	}

@@ -23,24 +23,20 @@ func newSectionSelectRecipe() *video.Recipe {
 		},
 		Cuts: []video.Cut{
 			{
-				CutIndex:       1,
-				AudioSync:      video.AudioSync{StartSec: 0, EndSec: 10, DurationSec: 10},
-				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png"},
-				Result: video.Result{
-					Status:   video.CutStatusGenerated,
-					VideoID:  "video-1",
-					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_1.mp4",
-				},
+				CutIndex: 1,
+				StartSec: 0, EndSec: 10, DurationSec: 10,
+				KeyframeReference: "gs://bucket/jobs/orig-job/images/cut_1.png",
+				Status:            video.CutStatusGenerated,
+				VideoID:           "video-1",
+				VideoURL:          "gs://bucket/jobs/orig-job/videos/cut_1.mp4",
 			},
 			{
-				CutIndex:       2,
-				AudioSync:      video.AudioSync{StartSec: 10, EndSec: 20, DurationSec: 10},
-				KeyframeResult: video.KeyframeResult{KeyframeReference: "images/cut_2.png"},
-				Result: video.Result{
-					Status:   video.CutStatusGenerated,
-					VideoID:  "video-2",
-					VideoURL: "gs://bucket/jobs/orig-job/videos/cut_2.mp4",
-				},
+				CutIndex: 2,
+				StartSec: 10, EndSec: 20, DurationSec: 10,
+				KeyframeReference: "images/cut_2.png",
+				Status:            video.CutStatusGenerated,
+				VideoID:           "video-2",
+				VideoURL:          "gs://bucket/jobs/orig-job/videos/cut_2.mp4",
 			},
 		},
 	}
@@ -53,15 +49,13 @@ func newSectionSelectRecipe() *video.Recipe {
 func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 	sectionIndex := 1
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:        "short-1",
-				Command:      domain.CommandShortVideoFromSection,
-				SectionIndex: &sectionIndex,
-				RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
-			},
-			VideoRecipe: newSectionSelectRecipe(),
+		Task: &domain.Task{
+			JobID:        "short-1",
+			Command:      domain.CommandShortVideoFromSection,
+			SectionIndex: &sectionIndex,
+			RecipeURL:    "gs://bucket/jobs/orig-job/video_music_meta.json",
 		},
+		VideoRecipe: newSectionSelectRecipe(),
 	}
 
 	if err := (SectionSelectFilter{}).Execute(context.Background(), fc); err != nil {
@@ -101,10 +95,10 @@ func TestSectionSelectFilterTrimsToSectionCuts(t *testing.T) {
 // and dialogue lines are distributed across the sub-cuts.
 func TestSplitCutBySupportedDurations(t *testing.T) {
 	cut := video.Cut{
-		CutIndex:       3,
-		Dialogue:       "line1\nline2\nline3\nline4\nline5",
-		AudioSync:      video.AudioSync{StartSec: 40, EndSec: 75, DurationSec: 35},
-		KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png"},
+		CutIndex: 3,
+		Dialogue: "line1\nline2\nline3\nline4\nline5",
+		StartSec: 40, EndSec: 75, DurationSec: 35,
+		KeyframeReference: "gs://bucket/jobs/orig/images/cut_3.png",
 	}
 
 	subCuts := veo.SplitCutBySupportedDurations(cut, veo.ImageToVideoDurationsSec())
@@ -136,7 +130,7 @@ func TestSplitCutBySupportedDurations(t *testing.T) {
 func TestCapCutsTotalDuration(t *testing.T) {
 	cuts := make([]video.Cut, 9)
 	for i := range cuts {
-		cuts[i] = video.Cut{CutIndex: i + 1, AudioSync: video.AudioSync{DurationSec: 8}}
+		cuts[i] = video.Cut{CutIndex: i + 1, DurationSec: 8}
 	}
 	capped := veo.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 7 {
@@ -144,14 +138,14 @@ func TestCapCutsTotalDuration(t *testing.T) {
 	}
 
 	// 56s + 4s = 60s ちょうどは収まる。
-	cuts = append(cuts[:7], video.Cut{CutIndex: 8, AudioSync: video.AudioSync{DurationSec: 4}})
+	cuts = append(cuts[:7], video.Cut{CutIndex: 8, DurationSec: 4})
 	capped = veo.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 8 {
 		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
 	}
 
 	// 上限超えの単独カットでも先頭は必ず残す。
-	capped = veo.CapCutsTotalDuration([]video.Cut{{CutIndex: 1, AudioSync: video.AudioSync{DurationSec: 90}}}, 60)
+	capped = veo.CapCutsTotalDuration([]video.Cut{{CutIndex: 1, DurationSec: 90}}, 60)
 	if len(capped) != 1 {
 		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
 	}
@@ -206,14 +200,12 @@ func TestResolveRecipeObjectURI(t *testing.T) {
 func TestSectionSelectFilterRejectsOutOfRangeSection(t *testing.T) {
 	sectionIndex := 5
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:        "short-1",
-				Command:      domain.CommandShortVideoFromSection,
-				SectionIndex: &sectionIndex,
-			},
-			VideoRecipe: newSectionSelectRecipe(),
+		Task: &domain.Task{
+			JobID:        "short-1",
+			Command:      domain.CommandShortVideoFromSection,
+			SectionIndex: &sectionIndex,
 		},
+		VideoRecipe: newSectionSelectRecipe(),
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)
@@ -229,14 +221,12 @@ func TestSectionSelectFilterRejectsEmptySection(t *testing.T) {
 	recipe := newSectionSelectRecipe()
 	recipe.Cuts = recipe.Cuts[:1] // サビのカットを取り除く
 	fc := &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:        "short-1",
-				Command:      domain.CommandShortVideoFromSection,
-				SectionIndex: &sectionIndex,
-			},
-			VideoRecipe: recipe,
+		Task: &domain.Task{
+			JobID:        "short-1",
+			Command:      domain.CommandShortVideoFromSection,
+			SectionIndex: &sectionIndex,
 		},
+		VideoRecipe: recipe,
 	}
 
 	err := (SectionSelectFilter{}).Execute(context.Background(), fc)

@@ -118,7 +118,7 @@ func newRegenerateSectionRequest(method, target, jobID, sectionIndex string, bod
 // shared by the section regenerate form and submit tests.
 func sectionRegenHistory() domain.VideoHistoryDetail {
 	return domain.VideoHistoryDetail{
-		VideoHistory: domain.VideoHistory{JobID: "job-1", StorageURI: "gs://bucket/jobs/job-1/video_music_meta.json"},
+		JobID: "job-1", StorageURI: "gs://bucket/jobs/job-1/video_music_meta.json",
 		Sections: []domain.VideoHistorySection{
 			{SectionIndex: 0, Name: "Verse", StartSeconds: 0, EndSeconds: 16},
 			{SectionIndex: 1, Name: "Chorus", StartSeconds: 16, EndSeconds: 24},

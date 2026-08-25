@@ -13,17 +13,15 @@ import (
 // generatedCut builds a cut in the state a finished job leaves behind.
 func generatedCut(index int, durationSec float64, chainStart bool) video.Cut {
 	return video.Cut{
-		CutIndex:       index,
-		SectionIndex:   1,
-		VisualAnchor:   "anchor",
-		AudioSync:      video.AudioSync{DurationSec: durationSec},
-		KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe.png"},
-		ChainControl:   video.ChainControl{IsChainStart: chainStart},
-		Result: video.Result{
-			VideoID:  "video-" + string(rune('0'+index)),
-			VideoURL: "gs://bucket/jobs/job-1/videos/cut.mp4",
-			Status:   video.CutStatusGenerated,
-		},
+		CutIndex:          index,
+		SectionIndex:      1,
+		VisualAnchor:      "anchor",
+		DurationSec:       durationSec,
+		KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe.png",
+		IsChainStart:      chainStart,
+		VideoID:           "video-" + string(rune('0'+index)),
+		VideoURL:          "gs://bucket/jobs/job-1/videos/cut.mp4",
+		Status:            video.CutStatusGenerated,
 	}
 }
 
@@ -46,15 +44,13 @@ func chainTestRecipe() *video.Recipe {
 func runCutVideoSelect(t *testing.T, recipe *video.Recipe, cutIndex int, usePreviousVideo bool) error {
 	t.Helper()
 	return CutVideoSelectFilter{UsePreviousVideo: usePreviousVideo}.Execute(context.Background(), &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:     "mv-2",
-				Command:   domain.CommandRegenerateCutVideo,
-				CutIndex:  &cutIndex,
-				RecipeURL: "gs://bucket/jobs/job-1/video_music_meta.json",
-			},
-			VideoRecipe: recipe,
+		Task: &domain.Task{
+			JobID:     "mv-2",
+			Command:   domain.CommandRegenerateCutVideo,
+			CutIndex:  &cutIndex,
+			RecipeURL: "gs://bucket/jobs/job-1/video_music_meta.json",
 		},
+		VideoRecipe: recipe,
 	})
 }
 

@@ -18,7 +18,7 @@ import (
 // an empty anchor+cue still yields an empty prompt so request validation keeps rejecting
 // broken recipes. Failing lookups here also catch missing/renamed prompt asset files.
 func TestVideoPromptAppendsModeGuidance(t *testing.T) {
-	cut := video.Cut{VisualAnchor: "anchor scene", AudioSync: video.AudioSync{AudioCue: "bass drop at 0:10"}}
+	cut := video.Cut{VisualAnchor: "anchor scene", AudioCue: "bass drop at 0:10"}
 	prefix := "anchor scene\nSynchronize motion and camera timing with audio cue: bass drop at 0:10\n"
 
 	tests := []struct {
@@ -58,11 +58,11 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 // keyframe (duration-split cuts share one keyframe; forcing end == start kills motion).
 func TestNextCutLastFrameReference(t *testing.T) {
 	cuts := []video.Cut{
-		{CutIndex: 0, CharacterID: "zunda", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
-		{CutIndex: 1, CharacterID: "zunda", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
-		{CutIndex: 2, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf2.png"}},
-		{CutIndex: 3, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}, ChainControl: video.ChainControl{IsSectionStart: true}},
-		{CutIndex: 4, CharacterID: "metan", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf3.png"}},
+		{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png"},
+		{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png"},
+		{CutIndex: 2, CharacterID: "metan", KeyframeReference: "gs://bucket/kf2.png"},
+		{CutIndex: 3, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png", IsSectionStart: true},
+		{CutIndex: 4, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png"},
 		{CutIndex: 5, CharacterID: "metan"},
 	}
 
@@ -93,15 +93,15 @@ func TestRunDirectPassesNextKeyframeAsLastFrame(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 0, CharacterID: "zunda", VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf0.png"}},
-			{CutIndex: 1, CharacterID: "zunda", VisualAnchor: "b", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/kf1.png"}},
+			{CutIndex: 0, CharacterID: "zunda", VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/kf0.png"},
+			{CutIndex: 1, CharacterID: "zunda", VisualAnchor: "b", DurationSec: 8, KeyframeReference: "gs://bucket/kf1.png"},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
 	runner := &durationCaptureRunner{supportsReferenceImages: false, supportsLastFrame: true}
 	flt := VideoGenerationFilter{Runner: runner}
 
-	if err := flt.Execute(context.Background(), &Context{State: State{Task: task, VideoRecipe: recipe}}); err != nil {
+	if err := flt.Execute(context.Background(), &Context{Task: task, VideoRecipe: recipe}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	if len(runner.requests) != 2 {

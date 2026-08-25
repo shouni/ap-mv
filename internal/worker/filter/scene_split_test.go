@@ -25,24 +25,20 @@ func TestSceneSplitFilterExpandsLongCutsBeforeKeyframeGeneration(t *testing.T) {
 			}},
 		},
 		Cuts: []video.Cut{{
-			CutIndex:       1,
-			VisualAnchor:   "protagonist on a glowing rooftop",
-			Dialogue:       "line one\nline two\nline three",
-			AudioSync:      video.AudioSync{DurationSec: 20, AudioCue: "chorus lift"},
-			KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/old.png"},
-			Result: video.Result{
-				VideoID:  "old-video",
-				VideoURL: "gs://bucket/old.mp4",
-				Status:   video.CutStatusGenerated,
-			},
+			CutIndex:     1,
+			VisualAnchor: "protagonist on a glowing rooftop",
+			Dialogue:     "line one\nline two\nline three",
+			DurationSec:  20, AudioCue: "chorus lift",
+			KeyframeReference: "gs://bucket/old.png",
+			VideoID:           "old-video",
+			VideoURL:          "gs://bucket/old.mp4",
+			Status:            video.CutStatusGenerated,
 		}},
 	}
 
 	err := (SceneSplitFilter{}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -81,15 +77,13 @@ func TestSceneSplitFilterAllocatesVideoToVideoChainBlocks(t *testing.T) {
 			CutIndex:     1,
 			VisualAnchor: "protagonist crossing a luminous city stage",
 			Dialogue:     "a\nb\nc\nd\ne",
-			AudioSync:    video.AudioSync{DurationSec: 50, AudioCue: "long chorus"},
+			DurationSec:  50, AudioCue: "long chorus",
 		}},
 	}
 
 	err := (SceneSplitFilter{UsePreviousVideo: true}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -137,16 +131,14 @@ func TestSceneSplitFilterVideoToVideoTracksMusicTimeline(t *testing.T) {
 		ProjectTitle: "test",
 		MusicRecipe:  video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, Dialogue: "line five", AudioSync: video.AudioSync{StartSec: 28, DurationSec: 9, AudioCue: "0:28 to 0:37"}},
-			{CutIndex: 2, Dialogue: "line six", AudioSync: video.AudioSync{StartSec: 37, DurationSec: 10, AudioCue: "0:37 to 0:47"}},
+			{CutIndex: 1, Dialogue: "line five", StartSec: 28, DurationSec: 9, AudioCue: "0:28 to 0:37"},
+			{CutIndex: 2, Dialogue: "line six", StartSec: 37, DurationSec: 10, AudioCue: "0:37 to 0:47"},
 		},
 	}
 
 	err := (SceneSplitFilter{UsePreviousVideo: true}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -181,16 +173,14 @@ func TestSceneSplitFilterKeyframeScenesDiffusesRoundingError(t *testing.T) {
 		ProjectTitle: "test",
 		MusicRecipe:  video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, AudioSync: video.AudioSync{StartSec: 28, DurationSec: 9}},
-			{CutIndex: 2, AudioSync: video.AudioSync{StartSec: 37, DurationSec: 10}},
+			{CutIndex: 1, StartSec: 28, DurationSec: 9},
+			{CutIndex: 2, StartSec: 37, DurationSec: 10},
 		},
 	}
 
 	err := (SceneSplitFilter{}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -220,17 +210,15 @@ func TestSceneSplitAndExpandKeepVideoTimelineAlignedToSong(t *testing.T) {
 		ProjectTitle: "test",
 		MusicRecipe:  video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, SectionIndex: 1, AudioSync: video.AudioSync{StartSec: 0, DurationSec: 8}},
-			{CutIndex: 2, SectionIndex: 1, AudioSync: video.AudioSync{StartSec: 8, DurationSec: 9}},
-			{CutIndex: 3, SectionIndex: 2, AudioSync: video.AudioSync{StartSec: 17, DurationSec: 11}},
+			{CutIndex: 1, SectionIndex: 1, StartSec: 0, DurationSec: 8},
+			{CutIndex: 2, SectionIndex: 1, StartSec: 8, DurationSec: 9},
+			{CutIndex: 3, SectionIndex: 2, StartSec: 17, DurationSec: 11},
 		},
 	}
 
 	err := (SceneSplitFilter{UsePreviousVideo: true}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -283,17 +271,16 @@ func TestSceneSplitFilterIsIdempotent(t *testing.T) {
 				ProjectTitle: "test",
 				MusicRecipe:  video.MusicRecipe{Title: "test"},
 				Cuts: []video.Cut{
-					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"}},
-					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"}},
+					{CutIndex: 1, SectionIndex: 1, VisualAnchor: "rooftop at dawn", Dialogue: "a\nb\nc", StartSec: 0, DurationSec: 30, AudioCue: "0:00 to 0:30"},
+					{CutIndex: 2, SectionIndex: 2, VisualAnchor: "neon corridor", Dialogue: "d\ne", StartSec: 30, DurationSec: 19, AudioCue: "0:30 to 0:49"},
 				},
 			}
 
 			filter := SceneSplitFilter{UsePreviousVideo: tc.usePreviousVideo}
 			newContext := func() *Context {
-				return &Context{State: State{
+				return &Context{
 					Task:        &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeCreate},
-					VideoRecipe: recipe,
-				}}
+					VideoRecipe: recipe}
 			}
 
 			if err := filter.Execute(context.Background(), newContext()); err != nil {
@@ -352,19 +339,17 @@ func TestSceneSplitFilterKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
 				ProjectTitle: "test",
 				MusicRecipe:  video.MusicRecipe{Title: "test"},
 				Cuts: []video.Cut{{
-					CutIndex:       1,
-					VisualAnchor:   "rooftop",
-					AudioSync:      video.AudioSync{StartSec: 0, DurationSec: 8, AudioCue: "0:00 to 0:08"},
-					KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
-					ChainControl:   video.ChainControl{IsChainStart: true},
+					CutIndex:     1,
+					VisualAnchor: "rooftop",
+					StartSec:     0, DurationSec: 8, AudioCue: "0:00 to 0:08",
+					KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png",
+					IsChainStart:      true,
 				}},
 			}
 
 			err := (SceneSplitFilter{UsePreviousVideo: tc.usePreviousVideo}).Execute(context.Background(), &Context{
-				State: State{
-					Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
-					VideoRecipe: recipe,
-				},
+				Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
+				VideoRecipe: recipe,
 			})
 			if err != nil {
 				t.Fatalf("Execute() error = %v", err)
@@ -390,18 +375,16 @@ func TestSceneSplitFilterDropsKeyframeWhenCutIsResplit(t *testing.T) {
 		ProjectTitle: "test",
 		MusicRecipe:  video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{{
-			CutIndex:       1,
-			VisualAnchor:   "rooftop",
-			AudioSync:      video.AudioSync{StartSec: 0, DurationSec: 20, AudioCue: "0:00 to 0:20"},
-			KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
+			CutIndex:     1,
+			VisualAnchor: "rooftop",
+			StartSec:     0, DurationSec: 20, AudioCue: "0:00 to 0:20",
+			KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png",
 		}},
 	}
 
 	err := (SceneSplitFilter{}).Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

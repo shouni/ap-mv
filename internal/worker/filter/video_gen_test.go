@@ -19,8 +19,8 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "first", DurationSec: 8},
+			{CutIndex: 2, VisualAnchor: "second", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{
@@ -32,13 +32,9 @@ func TestVideoGenerationFilterEnqueuesContinuationAfterOneCut(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
-		Services: Services{
-			TaskQueue: queue,
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -90,8 +86,8 @@ func TestVideoGenerationFilterPropagatesContinuationEnqueueFailure(t *testing.T)
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "first", DurationSec: 8},
+			{CutIndex: 2, VisualAnchor: "second", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -99,8 +95,8 @@ func TestVideoGenerationFilterPropagatesContinuationEnqueueFailure(t *testing.T)
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		State:    State{Task: task, VideoRecipe: recipe},
-		Services: Services{TaskQueue: queue},
+		Task: task, VideoRecipe: recipe,
+		TaskQueue: queue,
 	})
 	if err == nil || errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want a non-deferred enqueue failure", err)
@@ -113,8 +109,8 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "first", DurationSec: 8},
+			{CutIndex: 2, VisualAnchor: "second", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{
@@ -127,14 +123,10 @@ func TestVideoGenerationFilterPrefersDirectRunnerWhenWorkflowExists(t *testing.T
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
-		Services: Services{
-			TaskQueue: queue,
-			Workflows: &orchestrator.Workflows{Video: workflow},
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
+		Workflows:   &orchestrator.Workflows{Video: workflow},
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -156,8 +148,8 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
-			{CutIndex: 2, VisualAnchor: "second", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "first", DurationSec: 8},
+			{CutIndex: 2, VisualAnchor: "second", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{
@@ -170,13 +162,9 @@ func TestVideoGenerationFilterContinuationFromShortSectionUsesContinuationComman
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
-		Services: Services{
-			TaskQueue: queue,
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
 	})
 	if !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v, want ErrPipelineDeferred", err)
@@ -194,7 +182,7 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "first", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "first", DurationSec: 8},
 		},
 	}
 	task := &domain.Task{
@@ -206,11 +194,9 @@ func TestVideoGenerationFilterAddsOutputPathToContext(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: runner}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/ap-mv/veo/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -227,10 +213,10 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
 			{
-				CutIndex:       1,
-				VisualAnchor:   "long cut",
-				AudioSync:      video.AudioSync{DurationSec: 10},
-				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png"},
+				CutIndex:          1,
+				VisualAnchor:      "long cut",
+				DurationSec:       10,
+				KeyframeReference: "gs://bucket/jobs/job-1/images/cut_1.png",
 			},
 		},
 	}
@@ -242,10 +228,8 @@ func TestVideoGenerationFilterExpandsUnsupportedDurations(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
+		Task:        task,
+		VideoRecipe: recipe,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -290,7 +274,7 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}},
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", DurationSec: 8},
 		},
 	}
 	// Seed is a field promoted from the embedded lyria.AIModels struct, so it cannot be set
@@ -302,13 +286,9 @@ func TestVideoSeedUsesCharacterSeed(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: runner}
 
 	err = flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
-		Services: Services{
-			Characters: characters,
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		Characters:  characters,
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -339,7 +319,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 5, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 6}},
+			{CutIndex: 5, VisualAnchor: "a", CharacterID: "tsumugi", StartSec: 30, DurationSec: 6},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -347,13 +327,9 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	flt := VideoGenerationFilter{Runner: runner}
 
 	if err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-		},
-		Services: Services{
-			Characters: characters,
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		Characters:  characters,
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -366,7 +342,7 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	recipe2 := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 5, VisualAnchor: "a", AudioSync: video.AudioSync{StartSec: 30, DurationSec: 6}},
+			{CutIndex: 5, VisualAnchor: "a", StartSec: 30, DurationSec: 6},
 		},
 	}
 	task2 := &domain.Task{JobID: "job-2", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe2}
@@ -374,13 +350,9 @@ func TestVideoGenerationFilterForcesEightSecondsForReferenceToVideo(t *testing.T
 	flt2 := VideoGenerationFilter{Runner: runner2}
 
 	if err := flt2.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task2,
-			VideoRecipe: recipe2,
-		},
-		Services: Services{
-			Characters: characters,
-		},
+		Task:        task2,
+		VideoRecipe: recipe2,
+		Characters:  characters,
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

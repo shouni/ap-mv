@@ -75,11 +75,9 @@ func TestSaveWritesInsideJobDirectory(t *testing.T) {
 	repo := newStatusRepo(io)
 
 	err := repo.Save(context.Background(), "mv-20260726-123456-abcdef123456", domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:   "mv-20260726-123456-abcdef123456",
-			Command: "mv_from_keyframe_video_recipe",
-			State:   domain.JobStateQueued,
-		},
+		JobID:   "mv-20260726-123456-abcdef123456",
+		Command: "mv_from_keyframe_video_recipe",
+		State:   domain.JobStateQueued,
 	})
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -96,13 +94,11 @@ func TestSaveAndGetRoundTrip(t *testing.T) {
 
 	repo := newStatusRepo(newStatusIO())
 	original := domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:    "mv-20260726-123456-abcdef123456",
-			Command:  "video_gen_continuation",
-			State:    domain.JobStateSucceeded,
-			Title:    "テスト曲",
-			Attempts: 3,
-		},
+		JobID:         "mv-20260726-123456-abcdef123456",
+		Command:       "video_gen_continuation",
+		State:         domain.JobStateSucceeded,
+		Title:         "テスト曲",
+		Attempts:      3,
 		OriginalJobID: "video-recipe-20260725-101010-aabbccdd",
 		OutputURI:     testBaseURI + "/mv-20260726-123456-abcdef123456/",
 	}

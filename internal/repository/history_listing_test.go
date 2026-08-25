@@ -15,7 +15,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
 		AspectRatio:  "9:16",
-		Cuts:         []video.Cut{{CutIndex: 1, Result: video.Result{Status: video.CutStatusGenerated}}},
+		Cuts:         []video.Cut{{CutIndex: 1, Status: video.CutStatusGenerated}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
@@ -32,7 +32,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
-		Cuts:         []video.Cut{{CutIndex: 1, Result: video.Result{Status: video.CutStatusGenerated}}},
+		Cuts:         []video.Cut{{CutIndex: 1, Status: video.CutStatusGenerated}},
 	}
 
 	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
@@ -52,14 +52,14 @@ func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 		ProjectTitle: "test",
 		Cuts: []video.Cut{
 			{
-				CutIndex:  1,
-				AudioSync: video.AudioSync{DurationSec: 8},
-				Result:    video.Result{Status: video.CutStatusGenerated},
+				CutIndex:    1,
+				DurationSec: 8,
+				Status:      video.CutStatusGenerated,
 			},
 			{
-				CutIndex:  2,
-				AudioSync: video.AudioSync{DurationSec: 6},
-				Result:    video.Result{Status: video.CutStatusPending},
+				CutIndex:    2,
+				DurationSec: 6,
+				Status:      video.CutStatusPending,
 			},
 		},
 	}

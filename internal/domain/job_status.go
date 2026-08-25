@@ -56,13 +56,11 @@ func NewQueuedJobStatus(task *Task, now time.Time) JobStatus {
 	}
 
 	status := JobStatus{
-		Status: jobstatus.Status{
-			JobID:     task.JobID,
-			Command:   string(task.Command),
-			State:     JobStateQueued,
-			QueuedAt:  now,
-			UpdatedAt: now,
-		},
+		JobID:         task.JobID,
+		Command:       string(task.Command),
+		State:         JobStateQueued,
+		QueuedAt:      now,
+		UpdatedAt:     now,
 		OriginalJobID: task.OriginalJobID,
 	}
 	if task.Recipe != nil {

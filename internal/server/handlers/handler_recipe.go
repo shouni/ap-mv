@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -65,8 +66,8 @@ func (h *Handler) latestVideoForHome(r *http.Request, items []domain.VideoHistor
 				PosterURL: poster,
 			}
 		}
-		for i := len(detail.Cuts) - 1; i >= 0; i-- {
-			cut := detail.Cuts[i]
+		for _, cut := range slices.Backward(detail.Cuts) {
+
 			if cut.VideoWebURL != "" {
 				return &HomeLatestVideo{
 					JobID:     detail.JobID,

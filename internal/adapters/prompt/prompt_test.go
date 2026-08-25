@@ -121,7 +121,7 @@ func TestFormatSourceRecipeJSONDoesNotMutateSource(t *testing.T) {
 			}},
 		},
 		Cuts: []video.Cut{{
-			AudioSync: video.AudioSync{DurationSec: 8},
+			DurationSec: 8,
 		}},
 	}
 
@@ -383,7 +383,7 @@ func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
 			userPrompt, systemPrompt := kf.BuildCut(video.Cut{
 				CutIndex:     1,
 				VisualAnchor: "rooftop at dawn",
-				AudioSync:    video.AudioSync{AudioCue: "intro pad"},
+				AudioCue:     "intro pad",
 			}, nil)
 			for _, prompt := range []string{userPrompt, systemPrompt} {
 				if strings.Contains(prompt, "{{") || strings.Contains(prompt, "}}") {

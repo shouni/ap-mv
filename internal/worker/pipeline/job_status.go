@@ -80,11 +80,9 @@ func (s statusRecorder) record(
 	}
 
 	status := domain.JobStatus{
-		Status: jobstatus.Status{
-			JobID:   task.JobID,
-			Command: string(task.Command),
-			State:   state,
-		},
+		JobID:         task.JobID,
+		Command:       string(task.Command),
+		State:         state,
 		OriginalJobID: task.OriginalJobID,
 	}
 	if task.Recipe != nil {

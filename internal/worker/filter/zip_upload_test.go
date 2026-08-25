@@ -33,34 +33,30 @@ func (r *zipTestReader) Open(_ context.Context, uri string) (io.ReadCloser, erro
 
 func zipTestContext(writer *memoryWriter, reader *zipTestReader) *Context {
 	return &Context{
-		Services: Services{
-			Reader: reader,
-			Writer: writer,
+		Reader: reader,
+		Writer: writer,
+		Task: &domain.Task{
+			JobID:   "video-recipe-20260618-081931-abcd1234",
+			Command: domain.CommandVideoRecipeCreate,
 		},
-		State: State{
-			Task: &domain.Task{
-				JobID:   "video-recipe-20260618-081931-abcd1234",
-				Command: domain.CommandVideoRecipeCreate,
+		OutputPath: "gs://bucket/jobs/video-recipe-20260618-081931-abcd1234/",
+		VideoRecipe: &video.Recipe{
+			ProjectTitle: "zip test",
+			MusicRecipe: domain.MusicRecipe{
+				Title: "zip test",
+				Tempo: 120,
 			},
-			OutputPath: "gs://bucket/jobs/video-recipe-20260618-081931-abcd1234/",
-			VideoRecipe: &video.Recipe{
-				ProjectTitle: "zip test",
-				MusicRecipe: domain.MusicRecipe{
-					Title: "zip test",
-					Tempo: 120,
+			Cuts: []video.Cut{
+				{
+					CutIndex:    1,
+					Dialogue:    "サビの歌詞",
+					DurationSec: 8, StartSec: 0, EndSec: 8,
+					KeyframeReference: "gs://bucket/images/keyframe_1.png",
 				},
-				Cuts: []video.Cut{
-					{
-						CutIndex:       1,
-						Dialogue:       "サビの歌詞",
-						AudioSync:      video.AudioSync{DurationSec: 8, StartSec: 0, EndSec: 8},
-						KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/images/keyframe_1.png"},
-					},
-					{
-						// キーフレームを持たないカットは ZIP に含まれない。
-						CutIndex:  2,
-						AudioSync: video.AudioSync{DurationSec: 8, StartSec: 8, EndSec: 16},
-					},
+				{
+					// キーフレームを持たないカットは ZIP に含まれない。
+					CutIndex:    2,
+					DurationSec: 8, StartSec: 8, EndSec: 16,
 				},
 			},
 		},

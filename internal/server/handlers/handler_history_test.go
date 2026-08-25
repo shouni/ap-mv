@@ -480,9 +480,9 @@ func TestHistoryDetailRendersProgressBadge(t *testing.T) {
 	// 3カット中2カットが動画生成済み = videos 2/3
 	cuts := []domain.VideoCut{}
 	for i := range 3 {
-		cut := domain.VideoCut{}
-		cut.CutIndex = i + 1
-		cut.KeyframeReference = "gs://bucket/k.png"
+		cut := domain.VideoCut{
+			CutIndex:          i + 1,
+			KeyframeReference: "gs://bucket/k.png"}
 		if i < 2 {
 			cut.Status = video.CutStatusGenerated
 			cut.VideoURL = "gs://bucket/v.mp4"

@@ -62,15 +62,15 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 		ProjectTitle: "test",
 		Cuts: []video.Cut{
 			{
-				CutIndex:       *task.CutIndex,
-				VisualAnchor:   "original anchor",
-				KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png"},
+				CutIndex:          *task.CutIndex,
+				VisualAnchor:      "original anchor",
+				KeyframeReference: "gs://bucket/jobs/orig/images/keyframe_1.png",
 			},
 		},
 	}
 	return &Context{
-		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
-		Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}},
+		Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/",
+		Workflows: &orchestrator.Workflows{CutKeyframe: runner},
 	}
 }
 
@@ -79,11 +79,11 @@ func newRegenTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Cont
 func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner) *Context {
 	cut := func(index, sectionIndex int, startSec float64) video.Cut {
 		return video.Cut{
-			CutIndex:       index,
-			SectionIndex:   sectionIndex,
-			VisualAnchor:   fmt.Sprintf("anchor %d", index),
-			AudioSync:      video.AudioSync{StartSec: startSec, EndSec: startSec + 8, DurationSec: 8},
-			KeyframeResult: video.KeyframeResult{KeyframeReference: fmt.Sprintf("gs://bucket/jobs/orig/images/keyframe_%d.png", index)},
+			CutIndex:     index,
+			SectionIndex: sectionIndex,
+			VisualAnchor: fmt.Sprintf("anchor %d", index),
+			StartSec:     startSec, EndSec: startSec + 8, DurationSec: 8,
+			KeyframeReference: fmt.Sprintf("gs://bucket/jobs/orig/images/keyframe_%d.png", index),
 		}
 	}
 	recipe := &video.Recipe{
@@ -97,8 +97,8 @@ func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner
 		Cuts: []video.Cut{cut(1, 1, 0), cut(2, 1, 8), cut(3, 2, 16)},
 	}
 	return &Context{
-		State:    State{Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/"},
-		Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}},
+		Task: task, VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/regen-1/",
+		Workflows: &orchestrator.Workflows{CutKeyframe: runner},
 	}
 }
 

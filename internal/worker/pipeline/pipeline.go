@@ -229,21 +229,17 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	}
 	videoRunner := ports.DeriveVideoRunner(r.deps.VideoRunner, task.VeoModel, task.VeoAspectRatio)
 	fc := &filter.Context{
-		State: filter.State{
-			Task:        task,
-			Recipe:      task.Recipe,
-			VideoRecipe: task.VideoRecipe,
-			OutputPath:  r.outputPath(task),
-		},
-		Services: filter.Services{
-			VideoRunner:       videoRunner,
-			TaskQueue:         r.deps.TaskQueue,
-			Workflows:         workflows,
-			Reader:            r.deps.Reader,
-			Writer:            r.deps.Writer,
-			Characters:        r.deps.Characters,
-			HistoryRepository: r.deps.HistoryRepository,
-		},
+		Task:              task,
+		Recipe:            task.Recipe,
+		VideoRecipe:       task.VideoRecipe,
+		OutputPath:        r.outputPath(task),
+		VideoRunner:       videoRunner,
+		TaskQueue:         r.deps.TaskQueue,
+		Workflows:         workflows,
+		Reader:            r.deps.Reader,
+		Writer:            r.deps.Writer,
+		Characters:        r.deps.Characters,
+		HistoryRepository: r.deps.HistoryRepository,
 	}
 	// deps.Planner は New が DefaultPlanner{} で補完済みのため、ここでは nil になりません。
 	filters, err := r.deps.Planner.Plan(task, videoRunner)
