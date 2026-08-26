@@ -452,4 +452,4 @@ README「タイムアウトの三段」にあります。
 
 ## 📜 ライセンス (License)
 
-* このプロジェクトは [MIT License](https://opensource.org/licenses/MIT) の下で、ポートフォリオ契約およびクローズド開発向け統合資産としてライセンスされています。
+* このプロジェクトは [MIT License](https://opensource.org/licenses/MIT) の下で公開されています。
