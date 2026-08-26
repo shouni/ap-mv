@@ -7,8 +7,8 @@ import (
 )
 
 func cutWithKeyframe(ref string) VideoCut {
-	cut := VideoCut{}
-	cut.KeyframeReference = ref
+	cut := VideoCut{
+		KeyframeReference: ref}
 	return cut
 }
 

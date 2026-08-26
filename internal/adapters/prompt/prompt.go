@@ -79,13 +79,11 @@ func recipeOutputSchema() (string, error) {
 		LocationAnchor: "the single persistent core setting for the whole video: location plus any recurring prop, e.g. 'a misty coastal cliffside road overlooking the ocean at dawn; her bicycle beside her'",
 		Cuts: []video.Cut{
 			{
-				VisualAnchor: "visual scene prompt for keyframe and video",
-				CharacterID:  "",
-				AudioSync: video.AudioSync{
-					DurationSec:    8,
-					AudioCue:       "musical timing cue",
-					AudioReference: "optional gs:// audio segment or full music file",
-				},
+				VisualAnchor:   "visual scene prompt for keyframe and video",
+				CharacterID:    "",
+				DurationSec:    8,
+				AudioCue:       "musical timing cue",
+				AudioReference: "optional gs:// audio segment or full music file",
 			},
 		},
 	}
@@ -415,15 +413,15 @@ const scriptOnlyHeading = "#### For Script Generation"
 // 画像モデルへ送られていました。節の切り出しに（レンダリングではなく）文字列操作を
 // 使うのは、キーフレーム経路には流し込むテンプレートデータが存在しないためです。
 func stripScriptOnlySection(prompt string) string {
-	start := strings.Index(prompt, scriptOnlyHeading)
-	if start == -1 {
+	before, after, ok := strings.Cut(prompt, scriptOnlyHeading)
+	if !ok {
 		return prompt
 	}
-	rest := prompt[start+len(scriptOnlyHeading):]
+	rest := after
 	if next := strings.Index(rest, "\n#### "); next != -1 {
-		return strings.TrimSpace(prompt[:start] + rest[next+1:])
+		return strings.TrimSpace(before + rest[next+1:])
 	}
-	return strings.TrimSpace(prompt[:start])
+	return strings.TrimSpace(before)
 }
 
 // nonEmptyStrings returns the non-empty values in order.

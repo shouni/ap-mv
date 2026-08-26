@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strconv"
 
 	"github.com/shouni/go-http-kit/httpkit"
@@ -131,24 +130,11 @@ func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) 
 // draftsURL は下書き一覧のURLを返します。下書きには専用の詳細画面が無いため
 // （JSON は ap-mcp 用、ブラウザは一覧へリダイレクト）、リンク先は一覧そのものです。
 func (s *SlackAdapter) draftsURL() string {
-	if s.serviceURL == "" {
-		return ""
-	}
-	draftsURL, err := url.JoinPath(s.serviceURL, "/web/drafts")
-	if err != nil {
-		return ""
-	}
-	return draftsURL
+	return notify.JoinURL(s.serviceURL, "/web/drafts")
 }
 
 // historyDetailURL は履歴詳細ページのURLを返します。
 func (s *SlackAdapter) historyDetailURL(jobID string) string {
-	if s.serviceURL == "" || jobID == "" {
-		return ""
-	}
-	historyURL, err := url.JoinPath(s.serviceURL, "/web/history", jobID)
-	if err != nil {
-		return ""
-	}
-	return historyURL
+	// serviceURL か jobID が空なら空を返し、通知側が行ごと省きます（JoinURL の契約）。
+	return notify.JoinURL(s.serviceURL, "/web/history", jobID)
 }

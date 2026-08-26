@@ -19,11 +19,11 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 2, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 3, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 4, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
-			{CutIndex: 5, VisualAnchor: "a", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/static.png"}},
+			{CutIndex: 1, VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 2, VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 3, VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 4, VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/static.png"},
+			{CutIndex: 5, VisualAnchor: "a", DurationSec: 8, KeyframeReference: "gs://bucket/static.png"},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -31,11 +31,9 @@ func TestRunDirectAppliesChainResetKeyframeAndMarksIsChainStart(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -88,9 +86,9 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	recipe := &video.Recipe{
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
-			{CutIndex: 2, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
-			{CutIndex: 3, VisualAnchor: "a", CharacterID: "tsumugi", AudioSync: video.AudioSync{DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/keyframes/scene.png"}},
+			{CutIndex: 1, VisualAnchor: "a", CharacterID: "tsumugi", DurationSec: 8, KeyframeReference: "gs://bucket/keyframes/scene.png"},
+			{CutIndex: 2, VisualAnchor: "a", CharacterID: "tsumugi", DurationSec: 8, KeyframeReference: "gs://bucket/keyframes/scene.png"},
+			{CutIndex: 3, VisualAnchor: "a", CharacterID: "tsumugi", DurationSec: 8, KeyframeReference: "gs://bucket/keyframes/scene.png"},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -98,11 +96,9 @@ func TestRunDirectColorCorrectsVideoExtensionCuts(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -159,10 +155,10 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 			},
 		},
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "verse", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
-			{CutIndex: 2, VisualAnchor: "verse", AudioSync: video.AudioSync{StartSec: 8, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/verse.png"}},
-			{CutIndex: 3, VisualAnchor: "chorus", AudioSync: video.AudioSync{StartSec: 16, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
-			{CutIndex: 4, VisualAnchor: "chorus", AudioSync: video.AudioSync{StartSec: 24, DurationSec: 8}, KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/chorus.png"}},
+			{CutIndex: 1, VisualAnchor: "verse", StartSec: 0, DurationSec: 8, KeyframeReference: "gs://bucket/verse.png"},
+			{CutIndex: 2, VisualAnchor: "verse", StartSec: 8, DurationSec: 8, KeyframeReference: "gs://bucket/verse.png"},
+			{CutIndex: 3, VisualAnchor: "chorus", StartSec: 16, DurationSec: 8, KeyframeReference: "gs://bucket/chorus.png"},
+			{CutIndex: 4, VisualAnchor: "chorus", StartSec: 24, DurationSec: 8, KeyframeReference: "gs://bucket/chorus.png"},
 		},
 	}
 	task := &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe}
@@ -170,11 +166,9 @@ func TestRunDirectSkipsFrameExtractionAtSectionBoundary(t *testing.T) {
 	flt := VideoGenerationFilter{Runner: indexedURLRunner{}, UsePreviousVideo: true, VideoProcessor: vp}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

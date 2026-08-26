@@ -243,7 +243,7 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 func parseLyricsSections(lyricsText string) map[string][]string {
 	result := make(map[string][]string)
 	current := "Default"
-	for _, line := range strings.Split(lyricsText, "\n") {
+	for line := range strings.SplitSeq(lyricsText, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
 			current = line[1 : len(line)-1]

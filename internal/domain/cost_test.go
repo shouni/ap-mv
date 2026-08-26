@@ -37,21 +37,21 @@ func TestVeoPricingRateForFallsBackThroughTable(t *testing.T) {
 func TestGeneratedSecondsOfCutsCountsOnlyGeneratedCuts(t *testing.T) {
 	cuts := []VideoCut{
 		{
-			AudioSync: video.AudioSync{DurationSec: 8},
-			Result:    video.Result{Status: video.CutStatusGenerated},
+			DurationSec: 8,
+			Status:      video.CutStatusGenerated,
 		},
 		{
-			AudioSync: video.AudioSync{DurationSec: 6},
-			Result:    video.Result{Status: video.CutStatusPending},
+			DurationSec: 6,
+			Status:      video.CutStatusPending,
 		},
 		{
-			AudioSync: video.AudioSync{DurationSec: 4},
-			Result:    video.Result{Status: video.CutStatusFailed},
+			DurationSec: 4,
+			Status:      video.CutStatusFailed,
 		},
 		{
 			// status 未設定でも video_id + video_url が揃っていれば生成済み扱い。
-			AudioSync: video.AudioSync{DurationSec: 7},
-			Result:    video.Result{VideoID: "v1", VideoURL: "gs://b/v1.mp4"},
+			DurationSec: 7,
+			VideoID:     "v1", VideoURL: "gs://b/v1.mp4",
 		},
 	}
 

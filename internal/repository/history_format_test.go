@@ -9,7 +9,7 @@ import (
 
 // 用途プレフィックスが混在しても作成日時の降順に並ぶこと。
 // ID の文字列比較だとプレフィックス順（video-recipe- が先頭）になってしまいます。
-// ソートキーは paging.WithSortKey に渡されるため、ここが壊れると一覧が
+// ソートキーは paging.SelectIDs / LoadPage の sortKey に渡されるため、ここが壊れると一覧が
 // エラーにならず静かに並び替わります。
 //
 // タイムスタンプの抽出そのものは go-utils/jobid 側で検証済みです。
@@ -23,7 +23,7 @@ func TestHistorySortKeyOrdersByCreatedAtDesc(t *testing.T) {
 		"no-timestamp-job",
 	}
 
-	selected, meta := paging.SelectIDs(jobIDs, 1, 10, paging.WithSortKey(jobid.SortKey))
+	selected, meta := paging.SelectIDs(jobIDs, 1, 10, jobid.SortKey)
 
 	want := []string{
 		"20260712235959-ddd",

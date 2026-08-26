@@ -22,26 +22,24 @@ func sectionScopedRecipe() *video.Recipe {
 			},
 		},
 		Cuts: []video.Cut{
-			{CutIndex: 1, SectionIndex: 1, VisualAnchor: "v1", AudioSync: video.AudioSync{StartSec: 0, DurationSec: 8}},
-			{CutIndex: 2, SectionIndex: 1, VisualAnchor: "v2", AudioSync: video.AudioSync{StartSec: 8, DurationSec: 8}},
-			{CutIndex: 3, SectionIndex: 2, VisualAnchor: "c1", AudioSync: video.AudioSync{StartSec: 16, DurationSec: 8}},
-			{CutIndex: 4, SectionIndex: 2, VisualAnchor: "c2", AudioSync: video.AudioSync{StartSec: 24, DurationSec: 8}},
+			{CutIndex: 1, SectionIndex: 1, VisualAnchor: "v1", StartSec: 0, DurationSec: 8},
+			{CutIndex: 2, SectionIndex: 1, VisualAnchor: "v2", StartSec: 8, DurationSec: 8},
+			{CutIndex: 3, SectionIndex: 2, VisualAnchor: "c1", StartSec: 16, DurationSec: 8},
+			{CutIndex: 4, SectionIndex: 2, VisualAnchor: "c2", StartSec: 24, DurationSec: 8},
 		},
 	}
 }
 
 func sectionScopedContext(recipe *video.Recipe, sectionIndex int, queue *captureQueue) *Context {
 	return &Context{
-		State: State{
-			Task: &domain.Task{
-				JobID:        "job-1",
-				Command:      domain.CommandSectionVideo,
-				SectionIndex: &sectionIndex,
-				VideoRecipe:  recipe,
-			},
-			VideoRecipe: recipe,
+		Task: &domain.Task{
+			JobID:        "job-1",
+			Command:      domain.CommandSectionVideo,
+			SectionIndex: &sectionIndex,
+			VideoRecipe:  recipe,
 		},
-		Services: Services{TaskQueue: queue},
+		VideoRecipe: recipe,
+		TaskQueue:   queue,
 	}
 }
 
@@ -167,8 +165,8 @@ func TestContinuationRemembersTheOriginCommand(t *testing.T) {
 	nextRecipe := next.VideoRecipe
 	nextQueue := &captureQueue{}
 	nextCtx := &Context{
-		State:    State{Task: next, VideoRecipe: nextRecipe},
-		Services: Services{TaskQueue: nextQueue},
+		Task: next, VideoRecipe: nextRecipe,
+		TaskQueue: nextQueue,
 	}
 	if err := flt.Execute(context.Background(), nextCtx); err != nil && !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("continuation Execute() error = %v", err)
@@ -186,10 +184,8 @@ func TestUnscopedGenerationStillCoversEveryCut(t *testing.T) {
 	recipe := sectionScopedRecipe()
 	flt := VideoGenerationFilter{Runner: sequenceRunner{}}
 	ctx := &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe},
-			VideoRecipe: recipe,
-		},
+		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe},
+		VideoRecipe: recipe,
 	}
 	// TaskQueue 無しなら継続へ逃げず、その場で全カットを生成する。
 	if err := flt.Execute(context.Background(), ctx); err != nil {

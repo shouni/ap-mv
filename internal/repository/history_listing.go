@@ -146,8 +146,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	// ジョブ ID は "{用途}-{生成時刻}-{乱数}" 形式で、用途プレフィックスが 7 種あります。
 	// ID の文字列比較ではプレフィックス順になってしまうため、埋め込まれた時刻を
 	// ソートキーとして渡します。時刻を持たない ID は末尾に回ります。
-	histories, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, load,
-		paging.WithSortKey(jobid.SortKey),
+	histories, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, jobid.SortKey, load,
 		paging.WithConcurrency(historyFetchConcurrency),
 	)
 	if err != nil {

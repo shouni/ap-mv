@@ -16,11 +16,11 @@ import (
 // IsChainStart markers rather than duration_sec, matching how runDirect marks resets.
 func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 	cuts := []video.Cut{
-		{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
-		{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
-		{CutIndex: 3, Result: video.Result{VideoURL: "gs://bucket/cut_3.mp4"}},
-		{CutIndex: 4, Result: video.Result{VideoURL: "gs://bucket/cut_4.mp4"}},
-		{CutIndex: 5, Result: video.Result{VideoURL: "gs://bucket/cut_5.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
+		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
+		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
+		{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4"},
+		{CutIndex: 4, VideoURL: "gs://bucket/cut_4.mp4"},
+		{CutIndex: 5, VideoURL: "gs://bucket/cut_5.mp4", IsChainStart: true},
 	}
 	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_4.mp4", "gs://bucket/cut_5.mp4"}
@@ -32,8 +32,8 @@ func TestChainEndVideoURLsFindsBoundaries(t *testing.T) {
 // TestChainEndVideoURLsSingleChain verifies a job with no chain reset returns exactly the last cut.
 func TestChainEndVideoURLsSingleChain(t *testing.T) {
 	cuts := []video.Cut{
-		{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
-		{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
+		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
+		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
 	}
 	got := chainEndVideoURLs(cuts, true)
 	want := []string{"gs://bucket/cut_2.mp4"}
@@ -49,10 +49,10 @@ func TestChainEndVideoURLsSingleChain(t *testing.T) {
 // branch), which is what made the finished video collapse to a single cut.
 func TestChainEndVideoURLsJoinsEveryCutWithoutChaining(t *testing.T) {
 	cuts := []video.Cut{
-		{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}},
-		{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
-		{CutIndex: 3, Result: video.Result{VideoURL: "gs://bucket/cut_3.mp4"}},
-		{CutIndex: 4, Result: video.Result{VideoURL: "gs://bucket/cut_4.mp4"}},
+		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4"},
+		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
+		{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4"},
+		{CutIndex: 4, VideoURL: "gs://bucket/cut_4.mp4"},
 	}
 	got := chainEndVideoURLs(cuts, false)
 	want := []string{
@@ -71,8 +71,8 @@ func TestChainEndVideoURLsJoinsEveryCutWithoutChaining(t *testing.T) {
 // modes disagree about what the marker means, so the mode decides, not the persisted flag.
 func TestChainEndVideoURLsIgnoresChainStartWithoutChaining(t *testing.T) {
 	cuts := []video.Cut{
-		{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
-		{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
+		{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
+		{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
 	}
 	got := chainEndVideoURLs(cuts, false)
 	want := []string{"gs://bucket/cut_1.mp4", "gs://bucket/cut_2.mp4"}
@@ -86,15 +86,15 @@ func TestChainEndVideoURLsIgnoresChainStartWithoutChaining(t *testing.T) {
 func TestChainFinalizeFilterConcatsEveryCutWithoutChaining(t *testing.T) {
 	recipe := &video.Recipe{
 		Cuts: []video.Cut{
-			{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}},
-			{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
-			{CutIndex: 3, Result: video.Result{VideoURL: "gs://bucket/cut_3.mp4"}},
+			{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4"},
+			{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
+			{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4"},
 		},
 	}
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
 
 	err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), &Context{
-		State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"},
+		VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -113,19 +113,17 @@ func TestChainFinalizeFilterConcatsEveryCutWithoutChaining(t *testing.T) {
 func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 	recipe := &video.Recipe{
 		Cuts: []video.Cut{
-			{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
-			{CutIndex: 2, Result: video.Result{VideoURL: "gs://bucket/cut_2.mp4"}},
-			{CutIndex: 3, Result: video.Result{VideoURL: "gs://bucket/cut_3.mp4"}, ChainControl: video.ChainControl{IsChainStart: true}},
+			{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4", IsChainStart: true},
+			{CutIndex: 2, VideoURL: "gs://bucket/cut_2.mp4"},
+			{CutIndex: 3, VideoURL: "gs://bucket/cut_3.mp4", IsChainStart: true},
 		},
 	}
 	vp := &recordingVideoProcessor{concatResult: "gs://bucket/jobs/job-1/videos/final.mp4"}
 	flt := ChainFinalizeFilter{VideoProcessor: vp, UsePreviousVideo: true}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -150,10 +148,10 @@ func TestChainFinalizeFilterConcatsAndSetsFinalVideoURL(t *testing.T) {
 // pipelines that never include this filter in the first place, or a nil default.
 func TestChainFinalizeFilterNoopWithoutVideoProcessor(t *testing.T) {
 	recipe := &video.Recipe{
-		Cuts: []video.Cut{{CutIndex: 1, Result: video.Result{VideoURL: "gs://bucket/cut_1.mp4"}}},
+		Cuts: []video.Cut{{CutIndex: 1, VideoURL: "gs://bucket/cut_1.mp4"}},
 	}
 	flt := ChainFinalizeFilter{}
-	err := flt.Execute(context.Background(), &Context{State: State{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"}})
+	err := flt.Execute(context.Background(), &Context{VideoRecipe: recipe, OutputPath: "gs://bucket/jobs/job-1/"})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -226,17 +224,16 @@ func (p *recordingVideoProcessor) ColorMatchSaturation(_ context.Context, videoU
 // carries per-cut durations, but nothing checked that the finished file matches them until now.
 func TestChainFinalizeProbesTheFinalVideo(t *testing.T) {
 	vp := &recordingVideoProcessor{probeResult: ports.VideoStats{DurationSeconds: 20, HasAudio: true}}
-	fc := &Context{State: State{
+	fc := &Context{
 		OutputPath: "gs://bucket/jobs/job-1/",
 		VideoRecipe: &video.Recipe{
 			Cuts: []video.Cut{{
 				CutIndex:     1,
-				AudioSync:    video.AudioSync{EndSec: 20},
-				Result:       video.Result{VideoURL: "gs://bucket/cut_1.mp4"},
-				ChainControl: video.ChainControl{IsChainStart: true},
+				EndSec:       20,
+				VideoURL:     "gs://bucket/cut_1.mp4",
+				IsChainStart: true,
 			}},
-		},
-	}}
+		}}
 
 	if err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), fc); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -254,17 +251,16 @@ func TestChainFinalizeProbesTheFinalVideo(t *testing.T) {
 // video is already generated and playable; measuring it is a check, not a gate.
 func TestChainFinalizeSucceedsWhenProbeFails(t *testing.T) {
 	vp := &recordingVideoProcessor{probeErr: errors.New("ffmpeg unavailable")}
-	fc := &Context{State: State{
+	fc := &Context{
 		OutputPath: "gs://bucket/jobs/job-1/",
 		VideoRecipe: &video.Recipe{
 			Cuts: []video.Cut{{
 				CutIndex:     1,
-				AudioSync:    video.AudioSync{EndSec: 20},
-				Result:       video.Result{VideoURL: "gs://bucket/cut_1.mp4"},
-				ChainControl: video.ChainControl{IsChainStart: true},
+				EndSec:       20,
+				VideoURL:     "gs://bucket/cut_1.mp4",
+				IsChainStart: true,
 			}},
-		},
-	}}
+		}}
 
 	if err := (ChainFinalizeFilter{VideoProcessor: vp}).Execute(context.Background(), fc); err != nil {
 		t.Fatalf("Execute() error = %v, want nil", err)
@@ -279,8 +275,8 @@ func TestChainFinalizeSucceedsWhenProbeFails(t *testing.T) {
 func TestExpectedDurationSecondsUsesTheLastCutEnd(t *testing.T) {
 	recipe := &video.Recipe{
 		Cuts: []video.Cut{
-			{CutIndex: 1, AudioSync: video.AudioSync{EndSec: 8}},
-			{CutIndex: 2, AudioSync: video.AudioSync{EndSec: 21.5}},
+			{CutIndex: 1, EndSec: 8},
+			{CutIndex: 2, EndSec: 21.5},
 		},
 	}
 

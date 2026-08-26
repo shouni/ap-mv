@@ -22,14 +22,10 @@ func TestCutKeyframeFilterStampsTaskAspectRatio(t *testing.T) {
 	flt := CutKeyframeFilter{}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
-		Services: Services{
-			Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
+		Workflows:   &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -52,14 +48,10 @@ func TestCutKeyframeFilterDefaultsAspectRatioWhenTaskHasNone(t *testing.T) {
 	flt := CutKeyframeFilter{}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
-		Services: Services{
-			Workflows: &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
+		Workflows:   &orchestrator.Workflows{CutKeyframe: &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/keyframe.png"}},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -101,14 +93,10 @@ func TestCutKeyframeFilterSetsAspectRatioBeforeRunAndSave(t *testing.T) {
 	flt := CutKeyframeFilter{}
 
 	err := flt.Execute(context.Background(), &Context{
-		State: State{
-			Task:        task,
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/job-1/",
-		},
-		Services: Services{
-			Workflows: &orchestrator.Workflows{CutKeyframe: runner},
-		},
+		Task:        task,
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/job-1/",
+		Workflows:   &orchestrator.Workflows{CutKeyframe: runner},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -127,19 +115,17 @@ func TestCutKeyframeFilterPassesExistingKeyframesThrough(t *testing.T) {
 		MusicRecipe: video.MusicRecipe{Title: "test"},
 		AspectRatio: "16:9",
 		Cuts: []video.Cut{
-			{CutIndex: 1, VisualAnchor: "a", KeyframeResult: video.KeyframeResult{KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"}},
+			{CutIndex: 1, VisualAnchor: "a", KeyframeReference: "gs://bucket/jobs/job-1/images/keyframe_001.png"},
 			{CutIndex: 2, VisualAnchor: "b"},
 		},
 	}
 	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/mv-1/images/keyframe.png"}
 
 	err := CutKeyframeFilter{}.Execute(context.Background(), &Context{
-		State: State{
-			Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
-			VideoRecipe: recipe,
-			OutputPath:  "gs://bucket/jobs/mv-1/",
-		},
-		Services: Services{Workflows: &orchestrator.Workflows{CutKeyframe: runner}},
+		Task:        &domain.Task{JobID: "mv-1", Command: domain.CommandMVFromKeyframeVideoRecipe},
+		VideoRecipe: recipe,
+		OutputPath:  "gs://bucket/jobs/mv-1/",
+		Workflows:   &orchestrator.Workflows{CutKeyframe: runner},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

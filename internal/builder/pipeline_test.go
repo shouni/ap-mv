@@ -45,7 +45,7 @@ func TestWorkflowResolverBuildsForSelectedModels(t *testing.T) {
 	}
 
 	got, err := resolver.Resolve(t.Context(), &domain.Task{
-		AIModels: domain.AIModels{TextModel: "gemini-alt", ImageModel: "image-default"},
+		TextModel: "gemini-alt", ImageModel: "image-default",
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -73,7 +73,7 @@ func TestWorkflowResolverReusesSharedForDefaultOptions(t *testing.T) {
 	}
 
 	got, err := resolver.Resolve(t.Context(), &domain.Task{
-		AIModels: domain.AIModels{TextModel: "gemini-default", ImageModel: "image-default"},
+		TextModel: "gemini-default", ImageModel: "image-default",
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
