@@ -40,7 +40,7 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 		"character_id": {"zundamon"},
 		"audio_url":    {"gs://bucket/music.mp3"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 		"music_job_id": {"20260711132823-256e9128"},
 		"visual_mode":  {"sparkle_rock"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestPostVideoRecipeCreateFallsBackToURLForM2M(t *testing.T) {
 		"csrf_token": {"token"},
 		"url":        {"gs://bucket/source.json"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestPostVideoRecipeCreateRejectsInvalidMusicJobID(t *testing.T) {
 		"csrf_token":   {"token"},
 		"music_job_id": {"not a valid id!"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
 		"csrf_token":   {"token"},
 		"music_job_id": {"20260711132823-256e9128"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
@@ -224,7 +224,7 @@ func TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate(t *testing.T) {
 		"csrf_token": {"token"},
 		"text":       {"source text"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -266,7 +266,7 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 			]
 		}`},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/mv-from-keyframe-video-recipe", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/mv-from-keyframe-video-recipe", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
@@ -302,7 +302,7 @@ func TestComposeTemplateOffersAllAspectRatios(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 	rec := httptest.NewRecorder()
-	h.VideoRecipeCreateForm(rec, httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil))
+	h.VideoRecipeCreateForm(rec, httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("VideoRecipeCreateForm status = %d", rec.Code)
 	}

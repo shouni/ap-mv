@@ -19,13 +19,13 @@
                 {{end}}
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <a class="btn btn-outline-secondary" href="/web/history">Back</a>
+                <a class="btn btn-outline-secondary" href="/history">Back</a>
                 <button type="button" class="btn btn-outline-secondary" data-copy-text="{{.HistoryDetail.JobID}}">Copy MV Job ID</button>
                 {{if .HistoryDetail.MetadataWebURL}}
                 <a class="btn btn-outline-primary" href="{{.HistoryDetail.MetadataWebURL}}" target="_blank" rel="noopener">Metadata</a>
                 {{end}}
-                <a class="btn btn-outline-success" href="/web/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
-                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/regenerate-zip" class="d-flex align-items-center gap-2">
+                <a class="btn btn-outline-success" href="/history/{{.HistoryDetail.JobID}}/keyframes.zip">Download Keyframes</a>
+                <form method="POST" action="/history/{{.HistoryDetail.JobID}}/regenerate-zip" class="d-flex align-items-center gap-2">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <div class="d-flex align-items-center gap-1">
                         <label class="small text-muted mb-0" title="歌唱済み文字の色">歌唱</label>
@@ -36,9 +36,9 @@
                     <button type="submit" class="btn btn-outline-primary">Queue ZIP Job</button>
                 </form>
                 <button type="button" class="btn btn-outline-danger ms-auto"
-                        data-delete-url="/web/history/{{.HistoryDetail.JobID}}"
+                        data-delete-url="/history/{{.HistoryDetail.JobID}}"
                         data-delete-confirm="Delete job {{.HistoryDetail.JobID}}?"
-                        data-delete-redirect="/web/history">Delete</button>
+                        data-delete-redirect="/history">Delete</button>
             </div>
         </div>
 
@@ -127,7 +127,7 @@
                 <p class="small text-muted mb-0">このジョブは全カット生成済みです。同じ対象を再度生成すると、フルMVはキーフレームの再生成コストのみ無駄になり、セクション指定は生成状態がリセットされて Veo が再実行されます（実コストが発生します）。</p>
                 {{else}}
                 <p class="small text-muted mb-3">保存済みのキーフレームと歌詞から、新しいジョブとして動画を生成します。セクションを選ぶとそのセクションだけのショート動画（最大60秒・9:16推奨）になります。生成済みの対象は選択肢から除外しています。</p>
-                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/generate-video" class="row g-2 align-items-end">
+                <form method="POST" action="/history/{{.HistoryDetail.JobID}}/generate-video" class="row g-2 align-items-end">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <div class="col-md-5">
                         <label for="gen-target" class="form-label small text-muted mb-1">対象</label>
@@ -164,7 +164,7 @@
                     生成済みカットを1本の完成動画へ結合し直します。動画生成は行わないため追加の課金はありません。
                     セクションごとに「動画作成」で積み上げたあと、全セクションが揃ったところで実行してください。
                 </p>
-                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/finalize">
+                <form method="POST" action="/history/{{.HistoryDetail.JobID}}/finalize">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-film me-1"></i>完成動画を結合
@@ -186,7 +186,7 @@
                 </h3>
                 {{if and .Section.Name .Cuts}}
                 <div class="d-flex flex-wrap gap-2">
-                    <a href="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">
+                    <a href="/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">
                         <i class="bi bi-arrow-repeat me-1"></i>Regenerate section
                     </a>
                     {{/* このセクションだけを「キーフレーム → 動画」の順に生成し、このジョブへ書き戻します。
@@ -198,7 +198,7 @@
                         <i class="bi bi-check2 me-1"></i>動画生成済み
                     </button>
                     {{else}}
-                    <form method="POST" action="/web/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/video" class="d-inline">
+                    <form method="POST" action="/history/{{$.HistoryDetail.JobID}}/sections/{{.Section.SectionIndex}}/video" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                         <input type="hidden" name="veo_model" value="{{$.SelectedVeoModel}}">
                         <button type="submit" class="btn btn-sm btn-primary">
@@ -260,9 +260,9 @@
                     <span class="badge text-bg-danger" title="このカットは焼き直されています（再配信・セクション再生成など）">×{{$cut.GenerationCount}} 生成</span>
                     {{end}}
                     {{if $cut.Status}}<span class="badge text-bg-light border">{{$cut.Status}}</span>{{end}}
-                    <a href="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
+                    <a href="/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate" class="btn btn-sm btn-outline-secondary">Regenerate</a>
                     {{if $cut.VideoURL}}
-                    <form method="POST" action="/web/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate-video" class="d-inline"
+                    <form method="POST" action="/history/{{$detail.JobID}}/cuts/{{$cut.CutIndex}}/regenerate-video" class="d-inline"
                           data-confirm="Cut {{$cut.CutIndex}} の動画を作り直します。継続チェーンでは同じチェーンの後続カットもまとめて生成し直されます。よろしいですか?">
                         <input type="hidden" name="csrf_token" value="{{$csrfToken}}">
                         <button type="submit" class="btn btn-sm btn-outline-warning"

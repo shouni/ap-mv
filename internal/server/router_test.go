@@ -34,22 +34,22 @@ var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	router, loginCookies := newAuthenticatedTestRouter(t)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
 	for _, cookie := range loginCookies {
 		getReq.AddCookie(cookie)
 	}
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
-		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
+		t.Fatalf("GET /video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
 	}
 	matches := csrfInputPattern.FindStringSubmatch(getRec.Body.String())
 	if len(matches) != 2 {
-		t.Fatalf("GET /web/video-recipe-create did not render csrf token")
+		t.Fatalf("GET /video-recipe-create did not render csrf token")
 	}
 	cookies := mergeCookies(loginCookies, getRec.Result().Cookies())
 	if len(getRec.Result().Cookies()) == 0 {
-		t.Fatalf("GET /web/video-recipe-create did not set csrf session cookie")
+		t.Fatalf("GET /video-recipe-create did not set csrf session cookie")
 	}
 
 	forbiddenReq := newVideoRecipeCreatePostRequest("")
@@ -59,7 +59,7 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	forbiddenRec := httptest.NewRecorder()
 	router.ServeHTTP(forbiddenRec, forbiddenReq)
 	if forbiddenRec.Code != http.StatusForbidden {
-		t.Fatalf("POST /web/video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
+		t.Fatalf("POST /video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
 	}
 
 	acceptedReq := newVideoRecipeCreatePostRequest(matches[1])
@@ -69,7 +69,7 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	acceptedRec := httptest.NewRecorder()
 	router.ServeHTTP(acceptedRec, acceptedReq)
 	if acceptedRec.Code != http.StatusAccepted {
-		t.Fatalf("POST /web/video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
+		t.Fatalf("POST /video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
 	}
 }
 
@@ -77,11 +77,11 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	router, _ := newAuthenticatedTestRouter(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
+	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
-		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
+		t.Fatalf("GET /video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
 	}
 	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/auth/login") {
 		t.Fatalf("redirect location = %q, want /auth/login", location)
@@ -134,7 +134,7 @@ func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
 	router := newWorkerRoleTestRouter()
 
-	for _, path := range []string{"/", "/web/history", "/auth/login"} {
+	for _, path := range []string{"/", "/history", "/auth/login"} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
@@ -248,7 +248,7 @@ func newVideoRecipeCreatePostRequest(csrfToken string) *http.Request {
 	if csrfToken != "" {
 		form.Set("csrf_token", csrfToken)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
 }

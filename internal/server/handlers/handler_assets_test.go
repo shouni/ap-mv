@@ -31,7 +31,7 @@ func TestPagesLoadTheirScripts(t *testing.T) {
 	if !strings.Contains(body, `id="csrf_token"`) {
 		t.Error("CSRF トークンの hidden input がありません")
 	}
-	if !strings.Contains(body, `data-delete-url="/web/history/`) {
+	if !strings.Contains(body, `data-delete-url="/history/`) {
 		t.Error("削除ボタンに data-delete-url がありません")
 	}
 }
@@ -71,7 +71,7 @@ func renderHistoryPage(t *testing.T) string {
 	}
 
 	rec := httptest.NewRecorder()
-	h.History(rec, httptest.NewRequest(http.MethodGet, "/web/history", nil))
+	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("History status = %d; body=%s", rec.Code, rec.Body.String())
 	}
@@ -95,7 +95,7 @@ func renderHistoryDetailPage(t *testing.T) string {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/"+jobID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/"+jobID, nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", jobID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -118,8 +118,8 @@ func TestNavMarksCurrentPage(t *testing.T) {
 		target   string
 		wantHref string
 	}{
-		"履歴":     {target: "/web/history", wantHref: `href="/web/history"`},
-		"台本のみ一覧": {target: "/web/history?stage=script", wantHref: `href="/web/history?stage=script"`},
+		"履歴":     {target: "/history", wantHref: `href="/history"`},
+		"台本のみ一覧": {target: "/history?stage=script", wantHref: `href="/history?stage=script"`},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

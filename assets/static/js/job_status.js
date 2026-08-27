@@ -1,4 +1,4 @@
-// 受付画面（queued.html）。/web/jobs/{jobID} をポーリングして
+// 受付画面（queued.html）。/jobs/{jobID} をポーリングして
 // queued → running → succeeded/failed を反映します。
 //
 // サーバー側の記録（statusRecorder）は以前から動いており、この画面が唯一の未接続点でした。
@@ -45,7 +45,7 @@
             spinnerEl.classList.add('d-none');
             // 再生成系は成果物が元ジョブ側に書かれるため、そちらの履歴へ案内する。
             const jobForHistory = status.original_job_id || jobID;
-            historyLink.href = `/web/history/${encodeURIComponent(jobForHistory)}`;
+            historyLink.href = `/history/${encodeURIComponent(jobForHistory)}`;
             historyLink.classList.remove('d-none');
             stop();
             return;
@@ -64,7 +64,7 @@
 
     async function poll() {
         try {
-            const resp = await fetch(`/web/jobs/${encodeURIComponent(jobID)}`, {
+            const resp = await fetch(`/jobs/${encodeURIComponent(jobID)}`, {
                 headers: {Accept: 'application/json'}
             });
             // 404 は「この機能より前のジョブ」や記録前の一瞬でも起こるため、静かに続行。

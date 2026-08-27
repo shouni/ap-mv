@@ -40,7 +40,7 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -55,7 +55,7 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 	for _, want := range []string{
 		"軌跡のアーキテクト",
 		// 画面が指すのは同一オリジンのパスです。実体へはハンドラーが 302 で送ります。
-		`src="/web/history/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
+		`src="/history/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
 		"blue stage",
 		"Cut 1",
 	} {
@@ -98,7 +98,7 @@ func TestHistoryDetailAppliesAspectRatioClass(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -143,7 +143,7 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -157,7 +157,7 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"完成動画",
-		`src="/web/history/job-1/video"`,
+		`src="/history/job-1/video"`,
 		"Copy MV Job ID",
 		// コピー対象は data 属性で渡す。JS の引数にテンプレート値を埋めていた頃は、
 		// JS 文字列リテラル文脈のエスケープ（"/" → "\/" など）が絡んでいた。
@@ -193,7 +193,7 @@ func TestHistoryDetailRendersVeoCostEstimate(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -236,7 +236,7 @@ func TestHistoryDetailOmitsCostForKeyframeOnlyJob(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -272,7 +272,7 @@ func TestHistoryListRendersVeoCostColumn(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history", nil)
 	rec := httptest.NewRecorder()
 
 	h.History(rec, req)
@@ -319,7 +319,7 @@ func TestHistoryDetailRendersRecordedUsage(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -365,7 +365,7 @@ func TestHistoryDetailWithoutUsageSaysSo(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -404,7 +404,7 @@ func TestHistoryDetailSurvivesUsageReadFailure(t *testing.T) {
 		usageErr: errors.New("storage unavailable"),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
@@ -446,7 +446,7 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
@@ -503,7 +503,7 @@ func TestHistoryDetailRendersProgressBadge(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))

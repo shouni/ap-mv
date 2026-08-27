@@ -267,8 +267,8 @@ func navPathFor(r *http.Request) string {
 		return ""
 	}
 	path := r.URL.Path
-	if path == "/web/history" && r.URL.Query().Get("stage") == "script" {
-		return "/web/history?stage=script"
+	if path == "/history" && r.URL.Query().Get("stage") == "script" {
+		return "/history?stage=script"
 	}
 	return path
 }

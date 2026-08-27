@@ -13,7 +13,7 @@
                 <h2 class="h4 fw-bold">videoレシピ作成</h2>
                 <p class="text-muted">Character、Music Recipe JSON、Visual Mode 的プロンプトから、セクション単位のキーフレーム付き Video Recipe を作成します。</p>
                 <p class="text-muted small">MV・ショート動画の生成は、作成後に履歴詳細画面から実行できます。</p>
-                <a href="/web/video-recipe-create" class="btn btn-primary">作成フォームを開く</a>
+                <a href="/video-recipe-create" class="btn btn-primary">作成フォームを開く</a>
             </div>
         </div>
     </div>
@@ -22,7 +22,7 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="h4 fw-bold mb-0">最近のジョブ</h2>
-                    <a href="/web/history" class="btn btn-sm btn-outline-secondary">履歴一覧へ</a>
+                    <a href="/history" class="btn btn-sm btn-outline-secondary">履歴一覧へ</a>
                 </div>
                 {{if .LatestVideo}}
                 <div class="mb-3">
@@ -30,14 +30,14 @@
                         <source src="{{.LatestVideo.VideoURL}}" type="video/mp4">
                     </video>
                     <div class="small text-muted mt-1">
-                        最新の生成動画: <a href="/web/history/{{.LatestVideo.JobID}}">{{if .LatestVideo.Title}}{{.LatestVideo.Title}}{{else}}{{.LatestVideo.JobID}}{{end}}</a>
+                        最新の生成動画: <a href="/history/{{.LatestVideo.JobID}}">{{if .LatestVideo.Title}}{{.LatestVideo.Title}}{{else}}{{.LatestVideo.JobID}}{{end}}</a>
                     </div>
                 </div>
                 {{end}}
                 {{if .HistoryItems}}
                 <div class="list-group list-group-flush">
                     {{range .HistoryItems}}
-                    <a href="/web/history/{{.JobID}}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2 px-0">
+                    <a href="/history/{{.JobID}}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2 px-0">
                         <div class="text-truncate">
                             <span class="fw-semibold">{{if .Title}}{{.Title}}{{else}}{{.JobID}}{{end}}</span>
                             {{if .CreatedAt}}<span class="text-muted small ms-2">{{.CreatedAt}}</span>{{end}}
