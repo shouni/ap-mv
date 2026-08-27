@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/session"
 
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +42,7 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -109,7 +109,7 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -141,7 +141,7 @@ func TestPostVideoRecipeCreateFallsBackToURLForM2M(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -170,7 +170,7 @@ func TestPostVideoRecipeCreateRejectsInvalidMusicJobID(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -199,7 +199,7 @@ func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -226,7 +226,7 @@ func TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostVideoRecipeCreate(rec, req)
@@ -268,7 +268,7 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "/mv-from-keyframe-video-recipe", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.PostRecipe(rec, req)

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/assets"
@@ -450,7 +450,7 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
-	ctx = auth.WithCSRFToken(ctx, "csrf-test-token")
+	ctx = session.WithCSRFToken(ctx, "csrf-test-token")
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

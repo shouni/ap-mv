@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
+	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/gcp-kit/worker"
 	promptkit "github.com/shouni/go-prompt-kit/prompts"
 
@@ -20,13 +21,13 @@ const defaultSessionName = "ap-mv-session"
 
 // AppHandlers は生成されたHTTPハンドラーを保持します。
 type AppHandlers struct {
-	Auth   *auth.Handler
+	Auth   *session.Handler
 	Web    *handlers.Handler
 	Worker *worker.Handler[domain.Task]
-	M2M    *auth.M2MVerifier
+	M2M    *oidc.Verifier
 	// TaskAuth は Cloud Tasks からの OIDC を検証します。Auth と違い OAuth 設定を
 	// 必要としないため、Web 面を持たない Worker プロセスでも構築できます。
-	TaskAuth *auth.TaskVerifier
+	TaskAuth *oidc.Verifier
 }
 
 // Validate は、組み立て結果が役割として筋の通った形になっていることを確かめます。
@@ -67,7 +68,7 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 		}
 		// audience と許可する caller SA の両方が揃わないと検証は常に失敗する
 		// （fail-closed）ため、起動時に構成を確かめておきます。
-		taskAuth := auth.NewTaskVerifier(
+		taskAuth := oidc.New(
 			appCtx.Config.Tasks.TaskAudienceURL,
 			appCtx.Config.Tasks.AllowedServiceAccounts,
 		)
@@ -176,13 +177,13 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 }
 
 // createAuthHandler は、認証ハンドラーを初期化して返します。
-func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
+func createAuthHandler(cfg *config.Config) (*session.Handler, error) {
 	redirectURL, err := url.JoinPath(cfg.Server.ServiceURL, "/auth/callback")
 	if err != nil {
 		return nil, fmt.Errorf("リダイレクトURLの構築に失敗しました: %w", err)
 	}
 
-	return auth.NewHandler(auth.Config{
+	return session.New(session.Config{
 		ClientID:          cfg.Auth.GoogleClientID,
 		ClientSecret:      cfg.Auth.GoogleClientSecret,
 		RedirectURL:       redirectURL,
@@ -197,7 +198,7 @@ func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
 
 // newM2MVerifier は M2M(サーバー間通信)用の OIDC 検証器を構成します。
 //
-// ProtectedMiddleware は M2M を無効化できません。許可リストか audience が欠けていても
+// auth.Protected は M2M を無効化できません。許可リストか audience が欠けていても
 // 経路は生き続け、検証が必ず失敗してセッション認証へフォールバックします。つまり設定漏れは
 // 「ブラウザは正常に動くが ap-mcp だけログイン画面の HTML を受け取る」という形でしか
 // 現れません。意図的な無効化と設定漏れを区別する手段が無い以上、空は後者としか解釈できない
@@ -206,8 +207,8 @@ func createAuthHandler(cfg *config.Config) (*auth.Handler, error) {
 // 構成の可否を config ではなく検証器自身に尋ねるのは、必要な設定が何かを知っているのが
 // gcp-kit 側だからです。許可リストの空だけを config で見ると audience（SERVICE_URL）の
 // 欠落を拾えず、kit が要件を増やしても追随しません。
-func newM2MVerifier(serviceURL string, allowedServiceAccounts []string) (*auth.M2MVerifier, error) {
-	m2m := auth.NewM2MVerifier(serviceURL, allowedServiceAccounts)
+func newM2MVerifier(serviceURL string, allowedServiceAccounts []string) (*oidc.Verifier, error) {
+	m2m := oidc.New(serviceURL, allowedServiceAccounts)
 	if !m2m.Configured() {
 		return nil, fmt.Errorf("m2m の OIDC 検証を構成できません: SERVICE_URL と ALLOWED_M2M_SERVICE_ACCOUNTS が必要です")
 	}

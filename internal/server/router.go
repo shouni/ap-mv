@@ -14,6 +14,7 @@ import (
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/builder"
 	"github.com/shouni/ap-mv/internal/server/handlers"
+	"github.com/shouni/gcp-kit/auth"
 )
 
 // NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
@@ -134,7 +135,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		r.Use(h.Auth.ProtectedMiddleware(h.M2M))
+		r.Use(auth.Protected(h.M2M, h.Auth))
 
 		if h.Web != nil {
 			registerWebRoutes(r, h.Web)
@@ -150,7 +151,7 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 			return
 		}
 
-		r.Use(h.TaskAuth.Middleware)
+		r.Use(auth.Require(h.TaskAuth))
 		r.Post("/tasks/generate", h.Worker.ProcessTask)
 	})
 }

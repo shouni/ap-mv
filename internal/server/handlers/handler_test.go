@@ -10,7 +10,7 @@ import (
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/session"
 )
 
 type recordingQueue struct {
@@ -188,7 +188,7 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.VideoRecipeCreateForm(rec, req)

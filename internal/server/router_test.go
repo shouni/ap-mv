@@ -12,7 +12,8 @@ import (
 	"testing"
 
 	"github.com/gorilla/sessions"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
+	"github.com/shouni/gcp-kit/auth/session"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/builder"
@@ -160,7 +161,7 @@ func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 // newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
 func newWorkerRoleTestRouter() http.Handler {
 	return NewRouter(&builder.AppHandlers{
-		TaskAuth: auth.NewTaskVerifier("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: oidc.New("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 }
 
@@ -176,7 +177,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		taskAccount = "tasks@example.iam.gserviceaccount.com"
 	)
 
-	authHandler, err := auth.NewHandler(auth.Config{
+	authHandler, err := session.New(session.Config{
 		ClientID:          "client-id",
 		ClientSecret:      "client-secret",
 		RedirectURL:       "http://localhost:8080/auth/callback",
@@ -212,13 +213,14 @@ func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encr
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	session, err := store.Get(req, sessionName)
+	// 変数名を sess にするのは、パッケージ名 session と衝突させないためです。
+	sess, err := store.Get(req, sessionName)
 	if err != nil {
 		t.Fatalf("store.Get() error = %v", err)
 	}
-	session.Values[auth.DefaultUserSessionKey] = userEmail
-	if err := session.Save(req, rec); err != nil {
-		t.Fatalf("session.Save() error = %v", err)
+	sess.Values[session.DefaultUserSessionKey] = userEmail
+	if err := sess.Save(req, rec); err != nil {
+		t.Fatalf("sess.Save() error = %v", err)
 	}
 	return rec.Result().Cookies()
 }
