@@ -243,24 +243,4 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
 	r.Post("/history/{jobID}/generate-video", h.PostGenerateVideoFromHistory)
 
-	// 旧 /web/... は同じ経路へ 308 で送ります。308 なのは POST の
-	// メソッドと本文を保つためで、302 だと GET に落ちて投入が失われます。
-	// ブックマークと ap-mcp の移行のために置いており、移行後に消します。
-	r.Handle("/web/*", http.HandlerFunc(redirectFromWebPrefix))
-}
-
-// redirectFromWebPrefix は、旧 /web プレフィックスを外した同じ経路へ転送します。
-//
-// content negotiation を入れた今、このプレフィックスは実態と合いません。
-// 同じルートが Accept を見て画面にも機械にも答えるため、「web」だけの入口では
-// なくなりました。
-func redirectFromWebPrefix(w http.ResponseWriter, r *http.Request) {
-	target := strings.TrimPrefix(r.URL.Path, "/web")
-	if target == "" {
-		target = "/"
-	}
-	if r.URL.RawQuery != "" {
-		target += "?" + r.URL.RawQuery
-	}
-	http.Redirect(w, r, target, http.StatusPermanentRedirect)
 }
