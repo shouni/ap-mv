@@ -28,7 +28,7 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 	}
 	// 単価は保存せず表示時に解決するため、JSON 応答にも同じ値が乗るよう分岐の前で適用する。
 	domain.ApplyVeoCostEstimateToHistories(page.Items, h.ModelOptions.DefaultVeoModel, h.VeoPricing)
-	if wantsJSON(r) {
+	if wantsJSON(w, r) {
 		writeJSON(w, http.StatusOK, page)
 		return
 	}
@@ -60,7 +60,7 @@ func (h *Handler) HistoryDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.applyCostEstimate(r.Context(), jobID, &history)
-	if wantsJSON(r) {
+	if wantsJSON(w, r) {
 		// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らず URL 自体を受け取るため、
 		// ここでだけ署名します。画面はこの下で同一オリジンのパスを埋めます。
 		if err := h.HistoryRepository.SignHistoryURLs(r.Context(), &history); err != nil {

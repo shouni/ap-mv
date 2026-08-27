@@ -13,6 +13,8 @@ import (
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // Handler は、Web UIのハンドラーが共有する依存関係とフォーム選択肢を保持します。
@@ -189,7 +191,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 		}
 	}
 	h.recordQueuedStatus(r, task)
-	if !wantsJSON(r) {
+	if !wantsJSON(w, r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)
 		h.renderPage(w, r, PageData{
@@ -202,15 +204,25 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
-func wantsJSON(r *http.Request) bool {
-	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
+// wantsJSON は、呼び出し元が JSON を求めているかを返します。
+//
+// ルートを分けずに Accept で切り替えるのは、同じ取得処理を 2 本持たないためです。
+// 画面用と API 用にハンドラを分けると、片方だけ直したときに画面の表示と機械可読な
+// 結果が食い違います。5 つの兄弟アプリすべてが同じ形です。
+//
+// 判定を gcp-kit へ委ねているのは、同時に Vary: Accept を立てさせるためです。
+// 同じ URL が Accept で中身を変えるのにキャッシュへ伝えないと、共有キャッシュや
+// CDN を挟んだとき JSON を求めたクライアントへ HTML が返りえます。以前は
+// 3 アプリが逐語コピーを持ち、3 つとも Vary を落としていました。
+func wantsJSON(w http.ResponseWriter, r *http.Request) bool {
+	return negotiate.WantsJSON(w, r)
 }
 
 // writeError writes an error response, using JSON when the caller requested it (mirroring
 // writeJSON's success-path content negotiation) so M2M/JSON callers (Accept: application/json)
 // reliably get a JSON error body instead of an HTML/plain-text one.
 func writeError(w http.ResponseWriter, r *http.Request, status int, message string) {
-	if wantsJSON(r) {
+	if wantsJSON(w, r) {
 		writeJSON(w, status, map[string]string{"error": message})
 		return
 	}
