@@ -130,11 +130,11 @@ func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) 
 // draftsURL は下書き一覧のURLを返します。下書きには専用の詳細画面が無いため
 // （JSON は ap-mcp 用、ブラウザは一覧へリダイレクト）、リンク先は一覧そのものです。
 func (s *SlackAdapter) draftsURL() string {
-	return notify.JoinURL(s.serviceURL, "/web/drafts")
+	return notify.JoinURL(s.serviceURL, "/drafts")
 }
 
 // historyDetailURL は履歴詳細ページのURLを返します。
 func (s *SlackAdapter) historyDetailURL(jobID string) string {
 	// serviceURL か jobID が空なら空を返し、通知側が行ごと省きます（JoinURL の契約）。
-	return notify.JoinURL(s.serviceURL, "/web/history", jobID)
+	return notify.JoinURL(s.serviceURL, "/history", jobID)
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/session"
 )
 
 type recordingQueue struct {
@@ -131,10 +131,10 @@ func TestLatestVideoForHomePrefersFinalVideo(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "/web/history/job-1/video" {
+	if got.VideoURL != "/history/job-1/video" {
 		t.Errorf("VideoURL = %q, want the final-video web path", got.VideoURL)
 	}
-	if got.PosterURL != "/web/history/job-1/cuts/1/keyframe" {
+	if got.PosterURL != "/history/job-1/cuts/1/keyframe" {
 		t.Errorf("PosterURL = %q, want the first cut's keyframe web path", got.PosterURL)
 	}
 }
@@ -162,10 +162,10 @@ func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "/web/history/job-1/cuts/2/video" {
+	if got.VideoURL != "/history/job-1/cuts/2/video" {
 		t.Errorf("VideoURL = %q, want the last cut's video web path", got.VideoURL)
 	}
-	if got.PosterURL != "/web/history/job-1/cuts/2/keyframe" {
+	if got.PosterURL != "/history/job-1/cuts/2/keyframe" {
 		t.Errorf("PosterURL = %q, want the last cut's keyframe web path", got.PosterURL)
 	}
 }
@@ -187,8 +187,8 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
-	req = req.WithContext(auth.WithCSRFToken(req.Context(), "token"))
+	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
 	h.VideoRecipeCreateForm(rec, req)

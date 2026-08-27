@@ -8,7 +8,7 @@
                     <code>{{.HistoryDetail.JobID}}</code>
                 </div>
             </div>
-            <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Back</a>
+            <a class="btn btn-outline-secondary" href="/history/{{.HistoryDetail.JobID}}">Back</a>
         </div>
 
         <div class="row g-4">
@@ -22,7 +22,7 @@
                 {{end}}
             </div>
             <div class="col-md-7">
-                <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/cuts/{{.RegenerateCut.CutIndex}}/regenerate-keyframe">
+                <form method="POST" action="/history/{{.HistoryDetail.JobID}}/cuts/{{.RegenerateCut.CutIndex}}/regenerate-keyframe">
                     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
                     <div class="mb-3">
@@ -72,7 +72,7 @@
 
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Queue Keyframe Job</button>
-                        <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Cancel</a>
+                        <a class="btn btn-outline-secondary" href="/history/{{.HistoryDetail.JobID}}">Cancel</a>
                     </div>
                 </form>
             </div>

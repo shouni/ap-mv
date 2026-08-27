@@ -12,7 +12,8 @@ import (
 	"testing"
 
 	"github.com/gorilla/sessions"
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
+	"github.com/shouni/gcp-kit/auth/session"
 
 	"github.com/shouni/ap-mv/assets"
 	"github.com/shouni/ap-mv/internal/builder"
@@ -34,22 +35,22 @@ var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
 func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	router, loginCookies := newAuthenticatedTestRouter(t)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
 	for _, cookie := range loginCookies {
 		getReq.AddCookie(cookie)
 	}
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK {
-		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
+		t.Fatalf("GET /video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
 	}
 	matches := csrfInputPattern.FindStringSubmatch(getRec.Body.String())
 	if len(matches) != 2 {
-		t.Fatalf("GET /web/video-recipe-create did not render csrf token")
+		t.Fatalf("GET /video-recipe-create did not render csrf token")
 	}
 	cookies := mergeCookies(loginCookies, getRec.Result().Cookies())
 	if len(getRec.Result().Cookies()) == 0 {
-		t.Fatalf("GET /web/video-recipe-create did not set csrf session cookie")
+		t.Fatalf("GET /video-recipe-create did not set csrf session cookie")
 	}
 
 	forbiddenReq := newVideoRecipeCreatePostRequest("")
@@ -59,7 +60,7 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	forbiddenRec := httptest.NewRecorder()
 	router.ServeHTTP(forbiddenRec, forbiddenReq)
 	if forbiddenRec.Code != http.StatusForbidden {
-		t.Fatalf("POST /web/video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
+		t.Fatalf("POST /video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
 	}
 
 	acceptedReq := newVideoRecipeCreatePostRequest(matches[1])
@@ -69,7 +70,7 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 	acceptedRec := httptest.NewRecorder()
 	router.ServeHTTP(acceptedRec, acceptedReq)
 	if acceptedRec.Code != http.StatusAccepted {
-		t.Fatalf("POST /web/video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
+		t.Fatalf("POST /video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
 	}
 }
 
@@ -77,11 +78,11 @@ func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	router, _ := newAuthenticatedTestRouter(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/web/video-recipe-create", nil)
+	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
-		t.Fatalf("GET /web/video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
+		t.Fatalf("GET /video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
 	}
 	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/auth/login") {
 		t.Fatalf("redirect location = %q, want /auth/login", location)
@@ -134,7 +135,7 @@ func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
 	router := newWorkerRoleTestRouter()
 
-	for _, path := range []string{"/", "/web/history", "/auth/login"} {
+	for _, path := range []string{"/", "/history", "/auth/login"} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
@@ -160,7 +161,7 @@ func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 // newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
 func newWorkerRoleTestRouter() http.Handler {
 	return NewRouter(&builder.AppHandlers{
-		TaskAuth: auth.NewTaskVerifier("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: oidc.New("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 }
 
@@ -176,7 +177,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		taskAccount = "tasks@example.iam.gserviceaccount.com"
 	)
 
-	authHandler, err := auth.NewHandler(auth.Config{
+	authHandler, err := session.New(session.Config{
 		ClientID:          "client-id",
 		ClientSecret:      "client-secret",
 		RedirectURL:       "http://localhost:8080/auth/callback",
@@ -212,13 +213,14 @@ func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encr
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	session, err := store.Get(req, sessionName)
+	// 変数名を sess にするのは、パッケージ名 session と衝突させないためです。
+	sess, err := store.Get(req, sessionName)
 	if err != nil {
 		t.Fatalf("store.Get() error = %v", err)
 	}
-	session.Values[auth.DefaultUserSessionKey] = userEmail
-	if err := session.Save(req, rec); err != nil {
-		t.Fatalf("session.Save() error = %v", err)
+	sess.Values[session.DefaultUserSessionKey] = userEmail
+	if err := sess.Save(req, rec); err != nil {
+		t.Fatalf("sess.Save() error = %v", err)
 	}
 	return rec.Result().Cookies()
 }
@@ -248,7 +250,7 @@ func newVideoRecipeCreatePostRequest(csrfToken string) *http.Request {
 	if csrfToken != "" {
 		form.Set("csrf_token", csrfToken)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/web/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return req
 }

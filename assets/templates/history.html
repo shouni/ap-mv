@@ -51,7 +51,7 @@
                         {{template "jobStageBadge" .Progress}}
                     </td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-primary" href="/web/history/{{.JobID}}">Detail</a>
+                        <a class="btn btn-sm btn-primary" href="/history/{{.JobID}}">Detail</a>
                     </td>
                 </tr>
                 {{end}}
@@ -66,13 +66,13 @@
         <nav class="mt-4">
             <ul class="pagination mb-0">
                 <li class="page-item {{if not .PageMeta.HasPrev}}disabled{{end}}">
-                    <a class="page-link" href="/web/history?page={{.PageMeta.PrevPage}}">Prev</a>
+                    <a class="page-link" href="/history?page={{.PageMeta.PrevPage}}">Prev</a>
                 </li>
                 <li class="page-item disabled">
                     <span class="page-link">{{.PageMeta.Page}} / {{.PageMeta.TotalPages}}</span>
                 </li>
                 <li class="page-item {{if not .PageMeta.HasNext}}disabled{{end}}">
-                    <a class="page-link" href="/web/history?page={{.PageMeta.NextPage}}">Next</a>
+                    <a class="page-link" href="/history?page={{.PageMeta.NextPage}}">Next</a>
                 </li>
             </ul>
         </nav>

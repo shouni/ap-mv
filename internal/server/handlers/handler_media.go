@@ -36,12 +36,12 @@ const redirectCacheControl = "private, max-age=600"
 
 // MetadataWebPath などは、画面が辿る同一オリジンのパスを組み立てます。
 func MetadataWebPath(jobID string) string {
-	return "/web/history/" + url.PathEscape(jobID) + "/" + mediaPathMetadata
+	return "/history/" + url.PathEscape(jobID) + "/" + mediaPathMetadata
 }
 
 // FinalVideoWebPath は結合済み完成動画のパスです。
 func FinalVideoWebPath(jobID string) string {
-	return "/web/history/" + url.PathEscape(jobID) + "/" + mediaPathVideo
+	return "/history/" + url.PathEscape(jobID) + "/" + mediaPathVideo
 }
 
 // CutVideoWebPath はカット単体の動画のパスです。
@@ -55,7 +55,7 @@ func CutKeyframeWebPath(jobID string, cutIndex int) string {
 }
 
 func cutAssetWebPath(jobID string, cutIndex int, kind string) string {
-	return fmt.Sprintf("/web/history/%s/cuts/%d/%s", url.PathEscape(jobID), cutIndex, kind)
+	return fmt.Sprintf("/history/%s/cuts/%d/%s", url.PathEscape(jobID), cutIndex, kind)
 }
 
 // applyWebMediaURLs は、画面が辿るパスを履歴詳細へ埋めます。

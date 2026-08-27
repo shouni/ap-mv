@@ -55,10 +55,10 @@ func TestBuildCompleteContentLinksDraftsForDraftJobs(t *testing.T) {
 		Title:   "draft test",
 	}).String()
 
-	if !strings.Contains(got, "https://ap-mv.example.com/web/drafts") {
+	if !strings.Contains(got, "https://ap-mv.example.com/drafts") {
 		t.Errorf("content = %q, want a link to the drafts list", got)
 	}
-	if strings.Contains(got, "/web/history/") {
+	if strings.Contains(got, "/history/") {
 		t.Errorf("content = %q, want no History Detail link for a draft job", got)
 	}
 }
@@ -73,7 +73,7 @@ func TestBuildCompleteContentLinksHistoryForNormalJobs(t *testing.T) {
 			JobID:   "video-recipe-20260804-101112-abc",
 			Command: string(domain.CommandVideoRecipeCreate),
 		}).String()
-		if !strings.Contains(got, "/web/history/video-recipe-20260804-101112-abc") {
+		if !strings.Contains(got, "/history/video-recipe-20260804-101112-abc") {
 			t.Errorf("content = %q, want the history detail link", got)
 		}
 	})
@@ -84,7 +84,7 @@ func TestBuildCompleteContentLinksHistoryForNormalJobs(t *testing.T) {
 			HistoryJobID: "video-recipe-20260618-081931-abc",
 			Command:      string(domain.CommandRegenerateCutKeyframe),
 		}).String()
-		if !strings.Contains(got, "/web/history/video-recipe-20260618-081931-abc") {
+		if !strings.Contains(got, "/history/video-recipe-20260618-081931-abc") {
 			t.Errorf("content = %q, want the original job's history detail link", got)
 		}
 	})

@@ -9,7 +9,7 @@
                     <span class="ms-2">{{.RegenerateSection.Section.StartSeconds}}s - {{.RegenerateSection.Section.EndSeconds}}s / {{len .RegenerateSection.Cuts}} cuts</span>
                 </div>
             </div>
-            <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Back</a>
+            <a class="btn btn-outline-secondary" href="/history/{{.HistoryDetail.JobID}}">Back</a>
         </div>
 
         <div class="row g-3 mb-4">
@@ -27,7 +27,7 @@
             {{end}}
         </div>
 
-        <form method="POST" action="/web/history/{{.HistoryDetail.JobID}}/sections/{{.RegenerateSection.Section.SectionIndex}}/regenerate-keyframes">
+        <form method="POST" action="/history/{{.HistoryDetail.JobID}}/sections/{{.RegenerateSection.Section.SectionIndex}}/regenerate-keyframes">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
 
             <div class="mb-3">
@@ -65,7 +65,7 @@
 
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">Queue Keyframes Job</button>
-                <a class="btn btn-outline-secondary" href="/web/history/{{.HistoryDetail.JobID}}">Cancel</a>
+                <a class="btn btn-outline-secondary" href="/history/{{.HistoryDetail.JobID}}">Cancel</a>
             </div>
         </form>
     </div>

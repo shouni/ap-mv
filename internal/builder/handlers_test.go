@@ -7,7 +7,7 @@ import (
 
 	"github.com/shouni/gcp-kit/serverrole"
 
-	"github.com/shouni/gcp-kit/auth"
+	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/worker"
 
 	"github.com/shouni/ap-mv/internal/app"
@@ -140,7 +140,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
 		{
 			name:    "TaskAuth だけある",
-			h:       &AppHandlers{TaskAuth: auth.NewTaskVerifier("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
+			h:       &AppHandlers{TaskAuth: oidc.New("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{
@@ -164,7 +164,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 
 // M2M 検証器は、audience と許可リストの両方が揃ってはじめて機能します。
 //
-// 片方でも欠けると ProtectedMiddleware は毎回セッション認証へフォールバックし、
+// 片方でも欠けると auth.Protected は毎回セッション認証へフォールバックし、
 // ブラウザは正常なまま ap-mcp からの呼び出しだけがログイン画面の HTML を受け取ります。
 // リクエストからは設定漏れだと分からないので、起動時に落ちることを固定します。
 func TestNewM2MVerifierRejectsIncompleteConfiguration(t *testing.T) {
