@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -181,17 +180,17 @@ func pageFromQuery(r *http.Request) int {
 // enqueue validates and submits a task to the configured queue.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
-			writeError(w, r, http.StatusBadGateway, err.Error())
+			negotiate.Error(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
 	h.recordQueuedStatus(r, task)
-	if !wantsJSON(w, r) {
+	if !negotiate.WantsJSON(w, r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)
 		h.renderPage(w, r, PageData{
@@ -201,32 +200,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 		}, "queued.html")
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
-}
-
-// wantsJSON は、呼び出し元が JSON を求めているかを返します。
-//
-// ルートを分けずに Accept で切り替えるのは、同じ取得処理を 2 本持たないためです。
-// 画面用と API 用にハンドラを分けると、片方だけ直したときに画面の表示と機械可読な
-// 結果が食い違います。5 つの兄弟アプリすべてが同じ形です。
-//
-// 判定を gcp-kit へ委ねているのは、同時に Vary: Accept を立てさせるためです。
-// 同じ URL が Accept で中身を変えるのにキャッシュへ伝えないと、共有キャッシュや
-// CDN を挟んだとき JSON を求めたクライアントへ HTML が返りえます。以前は
-// 3 アプリが逐語コピーを持ち、3 つとも Vary を落としていました。
-func wantsJSON(w http.ResponseWriter, r *http.Request) bool {
-	return negotiate.WantsJSON(w, r)
-}
-
-// writeError writes an error response, using JSON when the caller requested it (mirroring
-// writeJSON's success-path content negotiation) so M2M/JSON callers (Accept: application/json)
-// reliably get a JSON error body instead of an HTML/plain-text one.
-func writeError(w http.ResponseWriter, r *http.Request, status int, message string) {
-	if wantsJSON(w, r) {
-		writeJSON(w, status, map[string]string{"error": message})
-		return
-	}
-	http.Error(w, message, status)
+	negotiate.JSON(w, r, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
 // pageScripts は、ページごとに追加で読み込む JavaScript です。
@@ -261,13 +235,6 @@ func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, data PageDa
 	if err := tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-}
-
-// writeJSON writes a JSON response with the given status.
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
 }
 
 // navPathFor はナビの現在地キーを返します。

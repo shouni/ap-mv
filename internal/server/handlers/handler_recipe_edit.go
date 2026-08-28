@@ -14,6 +14,8 @@ import (
 	"github.com/shouni/go-veo-orchestrator/video"
 
 	"github.com/shouni/ap-mv/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // maxRecipeJSONSize caps the accepted recipe body. Mirrors the pipeline's read limit
@@ -27,20 +29,20 @@ const maxRecipeJSONSize = 5 * 1024 * 1024
 func (h *Handler) GetJobRecipe(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.HistoryRepository == nil {
-		writeError(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
+		negotiate.Error(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
 		return
 	}
 	recipe, err := h.HistoryRepository.GetRecipe(r.Context(), jobID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to get job recipe", "job_id", jobID, "error", err)
-		writeError(w, r, http.StatusNotFound, "job not found")
+		negotiate.Error(w, r, http.StatusNotFound, "job not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	negotiate.JSON(w, r, http.StatusOK, map[string]any{
 		"job_id": jobID,
 		"recipe": recipe,
 	})
@@ -60,38 +62,38 @@ func (h *Handler) GetJobRecipe(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PutJobRecipe(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.HistoryRepository == nil {
-		writeError(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
+		negotiate.Error(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
 		return
 	}
 
 	current, err := h.HistoryRepository.GetRecipe(r.Context(), jobID)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, "job not found")
+		negotiate.Error(w, r, http.StatusNotFound, "job not found")
 		return
 	}
 	if stage := domain.NewJobProgress(current.Cuts).Stage; stage != domain.StageScript {
-		writeError(w, r, http.StatusConflict,
+		negotiate.Error(w, r, http.StatusConflict,
 			"recipe can only be edited before keyframes are generated (current stage: "+string(stage)+")")
 		return
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maxRecipeJSONSize))
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "failed to read request body")
+		negotiate.Error(w, r, http.StatusBadRequest, "failed to read request body")
 		return
 	}
 	recipeJSON, err := recipeJSONFromBody(raw)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	recipe, err := domain.DecodeVideoRecipeJSON(recipeJSON)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid video recipe json: "+err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid video recipe json: "+err.Error())
 		return
 	}
 
@@ -104,13 +106,13 @@ func (h *Handler) PutJobRecipe(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, video.ErrRecipeInvalid) {
 			status = http.StatusBadRequest
 		}
-		writeError(w, r, status, err.Error())
+		negotiate.Error(w, r, status, err.Error())
 		return
 	}
 
 	// 保存後のカット数と尺を返す。直す目的はカット割りの確認なので、反映結果を
 	// もう一度読みに行かせる必要はない。
-	writeJSON(w, http.StatusOK, map[string]any{
+	negotiate.JSON(w, r, http.StatusOK, map[string]any{
 		"job_id":             jobID,
 		"status":             "updated",
 		"cut_count":          len(recipe.Cuts),
