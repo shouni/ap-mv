@@ -21,7 +21,7 @@ import (
 // 生成中のジョブは動画生成のたびにメタデータが書き換わるため、キャッシュを経由せず
 // 毎回ストレージから読みます。
 func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil, errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -45,7 +45,7 @@ func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*
 // 表示用の履歴はキャッシュ越しに読まれるため、破棄しないと直したはずの内容が
 // 画面へ反映されません。
 func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error {
-	if r == nil || r.writer == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -64,7 +64,7 @@ func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, r
 		return fmt.Errorf("encode recipe: %w", err)
 	}
 	uri := r.metadataURI(jobID)
-	if err := r.writer.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
+	if err := r.store.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
 		return fmt.Errorf("write recipe (%s): %w", uri, err)
 	}
 	r.InvalidateJob(jobID)

@@ -30,7 +30,7 @@ type State struct {
 type Services struct {
 	Workflows         *orchestrator.Workflows
 	Reader            orchestrator.ContentReader
-	Writer            remoteio.OutputWriter
+	Writer            remoteio.Writer
 	VideoRunner       ports.VideoRunner
 	TaskQueue         ports.TaskQueue
 	Characters        *characterkit.Characters

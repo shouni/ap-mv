@@ -2,73 +2,111 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"os"
+	"iter"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-remote-io/remoteio/memio"
 )
 
+// fakeHistoryReader は memio を包んだストレージのフェイクです。
+//
+// 一覧の畳み込み・不在の返し方・削除の単位といったストレージの振る舞いは memio が
+// 受け持ちます（本物のハンドラと同じ適合性スイートを通っています）。ここに残しているのは
+// 呼び出しの記録（何回開いたか・何回走査したか・何を消したか）と、
+// 署名付き URL の組み立てだけです。
+//
+// 読み書き・署名が 1 つの Store に畳まれたので、以前あった fakeHistoryWriter と
+// fakeHistorySigner もこの型が兼ねます。
 type fakeHistoryReader struct {
+	remoteio.Store
+	h *memio.Handler
+
+	// paths は一覧にだけ現れるオブジェクトです（内容は要らないもの）。
+	paths []string
+	// files は内容を持つオブジェクトです。
+	files map[string]string
+
 	mu        sync.Mutex
-	paths     []string
-	files     map[string]string
 	openCount map[string]int
 	listCount map[string]int
+	deleted   []string
+	ready     bool
 }
 
-func (r *fakeHistoryReader) Open(_ context.Context, p string) (io.ReadCloser, error) {
+// ensure は memio を組み立てて paths / files を流し込みます。
+// 各テストが構造体リテラルで前提を書けるよう、生成は最初の呼び出しまで遅らせています。
+func (r *fakeHistoryReader) ensure() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.ready {
+		return
+	}
+	r.ready = true
+
+	r.h = memio.New(memio.WithScheme(remoteio.SchemeGCS))
+	r.Store = remoteio.NewStore(r.h)
+	for _, uri := range r.paths {
+		if _, ok := r.files[uri]; ok {
+			continue
+		}
+		_ = r.h.Seed(uri, nil)
+	}
+	for uri, body := range r.files {
+		_ = r.h.Seed(uri, []byte(body))
+	}
+}
+
+func (r *fakeHistoryReader) Open(ctx context.Context, name string) (io.ReadCloser, error) {
+	r.ensure()
+
 	r.mu.Lock()
 	if r.openCount == nil {
 		r.openCount = map[string]int{}
 	}
-	r.openCount[p]++
+	r.openCount[name]++
 	r.mu.Unlock()
-	return io.NopCloser(strings.NewReader(r.files[p])), nil
+
+	return r.Store.Open(ctx, name)
 }
 
-// List は GCS の一覧を模倣します。
-//
-// 区切り文字の扱いまで写しているのは、本番の一覧が WithDelimiter に乗っているためです。
-// フェイクが prefix を無視して全件返すと、プレフィックスの絞り込みも疑似ディレクトリの
-// 組み立ても素通りしてしまい、一覧のテストが何も確かめないものになります。
-func (r *fakeHistoryReader) List(_ context.Context, prefix string, callback func(path string) error, opts ...remoteio.ListOption) error {
+func (r *fakeHistoryReader) List(ctx context.Context, name string, opts ...remoteio.ListOption) iter.Seq2[remoteio.Entry, error] {
+	r.ensure()
+
 	r.mu.Lock()
 	if r.listCount == nil {
 		r.listCount = map[string]int{}
 	}
-	r.listCount[prefix]++
+	r.listCount[name]++
 	r.mu.Unlock()
 
-	settings := remoteio.NewListSettings(opts...)
-	prefix = remoteio.ListPrefix(prefix, settings)
+	return r.Store.List(ctx, name, opts...)
+}
 
-	seen := map[string]bool{}
-	for _, p := range r.paths {
-		if !strings.HasPrefix(p, prefix) {
-			continue
-		}
-		entry := p
-		if settings.Delimiter != "" {
-			rest := strings.TrimPrefix(p, prefix)
-			if idx := strings.Index(rest, settings.Delimiter); idx >= 0 {
-				// 区切り文字より先は疑似ディレクトリへ畳まれます。
-				entry = prefix + rest[:idx] + settings.Delimiter
-			}
-		}
-		if seen[entry] {
-			continue
-		}
-		seen[entry] = true
-		if err := callback(entry); err != nil {
-			return err
-		}
-	}
-	return nil
+func (r *fakeHistoryReader) Delete(ctx context.Context, name string) error {
+	r.ensure()
+
+	r.mu.Lock()
+	r.deleted = append(r.deleted, name)
+	r.mu.Unlock()
+
+	return r.Store.Delete(ctx, name)
+}
+
+// SignURL は署名付き URL を組み立てたことにします。
+func (r *fakeHistoryReader) SignURL(_ context.Context, uri, _ string, _ time.Duration) (string, error) {
+	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
+}
+
+// Sub をライブラリの Sub へ委譲します。埋め込みから昇格した Sub をそのまま使うと、
+// スコープの土台が埋め込まれた Store になり、上の記録が素通しされます。
+func (r *fakeHistoryReader) Sub(prefix string) remoteio.Store {
+	r.ensure()
+	return remoteio.Sub(r, prefix)
 }
 
 // ListCount は指定プレフィックスに対する List 呼び出し回数を返します。
@@ -78,36 +116,10 @@ func (r *fakeHistoryReader) ListCount(prefix string) int {
 	return r.listCount[prefix]
 }
 
-func (r *fakeHistoryReader) Exists(context.Context, string) (bool, error) {
-	return true, nil
-}
-
 func (r *fakeHistoryReader) OpenCount(p string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.openCount[p]
-}
-
-type fakeHistoryWriter struct {
-	mu      sync.Mutex
-	deleted []string
-}
-
-func (w *fakeHistoryWriter) Write(context.Context, string, io.Reader, ...remoteio.WriteOption) error {
-	return nil
-}
-
-func (w *fakeHistoryWriter) Delete(_ context.Context, path string) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.deleted = append(w.deleted, path)
-	return nil
-}
-
-type fakeHistorySigner struct{}
-
-func (s fakeHistorySigner) GenerateSignedURL(_ context.Context, uri string, _ string, _ time.Duration) (string, error) {
-	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
 }
 
 type countingHistorySigner struct {
@@ -153,7 +165,7 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20, "")
 	if err != nil {
@@ -195,7 +207,7 @@ func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	history, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc")
 	if err != nil {
@@ -249,7 +261,7 @@ func TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
@@ -285,7 +297,7 @@ func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testin
 			keyframeURI: "fake-image-bytes",
 		},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: fakeHistorySigner{}, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
@@ -320,7 +332,7 @@ func TestListHistoryPageCachesMetadataAndSignsNothing(t *testing.T) {
 		},
 	}
 	signer := &countingHistorySigner{}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Signer: signer, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
 		t.Fatalf("first ListHistoryPage() error = %v", err)
@@ -339,7 +351,7 @@ func TestListHistoryPageCachesMetadataAndSignsNothing(t *testing.T) {
 func TestGetHistoryReturnsErrorWhenRepositoryMisconfigured(t *testing.T) {
 	t.Parallel()
 
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "", Reader: nil, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "", Store: nil, HistoryCache: NewHistoryCache()})
 
 	if _, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc"); err == nil {
 		t.Fatal("GetHistory() error = nil, want configuration error")
@@ -356,38 +368,28 @@ func TestDeleteHistoryDeletesJobObjects(t *testing.T) {
 		},
 		files: map[string]string{},
 	}
-	writer := &fakeHistoryWriter{}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Reader: reader, Writer: writer, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
 
 	if err := repo.DeleteHistory(context.Background(), "job-1"); err != nil {
 		t.Fatalf("DeleteHistory() error = %v", err)
 	}
-	if len(writer.deleted) != 2 {
-		t.Fatalf("deleted count = %d, want 2: %#v", len(writer.deleted), writer.deleted)
+	if len(reader.deleted) != 2 {
+		t.Fatalf("deleted count = %d, want 2: %#v", len(reader.deleted), reader.deleted)
 	}
 }
 
-// notFoundReader serves a fixed set of objects and reports os.ErrNotExist for anything else,
 // matching how remoteio's GCS reader signals a missing object.
-type notFoundReader struct {
-	files map[string]string
-}
-
-func (r notFoundReader) Open(_ context.Context, p string) (io.ReadCloser, error) {
-	content, ok := r.files[p]
-	if !ok {
-		return nil, fmt.Errorf("open %s: %w", p, os.ErrNotExist)
+// notFoundReader は、指定した内容だけを持つストアです。
+// 「まだ無い」と「読めない」を分けて扱う経路の検証に使います。
+// 未登録のオブジェクトは memio がそのまま ErrNotExist を返します。
+func notFoundReader(files map[string]string) remoteio.Store {
+	h := memio.New(memio.WithScheme(remoteio.SchemeGCS))
+	for uri, body := range files {
+		if err := h.Seed(uri, []byte(body)); err != nil {
+			panic(err)
+		}
 	}
-	return io.NopCloser(strings.NewReader(content)), nil
-}
-
-func (r notFoundReader) List(context.Context, string, func(string) error, ...remoteio.ListOption) error {
-	return nil
-}
-
-func (r notFoundReader) Exists(_ context.Context, p string) (bool, error) {
-	_, ok := r.files[p]
-	return ok, nil
+	return remoteio.NewStore(h)
 }
 
 const testUsageJobID = "video-recipe-20260618-081931-abc"
@@ -398,9 +400,9 @@ func TestGetVeoUsageReadsRecordedTally(t *testing.T) {
 	usageURI := "gs://bucket/ap-mv/veo/jobs/" + testUsageJobID + "/veo_usage.json"
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
 		BaseURI: "gs://bucket/ap-mv/veo/jobs",
-		Reader: notFoundReader{files: map[string]string{
+		Store: notFoundReader(map[string]string{
 			usageURI: `{"schema_version":1,"job_id":"` + testUsageJobID + `","model":"veo-test","calls":3,"submitted_seconds":22,"cuts":[{"cut_index":1,"calls":2,"submitted_seconds":16}]}`,
-		}},
+		}),
 		HistoryCache: NewHistoryCache(),
 	})
 
@@ -427,7 +429,7 @@ func TestGetVeoUsageTreatsMissingRecordAsNoData(t *testing.T) {
 
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
 		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Reader:       notFoundReader{files: map[string]string{}},
+		Store:        notFoundReader(map[string]string{}),
 		HistoryCache: NewHistoryCache(),
 	})
 
@@ -447,7 +449,7 @@ func TestGetVeoUsageTreatsEmptyObjectAsNoData(t *testing.T) {
 	usageURI := "gs://bucket/ap-mv/veo/jobs/" + testUsageJobID + "/veo_usage.json"
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
 		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Reader:       notFoundReader{files: map[string]string{usageURI: "  \n"}},
+		Store:        notFoundReader(map[string]string{usageURI: "  \n"}),
 		HistoryCache: NewHistoryCache(),
 	})
 
@@ -465,7 +467,7 @@ func TestGetVeoUsageRejectsInvalidJobID(t *testing.T) {
 
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
 		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Reader:       notFoundReader{files: map[string]string{}},
+		Store:        notFoundReader(map[string]string{}),
 		HistoryCache: NewHistoryCache(),
 	})
 

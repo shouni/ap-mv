@@ -2,13 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-remote-io/remoteio/memio"
 
 	"github.com/shouni/go-job-kit/jobstatus"
 
@@ -16,51 +14,28 @@ import (
 )
 
 // statusIO は書き込まれたオブジェクトをメモリに保持するテスト用の Reader/Writer です。
+// statusIO は memio を包んだストレージのフェイクです。
+// ストレージの振る舞いは memio が受け持ち、ここは書き込みの記録だけを持ちます。
 type statusIO struct {
-	objects map[string]string
+	remoteio.Store
+	h *memio.Handler
+
 	written []string
 }
 
 func newStatusIO() *statusIO {
-	return &statusIO{objects: map[string]string{}}
+	s := &statusIO{h: memio.New(memio.WithScheme(remoteio.SchemeGCS))}
+	s.Store = remoteio.NewStore(s.h)
+	return s
 }
 
-func (s *statusIO) Open(_ context.Context, path string) (io.ReadCloser, error) {
-	body, ok := s.objects[path]
-	if !ok {
-		// remoteio は未存在を os.ErrNotExist に包んで返す。fake もそれに合わせないと
-		// 「未存在」と「読めない」を取り違えたまま通ってしまう。
-		return nil, fmt.Errorf("オブジェクトが見つかりません (%s): %w", path, os.ErrNotExist)
-	}
-	return io.NopCloser(strings.NewReader(body)), nil
-}
-
-func (s *statusIO) List(context.Context, string, func(string) error, ...remoteio.ListOption) error {
-	return nil
-}
-
-func (s *statusIO) Exists(_ context.Context, path string) (bool, error) {
-	_, ok := s.objects[path]
-	return ok, nil
-}
-
-func (s *statusIO) Write(_ context.Context, path string, r io.Reader, _ ...remoteio.WriteOption) error {
-	body, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-	s.objects[path] = string(body)
-	s.written = append(s.written, path)
-	return nil
-}
-
-func (s *statusIO) Delete(_ context.Context, path string) error {
-	delete(s.objects, path)
-	return nil
+func (s *statusIO) Write(ctx context.Context, name string, r io.Reader, opts ...remoteio.WriteOption) error {
+	s.written = append(s.written, name)
+	return s.Store.Write(ctx, name, r, opts...)
 }
 
 func newStatusRepo(io *statusIO) *jobstatus.Store[domain.JobStatus] {
-	return NewJobStatusRepository(testBaseURI, io, io)
+	return NewJobStatusRepository(testBaseURI, io)
 }
 
 // 状態はジョブ出力ディレクトリ配下に置き、履歴削除（プレフィックス一括削除）で

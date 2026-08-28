@@ -33,7 +33,7 @@ type Dependencies struct {
 	VideoRunner       ports.VideoRunner
 	TaskQueue         ports.TaskQueue
 	Reader            orchestrator.ContentReader
-	Writer            remoteio.OutputWriter
+	Writer            remoteio.Writer
 	Characters        *characterkit.Characters
 	HistoryRepository ports.HistoryRepository
 	// WorkflowResolver はタスクに応じた orchestrator Workflows を解決します。

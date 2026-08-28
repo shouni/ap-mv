@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -325,7 +326,7 @@ type captureVideoCopier struct {
 	deletedURI string
 }
 
-func (c *captureVideoCopier) Copy(_ context.Context, sourceURI, targetURI string) error {
+func (c *captureVideoCopier) Copy(_ context.Context, sourceURI, targetURI string, _ ...remoteio.WriteOption) error {
 	c.sourceURI = sourceURI
 	c.targetURI = targetURI
 	return nil

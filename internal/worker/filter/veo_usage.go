@@ -100,7 +100,7 @@ func loadVeoUsage(ctx context.Context, fc *Context, uri string) *domain.VeoUsage
 }
 
 // writeVeoUsage persists the record.
-func writeVeoUsage(ctx context.Context, writer remoteio.OutputWriter, uri string, usage *domain.VeoUsage) error {
+func writeVeoUsage(ctx context.Context, writer remoteio.Writer, uri string, usage *domain.VeoUsage) error {
 	raw, err := json.MarshalIndent(usage, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal veo usage: %w", err)

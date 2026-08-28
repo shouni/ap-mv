@@ -93,7 +93,7 @@ func (r *VideoHistoryRepository) keyframeZipURI(jobID string) string {
 // KeyframeZipSignedURL returns a signed download URL for the pre-built keyframe zip.
 // Returns empty string (without error) if the zip does not exist yet.
 func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error) {
-	if r == nil || r.reader == nil || r.signer == nil {
+	if r == nil || r.store == nil {
 		return "", nil
 	}
 	// jobID はそのままオブジェクトパスへ埋め込まれるため、他の公開メソッドと同様に検証する。
@@ -102,7 +102,7 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 		return "", err
 	}
 	uri := r.keyframeZipURI(jobID)
-	exists, err := r.reader.Exists(ctx, uri)
+	exists, err := r.store.Exists(ctx, uri)
 	if err != nil {
 		return "", fmt.Errorf("check keyframe zip existence: %w", err)
 	}
@@ -129,7 +129,7 @@ func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID stri
 // fetchVideoRecipe always reads the recipe directly from storage, bypassing the cache entirely.
 // Used by single-job reads (GetHistory, DownloadKeyframes) that need the current state.
 func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
-	rc, err := r.reader.Open(ctx, r.metadataURI(jobID))
+	rc, err := r.store.Open(ctx, r.metadataURI(jobID))
 	if err != nil {
 		return domain.VideoRecipe{}, err
 	}
@@ -152,13 +152,13 @@ func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID str
 // estimate. The record is small and read once per detail view, so it is not cached; it also
 // changes while a job is still generating, which is exactly when a stale copy would mislead.
 func (r *VideoHistoryRepository) GetVeoUsage(ctx context.Context, jobID string) (*domain.VeoUsage, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil, nil
 	}
 	if err := jobid.Validate(jobID); err != nil {
 		return nil, err
 	}
-	rc, err := r.reader.Open(ctx, r.jobObjectURI(jobID, domain.VeoUsageFileName))
+	rc, err := r.store.Open(ctx, r.jobObjectURI(jobID, domain.VeoUsageFileName))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -244,20 +244,20 @@ func (r *VideoHistoryRepository) jobObjectURI(jobID, name string) string {
 }
 
 func (r *VideoHistoryRepository) signedURL(ctx context.Context, uri string) (string, error) {
-	if r.signer == nil || strings.TrimSpace(uri) == "" {
+	if r.store == nil || strings.TrimSpace(uri) == "" {
 		return "", nil
 	}
-	return r.signer.GenerateSignedURL(ctx, uri, "GET", 15*time.Minute)
+	return r.store.SignURL(ctx, uri, "GET", 15*time.Minute)
 }
 
 // listObjectsUnder は prefix 配下のオブジェクト URI を集めます。
 func (r *VideoHistoryRepository) listObjectsUnder(ctx context.Context, prefix string) ([]string, error) {
 	var paths []string
-	if err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		paths = append(paths, gcsPath)
-		return nil
-	}); err != nil {
-		return nil, err
+	for entry, err := range r.store.List(ctx, prefix) {
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, entry.URI)
 	}
 	return paths, nil
 }

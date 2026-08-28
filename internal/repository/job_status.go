@@ -16,6 +16,6 @@ import (
 //
 // ports.JobStatusStore は jobstatus.Store と同じシグネチャなので、包む型は要りません。
 // 状態ファイルは常に最新の 1 世代だけを保持し、上書きで更新します。
-func NewJobStatusRepository(baseURI string, reader remoteio.InputReader, writer remoteio.OutputWriter) *jobstatus.Store[domain.JobStatus] {
-	return jobstatus.NewStore[domain.JobStatus](reader, writer, jobstatus.UnderJobDir(baseURI))
+func NewJobStatusRepository(baseURI string, store remoteio.Store) *jobstatus.Store[domain.JobStatus] {
+	return jobstatus.NewStore[domain.JobStatus](store, jobstatus.UnderJobDir(baseURI))
 }

@@ -221,7 +221,7 @@ func joinWorkerPath(serviceURL string) (string, error) {
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
 func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(remoteio.NormalizeBucketName(c.Storage.GCSBucket), path)
+	return remoteio.BuildURI(remoteio.SchemeGCS, remoteio.NormalizeBucketName(c.Storage.GCSBucket), path)
 }
 
 // TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。

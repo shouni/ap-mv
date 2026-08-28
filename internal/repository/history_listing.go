@@ -30,10 +30,9 @@ const (
 
 // VideoHistoryRepository lists generated MV metadata from the workflow output directory.
 type VideoHistoryRepository struct {
-	baseURI      string
-	reader       remoteio.InputReader
-	writer       remoteio.OutputWriter
-	signer       remoteio.URLSigner
+	baseURI string
+	// store は読み書き・一覧・署名の窓口です。
+	store        remoteio.Store
 	historyCache *cache.TTL[domain.VideoHistory]
 	recipeCache  *cache.TTL[domain.VideoRecipe]
 	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
@@ -44,16 +43,14 @@ type VideoHistoryRepository struct {
 
 // VideoHistoryRepositoryConfig は VideoHistoryRepository の依存関係です。
 //
-// reader / writer / signer は用途が近く、位置引数だと取り違えても型が同じ方向へ通って
-// しまう箇所があるため、名前で受けます。
+// 依存を名前で受けるのは、位置引数だと取り違えても型が同じ方向へ通ってしまう
+// 箇所があるためです。
 type VideoHistoryRepositoryConfig struct {
 	// BaseURI は履歴を走査する起点です（末尾のスラッシュは正規化します）。
 	BaseURI string
-	Reader  remoteio.InputReader
-	// Writer は履歴の削除・更新に使います。読み取り専用の用途では nil を許容します。
-	Writer remoteio.OutputWriter
-	// Signer は再生用の署名付き URL を発行します。発行しない用途では nil を許容します。
-	Signer remoteio.URLSigner
+	// Store は読み書き・一覧・署名の窓口です。
+	// 読み取り専用の用途でも 1 つで足ります。
+	Store remoteio.Store
 	// HistoryCache は履歴メタデータのキャッシュです。nil なら既定の TTL キャッシュを作ります。
 	HistoryCache *cache.TTL[domain.VideoHistory]
 }
@@ -66,9 +63,7 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 	}
 	return &VideoHistoryRepository{
 		baseURI:      strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
-		reader:       cfg.Reader,
-		writer:       cfg.Writer,
-		signer:       cfg.Signer,
+		store:        cfg.Store,
 		historyCache: historyCache,
 		recipeCache:  NewVideoRecipeCache(),
 		jobIDCache:   NewJobIDListCache(),
@@ -91,7 +86,7 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 // フォールバック値（ジョブ ID のみの行）として一覧に並びます。生成に失敗したジョブが
 // 一覧から完全に消えるより、行として見えているほうが追跡できるためです。
 func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
-	jobIDs, err := joblist.Collect(ctx, r.reader, r.baseURI,
+	jobIDs, err := joblist.Collect(ctx, r.store, r.baseURI,
 		joblist.WithKeep(func(jobID string) bool {
 			return !strings.HasPrefix(jobID, regenKeyframePrefix)
 		}),
@@ -110,7 +105,7 @@ func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, e
 // 先に全ジョブのメタデータを読みます。下書きが別プレフィックスだった頃も一覧は
 // そのプレフィックスの全走査だったので、コストは同等です。
 func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return domain.VideoHistoryPage{}, nil
 	}
 	jobIDs, err := r.listJobIDs(ctx, jobIDListCacheKey, r.collectJobIDs)
@@ -194,7 +189,7 @@ func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string)
 // and confusing (and, under multiple running instances, cache invalidation from the worker
 // instance that ran the job can't reach every other instance's in-memory cache anyway).
 func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return domain.VideoHistoryDetail{}, errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {

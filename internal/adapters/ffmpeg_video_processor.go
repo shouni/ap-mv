@@ -28,7 +28,7 @@ const defaultFFmpegBinary = "ffmpeg"
 // ap-mv の中で唯一、動画バイナリ処理（フレーム抽出・結合）を担う境界です。
 type FFmpegVideoProcessor struct {
 	Reader orchestrator.ContentReader
-	Writer remoteio.OutputWriter
+	Writer remoteio.Writer
 	// Binary は ffmpeg 実行ファイルのパスです。空の場合は PATH 上の "ffmpeg" を使います。
 	Binary string
 }
@@ -36,7 +36,7 @@ type FFmpegVideoProcessor struct {
 var _ ports.VideoProcessor = (*FFmpegVideoProcessor)(nil)
 
 // NewFFmpegVideoProcessor は FFmpegVideoProcessor を初期化します。
-func NewFFmpegVideoProcessor(reader orchestrator.ContentReader, writer remoteio.OutputWriter) *FFmpegVideoProcessor {
+func NewFFmpegVideoProcessor(reader orchestrator.ContentReader, writer remoteio.Writer) *FFmpegVideoProcessor {
 	return &FFmpegVideoProcessor{Reader: reader, Writer: writer}
 }
 
