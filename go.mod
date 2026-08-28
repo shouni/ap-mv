@@ -3,7 +3,6 @@ module github.com/shouni/ap-mv
 go 1.27
 
 require (
-	cloud.google.com/go/storage v1.65.1
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
@@ -12,12 +11,12 @@ require (
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-gemini-client v1.21.0
 	github.com/shouni/go-http-kit v1.10.0
-	github.com/shouni/go-job-kit v1.2.0
+	github.com/shouni/go-job-kit v1.3.0
 	github.com/shouni/go-notify v1.3.0
 	github.com/shouni/go-prompt-kit v1.7.0
-	github.com/shouni/go-remote-io v1.10.1
-	github.com/shouni/go-utils v1.7.0
-	github.com/shouni/go-veo-orchestrator v1.13.1
+	github.com/shouni/go-remote-io v1.11.0
+	github.com/shouni/go-utils v1.7.1
+	github.com/shouni/go-veo-orchestrator v1.14.0
 	github.com/shouni/netarmor v1.4.0
 	golang.org/x/sync v0.22.0
 )
@@ -31,6 +30,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.13.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
+	cloud.google.com/go/storage v1.65.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.60.0 // indirect
