@@ -233,7 +233,7 @@ ap-mv/
 └── internal/
     ├── adapters/           # 外部サービス連携（Vertex AI Veo adapter, Slack, ffmpeg）
     │   └── prompt/         # Gemini へ送るプロンプト組み立て（台本・キーフレーム）
-    ├── app/                # DI container（RemoteIO は remoteio.Bundle の別名）
+    ├── app/                # DI container（Storage は remoteio.Factory、Store はそこから取り出した窓口）
     ├── builder/            # config から container / handlers / workflow / pipeline を構築（配線のみ）
     ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
     ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
