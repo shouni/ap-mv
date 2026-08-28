@@ -13,6 +13,8 @@ import (
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // findHistoryCutByIndex returns the cut matching cutIndex, or false if none matches.
@@ -80,12 +82,12 @@ func (h *Handler) applySeedOverride(w http.ResponseWriter, r *http.Request, task
 	}
 	characterID = strings.TrimSpace(characterID)
 	if characterID == "" {
-		writeError(w, r, http.StatusBadRequest, "no character to apply a seed override to")
+		negotiate.Error(w, r, http.StatusBadRequest, "no character to apply a seed override to")
 		return false
 	}
 	seed, err := strconv.ParseInt(seedStr, 10, 64)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid seed")
+		negotiate.Error(w, r, http.StatusBadRequest, "invalid seed")
 		return false
 	}
 	if current := h.CharacterOptions.seed(characterID); current == nil || *current != seed {
@@ -100,16 +102,16 @@ func (h *Handler) applySeedOverride(w http.ResponseWriter, r *http.Request, task
 // failure it writes the appropriate error response itself and returns ok=false.
 func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request, jobID string) (domain.VideoHistoryDetail, bool) {
 	if h.HistoryRepository == nil {
-		writeError(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
+		negotiate.Error(w, r, http.StatusInternalServerError, "history storage adapter is not configured")
 		return domain.VideoHistoryDetail{}, false
 	}
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		negotiate.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return domain.VideoHistoryDetail{}, false
 	}
 	if strings.TrimSpace(history.StorageURI) == "" {
-		writeError(w, r, http.StatusInternalServerError, "recipe storage URI is not available")
+		negotiate.Error(w, r, http.StatusInternalServerError, "recipe storage URI is not available")
 		return domain.VideoHistoryDetail{}, false
 	}
 	return history, true
@@ -121,7 +123,7 @@ func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request,
 func mintJobID(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
 	jobID, err := jobid.New(prefix)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, err.Error())
+		negotiate.Error(w, r, http.StatusInternalServerError, err.Error())
 		return "", false
 	}
 	return jobID, true
@@ -172,7 +174,7 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -181,7 +183,7 @@ func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Reque
 	}
 	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
 	if !ok {
-		writeError(w, r, http.StatusNotFound, "cut not found")
+		negotiate.Error(w, r, http.StatusNotFound, "cut not found")
 		return
 	}
 	newJobID, ok := mintJobID(w, r, "regen-keyframe")
@@ -252,7 +254,7 @@ func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.
 func (h *Handler) PostRegenerateSectionKeyframes(w http.ResponseWriter, r *http.Request) {
 	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -261,11 +263,11 @@ func (h *Handler) PostRegenerateSectionKeyframes(w http.ResponseWriter, r *http.
 	}
 	group, ok := findHistorySectionGroup(history, sectionIndex)
 	if !ok {
-		writeError(w, r, http.StatusNotFound, "section not found")
+		negotiate.Error(w, r, http.StatusNotFound, "section not found")
 		return
 	}
 	if len(group.Cuts) == 0 {
-		writeError(w, r, http.StatusBadRequest, "section has no cuts to regenerate")
+		negotiate.Error(w, r, http.StatusBadRequest, "section has no cuts to regenerate")
 		return
 	}
 	newJobID, ok := mintJobID(w, r, "regen-section")
@@ -309,7 +311,7 @@ func sectionCharacterID(group domain.VideoHistorySectionGroup) string {
 func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -341,7 +343,7 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -350,7 +352,7 @@ func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request)
 	}
 	// 投入前に存在確認しておく。ここで弾かないと、失敗したジョブとしてしか現れない。
 	if _, found := findHistoryCutByIndex(history.Cuts, cutIndex); !found {
-		writeError(w, r, http.StatusBadRequest, "cut not found in this job")
+		negotiate.Error(w, r, http.StatusBadRequest, "cut not found in this job")
 		return
 	}
 	newJobID, ok := mintJobID(w, r, "regen-video")
@@ -378,7 +380,7 @@ func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request)
 func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -388,7 +390,7 @@ func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Re
 
 	command, sectionIndex, err := resolveHistoryGenerationTask(strings.TrimSpace(r.FormValue("target")), len(history.Sections))
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	task := &domain.Task{

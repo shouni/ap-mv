@@ -10,6 +10,8 @@ import (
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // PostSectionVideo は、指定セクションのカットだけを「キーフレーム → 動画」の順に生成し、
@@ -26,7 +28,7 @@ import (
 func (h *Handler) PostSectionVideo(w http.ResponseWriter, r *http.Request) {
 	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
 	if err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)
@@ -35,12 +37,12 @@ func (h *Handler) PostSectionVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	group, ok := findHistorySectionGroup(history, sectionIndex)
 	if !ok {
-		writeError(w, r, http.StatusNotFound, "section not found")
+		negotiate.Error(w, r, http.StatusNotFound, "section not found")
 		return
 	}
 	// 投入前に確認しておく。ここで弾かないと、何も生成しないまま失敗したジョブとしてしか現れない。
 	if len(group.Cuts) == 0 {
-		writeError(w, r, http.StatusBadRequest, "section has no cuts to generate")
+		negotiate.Error(w, r, http.StatusBadRequest, "section has no cuts to generate")
 		return
 	}
 	// タスク自身の JobID は Cloud Tasks のタスク名を衝突させないため新規に採番します。
@@ -70,7 +72,7 @@ func (h *Handler) PostSectionVideo(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PostFinalizeVideo(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	history, ok := h.loadHistoryForMutation(w, r, jobID)

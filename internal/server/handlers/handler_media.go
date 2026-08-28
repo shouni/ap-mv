@@ -12,6 +12,8 @@ import (
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
+
+	"github.com/shouni/gcp-kit/negotiate"
 )
 
 // 画面が指すのは、この 4 つの同一オリジンのパスです。GCS の署名付き URL は HTML に出さず、
@@ -127,36 +129,36 @@ func (h *Handler) redirectCutAsset(w http.ResponseWriter, r *http.Request, pick 
 // 署名すると、ジョブ ID さえ有効なら任意のオブジェクトの URL を発行できてしまいます。
 func (h *Handler) redirectJobAsset(w http.ResponseWriter, r *http.Request, pick func(domain.VideoHistoryDetail) (string, error)) {
 	if h.HistoryRepository == nil {
-		writeError(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
+		negotiate.Error(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
 		return
 	}
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	detail, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to load history for asset redirect", "job_id", jobID, "error", err)
-		writeError(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		negotiate.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
 	uri, err := pick(detail)
 	if err != nil {
-		writeError(w, r, http.StatusNotFound, err.Error())
+		negotiate.Error(w, r, http.StatusNotFound, err.Error())
 		return
 	}
 	if strings.TrimSpace(uri) == "" {
-		writeError(w, r, http.StatusNotFound, "asset is not available for this job")
+		negotiate.Error(w, r, http.StatusNotFound, "asset is not available for this job")
 		return
 	}
 
 	signedURL, err := h.HistoryRepository.SignedObjectURL(r.Context(), uri)
 	if err != nil || strings.TrimSpace(signedURL) == "" {
 		slog.ErrorContext(r.Context(), "failed to sign asset URL", "job_id", jobID, "uri", uri, "error", err)
-		writeError(w, r, http.StatusInternalServerError, "failed to build the asset URL")
+		negotiate.Error(w, r, http.StatusInternalServerError, "failed to build the asset URL")
 		return
 	}
 
