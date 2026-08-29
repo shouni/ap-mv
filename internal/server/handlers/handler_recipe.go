@@ -12,7 +12,7 @@ import (
 
 	"github.com/shouni/ap-mv/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // homeRecentJobs はホームに表示する直近ジョブ件数です。
@@ -113,7 +113,7 @@ func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
 // 共通実装です。2 つのハンドラは定数 2 つを除いて byte 単位で同一でした。
 func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jobPrefix string, command domain.TaskCommand) {
 	if err := r.ParseForm(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid form")
+		respond.Error(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	jobID, ok := mintJobID(w, r, jobPrefix)
@@ -122,7 +122,7 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 	}
 	sourceURL, err := h.musicRecipeSourceURL(r)
 	if err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -167,7 +167,7 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 // このエンドポイントは ap-mcp 等の M2M 呼び出し（JSON レスポンス）で使われ続けています。
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid form")
+		respond.Error(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	var recipe *domain.MusicRecipe
@@ -176,7 +176,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if recipeJSON != "" {
 		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
 		if err != nil {
-			negotiate.Error(w, r, http.StatusBadRequest, "invalid recipe json: "+err.Error())
+			respond.Error(w, r, http.StatusBadRequest, "invalid recipe json: "+err.Error())
 			return
 		}
 		recipe = parsedRecipe

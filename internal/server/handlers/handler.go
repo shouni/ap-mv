@@ -13,7 +13,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // Handler は、Web UIのハンドラーが共有する依存関係とフォーム選択肢を保持します。
@@ -180,17 +180,17 @@ func pageFromQuery(r *http.Request) int {
 // enqueue validates and submits a task to the configured queue.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
-			negotiate.Error(w, r, http.StatusBadGateway, err.Error())
+			respond.Error(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
 	h.recordQueuedStatus(r, task)
-	if !negotiate.WantsJSON(w, r) {
+	if !respond.WantsJSON(w, r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)
 		h.renderPage(w, r, PageData{
@@ -200,7 +200,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 		}, "queued.html")
 		return
 	}
-	negotiate.JSON(w, r, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
+	respond.JSON(w, r, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
 // pageScripts は、ページごとに追加で読み込む JavaScript です。

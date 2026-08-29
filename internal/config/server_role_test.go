@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-serve-kit/serverrole"
 )
 
 // newRoleTestConfig は、役割ごとの検証だけを見たいときの土台になる設定を返します。
