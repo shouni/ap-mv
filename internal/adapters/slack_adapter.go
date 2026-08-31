@@ -80,17 +80,15 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) *not
 
 	writeSlackRequestSummary(body, req)
 
-	// 下書き（video_recipe_draft）は video_music_meta.json を書かないため履歴に現れません。
-	// 履歴詳細のリンクを出すと開いた先が 404/500 になるので、成果物が実際に並ぶ一覧へ誘導します。
-	if req.Command == string(domain.CommandVideoRecipeDraft) {
-		body.Link("Drafts", s.draftsURL(), req.JobID)
-	} else {
-		historyJobID := req.HistoryJobID
-		if historyJobID == "" {
-			historyJobID = req.JobID
-		}
-		body.Link("History Detail", s.historyDetailURL(historyJobID), historyJobID)
+	// 台本のみのジョブ（video_recipe_draft）も完成ジョブと同じ video_music_meta.json を
+	// 書くので、行き先は同じ履歴詳細です。以前は専用の /drafts 一覧へ送っていましたが、
+	// 下書きが別プレフィックスをやめて普通のジョブになった時点でそのルートは消えており、
+	// 台本のみのジョブの完了通知だけがリンク切れになっていました。
+	historyJobID := req.HistoryJobID
+	if historyJobID == "" {
+		historyJobID = req.JobID
 	}
+	body.Link("History Detail", s.historyDetailURL(historyJobID), historyJobID)
 
 	writeSlackRequestGenerationMetadata(body, req)
 
@@ -125,12 +123,6 @@ func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) 
 	body.URIField("Source", req.SourceURL).
 		URIField("Recipe", req.RecipeURL).
 		URIField("Audio", req.AudioURL)
-}
-
-// draftsURL は下書き一覧のURLを返します。下書きには専用の詳細画面が無いため
-// （JSON は ap-mcp 用、ブラウザは一覧へリダイレクト）、リンク先は一覧そのものです。
-func (s *SlackAdapter) draftsURL() string {
-	return notify.JoinURL(s.serviceURL, "/drafts")
 }
 
 // historyDetailURL は履歴詳細ページのURLを返します。

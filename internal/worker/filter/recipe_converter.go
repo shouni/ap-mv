@@ -63,7 +63,7 @@ func originalJobOutputPath(recipeURL string) string {
 	if recipeURL == "" {
 		return ""
 	}
-	bucket, objPath, err := remoteio.ParseRemoteURI(recipeURL)
+	bucket, objPath, err := remoteio.ParseBucketURI(remoteio.SchemeGCS, recipeURL)
 	if err != nil {
 		return ""
 	}
@@ -71,7 +71,7 @@ func originalJobOutputPath(recipeURL string) string {
 	if dir == "." || dir == "" || dir == "/" {
 		return ""
 	}
-	return remoteio.BuildGCSURI(bucket, dir) + "/"
+	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, dir) + "/"
 }
 
 // applyLyricsToVideoRecipeCuts は domain.ApplyLyricsToVideoRecipeCuts の filter 内ラッパーです。

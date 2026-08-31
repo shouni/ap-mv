@@ -42,8 +42,4 @@ type HistoryRepository interface {
 	// that predate the record or never reached video generation — a missing record is a normal
 	// state, not an error, and callers fall back to the recipe-derived estimate.
 	GetVeoUsage(ctx context.Context, jobID string) (*domain.VeoUsage, error)
-	// InvalidateJob clears cached history/recipe metadata for jobID, so a subsequent GetHistory
-	// reads fresh data from storage instead of a stale cached copy (e.g. after a regenerate/edit
-	// job writes new metadata back to jobID from a worker running in the same process).
-	InvalidateJob(jobID string)
 }

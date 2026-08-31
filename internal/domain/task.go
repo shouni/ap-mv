@@ -78,6 +78,21 @@ const (
 	CommandVideoGenContinuation TaskCommand = "video_gen_continuation"
 )
 
+// ListedCommand は、ジョブ状態に記録するコマンドを返します。
+//
+// 継続タスクは Command を video_gen_continuation で上書きするため、そのまま記録すると
+// 継続を挟んだジョブだけ元のコマンドを失います。履歴一覧はコマンドで絞り込むので、
+// 失うと video_recipe_create のジョブが継続を 1 回挟んだ時点で一覧から消えます。
+func (t *Task) ListedCommand() TaskCommand {
+	if t == nil {
+		return ""
+	}
+	if t.OriginCommand != "" {
+		return t.OriginCommand
+	}
+	return t.Command
+}
+
 // Task は、キューに投入される動画生成タスク1件分のペイロードです。
 type Task struct {
 	JobID   string      `json:"job_id"`

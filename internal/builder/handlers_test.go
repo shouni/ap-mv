@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-serve-kit/serverrole"
 
 	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/worker"

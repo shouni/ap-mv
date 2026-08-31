@@ -6,9 +6,9 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは VideoRecipe から履歴表示用モデルへの純粋な変換を集めています。
-// ストレージ・キャッシュ・署名URLへのアクセスは history_storage.go、
-// 公開エントリポイントは history_listing.go を参照してください。
+// このファイルは、ジョブ状態と VideoRecipe から履歴表示用モデルへの変換を集めています。
+// ストレージと署名 URL へのアクセスは history_storage.go、公開エントリポイントは
+// history_listing.go を参照してください。
 
 // historySectionsFromRecipe converts recipe sections into display-ready entries with
 // normalized time ranges, so the short-video form can label each section option.
@@ -54,36 +54,49 @@ func sectionCutsAllGenerated(cuts []domain.VideoCut, start, end float64) bool {
 	return found
 }
 
-func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
-	progress := domain.NewJobProgress(recipe.Cuts)
-	history := domain.VideoHistory{
-		JobID:         jobID,
-		Title:         strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
-		Mood:          strings.TrimSpace(recipe.MusicRecipe.Mood),
-		Tempo:         recipe.MusicRecipe.Tempo,
-		CreatedAt:     formatHistoryCreatedAt(jobID),
-		VisualMode:    strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
-		CutCount:      len(recipe.Cuts),
-		StorageURI:    metadataURI,
-		Generated:     progress.IsCompleted(),
-		Progress:      progress,
-		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
-		AspectRatio:   strings.TrimSpace(recipe.AspectRatio),
-		// 秒数はレシピだけで確定するのでここで入れる。単価を掛けるのは表示側
-		// （設定から解決するため、キャッシュに単価を焼き込まない）。
-		GeneratedSeconds: domain.GeneratedSecondsOfCuts(recipe.Cuts),
+// videoHistoryFromStatus は、ジョブ状態のドキュメントから一覧 1 行分を組み立てます。
+//
+// 保存先（メタデータ・ZIP）と作成日時はジョブ ID から導けるので、ドキュメントには
+// 写していません。導ける値を写すと、置き場を変えたときに古い行だけが古いパスを
+// 指したまま残ります。
+func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus) domain.VideoHistory {
+	jobID := strings.TrimSpace(status.JobID)
+	title := strings.TrimSpace(status.Title)
+	if title == "" {
+		title = jobID
 	}
-	if history.Title == "" {
-		history.Title = jobID
+	return domain.VideoHistory{
+		JobID:            jobID,
+		Title:            title,
+		State:            status.State,
+		Error:            strings.TrimSpace(status.Error),
+		Mood:             strings.TrimSpace(status.Mood),
+		Tempo:            status.Tempo,
+		CreatedAt:        formatHistoryCreatedAt(jobID),
+		VisualMode:       strings.TrimSpace(status.VisualMode),
+		CutCount:         status.Progress.TotalCuts,
+		StorageURI:       r.metadataURI(jobID),
+		Generated:        status.Progress.IsCompleted(),
+		Progress:         status.Progress,
+		KeyframeZipURI:   r.keyframeZipURI(jobID),
+		FinalVideoURL:    strings.TrimSpace(status.FinalVideoURL),
+		AspectRatio:      strings.TrimSpace(status.AspectRatio),
+		GeneratedSeconds: status.GeneratedSeconds,
 	}
-	return history
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+// videoHistoryFromRecipe は、保存済みレシピから詳細 1 件分の見出しを組み立てます。
+//
+// レシピから見出しへの写しは domain.JobStatus.ApplyVideoRecipe が唯一の定義元で、ここは
+// それを通してから一覧と同じ変換にかけます。以前は一覧と詳細がそれぞれレシピを読み替えて
+// おり、片方に項目を足してもコンパイルは通るため、詳細にだけ出る項目が生まれていました。
+// 一覧の見出しが状態ドキュメントの写しになった今は、その食い違いが画面に出ます。
+//
+// State と Error は成果物からは分からないので、ここでは空のままです（GetHistory が
+// 状態ドキュメントから補います）。
+func (r *VideoHistoryRepository) videoHistoryFromRecipe(jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
+	var status domain.JobStatus
+	status.JobID = jobID
+	status.ApplyVideoRecipe(&recipe)
+	return r.videoHistoryFromStatus(status)
 }

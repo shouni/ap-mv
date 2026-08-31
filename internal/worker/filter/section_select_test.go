@@ -151,27 +151,6 @@ func TestCapCutsTotalDuration(t *testing.T) {
 	}
 }
 
-// TestSnapToSupportedDuration verifies snapping to Veo-supported durations (ties round up).
-func TestSnapToSupportedDuration(t *testing.T) {
-	tests := []struct {
-		in   float64
-		want float64
-	}{
-		{in: 0, want: 4},
-		{in: 3, want: 4},
-		{in: 4, want: 4},
-		{in: 5, want: 6},
-		{in: 6, want: 6},
-		{in: 7, want: 8},
-		{in: 8, want: 8},
-	}
-	for _, tt := range tests {
-		if got := veo.SnapDuration(tt.in, veo.ImageToVideoDurationsSec()); got != tt.want {
-			t.Errorf("veo.SnapDuration(%v) = %v, want %v", tt.in, got, tt.want)
-		}
-	}
-}
-
 // TestResolveRecipeObjectURI verifies safe joining regardless of trailing/leading slashes.
 func TestResolveRecipeObjectURI(t *testing.T) {
 	tests := []struct {

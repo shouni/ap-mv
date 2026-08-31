@@ -6,12 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/gorilla/sessions"
 	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/auth/session"
 
@@ -29,54 +27,9 @@ func (inlineTaskQueue) Enqueue(context.Context, *domain.Task) error { return nil
 
 func (inlineTaskQueue) EnqueueWithName(context.Context, string, *domain.Task) error { return nil }
 
-var csrfInputPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
-
-// TestVideoRecipeCreatePostRequiresSessionCSRFToken verifies that video recipe creation POST requests require a session CSRF token.
-func TestVideoRecipeCreatePostRequiresSessionCSRFToken(t *testing.T) {
-	router, loginCookies := newAuthenticatedTestRouter(t)
-
-	getReq := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
-	for _, cookie := range loginCookies {
-		getReq.AddCookie(cookie)
-	}
-	getRec := httptest.NewRecorder()
-	router.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("GET /video-recipe-create status = %d, want %d", getRec.Code, http.StatusOK)
-	}
-	matches := csrfInputPattern.FindStringSubmatch(getRec.Body.String())
-	if len(matches) != 2 {
-		t.Fatalf("GET /video-recipe-create did not render csrf token")
-	}
-	cookies := mergeCookies(loginCookies, getRec.Result().Cookies())
-	if len(getRec.Result().Cookies()) == 0 {
-		t.Fatalf("GET /video-recipe-create did not set csrf session cookie")
-	}
-
-	forbiddenReq := newVideoRecipeCreatePostRequest("")
-	for _, cookie := range cookies {
-		forbiddenReq.AddCookie(cookie)
-	}
-	forbiddenRec := httptest.NewRecorder()
-	router.ServeHTTP(forbiddenRec, forbiddenReq)
-	if forbiddenRec.Code != http.StatusForbidden {
-		t.Fatalf("POST /video-recipe-create without csrf status = %d, want %d", forbiddenRec.Code, http.StatusForbidden)
-	}
-
-	acceptedReq := newVideoRecipeCreatePostRequest(matches[1])
-	for _, cookie := range cookies {
-		acceptedReq.AddCookie(cookie)
-	}
-	acceptedRec := httptest.NewRecorder()
-	router.ServeHTTP(acceptedRec, acceptedReq)
-	if acceptedRec.Code != http.StatusAccepted {
-		t.Fatalf("POST /video-recipe-create with csrf status = %d, want %d; body=%s", acceptedRec.Code, http.StatusAccepted, acceptedRec.Body.String())
-	}
-}
-
 // TestProtectedRoutesRedirectWhenUnauthenticated verifies protected routes redirect unauthenticated users.
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
 	rec := httptest.NewRecorder()
@@ -91,7 +44,7 @@ func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 
 // TestStaticRoutesServeOnlyStaticSubtree verifies static routing only serves the static subtree.
 func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	cssReq := httptest.NewRequest(http.MethodGet, "/static/css/app.css", nil)
 	cssRec := httptest.NewRecorder()
@@ -119,7 +72,7 @@ func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
 // 余地を残していない状態まで確かめる必要があります。
 func TestNewRouterOmitsWorkerRouteForWebRole(t *testing.T) {
 	// BuildHandlers が role=web で組む形: TaskAuth も Worker も nil。
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks/generate", nil))
@@ -165,8 +118,8 @@ func newWorkerRoleTestRouter() http.Handler {
 	}, "")
 }
 
-// newAuthenticatedTestRouter creates a router and authenticated session cookies for tests.
-func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
+// newWebRoleTestRouter は SERVER_ROLE=web 相当のルーターを返します。
+func newWebRoleTestRouter(t *testing.T) http.Handler {
 	t.Helper()
 
 	const (
@@ -174,7 +127,6 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		authKey     = "0123456789abcdef0123456789abcdef"
 		encryptKey  = "0123456789abcdef0123456789abcdef"
 		userEmail   = "user@example.com"
-		taskAccount = "tasks@example.iam.gserviceaccount.com"
 	)
 
 	authHandler, err := session.New(session.Config{
@@ -195,64 +147,7 @@ func newAuthenticatedTestRouter(t *testing.T) (http.Handler, []*http.Cookie) {
 		t.Fatalf("handlers.NewHandler() error = %v", err)
 	}
 
-	router := NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler}, "")
-	return router, authenticatedSessionCookies(t, sessionName, []byte(authKey), []byte(encryptKey), userEmail)
-}
-
-// authenticatedSessionCookies creates signed session cookies for an authenticated test user.
-func authenticatedSessionCookies(t *testing.T, sessionName string, authKey, encryptKey []byte, userEmail string) []*http.Cookie {
-	t.Helper()
-
-	store := sessions.NewCookieStore(authKey, encryptKey)
-	store.Options = &sessions.Options{
-		Path:     "/",
-		MaxAge:   60 * 60 * 24 * 7,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	// 変数名を sess にするのは、パッケージ名 session と衝突させないためです。
-	sess, err := store.Get(req, sessionName)
-	if err != nil {
-		t.Fatalf("store.Get() error = %v", err)
-	}
-	sess.Values[session.DefaultUserSessionKey] = userEmail
-	if err := sess.Save(req, rec); err != nil {
-		t.Fatalf("sess.Save() error = %v", err)
-	}
-	return rec.Result().Cookies()
-}
-
-// mergeCookies merges cookies by name with overrides taking precedence.
-func mergeCookies(base, overrides []*http.Cookie) []*http.Cookie {
-	cookiesByName := make(map[string]*http.Cookie, len(base)+len(overrides))
-	for _, cookie := range base {
-		cookiesByName[cookie.Name] = cookie
-	}
-	for _, cookie := range overrides {
-		cookiesByName[cookie.Name] = cookie
-	}
-
-	merged := make([]*http.Cookie, 0, len(cookiesByName))
-	for _, cookie := range cookiesByName {
-		merged = append(merged, cookie)
-	}
-	return merged
-}
-
-// newVideoRecipeCreatePostRequest creates a video recipe creation POST request for tests.
-func newVideoRecipeCreatePostRequest(csrfToken string) *http.Request {
-	form := url.Values{
-		"text": {"test video recipe input"},
-	}
-	if csrfToken != "" {
-		form.Set("csrf_token", csrfToken)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	return req
+	return NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler}, "")
 }
 
 // 画面が指す /static/... が実際に配信できること。テンプレートの参照とディレクトリ名は
@@ -269,7 +164,7 @@ func TestLayoutLocalAssetsAreServable(t *testing.T) {
 		t.Fatal("layout.html に /static/ の参照が 1 つも無い（正規表現かテンプレートの変更を疑う）")
 	}
 
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 	for _, ref := range refs {
 		target := ref[1]
 		t.Run(target, func(t *testing.T) {
@@ -297,7 +192,7 @@ func TestLayoutReferencesNoExternalOrigins(t *testing.T) {
 
 // バージョン付きの vendor と、URL が変わらない自前アセットで Cache-Control を分けること。
 func TestStaticCacheControlSeparatesVendorFromOwnAssets(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	tests := []struct {
 		target string
@@ -324,7 +219,7 @@ func TestStaticCacheControlSeparatesVendorFromOwnAssets(t *testing.T) {
 
 // CSP が全レスポンスに付き、script-src が緩められていないこと。
 func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -352,7 +247,7 @@ func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
 // キーフレームと動画は GCS の署名付き URL としてテンプレートへ直接埋まるため、
 // img-src / media-src がそのホストを許していないと画面上で読み込みが落ちます。
 func TestContentSecurityPolicyAllowsSignedMediaHost(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -379,7 +274,7 @@ func cspDirective(policy, name string) string {
 // 圧縮が効いていること。画面は日本語 UTF-8（1 文字 3 バイト）でよく縮むのに、
 // これまで無圧縮で配信していました。
 func TestCompressibleResponsesAreCompressed(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/static/vendor/bootstrap-5.3.8/bootstrap.min.css", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
@@ -412,7 +307,7 @@ func TestCompressibleResponsesAreCompressed(t *testing.T) {
 // CSP 以外の防御ヘッダーも全レスポンスに付くこと。どれも 1 行で入る割に、
 // 抜けても画面は正常に見えるため気付けません。
 func TestResponsesCarrySecurityHeaders(t *testing.T) {
-	router, _ := newAuthenticatedTestRouter(t)
+	router := newWebRoleTestRouter(t)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
 

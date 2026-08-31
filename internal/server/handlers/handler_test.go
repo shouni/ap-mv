@@ -97,8 +97,6 @@ func (r fakeHistoryRepository) SignedObjectURL(_ context.Context, uri string) (s
 	return "https://signed.example/object?src=" + uri, nil
 }
 
-func (r fakeHistoryRepository) InvalidateJob(string) {}
-
 // TestLatestVideoForHomePrefersFinalVideo verifies that when a job's chain-finalize result
 // (FinalVideoURL) is available, it is used instead of scanning cuts backward — scanning the
 // last cut alone would show only the last chain's fragment for jobs with more than one
@@ -198,6 +196,9 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
+		// CSRF トークンはテンプレートが出す側の責務。検証は gcp-kit の
+		// セッションミドルウェアが持つので、ここは埋め込み漏れだけを見ます。
+		`name="csrf_token" value="token"`,
 		`name="music_job_id"`,
 		`name="text_model"`,
 		`value="gemini-default" selected`,

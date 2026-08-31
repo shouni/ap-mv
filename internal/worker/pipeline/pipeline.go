@@ -33,7 +33,7 @@ type Dependencies struct {
 	VideoRunner       ports.VideoRunner
 	TaskQueue         ports.TaskQueue
 	Reader            orchestrator.ContentReader
-	Writer            remoteio.OutputWriter
+	Writer            remoteio.Writer
 	Characters        *characterkit.Characters
 	HistoryRepository ports.HistoryRepository
 	// WorkflowResolver はタスクに応じた orchestrator Workflows を解決します。
@@ -174,7 +174,7 @@ func (r *Runner) recordOutcome(
 		statusCtx, cancel := statusContext(ctx)
 		defer cancel()
 
-		status.markFailed(statusCtx, task, cause)
+		status.markFailed(statusCtx, task, cause, resultVideoRecipe(result))
 		r.notifyError(ctx, cause, req)
 		return cause
 
@@ -189,10 +189,19 @@ func (r *Runner) recordOutcome(
 		defer cancel()
 
 		// 記録 → 通知の順。記録できていないジョブの成功を人に知らせない。
-		status.markSucceeded(statusCtx, task, req)
+		status.markSucceeded(statusCtx, task, req, resultVideoRecipe(result))
 		r.notifyComplete(ctx, req)
 		return nil
 	}
+}
+
+// resultVideoRecipe は、実行後のレシピを取り出します。フィルター列が途中で落ちた場合は
+// nil になり、見出しは前回の記録のままになります。
+func resultVideoRecipe(result *runResult) *domain.VideoRecipe {
+	if result == nil {
+		return nil
+	}
+	return result.videoRecipe
 }
 
 // Close は Runner が保持する実行時リソースを解放します。

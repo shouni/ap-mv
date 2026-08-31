@@ -7,10 +7,10 @@ import (
 
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/adapters"
-	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -31,13 +31,13 @@ type pipelineExternals struct {
 func buildPipeline(
 	ctx context.Context,
 	cfg *config.Config,
-	rio *app.RemoteIO,
+	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 	aiClient gemini.Model,
 	externals pipelineExternals,
 ) (*pipeline.Runner, error) {
-	workflows, err := buildWorkflow(ctx, cfg, rio, httpClient, videoRunner, aiClient)
+	workflows, err := buildWorkflow(ctx, cfg, store, httpClient, videoRunner, aiClient)
 	if err != nil {
 		return nil, err
 	}
@@ -50,17 +50,17 @@ func buildPipeline(
 		TaskQueue:         externals.taskQueue,
 		Characters:        characters,
 		HistoryRepository: externals.historyRepository,
-		WorkflowResolver:  newWorkflowResolver(cfg, rio, httpClient, videoRunner, aiClient, workflows),
+		WorkflowResolver:  newWorkflowResolver(cfg, store, httpClient, videoRunner, aiClient, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
-		Timeout:           cfg.AI.PipelineTimeout,
+		Timeout:           cfg.Tasks.PipelineTimeout,
 		JobStatus:         externals.jobStatus,
 	}
 	planner := &pipeline.DefaultPlanner{UsePreviousVideo: cfg.AI.VeoUsePreviousVideo}
 	deps.Planner = planner
-	if rio != nil {
-		deps.Reader = workflowReader{delegate: rio.Reader}
-		deps.Writer = rio.Writer
+	if store != nil {
+		deps.Reader = workflowReader{delegate: store}
+		deps.Writer = store
 		planner.VideoProcessor = adapters.NewFFmpegVideoProcessor(deps.Reader, deps.Writer)
 	}
 	return pipeline.New(deps)
@@ -70,7 +70,7 @@ func buildPipeline(
 // workflowResolver を組み立てます。
 func newWorkflowResolver(
 	cfg *config.Config,
-	rio *app.RemoteIO,
+	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 	aiClient gemini.Model,
@@ -90,7 +90,7 @@ func newWorkflowResolver(
 			return buildWorkflowWithConfig(ctx, workflowBuildParams{
 				cfg:          cfg,
 				orchCfg:      taskOrchCfg,
-				rio:          rio,
+				store:        store,
 				httpClient:   httpClient,
 				videoRunner:  taskVideoRunner,
 				aiClient:     aiClient,

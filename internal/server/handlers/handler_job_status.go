@@ -12,7 +12,7 @@ import (
 
 	"github.com/shouni/ap-mv/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // recordQueuedStatus は投入直後のジョブ状態を記録します。
@@ -32,16 +32,30 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	}
 }
 
+// deleteJobStatus はジョブ状態のドキュメントを消します。
+//
+// 状態は成果物と別の場所（Firestore）にあるため、履歴のプレフィックス一括削除では
+// 消えません。呼ばないと、成果物の無いジョブの状態だけが孤児として残り続けます。
+// 消せなくても履歴の削除そのものは成功しているので、警告ログに留めます。
+func (h *Handler) deleteJobStatus(r *http.Request, jobID string) {
+	if h.JobStatus == nil {
+		return
+	}
+	if err := h.JobStatus.Delete(r.Context(), jobID); err != nil {
+		slog.WarnContext(r.Context(), "failed to delete job status", "job_id", jobID, "error", err)
+	}
+}
+
 // JobStatusDetail は、ジョブの進行状況（queued/running/succeeded/failed）を返します。
 // ブラウザからのポーリングと M2M クライアントの完了検知の両方が利用します。
 func (h *Handler) JobStatusDetail(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if h.JobStatus == nil {
-		negotiate.Error(w, r, http.StatusServiceUnavailable, "job status tracking is not configured")
+		respond.Error(w, r, http.StatusServiceUnavailable, "job status tracking is not configured")
 		return
 	}
 
@@ -50,13 +64,13 @@ func (h *Handler) JobStatusDetail(w http.ResponseWriter, r *http.Request) {
 		// 状態が無いのは異常ではなく「この機能より前に作られたジョブ」でも起こるため、
 		// 404 で明確に区別できるようにします。
 		if errors.Is(err, domain.ErrJobStatusNotFound) {
-			negotiate.Error(w, r, http.StatusNotFound, "job status not found")
+			respond.Error(w, r, http.StatusNotFound, "job status not found")
 			return
 		}
 		slog.ErrorContext(r.Context(), "failed to load job status", "job_id", jobID, "error", err)
-		negotiate.Error(w, r, http.StatusInternalServerError, "failed to load job status")
+		respond.Error(w, r, http.StatusInternalServerError, "failed to load job status")
 		return
 	}
 
-	negotiate.JSON(w, r, http.StatusOK, status)
+	respond.JSON(w, r, http.StatusOK, status)
 }

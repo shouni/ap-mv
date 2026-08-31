@@ -16,7 +16,7 @@ import (
 // DownloadKeyframes はジョブのキーフレーム画像を1枚ずつ sink へストリーミングします。
 // キーフレームが存在するカットのみ対象で、ファイル名は cut_01.png 形式です。
 func (r *VideoHistoryRepository) DownloadKeyframes(ctx context.Context, jobID string, sink ports.KeyframeSink) error {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -71,7 +71,7 @@ func sinkFFmpegFiles(cuts []domain.VideoCut, bpm int, sink ports.KeyframeSink) e
 // streamKeyframe は1カット分のキーフレームを読み取り sink へ渡します。
 // defer で rc を確実に Close するためにループ本体から切り出しています。
 func (r *VideoHistoryRepository) streamKeyframe(ctx context.Context, uri string, cutIndex int, name string, sink ports.KeyframeSink) error {
-	rc, err := r.reader.Open(ctx, uri)
+	rc, err := r.store.Open(ctx, uri)
 	if err != nil {
 		return fmt.Errorf("open keyframe for cut %d: %w", cutIndex, err)
 	}
@@ -84,7 +84,7 @@ func (r *VideoHistoryRepository) streamKeyframe(ctx context.Context, uri string,
 
 // DeleteHistory deletes all stored objects under a generated MV job directory.
 func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string) error {
-	if r == nil || r.reader == nil || r.writer == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -100,16 +100,15 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 
 	var errs []error
 	for _, p := range paths {
-		if err := r.writer.Delete(ctx, p); err != nil {
+		if err := r.store.Delete(ctx, p); err != nil {
 			errs = append(errs, fmt.Errorf("delete %s: %w", p, err))
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
 		return err
 	}
-	r.deleteCachedHistory(jobID)
-	r.deleteCachedVideoRecipe(jobID)
-	// ジョブが一覧から消えたことを TTL の満了を待たずに反映させる。
-	r.invalidateJobIDList(jobIDListCacheKey)
+	// 一覧はジョブ状態のクエリなので、キャッシュを落として回る必要はありません。
+	// 状態のドキュメントは成果物と別の場所にあり、消すのはハンドラーの仕事です
+	// （handlers.deleteJobStatus）。
 	return nil
 }

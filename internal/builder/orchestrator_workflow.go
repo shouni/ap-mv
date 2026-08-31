@@ -4,17 +4,16 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 
 	characterassets "github.com/shouni/go-character-kit/assets"
 	"github.com/shouni/go-character-kit/character"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 	"github.com/shouni/go-veo-orchestrator/workflow"
 
 	"github.com/shouni/ap-mv/internal/adapters/prompt"
-	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
 )
@@ -23,7 +22,7 @@ import (
 func buildWorkflow(
 	ctx context.Context,
 	cfg *config.Config,
-	rio *app.RemoteIO,
+	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
 	aiClient gemini.Model,
@@ -31,7 +30,7 @@ func buildWorkflow(
 	return buildWorkflowWithConfig(ctx, workflowBuildParams{
 		cfg:         cfg,
 		orchCfg:     buildOrchestratorConfig(cfg),
-		rio:         rio,
+		store:       store,
 		httpClient:  httpClient,
 		videoRunner: videoRunner,
 		aiClient:    aiClient,
@@ -52,7 +51,7 @@ type characterSeedOverride struct {
 type workflowBuildParams struct {
 	cfg         *config.Config
 	orchCfg     orchestrator.Config
-	rio         *app.RemoteIO
+	store       remoteio.Store
 	httpClient  httpkit.HTTPClient
 	videoRunner ports.VideoRunner
 	// aiClient は BuildContainer が組んだ Vertex AI クライアントです。ワークフローは
@@ -70,7 +69,7 @@ type workflowBuildParams struct {
 // 残った処理がいずれも I/O を伴わなくなったためです。引数は残してあります（ワークフロー
 // 構築に I/O が戻ったときに、呼び出し側の連鎖を作り直さずに済むように）。
 func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchestrator.Workflows, error) {
-	if p.cfg == nil || p.rio == nil || p.rio.Reader == nil || p.rio.Writer == nil || p.httpClient == nil {
+	if p.cfg == nil || p.store == nil || p.httpClient == nil {
 		return nil, nil
 	}
 	if p.aiClient == nil {
@@ -96,8 +95,8 @@ func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchest
 
 	workflows, err := workflow.New(workflow.ManagerArgs{
 		Config:      p.orchCfg,
-		Reader:      workflowReader{delegate: p.rio.Reader},
-		Writer:      p.rio.Writer,
+		Reader:      workflowReader{delegate: p.store},
+		Writer:      p.store,
 		AIClient:    p.aiClient,
 		VideoRunner: p.videoRunner,
 		PromptDeps: &workflow.PromptDeps{
@@ -123,8 +122,8 @@ func buildCharacters() (*character.Characters, error) {
 
 // workflowOutputBaseURI returns the GCS base URI for workflow outputs.
 func workflowOutputBaseURI(cfg *config.Config) string {
-	if cfg == nil || strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
+	if cfg == nil || cfg.Storage.GCSBucket == "" {
 		return ""
 	}
-	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.AI.VeoOutputPrefix), "jobs"))
+	return cfg.GetGCSObjectURL(path.Join(cfg.AI.VeoOutputPrefix, "jobs"))
 }

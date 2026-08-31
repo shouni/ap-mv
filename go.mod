@@ -3,21 +3,21 @@ module github.com/shouni/ap-mv
 go 1.27
 
 require (
-	cloud.google.com/go/storage v1.65.1
+	cloud.google.com/go/firestore v1.25.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
-	github.com/gorilla/sessions v1.4.0
-	github.com/shouni/gcp-kit v1.13.0
+	github.com/shouni/gcp-kit v1.14.1
 	github.com/shouni/go-character-kit v1.3.0
-	github.com/shouni/go-gemini-client v1.21.0
+	github.com/shouni/go-gemini-client v1.21.4
 	github.com/shouni/go-http-kit v1.10.0
-	github.com/shouni/go-job-kit v1.2.0
-	github.com/shouni/go-notify v1.3.0
+	github.com/shouni/go-job-firestore v1.2.0
+	github.com/shouni/go-notify v1.3.1
 	github.com/shouni/go-prompt-kit v1.7.0
-	github.com/shouni/go-remote-io v1.10.1
-	github.com/shouni/go-utils v1.7.0
-	github.com/shouni/go-veo-orchestrator v1.13.1
+	github.com/shouni/go-remote-io v1.11.0
+	github.com/shouni/go-serve-kit v1.0.0
+	github.com/shouni/go-utils v1.7.1
+	github.com/shouni/go-veo-orchestrator v1.14.0
 	github.com/shouni/netarmor v1.4.0
 	golang.org/x/sync v0.22.0
 )
@@ -30,7 +30,9 @@ require (
 	cloud.google.com/go/cloudtasks v1.19.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.13.0 // indirect
+	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
+	cloud.google.com/go/storage v1.65.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.60.0 // indirect
@@ -48,8 +50,8 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
 	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shouni/gemini-image-kit v1.16.1 // indirect
@@ -70,7 +72,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.294.0 // indirect
+	google.golang.org/api v0.295.0 // indirect
 	google.golang.org/genai v1.70.0 // indirect
 	google.golang.org/genproto v0.0.0-20260825221802-da73d73af1c5 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260825221802-da73d73af1c5 // indirect

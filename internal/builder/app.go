@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/shouni/go-http-kit/httpkit"
-	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-job-firestore/jobfirestore"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-mv/internal/adapters"
@@ -37,15 +37,14 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	}
 	resources = append(resources, storage)
 
-	rio, err := remoteio.NewBundle(storage)
+	store, err := storage.Store()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize IO components: %w", err)
 	}
 	// resources は組み立て中の巻き戻し用で、成功して返ったあとは誰も見ません。
 	// 実行中の解放は closers（app.Container.Close）が受け持つため、成功後も
-	// 生き続ける資源は両方へ入れます。rio は成功後の storage の所有者です
-	// （Bundle.Close が factory を閉じます）。
-	closers := []io.Closer{rio}
+	// 生き続ける資源は両方へ入れます。ストレージの寿命はファクトリが持ちます。
+	closers := []io.Closer{storage}
 
 	enqueuer, err := buildTaskEnqueuer(ctx, cfg)
 	if err != nil {
@@ -56,16 +55,31 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
 	queue := taskQueueAdapter{enqueuer: enqueuer}
-	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
-		BaseURI: workflowOutputBaseURI(cfg),
-		Reader:  rio.Reader,
-		Writer:  rio.Writer,
-		Signer:  rio.Signer,
-	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
-	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), rio.Reader, rio.Writer)
-	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
-	closers = append(closers, historyRepository)
+	// 成果物と違って Firestore に置くため、履歴のプレフィックス削除では消えません
+	// （消すのはハンドラーの仕事です。ports.JobStatusStore.Delete を参照）。
+	firestoreFactory, err := jobfirestore.New(ctx,
+		jobfirestore.WithProjectID(cfg.GCP.ProjectID),
+		jobfirestore.WithDatabase(cfg.Storage.FirestoreDatabase),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Firestore: %w", err)
+	}
+	resources = append(resources, firestoreFactory)
+	closers = append(closers, firestoreFactory)
+
+	firestoreClient, err := firestoreFactory.Client()
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain Firestore client: %w", err)
+	}
+	jobStatus := repository.NewJobStatusRepository(firestoreClient)
+
+	// 一覧はジョブ状態のクエリ、詳細は成果物と同じ場所のメタデータ読み込みです。
+	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
+		BaseURI:   workflowOutputBaseURI(cfg),
+		Store:     store,
+		JobStatus: jobStatus,
+	})
 
 	// 生成系（Vertex AI・Veo・Slack 通知・パイプライン）を組み立てるのは Worker 面だけです。
 	// Web 面で組み立てないことで、ap-mv-web-runner が aiplatform.user も
@@ -84,7 +98,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize Vertex AI client: %w", aiErr)
 		}
 
-		videoRunner, runnerErr := adapters.NewVertexVeoRunner(ctx, cfg, aiClient)
+		videoRunner, runnerErr := adapters.NewVertexVeoRunner(cfg, aiClient, store)
 		if runnerErr != nil {
 			return nil, fmt.Errorf("failed to initialize video runner: %w", runnerErr)
 		}
@@ -97,7 +111,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 			return nil, fmt.Errorf("failed to initialize slack notifier: %w", notifierErr)
 		}
 
-		builtPipe, pipeErr := buildPipeline(ctx, cfg, rio, httpClient, videoRunner, aiClient, pipelineExternals{
+		builtPipe, pipeErr := buildPipeline(ctx, cfg, store, httpClient, videoRunner, aiClient, pipelineExternals{
 			notifier:          notifier,
 			taskQueue:         queue,
 			historyRepository: historyRepository,
@@ -114,7 +128,8 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	return &app.Container{
 		Config:            cfg,
-		RemoteIO:          rio,
+		Storage:           storage,
+		Store:             store,
 		HTTPClient:        httpClient,
 		TaskEnqueuer:      enqueuer,
 		TaskQueue:         queue,

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shouni/gcp-kit/serverrole"
+	"github.com/shouni/go-serve-kit/serverrole"
 )
 
 var configEnvKeys = []string{

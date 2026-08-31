@@ -7,7 +7,6 @@ import (
 	"path"
 	"strings"
 
-	"cloud.google.com/go/storage"
 	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-mv/internal/ports"
@@ -81,58 +80,13 @@ func (r *VertexVeoRunner) canonicalizeGeneratedVideo(ctx context.Context, req po
 	return targetURI, nil
 }
 
+// videoCopier は、生成物を正規パスへ移すために必要な操作だけを表します。
+// remoteio.Store がそのまま満たします。
+//
+// 以前はこの口のために GCS クライアントをもう 1 つ持ち、CopierFrom を自前で
+// 呼んでいました。remoteio.Store.Copy が同一スキームならサーバーサイドコピーへ
+// 落とすようになったので、注入済みのストアで足ります。
 type videoCopier interface {
-	Copy(ctx context.Context, sourceURI, targetURI string) error
+	Copy(ctx context.Context, src, dst string, opts ...remoteio.WriteOption) error
 	Delete(ctx context.Context, uri string) error
-}
-
-type gcsVideoCopier struct {
-	client *storage.Client
-}
-
-// Close は copier が保持する GCS クライアントを解放します。
-func (c *gcsVideoCopier) Close() error {
-	if c == nil || c.client == nil {
-		return nil
-	}
-	client := c.client
-	c.client = nil
-	return client.Close()
-}
-
-// Copy は GCS オブジェクトを指定 URI へコピーします。
-func (c *gcsVideoCopier) Copy(ctx context.Context, sourceURI, targetURI string) error {
-	if c == nil || c.client == nil {
-		return fmt.Errorf("GCS client is not configured")
-	}
-	sourceBucket, sourceObject, err := remoteio.ParseRemoteURI(sourceURI)
-	if err != nil {
-		return err
-	}
-	targetBucket, targetObject, err := remoteio.ParseRemoteURI(targetURI)
-	if err != nil {
-		return err
-	}
-	if sourceObject == "" || targetObject == "" {
-		return fmt.Errorf("GCS object path is required")
-	}
-	_, err = c.client.Bucket(targetBucket).Object(targetObject).
-		CopierFrom(c.client.Bucket(sourceBucket).Object(sourceObject)).
-		Run(ctx)
-	return err
-}
-
-// Delete は GCS オブジェクトを削除します。
-func (c *gcsVideoCopier) Delete(ctx context.Context, uri string) error {
-	if c == nil || c.client == nil {
-		return fmt.Errorf("GCS client is not configured")
-	}
-	bucket, object, err := remoteio.ParseRemoteURI(uri)
-	if err != nil {
-		return err
-	}
-	if object == "" {
-		return fmt.Errorf("GCS object path is required")
-	}
-	return c.client.Bucket(bucket).Object(object).Delete(ctx)
 }

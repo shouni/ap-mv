@@ -30,14 +30,17 @@ const (
 //
 // 画面は Stage でバッジの色を決め、分数（3/12 など）で残りを示します。合計が 0 の
 // ジョブ（カットが 1 つも無いレシピ）は Stage が StageScript になります。
+// firestore タグは省略できません。JobStatus に埋めてドキュメントへ保存するため、
+// 省くと保存されるフィールド名が Go の識別子（TotalCuts）になり、一覧の絞り込みが
+// 見に行く progress.stage と食い違います。
 type JobProgress struct {
-	Stage JobStage `json:"stage"`
+	Stage JobStage `json:"stage" firestore:"stage"`
 	// TotalCuts はレシピのカット総数です。
-	TotalCuts int `json:"total_cuts"`
+	TotalCuts int `json:"total_cuts" firestore:"total_cuts"`
 	// KeyframeCuts はキーフレーム画像を持つカット数です。
-	KeyframeCuts int `json:"keyframe_cuts"`
+	KeyframeCuts int `json:"keyframe_cuts" firestore:"keyframe_cuts"`
 	// VideoCuts は動画生成が終わったカット数です。
-	VideoCuts int `json:"video_cuts"`
+	VideoCuts int `json:"video_cuts" firestore:"video_cuts"`
 }
 
 // IsCompleted は全カットの動画生成が終わっているかを返します。

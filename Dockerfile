@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/main ./main.go
 
 # 静的リンクされたffmpegバイナリ(シェル・共有ライブラリ依存なし)。
 # scratchベースの最終イメージにこの1バイナリだけをコピーする。
-FROM mwader/static-ffmpeg:7.1 AS ffmpeg
+FROM mwader/static-ffmpeg:9.0 AS ffmpeg
 
 FROM scratch
 

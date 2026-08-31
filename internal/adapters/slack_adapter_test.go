@@ -42,24 +42,23 @@ func newTestSlackAdapter(serviceURL string) (*SlackAdapter, *recordingNotifier) 
 	}, rec
 }
 
-// TestBuildCompleteContentLinksDraftsForDraftJobs pins that a draft job's notification points at
-// the drafts list. Drafts are stored under their own prefix and write no video_music_meta.json,
-// so the History Detail page has nothing to load for them — linking there hands the user a dead
-// link at the exact moment they want to look at the result.
-func TestBuildCompleteContentLinksDraftsForDraftJobs(t *testing.T) {
+// 台本のみのジョブ（video_recipe_draft）も履歴詳細へ送ります。以前は専用の /drafts 一覧へ
+// 送っていましたが、下書きが別プレフィックスをやめて普通のジョブになった時点でそのルートは
+// 消えており、このコマンドの完了通知だけがリンク切れになっていました。
+func TestBuildCompleteContentLinksHistoryForDraftJobs(t *testing.T) {
 	adapter, _ := newTestSlackAdapter("https://ap-mv.example.com")
 
 	got := adapter.buildCompleteContent(domain.NotificationRequest{
-		JobID:   "video-draft-20260804-101112-abc",
+		JobID:   "recipe-20260804-101112-abc",
 		Command: string(domain.CommandVideoRecipeDraft),
 		Title:   "draft test",
 	}).String()
 
-	if !strings.Contains(got, "https://ap-mv.example.com/drafts") {
-		t.Errorf("content = %q, want a link to the drafts list", got)
+	if !strings.Contains(got, "https://ap-mv.example.com/history/recipe-20260804-101112-abc") {
+		t.Errorf("content = %q, want a History Detail link", got)
 	}
-	if strings.Contains(got, "/history/") {
-		t.Errorf("content = %q, want no History Detail link for a draft job", got)
+	if strings.Contains(got, "/drafts") {
+		t.Errorf("content = %q, want no /drafts link (そのルートは存在しません)", got)
 	}
 }
 
@@ -102,17 +101,17 @@ func TestBuildCompleteContentLinksGCSPaths(t *testing.T) {
 	got := adapter.buildCompleteContent(domain.NotificationRequest{
 		JobID:     "video-draft-1",
 		Command:   string(domain.CommandVideoRecipeDraft),
-		OutputURI: "gs://ap-mv/veo/drafts/video-draft-1/",
+		OutputURI: "gs://ap-mv/veo/jobs/recipe-20260804-101112-abc/",
 		SourceURL: "gs://ap-music/music/comp-1/recipe.json",
 	}).String()
 
-	if !strings.Contains(got, "console.cloud.google.com/storage/browser/ap-mv/veo/drafts/video-draft-1/") {
+	if !strings.Contains(got, "console.cloud.google.com/storage/browser/ap-mv/veo/jobs/recipe-20260804-101112-abc/") {
 		t.Errorf("content = %q, want a console link for Output", got)
 	}
 	if !strings.Contains(got, "console.cloud.google.com/storage/browser/_details/ap-music/music/comp-1/recipe.json") {
 		t.Errorf("content = %q, want a console details link for Source", got)
 	}
-	if !strings.Contains(got, "gs://ap-mv/veo/drafts/video-draft-1/") {
+	if !strings.Contains(got, "gs://ap-mv/veo/jobs/recipe-20260804-101112-abc/") {
 		t.Errorf("content = %q, want the gs:// URI kept as the visible label", got)
 	}
 }

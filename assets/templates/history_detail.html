@@ -7,6 +7,7 @@
             <div>
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                     <h1 class="h3 fw-bold mb-0">{{.HistoryDetail.Title}}</h1>
+                    {{template "jobStateBadge" .HistoryDetail.VideoHistory}}
                     {{template "jobStageBadge" .HistoryDetail.Progress}}
                 </div>
                 {{if .Message}}
@@ -16,6 +17,11 @@
                     <code>{{.HistoryDetail.JobID}}</code>
                     {{if .HistoryDetail.CreatedAt}}<span class="ms-2">{{.HistoryDetail.CreatedAt}}</span>{{end}}
                 </div>
+                {{end}}
+                {{/* 失敗の理由はここにしか出ません。成果物は途中まで残るので、
+                     理由が無いと「なぜ止まったのか」を Slack かログまで探しに行くことになります。 */}}
+                {{if .HistoryDetail.Error}}
+                <div class="alert alert-danger mt-3 mb-0 py-2 px-3 small" role="alert">{{.HistoryDetail.Error}}</div>
                 {{end}}
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2">

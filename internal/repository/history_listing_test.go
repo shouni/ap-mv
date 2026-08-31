@@ -8,6 +8,12 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
+// newMappingTestRepository は、変換だけを見るためのリポジトリを返します。
+// 保存先の組み立てに BaseURI だけが要り、ストレージへは触れません。
+func newMappingTestRepository() *VideoHistoryRepository {
+	return NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/jobs"})
+}
+
 // TestVideoHistoryFromRecipeCarriesAspectRatio verifies the recipe's AspectRatio (set once at
 // keyframe creation time by CutKeyframeFilter) flows through to the history list/detail view, so
 // handlers building follow-up tasks (generate video, regenerate cut keyframe) can inherit it.
@@ -18,7 +24,7 @@ func TestVideoHistoryFromRecipeCarriesAspectRatio(t *testing.T) {
 		Cuts:         []video.Cut{{CutIndex: 1, Status: video.CutStatusGenerated}},
 	}
 
-	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
+	got := newMappingTestRepository().videoHistoryFromRecipe("job-1", recipe)
 
 	if got.AspectRatio != "9:16" {
 		t.Errorf("AspectRatio = %q, want %q", got.AspectRatio, "9:16")
@@ -35,7 +41,7 @@ func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 		Cuts:         []video.Cut{{CutIndex: 1, Status: video.CutStatusGenerated}},
 	}
 
-	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
+	got := newMappingTestRepository().videoHistoryFromRecipe("job-1", recipe)
 
 	if got.AspectRatio != "" {
 		t.Errorf("AspectRatio = %q, want empty for a recipe with none recorded", got.AspectRatio)
@@ -45,8 +51,8 @@ func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 // TestVideoHistoryFromRecipeSumsGeneratedSeconds verifies the history list carries the billable
 // Veo seconds (generated cuts only), so the list page can price a job without loading its cuts.
 // The seconds are derived purely from the recipe, which is why they are computed here rather
-// than at render time — the value is stable enough to sit in the TTL-cached VideoHistory, while
-// the price per second (config, changeable) deliberately is not.
+// than at render time — the value is fixed by the recipe, while the price per second (config,
+// changeable) deliberately is not.
 func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
@@ -64,7 +70,7 @@ func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 		},
 	}
 
-	got := videoHistoryFromRecipe("job-1", "gs://bucket/jobs/job-1/video_music_meta.json", recipe)
+	got := newMappingTestRepository().videoHistoryFromRecipe("job-1", recipe)
 
 	if got.GeneratedSeconds != 8 {
 		t.Errorf("GeneratedSeconds = %v, want 8 (the pending cut never reached Veo)", got.GeneratedSeconds)

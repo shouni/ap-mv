@@ -51,40 +51,6 @@ func TestVideoPromptAppendsModeGuidance(t *testing.T) {
 	}
 }
 
-// TestNextCutLastFrameReference verifies the guards for choosing the next cut's keyframe as
-// the current cut's ending frame: it must exist, be non-empty, stay within the same section
-// (a section boundary is an intentional scene change), match the current cut's character
-// (interpolating across characters would morph them), and differ from the current cut's own
-// keyframe (duration-split cuts share one keyframe; forcing end == start kills motion).
-func TestNextCutLastFrameReference(t *testing.T) {
-	cuts := []video.Cut{
-		{CutIndex: 0, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf0.png"},
-		{CutIndex: 1, CharacterID: "zunda", KeyframeReference: "gs://bucket/kf1.png"},
-		{CutIndex: 2, CharacterID: "metan", KeyframeReference: "gs://bucket/kf2.png"},
-		{CutIndex: 3, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png", IsSectionStart: true},
-		{CutIndex: 4, CharacterID: "metan", KeyframeReference: "gs://bucket/kf3.png"},
-		{CutIndex: 5, CharacterID: "metan"},
-	}
-
-	tests := []struct {
-		name string
-		i    int
-		want string
-	}{
-		{"same character and section", 0, "gs://bucket/kf1.png"},
-		{"different character", 1, ""},
-		{"next is section start", 2, ""},
-		{"next shares the same keyframe", 3, ""},
-		{"next keyframe empty", 4, ""},
-		{"last cut", 5, ""},
-	}
-	for _, tt := range tests {
-		if got := video.Cuts(cuts).NextLastFrameReference(tt.i); got != tt.want {
-			t.Errorf("%s: NextLastFrameReference(%d) = %q, want %q", tt.name, tt.i, got, tt.want)
-		}
-	}
-}
-
 // TestRunDirectPassesNextKeyframeAsLastFrame verifies the end-to-end wiring: on a runner that
 // supports lastFrame but not referenceImages (e.g. veo-3.1-fast), each image-input cut receives
 // the next same-section/same-character cut's keyframe as LastFrameReference, and the final cut

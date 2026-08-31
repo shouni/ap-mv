@@ -3,7 +3,7 @@ package domain
 import (
 	"strings"
 
-	"github.com/shouni/go-job-kit/paging"
+	"github.com/shouni/go-job-firestore/jobfirestore"
 )
 
 // VideoHistory is the metadata shown in the generated MV history list.
@@ -29,8 +29,17 @@ type VideoHistory struct {
 	// Progress は、台本のみ・キーフレーム途中・動画途中・完了という進行段階と、
 	// その根拠になるカット数です。Generated だけでは「まだ 1 枚も焼いていない」と
 	// 「あと 1 本で終わる」が区別できませんでした。
-	Progress       JobProgress `json:"progress"`
-	KeyframeZipURI string      `json:"keyframe_zip_uri,omitempty"`
+	Progress JobProgress `json:"progress"`
+	// State はジョブそのものの状態（queued/running/succeeded/failed）です。
+	//
+	// Progress と両方あるのは、両者が別のことを言っているからです。Progress は
+	// カットがどこまで焼けたか、State は処理が生きているかです。失敗したジョブは
+	// 「keyframes 3/12」で止まるので、State が無いと生成中のジョブと見分けが付きません。
+	// 記録の無いジョブ（一覧が成果物の走査だった頃のもの）では空になります。
+	State JobState `json:"state,omitempty"`
+	// Error は State が failed のときの理由です。
+	Error          string `json:"error,omitempty"`
+	KeyframeZipURI string `json:"keyframe_zip_uri,omitempty"`
 	// FinalVideoURL は、継続チェーンをハードカットで1本に結合した完成動画のGCS URIです
 	// (video.Recipe.FinalVideoURL、chain_finalize.goが設定)。
 	FinalVideoURL string `json:"final_video_url,omitempty"`
@@ -218,7 +227,7 @@ func sectionIndexForCutStart(sections []VideoHistorySection, startSec float64) i
 }
 
 // PageMeta contains pagination metadata for history list views.
-type PageMeta = paging.PageMeta
+type PageMeta = jobfirestore.PageMeta
 
 // VideoHistoryPage contains a page of generated MV history items.
 type VideoHistoryPage struct {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/shouni/ap-mv/internal/domain"
 
-	"github.com/shouni/gcp-kit/negotiate"
+	"github.com/shouni/go-serve-kit/respond"
 )
 
 // homeRecentJobs はホームに表示する直近ジョブ件数です。
@@ -102,9 +102,9 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 // PostVideoRecipeDraft handles draft creation form submissions.
 //
 // 入力は PostVideoRecipeCreate と同じで、違いはコマンドとジョブ ID プレフィックスだけです。
-// キーフレームを焼かずにカット割りまでで止め、結果を下書きとして保存します。
-// 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
-// ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
+// キーフレームを 1 枚も焼かずにカット割りまでで止めます。保存先は完成ジョブと同じ
+// video_music_meta.json で、履歴には script 段階として並びます（/history?stage=script）。
+// ジョブ ID の用途プレフィックスを分けているのは、どちらのものか ID だけで分かるようにするためです。
 func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
 	h.postMusicRecipeTask(w, r, "recipe", domain.CommandVideoRecipeDraft)
 }
@@ -113,7 +113,7 @@ func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
 // 共通実装です。2 つのハンドラは定数 2 つを除いて byte 単位で同一でした。
 func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jobPrefix string, command domain.TaskCommand) {
 	if err := r.ParseForm(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid form")
+		respond.Error(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	jobID, ok := mintJobID(w, r, jobPrefix)
@@ -122,7 +122,7 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 	}
 	sourceURL, err := h.musicRecipeSourceURL(r)
 	if err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	task := &domain.Task{
@@ -156,10 +156,10 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	if err := jobid.Validate(musicJobID); err != nil {
 		return "", fmt.Errorf("invalid music_job_id: %w", err)
 	}
-	if strings.TrimSpace(h.MusicBucket) == "" {
+	if h.MusicBucket == "" {
 		return "", fmt.Errorf("AP_MUSIC_BUCKET is not configured")
 	}
-	return fmt.Sprintf("gs://%s/music/%s/recipe.json", strings.TrimSpace(h.MusicBucket), musicJobID), nil
+	return fmt.Sprintf("gs://%s/music/%s/recipe.json", h.MusicBucket, musicJobID), nil
 }
 
 // PostRecipe handles recipe submissions.
@@ -167,7 +167,7 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 // このエンドポイントは ap-mcp 等の M2M 呼び出し（JSON レスポンス）で使われ続けています。
 func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		negotiate.Error(w, r, http.StatusBadRequest, "invalid form")
+		respond.Error(w, r, http.StatusBadRequest, "invalid form")
 		return
 	}
 	var recipe *domain.MusicRecipe
@@ -176,7 +176,7 @@ func (h *Handler) PostRecipe(w http.ResponseWriter, r *http.Request) {
 	if recipeJSON != "" {
 		parsedRecipe, parsedVideoRecipe, err := domain.UnmarshalRecipeOrVideoRecipe([]byte(recipeJSON))
 		if err != nil {
-			negotiate.Error(w, r, http.StatusBadRequest, "invalid recipe json: "+err.Error())
+			respond.Error(w, r, http.StatusBadRequest, "invalid recipe json: "+err.Error())
 			return
 		}
 		recipe = parsedRecipe

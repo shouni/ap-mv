@@ -17,11 +17,8 @@ import (
 //
 // 表示用に整形する GetHistory とは別経路です。読んで直して書き戻す往復では、署名 URL や
 // 概算コストのような表示専用の値が混ざると、そのまま保存したときに元へ戻せなくなります。
-//
-// 生成中のジョブは動画生成のたびにメタデータが書き換わるため、キャッシュを経由せず
-// 毎回ストレージから読みます。
 func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil, errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -41,11 +38,9 @@ func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*
 // 「確認してから焼く」ための保存が読み取り専用になります。
 //
 // 保存前に Normalize と検証を通すのは RecipeSaveFilter と同じ理由です（一覧には載るが
-// キーフレーム生成で落ちるレシピを残さない）。書き換えたらキャッシュを破棄します —
-// 表示用の履歴はキャッシュ越しに読まれるため、破棄しないと直したはずの内容が
-// 画面へ反映されません。
+// キーフレーム生成で落ちるレシピを残さない）。
 func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error {
-	if r == nil || r.writer == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return errors.New("history repository is not properly configured")
 	}
 	if err := jobid.Validate(jobID); err != nil {
@@ -64,9 +59,8 @@ func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, r
 		return fmt.Errorf("encode recipe: %w", err)
 	}
 	uri := r.metadataURI(jobID)
-	if err := r.writer.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
+	if err := r.store.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
 		return fmt.Errorf("write recipe (%s): %w", uri, err)
 	}
-	r.InvalidateJob(jobID)
 	return nil
 }

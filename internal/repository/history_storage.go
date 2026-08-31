@@ -18,30 +18,21 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは履歴のストレージ読み込み・キャッシュ利用・署名URL生成を集めています。
-// recipe→表示モデルの純粋な変換は history_mapping.go、公開エントリポイントは
+// このファイルは履歴のストレージ読み込みと署名 URL 生成を集めています。
+// 表示モデルへの変換は history_mapping.go、公開エントリポイントは
 // history_listing.go を参照してください。
 
-// buildHistoryFromRecipe builds (or reuses a cached) VideoHistory for the bulk ListHistoryPage
-// path, where re-deriving every listed job's metadata on every page view would be wasteful.
-func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
-	history, ok := r.getCachedHistory(jobID)
-	if !ok {
-		history = videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
-		r.setCachedHistory(jobID, history)
-	}
-	return r.finalizeHistory(ctx, jobID, history)
-}
+// historyFetchConcurrency caps parallel signed-URL requests when signing a job's cuts in bulk.
+// 署名は Cloud Run に秘密鍵が無いためネットワーク呼び出し（IAM SignBlob）です。
+const historyFetchConcurrency = 10
 
-// buildHistoryFromFreshRecipe builds VideoHistory directly from recipe without reading or
-// populating the history cache, so single-job reads (GetHistory) always reflect the latest
-// storage state rather than a snapshot cached before a regenerate/edit job completed.
+// buildHistoryFromFreshRecipe builds VideoHistory directly from the stored recipe, so
+// single-job reads (GetHistory) always reflect the latest storage state.
 func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
-	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
-	return r.finalizeHistory(ctx, jobID, history)
+	return r.finalizeHistory(ctx, jobID, r.videoHistoryFromRecipe(jobID, recipe))
 }
 
-// finalizeHistory fills in the fields that are never cached.
+// finalizeHistory fills in the fields derived from the job ID rather than stored.
 //
 // 署名付き URL はここでは作りません。画面は同一オリジンのパスを辿り、ハンドラーが
 // リダイレクトの時点で 1 本だけ署名します。JSON の呼び出し元だけが SignHistoryURLs を
@@ -93,7 +84,7 @@ func (r *VideoHistoryRepository) keyframeZipURI(jobID string) string {
 // KeyframeZipSignedURL returns a signed download URL for the pre-built keyframe zip.
 // Returns empty string (without error) if the zip does not exist yet.
 func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID string) (string, error) {
-	if r == nil || r.reader == nil || r.signer == nil {
+	if r == nil || r.store == nil {
 		return "", nil
 	}
 	// jobID はそのままオブジェクトパスへ埋め込まれるため、他の公開メソッドと同様に検証する。
@@ -102,7 +93,7 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 		return "", err
 	}
 	uri := r.keyframeZipURI(jobID)
-	exists, err := r.reader.Exists(ctx, uri)
+	exists, err := r.store.Exists(ctx, uri)
 	if err != nil {
 		return "", fmt.Errorf("check keyframe zip existence: %w", err)
 	}
@@ -112,24 +103,9 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 	return r.signedURL(ctx, uri)
 }
 
-// loadVideoRecipe returns a cached recipe if present, otherwise fetches and caches one. Used by
-// the bulk ListHistoryPage path.
-func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
-	if recipe, ok := r.getCachedVideoRecipe(jobID); ok {
-		return recipe, nil
-	}
-	recipe, err := r.fetchVideoRecipe(ctx, jobID)
-	if err != nil {
-		return domain.VideoRecipe{}, err
-	}
-	r.setCachedVideoRecipe(jobID, recipe)
-	return recipe, nil
-}
-
-// fetchVideoRecipe always reads the recipe directly from storage, bypassing the cache entirely.
-// Used by single-job reads (GetHistory, DownloadKeyframes) that need the current state.
+// fetchVideoRecipe reads the recipe directly from storage.
 func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
-	rc, err := r.reader.Open(ctx, r.metadataURI(jobID))
+	rc, err := r.store.Open(ctx, r.metadataURI(jobID))
 	if err != nil {
 		return domain.VideoRecipe{}, err
 	}
@@ -152,13 +128,13 @@ func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID str
 // estimate. The record is small and read once per detail view, so it is not cached; it also
 // changes while a job is still generating, which is exactly when a stale copy would mislead.
 func (r *VideoHistoryRepository) GetVeoUsage(ctx context.Context, jobID string) (*domain.VeoUsage, error) {
-	if r == nil || r.reader == nil || r.baseURI == "" {
+	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil, nil
 	}
 	if err := jobid.Validate(jobID); err != nil {
 		return nil, err
 	}
-	rc, err := r.reader.Open(ctx, r.jobObjectURI(jobID, domain.VeoUsageFileName))
+	rc, err := r.store.Open(ctx, r.jobObjectURI(jobID, domain.VeoUsageFileName))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -244,20 +220,20 @@ func (r *VideoHistoryRepository) jobObjectURI(jobID, name string) string {
 }
 
 func (r *VideoHistoryRepository) signedURL(ctx context.Context, uri string) (string, error) {
-	if r.signer == nil || strings.TrimSpace(uri) == "" {
+	if r.store == nil || strings.TrimSpace(uri) == "" {
 		return "", nil
 	}
-	return r.signer.GenerateSignedURL(ctx, uri, "GET", 15*time.Minute)
+	return r.store.SignURL(ctx, uri, "GET", 15*time.Minute)
 }
 
 // listObjectsUnder は prefix 配下のオブジェクト URI を集めます。
 func (r *VideoHistoryRepository) listObjectsUnder(ctx context.Context, prefix string) ([]string, error) {
 	var paths []string
-	if err := r.reader.List(ctx, prefix, func(gcsPath string) error {
-		paths = append(paths, gcsPath)
-		return nil
-	}); err != nil {
-		return nil, err
+	for entry, err := range r.store.List(ctx, prefix) {
+		if err != nil {
+			return nil, err
+		}
+		paths = append(paths, entry.URI)
 	}
 	return paths, nil
 }

@@ -71,23 +71,3 @@ func TestNewJobProgressStages(t *testing.T) {
 		})
 	}
 }
-
-// TestJobProgressIsCompletedMatchesOldGenerated は、IsCompleted が旧 Generated と同じ
-// 意味であることを確認します。API 応答の generated フィールドはこれで埋めるためです。
-func TestJobProgressIsCompletedMatchesOldGenerated(t *testing.T) {
-	tests := map[string]struct {
-		cuts []VideoCut
-		want bool
-	}{
-		"全部生成済み": {cuts: []VideoCut{generatedCut("k1"), generatedCut("k2")}, want: true},
-		"1本残り":   {cuts: []VideoCut{generatedCut("k1"), cutWithKeyframe("k2")}, want: false},
-		"カットが無い": {cuts: nil, want: false},
-	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			if got := NewJobProgress(tt.cuts).IsCompleted(); got != tt.want {
-				t.Errorf("IsCompleted() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}

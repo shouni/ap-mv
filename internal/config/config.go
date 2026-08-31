@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shouni/gcp-kit/serverrole"
 	"github.com/shouni/go-remote-io/remoteio"
+	"github.com/shouni/go-serve-kit/serverrole"
 	"github.com/shouni/go-utils/strlist"
 
 	"github.com/caarlos0/env/v11"
@@ -58,14 +58,28 @@ type TasksConfig struct {
 	// 出どころは Terraform 1 箇所に閉じます。アプリが既定を持つと同じ数字が 2 箇所に
 	// 現れ、設定漏れが「誰も選んでいない値」で動いてしまいます。
 	DispatchDeadline time.Duration `env:"TASK_DISPATCH_DEADLINE"`
+	// PipelineTimeout はワーカータスク 1 件の実行時間の上限です。DispatchDeadline と
+	// 対で三段のタイムアウトを成すため、AI の生成パラメータではなくここに置きます
+	// （VEO_OPERATION_TIMEOUT が Veo の 1 オペレーション単位の上限であるのに対し、
+	// こちらはフィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包みます）。
+	//
+	// DispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
+	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
+	// （worker では validatePipelineTimeout が起動時に拒否します）。既定値は
+	// DispatchDeadline と同じ理由で持ちません。
+	PipelineTimeout time.Duration `env:"PIPELINE_TIMEOUT"`
 }
 
 // StorageConfig は GCS バケットの設定です。
 type StorageConfig struct {
-	GCSBucket string `env:"AP_MV_BUCKET"`
-	// MusicBucket は、Video Recipe Create の Music Job ID からレシピJSON
-	// （gs://<MusicBucket>/music/<jobID>/recipe.json、ap-comp と同じ規則）を解決するために使う。
-	MusicBucket string `env:"AP_MUSIC_BUCKET" envDefault:"ap-music"`
+	GCSBucket   string `env:"AP_MV_BUCKET"`
+	MusicBucket string `env:"AP_MUSIC_BUCKET"`
+	// FirestoreDatabase はジョブ状態を置く Firestore データベースです。
+	//
+	// 名前付きデータベースを使うのは (default) の枠を占めないためです。フリートで共有し、
+	// コレクションでサービスを分けます。コレクション名は設定にしません（サービスの身元で
+	// あってデプロイごとに変わる値ではないため。repository の statusCollection を参照）。
+	FirestoreDatabase string `env:"FIRESTORE_DATABASE" envDefault:"job-status"`
 }
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
@@ -80,20 +94,15 @@ type AIConfig struct {
 	ImageModel   string   `env:"-"`
 	VeoModel     string   `env:"-"`
 
-	VeoLocationID       string        `env:"VEO_LOCATION_ID"`
-	VeoOutputPrefix     string        `env:"VEO_OUTPUT_PREFIX" envDefault:"github.com/shouni/ap-mv/veo"`
-	VeoAspectRatio      string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
-	VeoGenerateAudio    bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
-	VeoPollInterval     time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
-	VeoOperationTimeout time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
-	// PipelineTimeout はワーカータスク 1 件の実行時間の上限です。
-	// VEO_OPERATION_TIMEOUT が Veo の 1 オペレーション単位の上限であるのに対し、
-	// こちらはフィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限です。
-	//
-	// TaskDispatchDeadline より短く取ります。等号でも駄目で、アプリが先に諦められないと
-	// 失敗の記録も Slack 通知も出ないまま Cloud Tasks に打ち切られます
-	// （worker では validatePipelineTimeout が起動時に拒否します）。
-	PipelineTimeout        time.Duration `env:"PIPELINE_TIMEOUT"`
+	VeoLocationID string `env:"VEO_LOCATION_ID"`
+	// VeoOutputPrefix は既定値を持ちません。生成物の置き場所はデプロイ先が決める値で、
+	// アプリが既定を持つと設定漏れが「誰も選んでいない場所」に書き込んで動いてしまいます。
+	// 空なら ValidateEssentialConfig が起動時に落とします。
+	VeoOutputPrefix        string        `env:"VEO_OUTPUT_PREFIX"`
+	VeoAspectRatio         string        `env:"VEO_ASPECT_RATIO" envDefault:"16:9"`
+	VeoGenerateAudio       bool          `env:"VEO_GENERATE_AUDIO" envDefault:"false"`
+	VeoPollInterval        time.Duration `env:"VEO_POLL_INTERVAL" envDefault:"10s"`
+	VeoOperationTimeout    time.Duration `env:"VEO_OPERATION_TIMEOUT" envDefault:"20m"`
 	VeoPollMaxErrors       int           `env:"VEO_POLL_MAX_ERRORS" envDefault:"10"`
 	VeoUsePreviousVideo    bool          `env:"VEO_USE_PREVIOUS_VIDEO" envDefault:"false"`
 	KeyframeMaxConcurrency int           `env:"KEYFRAME_MAX_CONCURRENCY" envDefault:"1"`
@@ -143,6 +152,7 @@ type Config struct {
 
 // normalize normalizes the provided values.
 func (c *Config) normalize() error {
+	c.trimStringValues()
 	// 環境変数名はアプリ側の関心事なので、キットのエラーへここで文脈を足します。
 	role, err := serverrole.Parse(string(c.Server.Role))
 	if err != nil {
@@ -166,11 +176,39 @@ func (c *Config) normalize() error {
 	c.Tasks.AllowedServiceAccounts = strlist.Normalize(c.Tasks.AllowedServiceAccounts)
 	// Veo は提供リージョンが限られる（例: us-central1）ため、Cloud Tasks 等と共有する
 	// GCP_LOCATION_ID とは別に VEO_LOCATION_ID で上書きできる。未設定なら共通値を使う。
-	if strings.TrimSpace(c.AI.VeoLocationID) == "" {
+	if c.AI.VeoLocationID == "" {
 		c.AI.VeoLocationID = c.GCP.LocationID
 	}
 	c.NormalizeModels()
 	return nil
+}
+
+// trimStringValues は、env から読んだ文字列の前後空白を落とします。
+//
+// 正準形にするのはここ 1 箇所です。使う側で TrimSpace すると、検証は空白付きの値を見て
+// 通し、実際に動くのは空白を落とした別の値になります（" " の VEO_OUTPUT_PREFIX が
+// 「設定されていません」の検査を通り、出力先だけ gs://<bucket>/jobs/ にずれる、など）。
+//
+// シークレットは対象外です。鍵の中身を書き換えると、空白込みで運用されている環境の
+// セッションが黙って無効になります。
+func (c *Config) trimStringValues() {
+	for _, value := range []*string{
+		&c.Server.ServiceURL,
+		&c.Server.Port,
+		&c.GCP.ProjectID,
+		&c.GCP.LocationID,
+		&c.Tasks.QueueID,
+		&c.Tasks.TaskAudienceURL,
+		&c.Tasks.CallerServiceAccountEmail,
+		&c.Storage.FirestoreDatabase,
+		&c.AI.VeoLocationID,
+		&c.AI.VeoOutputPrefix,
+		&c.AI.VeoAspectRatio,
+		&c.AI.KeyframeImageSize,
+		&c.Notification.SlackWebhookURL,
+	} {
+		*value = strings.TrimSpace(*value)
+	}
 }
 
 // NormalizeModels normalizes configured model lists and defaults.
@@ -221,11 +259,11 @@ func joinWorkerPath(serviceURL string) (string, error) {
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。
 func (c *Config) GetGCSObjectURL(path string) string {
-	return remoteio.BuildGCSURI(remoteio.NormalizeBucketName(c.Storage.GCSBucket), path)
+	return remoteio.BuildURI(remoteio.SchemeGCS, c.Storage.GCSBucket, path)
 }
 
 // TaskCallerServiceAccount は、投入するタスクに指定する caller SA を返します。
-// 値は env から読んだままなので、前後の空白だけ落とします。
+// 値は trimStringValues が正準形にしています。
 func (c *Config) TaskCallerServiceAccount() string {
-	return strings.TrimSpace(c.Tasks.CallerServiceAccountEmail)
+	return c.Tasks.CallerServiceAccountEmail
 }

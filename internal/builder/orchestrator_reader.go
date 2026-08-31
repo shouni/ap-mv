@@ -12,7 +12,7 @@ import (
 )
 
 type workflowReader struct {
-	delegate remoteio.InputReader
+	delegate remoteio.Reader
 }
 
 // Open opens the requested resource.

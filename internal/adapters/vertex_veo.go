@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"cloud.google.com/go/storage"
 	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-gemini-client/veo"
+	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -28,16 +28,15 @@ type VertexVeoRunner struct {
 	usePreviousVideo bool
 }
 
-// Close は正規動画パスへのコピーに使う GCS クライアントを解放します。
+// Close は参照を手放すだけです。
+//
+// 以前はここで専用の GCS クライアントを閉じていました。いまはストアを注入して
+// もらう形なので、その寿命は注入した側（ファクトリ）にあります。
 func (r *VertexVeoRunner) Close() error {
-	if r == nil || r.videoCopier == nil {
+	if r == nil {
 		return nil
 	}
-	copier := r.videoCopier
 	r.videoCopier = nil
-	if closer, ok := copier.(interface{ Close() error }); ok {
-		return closer.Close()
-	}
 	return nil
 }
 
@@ -49,16 +48,17 @@ func (r *VertexVeoRunner) Close() error {
 // （実際に InitialDelay が 60s と 30s で割れていました）。認証とリトライの設定は
 // これで1箇所に集約されます。
 //
-// GCS クライアントは、Veo の一時出力パスからジョブ配下の正規パスへ動画をコピーする
-// ために別途持ちます。
-func NewVertexVeoRunner(ctx context.Context, cfg *config.Config, aiClient gemini.VideoGenerator) (*VertexVeoRunner, error) {
+// store は、Veo の一時出力パスからジョブ配下の正規パスへ動画を移すために使います。
+// 以前はここで GCS クライアントをもう 1 つ生成していましたが、
+// remoteio.Store.Copy が同一スキームでサーバーサイドコピーへ落とすため不要になりました。
+func NewVertexVeoRunner(cfg *config.Config, aiClient gemini.VideoGenerator, store remoteio.Store) (*VertexVeoRunner, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
 	if aiClient == nil {
 		return nil, fmt.Errorf("vertex AI client is required")
 	}
-	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
+	if cfg.Storage.GCSBucket == "" {
 		return nil, fmt.Errorf("AP_MV_BUCKET is required")
 	}
 
@@ -70,24 +70,23 @@ func NewVertexVeoRunner(ctx context.Context, cfg *config.Config, aiClient gemini
 	if err != nil {
 		return nil, fmt.Errorf("create Veo client: %w", err)
 	}
-	storageClient, err := storage.NewClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create GCS client: %w", err)
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
 	}
 
 	return &VertexVeoRunner{
 		videos:           videos,
-		videoCopier:      &gcsVideoCopier{client: storageClient},
-		model:            strings.TrimSpace(cfg.AI.VeoModel),
+		videoCopier:      store,
+		model:            cfg.AI.VeoModel,
 		outputStorageURI: buildVeoOutputStorageURI(cfg.Storage.GCSBucket, cfg.AI.VeoOutputPrefix),
-		aspectRatio:      strings.TrimSpace(cfg.AI.VeoAspectRatio),
+		aspectRatio:      cfg.AI.VeoAspectRatio,
 		generateAudio:    cfg.AI.VeoGenerateAudio,
 		usePreviousVideo: cfg.AI.VeoUsePreviousVideo,
 	}, nil
 }
 
 // WithVideoOptions は、モデルとアスペクト比だけを差し替えた派生 Runner を返します。
-// veo クライアントや GCS クライアントは共有するため、タスク単位で安全に呼び出せます。
+// veo クライアントやストアは共有するため、タスク単位で安全に呼び出せます。
 // 空文字の指定は元の設定値を維持します。
 func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.VideoRunner {
 	model = strings.TrimSpace(model)
