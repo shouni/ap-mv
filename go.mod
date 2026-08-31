@@ -12,7 +12,6 @@ require (
 	github.com/shouni/go-gemini-client v1.21.4
 	github.com/shouni/go-http-kit v1.10.0
 	github.com/shouni/go-job-firestore v1.2.0
-	github.com/shouni/go-job-kit v1.3.0
 	github.com/shouni/go-notify v1.3.1
 	github.com/shouni/go-prompt-kit v1.7.0
 	github.com/shouni/go-remote-io v1.11.0
@@ -53,7 +52,6 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/shouni/gemini-image-kit v1.16.1 // indirect

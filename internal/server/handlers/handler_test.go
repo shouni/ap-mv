@@ -97,8 +97,6 @@ func (r fakeHistoryRepository) SignedObjectURL(_ context.Context, uri string) (s
 	return "https://signed.example/object?src=" + uri, nil
 }
 
-func (r fakeHistoryRepository) InvalidateJob(string) {}
-
 // TestLatestVideoForHomePrefersFinalVideo verifies that when a job's chain-finalize result
 // (FinalVideoURL) is available, it is used instead of scanning cuts backward — scanning the
 // last cut alone would show only the last chain's fragment for jobs with more than one

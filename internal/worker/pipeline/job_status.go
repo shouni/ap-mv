@@ -41,14 +41,21 @@ func (s statusRecorder) begin(ctx context.Context, task *domain.Task) (bool, err
 	if task == nil {
 		return false, nil
 	}
-	return s.recorder.Begin(ctx, task.JobID, s.newStatus(task, domain.JobStateRunning),
+	// 継続タスクはレシピをペイロードで持ち回るため、ここで見出しが進みます。
+	// 終端の記録まで待つと、継続を繰り返している間の一覧が投入時のまま止まります。
+	return s.recorder.Begin(ctx, task.JobID, domain.NewJobStatus(task, domain.JobStateRunning),
 		func(next, _ *domain.JobStatus) { next.Attempts++ },
 	)
 }
 
 // markSucceeded は成功と成果物の保存先を記録します。
-func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, req domain.NotificationRequest) {
+//
+// recipe は実行後のレシピです。一覧の見出しはここで最後に塗り直します。タスクの
+// ペイロードに載っていたレシピは実行前のものなので、これを渡さないと完了したジョブが
+// 一覧では 1 つ手前の段階のまま止まります。
+func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, req domain.NotificationRequest, recipe *domain.VideoRecipe) {
 	s.record(ctx, task, domain.JobStateSucceeded, func(next, _ *domain.JobStatus) {
+		next.ApplyVideoRecipe(recipe)
 		next.OutputURI = req.OutputURI
 		if req.Title != "" {
 			next.Title = req.Title
@@ -57,11 +64,15 @@ func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, re
 }
 
 // markFailed は失敗と理由を記録します。
-func (s statusRecorder) markFailed(ctx context.Context, task *domain.Task, cause error) {
+//
+// 失敗しても、そこまでに進んだぶんの見出しは残します（キーフレームまで焼けて動画で
+// 落ちたジョブが、一覧では台本のみに見えてしまわないようにするためです）。
+func (s statusRecorder) markFailed(ctx context.Context, task *domain.Task, cause error, recipe *domain.VideoRecipe) {
 	if cause == nil {
 		return
 	}
 	s.record(ctx, task, domain.JobStateFailed, func(next, _ *domain.JobStatus) {
+		next.ApplyVideoRecipe(recipe)
 		next.Error = cause.Error()
 	})
 }
@@ -78,19 +89,5 @@ func (s statusRecorder) record(
 	if task == nil {
 		return
 	}
-	s.recorder.Record(ctx, task.JobID, s.newStatus(task, state), apply)
-}
-
-// newStatus は今回の記録ぶんの状態を組み立てます。
-func (s statusRecorder) newStatus(task *domain.Task, state domain.JobState) domain.JobStatus {
-	status := domain.JobStatus{
-		JobID:         task.JobID,
-		Command:       string(task.Command),
-		State:         state,
-		OriginalJobID: task.OriginalJobID,
-	}
-	if task.Recipe != nil {
-		status.Title = task.Recipe.Title
-	}
-	return status
+	s.recorder.Record(ctx, task.JobID, domain.NewJobStatus(task, state), apply)
 }

@@ -54,6 +54,35 @@ func sectionCutsAllGenerated(cuts []domain.VideoCut, start, end float64) bool {
 	return found
 }
 
+// videoHistoryFromStatus は、ジョブ状態のドキュメントから一覧 1 行分を組み立てます。
+//
+// 保存先（メタデータ・ZIP）と作成日時はジョブ ID から導けるので、ドキュメントには
+// 写していません。導ける値を写すと、置き場を変えたときに古い行だけが古いパスを
+// 指したまま残ります。
+func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus) domain.VideoHistory {
+	jobID := strings.TrimSpace(status.JobID)
+	title := strings.TrimSpace(status.Title)
+	if title == "" {
+		title = jobID
+	}
+	return domain.VideoHistory{
+		JobID:            jobID,
+		Title:            title,
+		Mood:             strings.TrimSpace(status.Mood),
+		Tempo:            status.Tempo,
+		CreatedAt:        formatHistoryCreatedAt(jobID),
+		VisualMode:       strings.TrimSpace(status.VisualMode),
+		CutCount:         status.Progress.TotalCuts,
+		StorageURI:       r.metadataURI(jobID),
+		Generated:        status.Progress.IsCompleted(),
+		Progress:         status.Progress,
+		KeyframeZipURI:   r.keyframeZipURI(jobID),
+		FinalVideoURL:    strings.TrimSpace(status.FinalVideoURL),
+		AspectRatio:      strings.TrimSpace(status.AspectRatio),
+		GeneratedSeconds: status.GeneratedSeconds,
+	}
+}
+
 func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
 	progress := domain.NewJobProgress(recipe.Cuts)
 	history := domain.VideoHistory{

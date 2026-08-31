@@ -107,9 +107,8 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 	if err := errors.Join(errs...); err != nil {
 		return err
 	}
-	r.deleteCachedHistory(jobID)
-	r.deleteCachedVideoRecipe(jobID)
-	// ジョブが一覧から消えたことを TTL の満了を待たずに反映させる。
-	r.invalidateJobIDList(jobIDListCacheKey)
+	// 一覧はジョブ状態のクエリなので、キャッシュを落として回る必要はありません。
+	// 状態のドキュメントは成果物と別の場所にあり、消すのはハンドラーの仕事です
+	// （handlers.deleteJobStatus）。
 	return nil
 }

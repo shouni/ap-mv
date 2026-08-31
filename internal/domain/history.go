@@ -3,7 +3,7 @@ package domain
 import (
 	"strings"
 
-	"github.com/shouni/go-job-kit/paging"
+	"github.com/shouni/go-job-firestore/jobfirestore"
 )
 
 // VideoHistory is the metadata shown in the generated MV history list.
@@ -218,7 +218,7 @@ func sectionIndexForCutStart(sections []VideoHistorySection, startSec float64) i
 }
 
 // PageMeta contains pagination metadata for history list views.
-type PageMeta = paging.PageMeta
+type PageMeta = jobfirestore.PageMeta
 
 // VideoHistoryPage contains a page of generated MV history items.
 type VideoHistoryPage struct {

@@ -67,6 +67,5 @@ func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, r
 	if err := r.store.Write(ctx, uri, bytes.NewReader(raw), remoteio.WithContentType("application/json")); err != nil {
 		return fmt.Errorf("write recipe (%s): %w", uri, err)
 	}
-	r.InvalidateJob(jobID)
 	return nil
 }

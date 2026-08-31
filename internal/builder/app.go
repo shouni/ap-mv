@@ -55,10 +55,6 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
 	queue := taskQueueAdapter{enqueuer: enqueuer}
-	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
-		BaseURI: workflowOutputBaseURI(cfg),
-		Store:   store,
-	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	// 成果物と違って Firestore に置くため、履歴のプレフィックス削除では消えません
 	// （消すのはハンドラーの仕事です。ports.JobStatusStore.Delete を参照）。
@@ -77,8 +73,13 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		return nil, fmt.Errorf("failed to obtain Firestore client: %w", err)
 	}
 	jobStatus := repository.NewJobStatusRepository(firestoreClient)
-	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
-	closers = append(closers, historyRepository)
+
+	// 一覧はジョブ状態のクエリ、詳細は成果物と同じ場所のメタデータ読み込みです。
+	historyRepository := repository.NewVideoHistoryRepository(repository.VideoHistoryRepositoryConfig{
+		BaseURI:   workflowOutputBaseURI(cfg),
+		Store:     store,
+		JobStatus: jobStatus,
+	})
 
 	// 生成系（Vertex AI・Veo・Slack 通知・パイプライン）を組み立てるのは Worker 面だけです。
 	// Web 面で組み立てないことで、ap-mv-web-runner が aiplatform.user も

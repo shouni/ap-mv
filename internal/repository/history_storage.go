@@ -22,20 +22,12 @@ import (
 // recipe→表示モデルの純粋な変換は history_mapping.go、公開エントリポイントは
 // history_listing.go を参照してください。
 
-// buildHistoryFromRecipe builds (or reuses a cached) VideoHistory for the bulk ListHistoryPage
-// path, where re-deriving every listed job's metadata on every page view would be wasteful.
-func (r *VideoHistoryRepository) buildHistoryFromRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
-	history, ok := r.getCachedHistory(jobID)
-	if !ok {
-		history = videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
-		r.setCachedHistory(jobID, history)
-	}
-	return r.finalizeHistory(ctx, jobID, history)
-}
+// historyFetchConcurrency caps parallel signed-URL requests when signing a job's cuts in bulk.
+// 署名は Cloud Run に秘密鍵が無いためネットワーク呼び出し（IAM SignBlob）です。
+const historyFetchConcurrency = 10
 
-// buildHistoryFromFreshRecipe builds VideoHistory directly from recipe without reading or
-// populating the history cache, so single-job reads (GetHistory) always reflect the latest
-// storage state rather than a snapshot cached before a regenerate/edit job completed.
+// buildHistoryFromFreshRecipe builds VideoHistory directly from the stored recipe, so
+// single-job reads (GetHistory) always reflect the latest storage state.
 func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
 	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
 	return r.finalizeHistory(ctx, jobID, history)
@@ -112,22 +104,7 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 	return r.signedURL(ctx, uri)
 }
 
-// loadVideoRecipe returns a cached recipe if present, otherwise fetches and caches one. Used by
-// the bulk ListHistoryPage path.
-func (r *VideoHistoryRepository) loadVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
-	if recipe, ok := r.getCachedVideoRecipe(jobID); ok {
-		return recipe, nil
-	}
-	recipe, err := r.fetchVideoRecipe(ctx, jobID)
-	if err != nil {
-		return domain.VideoRecipe{}, err
-	}
-	r.setCachedVideoRecipe(jobID, recipe)
-	return recipe, nil
-}
-
-// fetchVideoRecipe always reads the recipe directly from storage, bypassing the cache entirely.
-// Used by single-job reads (GetHistory, DownloadKeyframes) that need the current state.
+// fetchVideoRecipe reads the recipe directly from storage.
 func (r *VideoHistoryRepository) fetchVideoRecipe(ctx context.Context, jobID string) (domain.VideoRecipe, error) {
 	rc, err := r.store.Open(ctx, r.metadataURI(jobID))
 	if err != nil {

@@ -4,41 +4,53 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 
-	"github.com/shouni/go-job-kit/cache"
-	"github.com/shouni/go-job-kit/joblist"
-	"github.com/shouni/go-job-kit/paging"
+	"github.com/shouni/go-job-firestore/jobfirestore"
 	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/ports"
 )
 
 // このファイルは履歴の公開エントリポイント（一覧・詳細）を集めています。
 // ストレージ読み込み・キャッシュ・署名URLは history_storage.go、
 // recipe→表示モデルの純粋な変換は history_mapping.go を参照してください。
 
-const (
-	videoMetadataFile   = "video_music_meta.json"
-	regenKeyframePrefix = "regen-keyframe-"
-	// historyFetchConcurrency caps parallel GCS fetches when signing/loading history in bulk.
-	historyFetchConcurrency = 10
-)
+const videoMetadataFile = "video_music_meta.json"
 
-// VideoHistoryRepository lists generated MV metadata from the workflow output directory.
+// listedCommands は、履歴一覧に出すコマンドです。
+//
+// 以前は「ジョブのディレクトリが baseURI 直下にあり、regen-keyframe- で始まらないこと」で
+// 選んでいました。状態が 1 つのコレクションに集まった今は、絞り込みがその役目を持ちます。
+//
+// ここに無いコマンド（regenerate_cut_keyframe / regenerate_section_keyframes /
+// regenerate_zip / section_video / finalize_video）は、成果物を**元のジョブへ**書き戻す
+// 保守操作です。自分のディレクトリを持たないので以前も一覧に現れず、出すと成果物の無い
+// 行が並ぶことになります。進行状況は /jobs/{jobID} で追えます。
+//
+// video_gen_continuation はここにありません。継続タスクは Command を上書きしますが、
+// 記録されるのは domain.Task.ListedCommand が返す元のコマンドです。
+var listedCommands = []string{
+	string(domain.CommandVideoRecipeCreate),
+	string(domain.CommandVideoRecipeDraft),
+	string(domain.CommandMVFromKeyframeVideoRecipe),
+	string(domain.CommandShortVideoFromSection),
+	string(domain.CommandRegenerateCutVideo),
+}
+
+// VideoHistoryRepository は、生成済み MV の一覧と詳細を返します。
+//
+// 一覧はジョブ状態のコレクションへのクエリ、詳細は成果物と同じ場所に置かれた
+// video_music_meta.json の読み込みです。
 type VideoHistoryRepository struct {
 	baseURI string
 	// store は読み書き・一覧・署名の窓口です。
-	store        remoteio.Store
-	historyCache *cache.TTL[domain.VideoHistory]
-	recipeCache  *cache.TTL[domain.VideoRecipe]
-	// jobIDCache は一覧走査で得たジョブ ID を短時間キャッシュします。
-	// メタデータ本体のキャッシュと違い、これが無いと履歴画面を開くたびに
-	// baseURI 配下全体の List が走ります。
-	jobIDCache *cache.IDList
+	store remoteio.Store
+	// jobStatus は一覧の引き先です。見出しは状態ドキュメントに写してあります。
+	jobStatus ports.JobStatusStore
 }
 
 // VideoHistoryRepositoryConfig は VideoHistoryRepository の依存関係です。
@@ -46,139 +58,54 @@ type VideoHistoryRepository struct {
 // 依存を名前で受けるのは、位置引数だと取り違えても型が同じ方向へ通ってしまう
 // 箇所があるためです。
 type VideoHistoryRepositoryConfig struct {
-	// BaseURI は履歴を走査する起点です（末尾のスラッシュは正規化します）。
+	// BaseURI は成果物を置く起点です（末尾のスラッシュは正規化します）。
 	BaseURI string
 	// Store は読み書き・一覧・署名の窓口です。
 	// 読み取り専用の用途でも 1 つで足ります。
 	Store remoteio.Store
-	// HistoryCache は履歴メタデータのキャッシュです。nil なら既定の TTL キャッシュを作ります。
-	HistoryCache *cache.TTL[domain.VideoHistory]
+	// JobStatus は履歴一覧の引き先です。nil なら一覧は空を返します。
+	JobStatus ports.JobStatusStore
 }
 
 // NewVideoHistoryRepository creates a generated MV history repository.
 func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRepository {
-	historyCache := cfg.HistoryCache
-	if historyCache == nil {
-		historyCache = NewHistoryCache()
-	}
 	return &VideoHistoryRepository{
-		baseURI:      strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
-		store:        cfg.Store,
-		historyCache: historyCache,
-		recipeCache:  NewVideoRecipeCache(),
-		jobIDCache:   NewJobIDListCache(),
+		baseURI:   strings.TrimRight(strings.TrimSpace(cfg.BaseURI), "/"),
+		store:     cfg.Store,
+		jobStatus: cfg.JobStatus,
 	}
-}
-
-// collectJobIDs は baseURI 直下のジョブディレクトリを走査して MV ジョブの ID を集めます。
-// バケット全体の List になるため、呼び出しは listJobIDs のキャッシュ越しに行います。
-//
-// 走査そのものは joblist が担います。区切り文字を指定してジョブ 1 件を 1 エントリで
-// 受け取る形なので、配下の成果物（カットごとのキーフレーム・動画・最終 MV）が全件
-// 返ることはなく、regens/cut-N/ のようなサブディレクトリもジョブの疑似ディレクトリへ
-// 畳まれます。ここが与えるのは 2 つの絞り込みだけです。
-//
-//   - regen-keyframe- で始まる ID は再生成用の作業ジョブなので一覧から除外する
-//   - ID の形を満たさないディレクトリは落とす
-//
-// 拾えるのはディレクトリ名だけなので、video_music_meta.json を持たないジョブ
-// （メタデータの保存前に落ちたもの）も ID としては現れます。それらは ListHistoryPage の
-// フォールバック値（ジョブ ID のみの行）として一覧に並びます。生成に失敗したジョブが
-// 一覧から完全に消えるより、行として見えているほうが追跡できるためです。
-func (r *VideoHistoryRepository) collectJobIDs(ctx context.Context) ([]string, error) {
-	jobIDs, err := joblist.Collect(ctx, r.store, r.baseURI,
-		joblist.WithKeep(func(jobID string) bool {
-			return !strings.HasPrefix(jobID, regenKeyframePrefix)
-		}),
-		joblist.WithValidIDsOnly(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list history objects: %w", err)
-	}
-	return jobIDs, nil
 }
 
 // ListHistoryPage lists MV jobs with paging, optionally narrowed to one progress stage.
 //
-// stage が空なら全ジョブを返します。指定した場合は、その段階のジョブだけを対象に
-// ページングします。段階はレシピのカット列からしか導けないため、絞り込むときは
-// 先に全ジョブのメタデータを読みます。下書きが別プレフィックスだった頃も一覧は
-// そのプレフィックスの全走査だったので、コストは同等です。
+// 走査もメモリ上の並べ替えも短期キャッシュも要りません。クエリがその役目を果たします。
+// 総件数は集計クエリで求めるため、ページの外にあるジョブのドキュメントは読みません。
+// 以前は baseURI 配下のジョブ ID を全件集めて ID 内の時刻で並べ替え、表示するページ分の
+// video_music_meta.json を並行に開いていました。段階での絞り込みに至っては、段階が
+// カット列からしか導けないため全ジョブのメタデータを読んでいました。
+//
+// stage が空なら全ジョブを返します。
 func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error) {
-	if r == nil || r.store == nil || r.baseURI == "" {
+	if r == nil || r.jobStatus == nil {
 		return domain.VideoHistoryPage{}, nil
 	}
-	jobIDs, err := r.listJobIDs(ctx, jobIDListCacheKey, r.collectJobIDs)
-	if err != nil {
-		return domain.VideoHistoryPage{}, err
-	}
+
+	opts := []jobfirestore.ListOption{jobfirestore.WithCommand(listedCommands...)}
 	if stage != "" {
-		jobIDs, err = r.jobIDsAtStage(ctx, jobIDs, stage)
-		if err != nil {
-			return domain.VideoHistoryPage{}, err
-		}
+		// パスは firestore タグの名前です（domain.JobStatus.Progress → domain.JobProgress.Stage）。
+		opts = append(opts, jobfirestore.WithField("progress.stage", string(stage)))
 	}
 
-	// 読み込めなかったジョブも一覧には残したいので、代替値は load の中で返します
-	// （LoadPage は load がエラーを返した ID を一覧から落とします）。
-	load := func(ctx context.Context, id string) (domain.VideoHistory, error) {
-		history, err := r.buildHistory(ctx, id)
-		if err != nil {
-			slog.WarnContext(ctx, "failed to load history metadata",
-				"job_id", id,
-				"error", err,
-			)
-			return domain.VideoHistory{
-				JobID:      id,
-				Title:      id,
-				CreatedAt:  formatHistoryCreatedAt(id),
-				StorageURI: r.metadataURI(id),
-			}, nil
-		}
-		return history, nil
-	}
-
-	// ジョブ ID は "{用途}-{生成時刻}-{乱数}" 形式で、用途プレフィックスが 7 種あります。
-	// ID の文字列比較ではプレフィックス順になってしまうため、埋め込まれた時刻を
-	// ソートキーとして渡します。時刻を持たない ID は末尾に回ります。
-	histories, meta, err := paging.LoadPage(ctx, jobIDs, page, perPage, jobid.SortKey, load,
-		paging.WithConcurrency(historyFetchConcurrency),
-	)
+	statuses, meta, err := r.jobStatus.List(ctx, page, perPage, opts...)
 	if err != nil {
-		return domain.VideoHistoryPage{}, err
+		return domain.VideoHistoryPage{}, fmt.Errorf("list job statuses: %w", err)
 	}
 
-	return domain.VideoHistoryPage{
-		Items:    histories,
-		PageMeta: meta,
-	}, nil
-}
-
-// jobIDsAtStage は、指定した進行段階にあるジョブの ID だけを、入力順を保って返します。
-// 読み込めなかったジョブは段階が判定できないため除外します（一覧の未読込プレースホルダは
-// 段階を持てないので、絞り込みの対象にすると常に漏れます）。
-func (r *VideoHistoryRepository) jobIDsAtStage(ctx context.Context, jobIDs []string, stage domain.JobStage) ([]string, error) {
-	matched := make([]string, 0, len(jobIDs))
-	for _, id := range jobIDs {
-		history, err := r.buildHistory(ctx, id)
-		if err != nil {
-			slog.WarnContext(ctx, "skipping job while filtering by stage",
-				"job_id", id, "stage", stage, "error", err)
-			continue
-		}
-		if history.Progress.Stage == stage {
-			matched = append(matched, id)
-		}
+	items := make([]domain.VideoHistory, 0, len(statuses))
+	for _, status := range statuses {
+		items = append(items, r.videoHistoryFromStatus(status))
 	}
-	return matched, nil
-}
-
-func (r *VideoHistoryRepository) buildHistory(ctx context.Context, jobID string) (domain.VideoHistory, error) {
-	recipe, err := r.loadVideoRecipe(ctx, jobID)
-	if err != nil {
-		return domain.VideoHistory{}, err
-	}
-	return r.buildHistoryFromRecipe(ctx, jobID, recipe), nil
+	return domain.VideoHistoryPage{Items: items, PageMeta: meta}, nil
 }
 
 // GetHistory loads generated MV job metadata and cut keyframe references.

@@ -63,11 +63,6 @@ func (RegenerateCutKeyframeFilter) Execute(ctx context.Context, fc *Context) err
 			if _, err := fc.Workflows.Publish.Run(ctx, fc.VideoRecipe, originalOutputPath); err != nil {
 				return fmt.Errorf("save updated recipe after regenerating %s: %w", label, err)
 			}
-			// 元ジョブの metadata を上書きしたため、History Detail が古いキャッシュを
-			// 返し続けないよう、同一プロセス内のキャッシュを無効化する。
-			if fc.HistoryRepository != nil && fc.Task.OriginalJobID != "" {
-				fc.HistoryRepository.InvalidateJob(fc.Task.OriginalJobID)
-			}
 		}
 	}
 

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shouni/go-job-firestore/jobfirestore"
+
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/worker/filter"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -38,6 +40,11 @@ func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.J
 	s.statuses[status.JobID] = status
 	s.saved = append(s.saved, status)
 	return nil
+}
+
+// List は一覧のためのクエリで、パイプラインは呼びません。ports を満たすためだけの実装です。
+func (s *fakeJobStatusStore) List(context.Context, int, int, ...jobfirestore.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
+	return nil, domain.PageMeta{}, nil
 }
 
 func (s *fakeJobStatusStore) Delete(ctx context.Context, jobID string) error {

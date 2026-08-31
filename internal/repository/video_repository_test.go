@@ -11,6 +11,8 @@ import (
 
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/memio"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // fakeHistoryReader は memio を包んだストレージのフェイクです。
@@ -143,29 +145,27 @@ func (s *countingHistorySigner) Count(uri string) int {
 	return s.count[uri]
 }
 
-func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
+// 一覧はジョブ状態のクエリで作ります。見出しはドキュメントに写してあり、保存先と
+// 作成日時だけをジョブ ID から導きます。
+func TestListHistoryPageBuildsRowsFromJobStatus(t *testing.T) {
 	t.Parallel()
 
-	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
-	reader := &fakeHistoryReader{
-		paths: []string{
-			metadataURI,
-			"gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_001.png",
-		},
-		files: map[string]string{
-			metadataURI: `{
-				"title": "軌跡のアーキテクト",
-				"mood": "Sparkling",
-				"tempo": 168,
-				"compose_mode": "sparkle_rock",
-				"cuts": [
-					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "status": "generated"},
-					{"cut_index": 2, "duration_sec": 8, "visual_anchor": "sky", "status": "generated"}
-				]
-			}`,
-		},
+	status := domain.JobStatus{
+		Mood:             "Sparkling",
+		Tempo:            168,
+		VisualMode:       "sparkle_rock",
+		AspectRatio:      "16:9",
+		GeneratedSeconds: 16,
+		Progress:         domain.JobProgress{Stage: domain.StageCompleted, TotalCuts: 2, KeyframeCuts: 2, VideoCuts: 2},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
+	status.JobID = "video-recipe-20260618-081931-abc"
+	status.Title = "軌跡のアーキテクト"
+	store := newFakeStatusStore(status)
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
+		Store:     &fakeHistoryReader{},
+		JobStatus: store,
+	})
 
 	page, err := repo.ListHistoryPage(context.Background(), 1, 20, "")
 	if err != nil {
@@ -175,17 +175,79 @@ func TestListHistoryPageLoadsVideoMetadata(t *testing.T) {
 		t.Fatalf("len(page.Items) = %d, want 1", len(page.Items))
 	}
 	got := page.Items[0]
-	if got.JobID != "video-recipe-20260618-081931-abc" {
+	if got.JobID != status.JobID {
 		t.Fatalf("JobID = %q", got.JobID)
 	}
 	if got.Title != "軌跡のアーキテクト" {
 		t.Fatalf("Title = %q", got.Title)
 	}
 	if got.CutCount != 2 {
-		t.Fatalf("CutCount = %d, want 2", got.CutCount)
+		t.Fatalf("CutCount = %d, want 2 (progress.total_cuts が唯一のカット数)", got.CutCount)
 	}
 	if !got.Generated {
 		t.Fatal("Generated = false, want true")
+	}
+	// 保存先はドキュメントに写さず、ジョブ ID から導きます。
+	want := "gs://bucket/ap-mv/veo/jobs/" + status.JobID + "/video_music_meta.json"
+	if got.StorageURI != want {
+		t.Fatalf("StorageURI = %q, want %q", got.StorageURI, want)
+	}
+	if got.KeyframeZipURI == "" {
+		t.Fatal("KeyframeZipURI が空です")
+	}
+	// 一覧はメタデータを 1 件も開きません（開いていた頃はページ分の並行読みが要りました）。
+	if store.listCalls != 1 {
+		t.Fatalf("listCalls = %d, want 1", store.listCalls)
+	}
+}
+
+// 段階での絞り込みはクエリが行います。以前は段階がカット列からしか導けないため、
+// 絞り込むと全ジョブのメタデータを読んでいました。
+func TestListHistoryPageAddsStageFilter(t *testing.T) {
+	t.Parallel()
+
+	store := newFakeStatusStore()
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
+		Store:     &fakeHistoryReader{},
+		JobStatus: store,
+	})
+
+	if _, err := repo.ListHistoryPage(context.Background(), 2, 10, ""); err != nil {
+		t.Fatalf("ListHistoryPage() error = %v", err)
+	}
+	// 絞り込み無しでもコマンドの限定は必ず載ります（保守用のジョブを混ぜないため）。
+	if store.lastOptions != 1 {
+		t.Fatalf("options = %d, want 1 (command のみ)", store.lastOptions)
+	}
+	if store.lastPage != 2 || store.lastPerPage != 10 {
+		t.Fatalf("page/perPage = %d/%d, want 2/10", store.lastPage, store.lastPerPage)
+	}
+
+	if _, err := repo.ListHistoryPage(context.Background(), 1, 10, domain.StageScript); err != nil {
+		t.Fatalf("ListHistoryPage(stage) error = %v", err)
+	}
+	if store.lastOptions != 2 {
+		t.Fatalf("options = %d, want 2 (command + progress.stage)", store.lastOptions)
+	}
+}
+
+// 記録先が無いときは空を返します。一覧が引けないことと 0 件は区別できませんが、
+// web ロールでも worker ロールでも Firestore は必ず組み立てるため、実運用では起きません。
+func TestListHistoryPageWithoutJobStatusReturnsEmpty(t *testing.T) {
+	t.Parallel()
+
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Store:   &fakeHistoryReader{},
+	})
+
+	page, err := repo.ListHistoryPage(context.Background(), 1, 20, "")
+	if err != nil {
+		t.Fatalf("ListHistoryPage() error = %v", err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("len(page.Items) = %d, want 0", len(page.Items))
 	}
 }
 
@@ -207,7 +269,7 @@ func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 			}`,
 		},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader})
 
 	history, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc")
 	if err != nil {
@@ -238,120 +300,10 @@ func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 	}
 }
 
-// TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt verifies GetHistory never reuses a
-// recipe cached by ListHistoryPage's bulk read: a single-job detail read always goes straight to
-// storage, so it can't serve a stale pre-regenerate/edit snapshot (this matters most under
-// multiple running instances, where a worker instance's cache invalidation can't reach every
-// other instance's in-memory cache).
-func TestGetHistoryAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
-	t.Parallel()
-
-	const (
-		jobID       = "video-recipe-20260618-081931-abc"
-		metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
-	)
-	reader := &fakeHistoryReader{
-		paths: []string{metadataURI},
-		files: map[string]string{
-			metadataURI: `{
-				"title": "軌跡のアーキテクト",
-				"cuts": [
-					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "keyframe_reference": "images/keyframe_001.png"}
-				]
-			}`,
-		},
-	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
-
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
-		t.Fatalf("ListHistoryPage() error = %v", err)
-	}
-	if _, err := repo.GetHistory(context.Background(), jobID); err != nil {
-		t.Fatalf("GetHistory() error = %v", err)
-	}
-	if got := reader.OpenCount(metadataURI); got != 2 {
-		t.Fatalf("metadata open count = %d, want 2 (ListHistoryPage's cached read must not be reused by GetHistory)", got)
-	}
-}
-
-// TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt mirrors the GetHistory case:
-// downloading keyframes is a deliberate, low-frequency action where a user expects the current
-// state, so it must not silently serve a recipe cached by an earlier ListHistoryPage call.
-func TestDownloadKeyframesAlwaysReadsFreshEvenAfterHistoryListCachedIt(t *testing.T) {
-	t.Parallel()
-
-	const (
-		jobID       = "video-recipe-20260618-081931-abc"
-		metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
-		keyframeURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/images/keyframe_001.png"
-	)
-	reader := &fakeHistoryReader{
-		paths: []string{metadataURI, keyframeURI},
-		files: map[string]string{
-			metadataURI: `{
-				"title": "軌跡のアーキテクト",
-				"cuts": [
-					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "keyframe_reference": "images/keyframe_001.png"}
-				]
-			}`,
-			keyframeURI: "fake-image-bytes",
-		},
-	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
-
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
-		t.Fatalf("ListHistoryPage() error = %v", err)
-	}
-	if err := repo.DownloadKeyframes(context.Background(), jobID, func(string, io.Reader) error { return nil }); err != nil {
-		t.Fatalf("DownloadKeyframes() error = %v", err)
-	}
-	if got := reader.OpenCount(metadataURI); got != 2 {
-		t.Fatalf("metadata open count = %d, want 2 (ListHistoryPage's cached read must not be reused by DownloadKeyframes)", got)
-	}
-}
-
-// 一覧はメタデータを TTL cache に載せますが、**署名は一切しません**。
-//
-// 以前は表示のたびに署名し直していました（期限付きの URL をキャッシュへ載せると、
-// 二度目の表示で期限切れの URL を配ってしまうため）。いまは署名そのものを画面から
-// 外したので、キャッシュに期限付きの値が入る余地がありません。メタデータの読み出しが
-// 1 回で済むこと（＝キャッシュが効いていること）は変わらず確かめます。
-func TestListHistoryPageCachesMetadataAndSignsNothing(t *testing.T) {
-	t.Parallel()
-
-	const metadataURI = "gs://bucket/ap-mv/veo/jobs/video-recipe-20260618-081931-abc/video_music_meta.json"
-	reader := &fakeHistoryReader{
-		paths: []string{metadataURI},
-		files: map[string]string{
-			metadataURI: `{
-				"title": "軌跡のアーキテクト",
-				"cuts": [
-					{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage"}
-				]
-			}`,
-		},
-	}
-	signer := &countingHistorySigner{}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
-
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
-		t.Fatalf("first ListHistoryPage() error = %v", err)
-	}
-	if _, err := repo.ListHistoryPage(context.Background(), 1, 20, ""); err != nil {
-		t.Fatalf("second ListHistoryPage() error = %v", err)
-	}
-	if got := signer.Count(metadataURI); got != 0 {
-		t.Fatalf("一覧が署名しています: count = %d, want 0（署名はリダイレクトの時点だけ）", got)
-	}
-	if got := reader.OpenCount(metadataURI); got != 1 {
-		t.Fatalf("metadata open count = %d, want 1", got)
-	}
-}
-
 func TestGetHistoryReturnsErrorWhenRepositoryMisconfigured(t *testing.T) {
 	t.Parallel()
 
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "", Store: nil, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "", Store: nil})
 
 	if _, err := repo.GetHistory(context.Background(), "video-recipe-20260618-081931-abc"); err == nil {
 		t.Fatal("GetHistory() error = nil, want configuration error")
@@ -368,7 +320,7 @@ func TestDeleteHistoryDeletesJobObjects(t *testing.T) {
 		},
 		files: map[string]string{},
 	}
-	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader, HistoryCache: NewHistoryCache()})
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/ap-mv/veo/jobs", Store: reader})
 
 	if err := repo.DeleteHistory(context.Background(), "job-1"); err != nil {
 		t.Fatalf("DeleteHistory() error = %v", err)
@@ -403,7 +355,6 @@ func TestGetVeoUsageReadsRecordedTally(t *testing.T) {
 		Store: notFoundReader(map[string]string{
 			usageURI: `{"schema_version":1,"job_id":"` + testUsageJobID + `","model":"veo-test","calls":3,"submitted_seconds":22,"cuts":[{"cut_index":1,"calls":2,"submitted_seconds":16}]}`,
 		}),
-		HistoryCache: NewHistoryCache(),
 	})
 
 	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
@@ -428,9 +379,8 @@ func TestGetVeoUsageTreatsMissingRecordAsNoData(t *testing.T) {
 	t.Parallel()
 
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
-		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Store:        notFoundReader(map[string]string{}),
-		HistoryCache: NewHistoryCache(),
+		BaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Store:   notFoundReader(map[string]string{}),
 	})
 
 	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
@@ -448,9 +398,8 @@ func TestGetVeoUsageTreatsEmptyObjectAsNoData(t *testing.T) {
 
 	usageURI := "gs://bucket/ap-mv/veo/jobs/" + testUsageJobID + "/veo_usage.json"
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
-		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Store:        notFoundReader(map[string]string{usageURI: "  \n"}),
-		HistoryCache: NewHistoryCache(),
+		BaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Store:   notFoundReader(map[string]string{usageURI: "  \n"}),
 	})
 
 	usage, err := repo.GetVeoUsage(context.Background(), testUsageJobID)
@@ -466,9 +415,8 @@ func TestGetVeoUsageRejectsInvalidJobID(t *testing.T) {
 	t.Parallel()
 
 	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
-		BaseURI:      "gs://bucket/ap-mv/veo/jobs",
-		Store:        notFoundReader(map[string]string{}),
-		HistoryCache: NewHistoryCache(),
+		BaseURI: "gs://bucket/ap-mv/veo/jobs",
+		Store:   notFoundReader(map[string]string{}),
 	})
 
 	if _, err := repo.GetVeoUsage(context.Background(), "../escape"); err == nil {

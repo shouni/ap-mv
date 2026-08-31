@@ -195,11 +195,17 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 
 ### History Storage
 
-生成履歴は `AP_MV_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下を参照します。ジョブごとの `video_music_meta.json` を一覧対象とし、詳細画面では同じ JSON の `cuts[]` から keyframe / video / status などを表示します。
+成果物は `AP_MV_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下に置きます。詳細画面はジョブごとの `video_music_meta.json` を読み、`cuts[]` から keyframe / video / status などを表示します。
+
+**一覧は Firestore のクエリです。** 一覧に出す見出し（題名・ムード・テンポ・映像モード・アスペクト比・進行段階・カット数・生成秒数・完成動画 URI）はジョブ状態のドキュメントへ写してあり、走査もメモリ上の並べ替えも短期キャッシュも要りません。総件数は集計クエリで求めるため、ページの外にあるジョブは読みません。写した値が古くならないのは、状態を記録するたびに `JobStatus.ApplyVideoRecipe` が塗り直すからです（投入時・処理開始時・終端の 3 か所すべてで通ります）。
 
 **台本のみのジョブ**（`video_recipe_draft`）も、完成ジョブと同じ `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。以前は `drafts/` という兄弟プレフィックスと専用ファイル名に分けていましたが、中身は同じ `VideoRecipe` で走査規則も同じだったため、一覧・取得・削除を 2 系統維持するだけの分離でした。進行段階は `domain.JobProgress` がカット列（キーフレームの有無・動画の生成状況）から導くので、保存場所で区別する必要がありません。台本のみのジョブは履歴一覧に `script` 段階として並び、`/history?stage=script` で絞り込めます。
 
-**履歴一覧**（`ListHistoryPage`）は、多数の job を毎回読み直すコストを抑えるため、metadata JSON を短時間 TTL cache に保持します。**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は、regenerate/編集ジョブ完了直後に最新状態を確認したいケースで stale なキャッシュを返さないよう、常に GCS から直接読み込みます（キャッシュを一切経由しません）。Cloud Run が複数インスタンスで動く場合、ワーカーインスタンスでのキャッシュ無効化が他インスタンスの一覧キャッシュには届かないことがありますが、詳細・ダウンロードは常に最新なので実害はありません。署名付き URL は表示ごとに生成し、期限付き URL 自体は cache しません。
+**一覧に出すのは 5 コマンド**（`video_recipe_create` / `video_recipe_draft` / `mv_from_keyframe_video_recipe` / `short_video_from_section` / `regenerate_cut_video`）です。残りの保守操作（キーフレーム再生成・ZIP 再生成・`section_video`・`finalize_video`）は成果物を**元のジョブへ**書き戻すので自分のディレクトリを持たず、以前も一覧に現れていません。出すと成果物の無い行が並ぶだけなので、コマンドで絞ります。進行状況は `/jobs/{jobID}` で追えます。継続タスク（`video_gen_continuation`）が `Command` を上書きしても一覧から消えないのは、記録するのが `domain.Task.ListedCommand()`（＝元のコマンド）だからです。
+
+**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
+
+**移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が `video_music_meta.json` から書き起こします。既にドキュメントがあるジョブは触りません。
 
 ---
 
@@ -445,9 +451,9 @@ README「タイムアウトの三段」にあります。
 * ジョブの進行状況は Firestore のコレクション `ap-mv`（データベースは `FIRESTORE_DATABASE`）に、ジョブ ID をドキュメント ID として記録します。Web プロセスが投入時に `queued` を、Worker プロセスが `running` → `succeeded` / `failed` を書き込みます。**成果物とは別の場所にあるため、履歴のプレフィックス一括削除では消えません。** ジョブを削除するときは状態のドキュメントも消します（`handlers.deleteJobStatus`）。
 * Cloud Tasks は at-least-once 配信のため、`Runner.Execute` は開始時に完了済み（`succeeded`）のジョブを検出したら処理を打ち切ります。通知失敗などでワーカーが一度エラーを返しただけでも再配信されるため、このガードが無いと Veo の生成コストが二重に発生します。
 * カット分割された動画生成が継続タスクへ引き継がれる間（`ErrPipelineDeferred`）は `running` のままにします。ここで `succeeded` にすると、同じ `job_id` を引き継ぐ継続タスクが再実行ガードで打ち切られ、残りのカットが生成されなくなります。なお、このガードはジョブ単位のため、実行中（`running`）に再配信された場合のカット単位の重複生成までは防げません。
-* 履歴一覧のジョブ ID 走査は短い TTL（1分）でキャッシュし、履歴画面を開くたびに出力ディレクトリ全体を List しないようにしています（削除時は明示的に破棄）。
+* 履歴一覧は Firestore のクエリなので、出力ディレクトリの走査もキャッシュもありません。絞り込みと並べ替えには複合索引が要ります（ap-infra の `mv_history` / `mv_history_stage`）。索引が無いクエリは実行時にエラーになり、エミュレータでは検出できません。
 * ジョブ ID の生成・検証・正規化に加え、**埋め込まれた作成時刻の復元も** `go-utils/jobid` に集約しています。ap-comp が発行したジョブ ID（`music_job_id`）も同じ規則で検証され、採番形式が違っても `jobid.CreatedAt` / `jobid.SortKey` で時刻を読めます。
-* 履歴一覧の並び順は `paging.LoadPage` / `SelectIDs` に `jobid.SortKey` を渡していることに依存しています。用途プレフィックスが 7 種あるため ID の文字列比較ではプレフィックス順になり、**エラーにならず静かに並び替わります**。作成日時の表示は UTC 採番の時刻を `go-utils/jst` で JST へ変換したもので、実行環境のタイムゾーン設定には依存しません。
+* 履歴一覧の並び順は Firestore の `queued_at` 降順です。作成日時の**表示**はジョブ ID に埋め込まれた UTC の採番時刻を `go-utils/jst` で JST へ変換したもので、実行環境のタイムゾーン設定には依存しません。
 
 ---
 
