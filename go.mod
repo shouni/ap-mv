@@ -6,7 +6,6 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
-	github.com/gorilla/sessions v1.4.0
 	github.com/shouni/gcp-kit v1.14.0
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-gemini-client v1.21.0
@@ -49,6 +48,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
 	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/gorilla/sessions v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jellydator/ttlcache/v3 v3.4.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
