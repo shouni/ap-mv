@@ -101,16 +101,66 @@ func newRegenSectionTestContext(task *domain.Task, runner *fakeCutKeyframeRunner
 	}
 }
 
-// fakePublishRunner records the recipe it was asked to save, standing in for
+// fakePublishRunner records where it was asked to save, standing in for
 // orchestrator.VideoPublishRunner in tests that exercise the OverwriteKeyframe path.
-type fakePublishRunner struct{}
+type fakePublishRunner struct {
+	paths []string
+}
 
-func (fakePublishRunner) Run(_ context.Context, _ *video.Recipe, _ string) (*video.PublishResult, error) {
+func (p *fakePublishRunner) Run(_ context.Context, _ *video.Recipe, outputPath string) (*video.PublishResult, error) {
+	p.paths = append(p.paths, outputPath)
 	return &video.PublishResult{}, nil
 }
 
-func (fakePublishRunner) BuildMetadata(_ *video.Recipe) ([]byte, error) {
+func (p *fakePublishRunner) BuildMetadata(_ *video.Recipe) ([]byte, error) {
 	return nil, nil
+}
+
+// 上書きは**元ジョブの**ディレクトリへ書きます。fc.OutputPath は再生成用に採番した新しい
+// ジョブを指しているので、そちらへ書くと元ジョブのレシピは古いキーフレームを指したままに
+// なり、画面には何も変化が出ません（生成そのものは成功して見えます）。書き先は
+// Task.RecipeURL から導きます。
+func TestRegenerateCutKeyframeFilterOverwritesTheOriginalJob(t *testing.T) {
+	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/cut-1/images/keyframe_1.png"}
+	task := &domain.Task{
+		Command:           domain.CommandRegenerateCutKeyframe,
+		OverwriteKeyframe: true,
+		OriginalJobID:     "original-job-1",
+		RecipeURL:         "gs://bucket/jobs/original-job-1/video_music_meta.json",
+	}
+	fc := newRegenTestContext(task, runner)
+	publish := &fakePublishRunner{}
+	fc.Workflows.Publish = publish
+
+	if err := (RegenerateCutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	want := "gs://bucket/jobs/original-job-1/"
+	if len(publish.paths) != 1 || publish.paths[0] != want {
+		t.Fatalf("published to %v, want [%s]", publish.paths, want)
+	}
+}
+
+// 上書きを指定しなければ元ジョブには一切書きません。再生成した画像を見てから
+// 採用するかを決められるのがこの操作の要点です。
+func TestRegenerateCutKeyframeFilterKeepsTheOriginalJobWithoutOverwrite(t *testing.T) {
+	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/cut-1/images/keyframe_1.png"}
+	task := &domain.Task{
+		Command:           domain.CommandRegenerateCutKeyframe,
+		OverwriteKeyframe: false,
+		OriginalJobID:     "original-job-1",
+		RecipeURL:         "gs://bucket/jobs/original-job-1/video_music_meta.json",
+	}
+	fc := newRegenTestContext(task, runner)
+	publish := &fakePublishRunner{}
+	fc.Workflows.Publish = publish
+
+	if err := (RegenerateCutKeyframeFilter{}).Execute(context.Background(), fc); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if len(publish.paths) != 0 {
+		t.Fatalf("published to %v, want nothing", publish.paths)
+	}
 }
 
 func TestRegenerateCutKeyframeFilterUsesFullRegenerateByDefault(t *testing.T) {
