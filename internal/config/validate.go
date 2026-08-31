@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/netarmor/securenet"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/shouni/gcp-kit/auth"
 	"github.com/shouni/gcp-kit/cloudlog"
 	"github.com/shouni/gcp-kit/cloudrun"
 	"github.com/shouni/go-serve-kit/secureheaders"
@@ -17,7 +18,6 @@ import (
 	"github.com/shouni/ap-mv/internal/builder"
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/server/handlers"
-	"github.com/shouni/gcp-kit/auth"
 )
 
 // NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
