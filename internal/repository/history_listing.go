@@ -17,8 +17,8 @@ import (
 )
 
 // このファイルは履歴の公開エントリポイント（一覧・詳細）を集めています。
-// ストレージ読み込み・キャッシュ・署名URLは history_storage.go、
-// recipe→表示モデルの純粋な変換は history_mapping.go を参照してください。
+// ストレージ読み込みと署名 URL は history_storage.go、状態・レシピから表示モデルへの
+// 変換は history_mapping.go を参照してください。
 
 const videoMetadataFile = "video_music_meta.json"
 
@@ -133,11 +133,9 @@ func (r *VideoHistoryRepository) applyJobState(ctx context.Context, jobID string
 
 // GetHistory loads generated MV job metadata and cut keyframe references.
 //
-// Unlike ListHistoryPage, this always reads storage directly rather than the TTL cache: a
-// single-job read is cheap, and callers use GetHistory precisely to check the latest state
-// right after a regenerate/edit job completes, when a stale cached copy would be most visible
-// and confusing (and, under multiple running instances, cache invalidation from the worker
-// instance that ran the job can't reach every other instance's in-memory cache anyway).
+// 一覧と違って成果物そのもの（video_music_meta.json）を読みます。一覧が持つのは状態
+// ドキュメントへ写した見出しだけで、カット 1 本ずつのキーフレームや動画の所在は入って
+// いないためです。ジョブ状態からは失敗と理由だけを補います（applyJobState）。
 func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error) {
 	if r == nil || r.store == nil || r.baseURI == "" {
 		return domain.VideoHistoryDetail{}, errors.New("history repository is not properly configured")

@@ -102,9 +102,9 @@ func (h *Handler) PostVideoRecipeCreate(w http.ResponseWriter, r *http.Request) 
 // PostVideoRecipeDraft handles draft creation form submissions.
 //
 // 入力は PostVideoRecipeCreate と同じで、違いはコマンドとジョブ ID プレフィックスだけです。
-// キーフレームを焼かずにカット割りまでで止め、結果を下書きとして保存します。
-// 下書きは完成ジョブとは別プレフィックスに保存され、履歴一覧にも現れません。
-// ジョブ ID の用途プレフィックスも分けて、どちらのものか ID だけで分かるようにします。
+// キーフレームを 1 枚も焼かずにカット割りまでで止めます。保存先は完成ジョブと同じ
+// video_music_meta.json で、履歴には script 段階として並びます（/history?stage=script）。
+// ジョブ ID の用途プレフィックスを分けているのは、どちらのものか ID だけで分かるようにするためです。
 func (h *Handler) PostVideoRecipeDraft(w http.ResponseWriter, r *http.Request) {
 	h.postMusicRecipeTask(w, r, "recipe", domain.CommandVideoRecipeDraft)
 }

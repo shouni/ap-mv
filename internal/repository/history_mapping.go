@@ -6,9 +6,9 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは VideoRecipe から履歴表示用モデルへの純粋な変換を集めています。
-// ストレージ・キャッシュ・署名URLへのアクセスは history_storage.go、
-// 公開エントリポイントは history_listing.go を参照してください。
+// このファイルは、ジョブ状態と VideoRecipe から履歴表示用モデルへの変換を集めています。
+// ストレージと署名 URL へのアクセスは history_storage.go、公開エントリポイントは
+// history_listing.go を参照してください。
 
 // historySectionsFromRecipe converts recipe sections into display-ready entries with
 // normalized time ranges, so the short-video form can label each section option.

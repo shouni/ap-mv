@@ -8,7 +8,7 @@ import (
 )
 
 // JobState はジョブのライフサイクル上の状態です。
-// 実体は go-job-kit の jobfirestore.State です。
+// 実体は go-job-firestore の jobfirestore.State です。
 type JobState = jobfirestore.State
 
 const (

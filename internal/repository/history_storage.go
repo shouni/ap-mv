@@ -18,8 +18,8 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは履歴のストレージ読み込み・キャッシュ利用・署名URL生成を集めています。
-// recipe→表示モデルの純粋な変換は history_mapping.go、公開エントリポイントは
+// このファイルは履歴のストレージ読み込みと署名 URL 生成を集めています。
+// 表示モデルへの変換は history_mapping.go、公開エントリポイントは
 // history_listing.go を参照してください。
 
 // historyFetchConcurrency caps parallel signed-URL requests when signing a job's cuts in bulk.
@@ -32,7 +32,7 @@ func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context
 	return r.finalizeHistory(ctx, jobID, r.videoHistoryFromRecipe(jobID, recipe))
 }
 
-// finalizeHistory fills in the fields that are never cached.
+// finalizeHistory fills in the fields derived from the job ID rather than stored.
 //
 // 署名付き URL はここでは作りません。画面は同一オリジンのパスを辿り、ハンドラーが
 // リダイレクトの時点で 1 本だけ署名します。JSON の呼び出し元だけが SignHistoryURLs を

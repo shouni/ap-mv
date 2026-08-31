@@ -51,8 +51,8 @@ func TestVideoHistoryFromRecipeEmptyAspectRatio(t *testing.T) {
 // TestVideoHistoryFromRecipeSumsGeneratedSeconds verifies the history list carries the billable
 // Veo seconds (generated cuts only), so the list page can price a job without loading its cuts.
 // The seconds are derived purely from the recipe, which is why they are computed here rather
-// than at render time — the value is stable enough to sit in the TTL-cached VideoHistory, while
-// the price per second (config, changeable) deliberately is not.
+// than at render time — the value is fixed by the recipe, while the price per second (config,
+// changeable) deliberately is not.
 func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 	recipe := domain.VideoRecipe{
 		ProjectTitle: "test",
