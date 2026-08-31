@@ -207,7 +207,11 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 
 **履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます（状態だけは Firestore を 1 回引きます）。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
 
-**移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が `video_music_meta.json` から書き起こします。既にドキュメントがあるジョブは触りません。
+**移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が書き起こします。材料は移行前の `status.json`（state と失敗理由はここにしかありません）と `video_music_meta.json`（一覧の見出し）で、**どちらか一方でも足りれば書きます** — 失敗して成果物が 1 つも残らなかったジョブこそ一覧に出したいためです。コマンドはジョブ ID の用途プレフィックスから決めます（記録された値は継続タスクが `video_gen_continuation` で上書きしていることがあり、そのまま入れると一覧から外れます）。既にドキュメントがあるジョブは触りません。
+
+```bash
+AP_MV_BUCKET=ap-mv VEO_OUTPUT_PREFIX=veo GCP_PROJECT_ID=<project> go run ./cmd/backfill-job-status -dry-run
+```
 
 ---
 

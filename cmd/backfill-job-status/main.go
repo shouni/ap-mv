@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"github.com/shouni/go-job-firestore/jobfirestore"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
+	"github.com/shouni/go-serve-kit/serverrole"
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/config"
@@ -33,7 +35,15 @@ import (
 	"github.com/shouni/ap-mv/internal/repository"
 )
 
-const videoMetadataFile = "video_music_meta.json"
+const (
+	videoMetadataFile = "video_music_meta.json"
+	// legacyStatusFile は Firestore へ移る前のジョブ状態です。JSON のフィールド名は
+	// jobfirestore.Status と同じなので、そのまま domain.JobStatus へ復元できます。
+	legacyStatusFile = "status.json"
+)
+
+// serverRoleEnvKey は config が役割を読む環境変数です。
+const serverRoleEnvKey = "SERVER_ROLE"
 
 // listedPrefixes は、ジョブ ID の用途プレフィックスから履歴一覧のコマンドを引きます。
 //
@@ -50,6 +60,8 @@ var listedPrefixes = map[string]domain.TaskCommand{
 	// （commandForJob 参照）。どちらも一覧に出るコマンドなので、取り違えても
 	// 一覧から消えることはありません。
 	"recipe": domain.CommandVideoRecipeDraft,
+	// 下書きの用途プレフィックスは "video-draft" から "recipe" へ変わっています。
+	"video-draft": domain.CommandVideoRecipeDraft,
 }
 
 func main() {
@@ -63,6 +75,15 @@ func main() {
 }
 
 func run(ctx context.Context, dryRun bool) error {
+	// SERVER_ROLE はプロセスが web と worker のどちらを担うかで、このコマンドには関係が
+	// ありません。設定の読み方を本体と 1 つに保つために LoadConfigFromEnv を通しますが、
+	// そのために無関係な変数を要求するのは筋が違うので、未設定ならここで埋めます。
+	if os.Getenv(serverRoleEnvKey) == "" {
+		if err := os.Setenv(serverRoleEnvKey, string(serverrole.Both)); err != nil {
+			return fmt.Errorf("set %s: %w", serverRoleEnvKey, err)
+		}
+	}
+
 	cfg, err := config.LoadConfigFromEnv()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
@@ -151,6 +172,14 @@ func collectJobIDs(ctx context.Context, lister interface {
 }
 
 // backfillJob は 1 件分の状態を書き起こします。書いたときだけ true を返します。
+//
+// 材料は 2 つあり、どちらか一方でも足りれば書きます。
+//
+//   - status.json … 移行前のジョブ状態。state と失敗理由はここにしかありません
+//   - video_music_meta.json … レシピ。一覧の見出し（題名・段階・尺）はここから写します
+//
+// レシピが無くても書くのは、失敗して成果物が 1 つも残らなかったジョブこそ一覧に出したい
+// からです（失敗を見えるようにしたのが Firestore へ移した理由の 1 つです）。
 func backfillJob(
 	ctx context.Context,
 	store remoteio.Store,
@@ -170,32 +199,65 @@ func backfillJob(
 		return false, fmt.Errorf("read existing status: %w", err)
 	}
 
-	recipe, err := readRecipe(ctx, store, baseURI+"/"+jobID+"/"+videoMetadataFile)
+	jobURI := baseURI + "/" + jobID + "/"
+	status, hasStatus, err := readLegacyStatus(ctx, store, jobURI+legacyStatusFile)
 	if err != nil {
-		// メタデータの無いジョブは、レシピから写せる見出しが 1 つもありません。
-		// 一覧に出しても題名も段階も空の行になるだけなので飛ばします。
 		return false, err
 	}
-
-	status := domain.JobStatus{}
-	status.JobID = jobID
-	status.Command = string(commandForJob(prefix, recipe))
-	status.State = domain.JobStateSucceeded
-	if createdAt, err := jobid.CreatedAt(jobID); err == nil {
-		status.QueuedAt = createdAt
-		status.UpdatedAt = createdAt
+	recipe, recipeErr := readRecipe(ctx, store, jobURI+videoMetadataFile)
+	if recipeErr != nil && !hasStatus {
+		// 手掛かりが 1 つも無いジョブ。書いても題名も段階も状態も空の行になるだけです。
+		return false, recipeErr
 	}
+
+	status.JobID = jobID
+	// コマンドは記録された値ではなくプレフィックスから決めます。移行前の記録は継続タスクが
+	// 上書きした video_gen_continuation を持っていることがあり、そのまま入れると一覧の
+	// コマンド絞り込みから外れて消えます（domain.Task.ListedCommand と同じ理由）。
+	status.Command = string(commandForJob(prefix, recipe))
+	if !hasStatus {
+		// 記録が無く成果物だけが残っているジョブ。そこまで進んだ以上、成功として扱います。
+		status.State = domain.JobStateSucceeded
+	}
+	if status.QueuedAt.IsZero() {
+		if createdAt, err := jobid.CreatedAt(jobID); err == nil {
+			status.QueuedAt = createdAt
+		}
+	}
+	status.UpdatedAt = status.QueuedAt
 	status.ApplyVideoRecipe(recipe)
 
 	if dryRun {
-		slog.Info("would write status", "job_id", jobID, "command", status.Command, "stage", status.Progress.Stage)
+		slog.Info("would write status", "job_id", jobID, "command", status.Command,
+			"state", status.State, "stage", status.Progress.Stage, "from_status_json", hasStatus)
 		return true, nil
 	}
 	if err := statuses.Save(ctx, jobID, status); err != nil {
 		return false, fmt.Errorf("save status: %w", err)
 	}
-	slog.Info("wrote status", "job_id", jobID, "command", status.Command, "stage", status.Progress.Stage)
+	slog.Info("wrote status", "job_id", jobID, "command", status.Command,
+		"state", status.State, "stage", status.Progress.Stage, "from_status_json", hasStatus)
 	return true, nil
+}
+
+// readLegacyStatus は移行前の status.json を読みます。無いのは正常なので、第 2 返り値で
+// 「読めたかどうか」を返します（この機能より前に作られたジョブには存在しません）。
+func readLegacyStatus(ctx context.Context, store remoteio.Store, uri string) (domain.JobStatus, bool, error) {
+	rc, err := store.Open(ctx, uri)
+	if err != nil {
+		return domain.JobStatus{}, false, nil
+	}
+	defer func() { _ = rc.Close() }()
+
+	raw, err := io.ReadAll(rc)
+	if err != nil {
+		return domain.JobStatus{}, false, fmt.Errorf("read %s: %w", uri, err)
+	}
+	var status domain.JobStatus
+	if err := json.Unmarshal(raw, &status); err != nil {
+		return domain.JobStatus{}, false, fmt.Errorf("decode %s: %w", uri, err)
+	}
+	return status, true, nil
 }
 
 // listedPrefix は、ジョブ ID の用途プレフィックスのうち一覧に出るものを返します。
@@ -218,13 +280,14 @@ func commandForJob(prefix string, recipe *domain.VideoRecipe) domain.TaskCommand
 	command := listedPrefixes[prefix]
 	// "recipe" は下書きと mv_from_keyframe_video_recipe の両方が使います。台本だけで
 	// 止まっているものを下書き、キーフレーム以降へ進んだものを MV 生成とみなします。
-	if prefix == "recipe" && domain.NewJobProgress(recipe.Cuts).Stage != domain.StageScript {
+	if prefix == "recipe" && recipe != nil && domain.NewJobProgress(recipe.Cuts).Stage != domain.StageScript {
 		return domain.CommandMVFromKeyframeVideoRecipe
 	}
 	return command
 }
 
 // readRecipe は video_music_meta.json を読んで VideoRecipe にします。
+// 失敗して成果物を残せなかったジョブには存在しないので、エラーは呼び出し側が判断します。
 func readRecipe(ctx context.Context, store remoteio.Store, uri string) (*domain.VideoRecipe, error) {
 	rc, err := store.Open(ctx, uri)
 	if err != nil {
