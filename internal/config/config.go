@@ -74,6 +74,12 @@ type TasksConfig struct {
 type StorageConfig struct {
 	GCSBucket   string `env:"AP_MV_BUCKET"`
 	MusicBucket string `env:"AP_MUSIC_BUCKET"`
+	// FirestoreDatabase はジョブ状態を置く Firestore データベースです。
+	//
+	// 名前付きデータベースを使うのは (default) の枠を占めないためです。フリートで共有し、
+	// コレクションでサービスを分けます。コレクション名は設定にしません（サービスの身元で
+	// あってデプロイごとに変わる値ではないため。repository の statusCollection を参照）。
+	FirestoreDatabase string `env:"FIRESTORE_DATABASE" envDefault:"job-status"`
 }
 
 // AIConfig は Gemini / Image / Veo のモデルと生成パラメータです。
@@ -194,6 +200,7 @@ func (c *Config) trimStringValues() {
 		&c.Tasks.QueueID,
 		&c.Tasks.TaskAudienceURL,
 		&c.Tasks.CallerServiceAccountEmail,
+		&c.Storage.FirestoreDatabase,
 		&c.AI.VeoLocationID,
 		&c.AI.VeoOutputPrefix,
 		&c.AI.VeoAspectRatio,

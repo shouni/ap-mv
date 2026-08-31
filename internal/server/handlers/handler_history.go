@@ -171,6 +171,7 @@ func (h *Handler) DeleteHistory(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.deleteJobStatus(r, jobID)
 	respond.JSON(w, r, http.StatusAccepted, map[string]string{"job_id": jobID, "status": "deleted"})
 }
 

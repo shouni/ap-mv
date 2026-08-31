@@ -10,7 +10,6 @@ import (
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/worker/filter"
-	"github.com/shouni/go-job-kit/jobstatus"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
@@ -41,6 +40,18 @@ func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.J
 	return nil
 }
 
+func (s *fakeJobStatusStore) Delete(ctx context.Context, jobID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.statuses, jobID)
+	return nil
+}
+
 func (s *fakeJobStatusStore) Get(ctx context.Context, jobID string) (domain.JobStatus, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.JobStatus{}, err
@@ -53,7 +64,7 @@ func (s *fakeJobStatusStore) Get(ctx context.Context, jobID string) (domain.JobS
 	if !ok {
 		// 未記録は ErrNotFound を包んで返す（Store の契約）。素のエラーを返すと
 		// 「読めなかった」に分類され、再実行ガードがエラーを返します。
-		return domain.JobStatus{}, fmt.Errorf("%w: 未記録", jobstatus.ErrNotFound)
+		return domain.JobStatus{}, fmt.Errorf("%w: 未記録", domain.ErrJobStatusNotFound)
 	}
 	return status, nil
 }

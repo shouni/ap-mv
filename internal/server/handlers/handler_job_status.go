@@ -32,6 +32,20 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	}
 }
 
+// deleteJobStatus はジョブ状態のドキュメントを消します。
+//
+// 状態は成果物と別の場所（Firestore）にあるため、履歴のプレフィックス一括削除では
+// 消えません。呼ばないと、成果物の無いジョブの状態だけが孤児として残り続けます。
+// 消せなくても履歴の削除そのものは成功しているので、警告ログに留めます。
+func (h *Handler) deleteJobStatus(r *http.Request, jobID string) {
+	if h.JobStatus == nil {
+		return
+	}
+	if err := h.JobStatus.Delete(r.Context(), jobID); err != nil {
+		slog.WarnContext(r.Context(), "failed to delete job status", "job_id", jobID, "error", err)
+	}
+}
+
 // JobStatusDetail は、ジョブの進行状況（queued/running/succeeded/failed）を返します。
 // ブラウザからのポーリングと M2M クライアントの完了検知の両方が利用します。
 func (h *Handler) JobStatusDetail(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/shouni/go-http-kit/httpkit"
+	"github.com/shouni/go-job-firestore/jobfirestore"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-mv/internal/adapters"
@@ -59,7 +60,23 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		Store:   store,
 	})
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
-	jobStatus := repository.NewJobStatusRepository(workflowOutputBaseURI(cfg), store)
+	// 成果物と違って Firestore に置くため、履歴のプレフィックス削除では消えません
+	// （消すのはハンドラーの仕事です。ports.JobStatusStore.Delete を参照）。
+	firestoreFactory, err := jobfirestore.New(ctx,
+		jobfirestore.WithProjectID(cfg.GCP.ProjectID),
+		jobfirestore.WithDatabase(cfg.Storage.FirestoreDatabase),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Firestore: %w", err)
+	}
+	resources = append(resources, firestoreFactory)
+	closers = append(closers, firestoreFactory)
+
+	firestoreClient, err := firestoreFactory.Client()
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain Firestore client: %w", err)
+	}
+	jobStatus := repository.NewJobStatusRepository(firestoreClient)
 	// 履歴リポジトリは TTL キャッシュの回収ゴルーチンを抱えます。
 	closers = append(closers, historyRepository)
 
