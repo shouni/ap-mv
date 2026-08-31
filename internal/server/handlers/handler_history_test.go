@@ -322,6 +322,45 @@ func TestHistoryListMarksFailedJobs(t *testing.T) {
 	}
 }
 
+// 成果物が 1 つも無いジョブは詳細を開けません（video_music_meta.json が無く、GetHistory が
+// 落ちます）。一覧に削除の口が無いと、そういう行は画面から二度と消せなくなります。
+func TestHistoryListOffersDeleteForJobsWithoutArtifacts(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		page: domain.VideoHistoryPage{
+			Items: []domain.VideoHistory{
+				{JobID: "empty-job", State: domain.JobStateFailed, Error: "scripting failed"},
+				{JobID: "real-job", Progress: domain.JobProgress{Stage: domain.StageCompleted, TotalCuts: 4, VideoCuts: 4}},
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/history", nil)
+	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
+	rec := httptest.NewRecorder()
+
+	h.History(rec, req)
+
+	body := rec.Body.String()
+	// 削除は fetch の DELETE なので、フォームの外から読めるトークンが要ります。
+	if !strings.Contains(body, `id="csrf_token" value="token"`) {
+		t.Fatalf("CSRF トークンがありません: %s", body)
+	}
+	if !strings.Contains(body, `data-delete-url="/history/empty-job"`) {
+		t.Errorf("成果物の無いジョブに削除ボタンがありません: %s", body)
+	}
+	// 成果物のあるジョブは今までどおり詳細へ送ります（削除はその画面にあります）。
+	if strings.Contains(body, `data-delete-url="/history/real-job"`) {
+		t.Errorf("成果物のあるジョブにまで削除ボタンが出ています: %s", body)
+	}
+	if !strings.Contains(body, `href="/history/real-job"`) {
+		t.Errorf("成果物のあるジョブの Detail リンクがありません: %s", body)
+	}
+}
+
 // 投入直後のジョブはレシピがまだ無いので段階が空です。空のバッジを出さず、queued と
 // 分かるようにします（以前は中身の無い灰色のバッジが 1 つ並ぶだけでした）。
 func TestHistoryListShowsQueuedWithoutAnEmptyStageBadge(t *testing.T) {
