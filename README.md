@@ -141,7 +141,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `AP_MUSIC_BUCKET` | なし | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json`（ap-comp と同じ規則）を解決するための GCS bucket |
 | `GEMINI_MODELS` | なし（必須） | 台本生成などのテキスト生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
 | `IMAGE_MODELS` | なし（必須） | 標準キーフレーム生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
-| `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
+| `WORKER_URL` | `<SERVICE_URL>` | worker **サービス**の URL。パスは含めません |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。ap-mv は worker も継続カットを投入するため、どちらの役割でも必要です。必須です（旧 `SERVICE_ACCOUNT_EMAIL` へのフォールバックは撤去済み） |
@@ -206,8 +206,6 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 **一覧と詳細は進行段階とジョブ状態の両方を出します。** 段階（`progress`）はカットがどこまで焼けたかで、状態（`state`）は処理が生きているかです。失敗したジョブは段階が途中で止まるだけなので、状態が無いと生成中のジョブと区別が付きません。失敗の理由（`error`）は一覧では省略表示、詳細ではそのまま出ます。移行前のジョブは状態の記録が無いため空になります。
 
 **履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます（状態だけは Firestore を 1 回引きます）。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
-
-**移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が `video_music_meta.json` から書き起こします。既にドキュメントがあるジョブは触りません。
 
 ---
 
@@ -370,16 +368,17 @@ sequenceDiagram
 ### 3. 履歴画面
 
 1. `/history` で job の一覧を確認します。Firestore のジョブ状態をコマンドで絞り込んで新しい順に引き、タイトル、作成時刻、cut 数、進行段階、ジョブ状態（`queued` / `running` / `failed`）をページング表示します。成果物を元のジョブへ書き戻す保守用のジョブ（キーフレーム・ZIP の再生成、セクション動画、仕上げの結合）は一覧に出ません。
-2. 一覧の `Detail` から `/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
-3. 署名付き URL は画面に埋め込みません。画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します（埋め込むと、期限内はその URL が認証の外側で使え、期限が切れると画面を開き直すまで直りません）。JSON 応答だけが署名付き URL を含みます。
-4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
-5. 各カードの **Regenerate** ボタンから `/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
+2. 成果物が 1 つも残っていないジョブ（失敗して途中で落ちたもの、投入直後のもの）は、`Detail` の代わりに `Delete` が出ます。詳細画面は `video_music_meta.json` を読むので開けず、残っている情報（状態と失敗理由）は一覧の行に出ているためです。一覧に口が無いと、そのジョブは画面から二度と消せません。
+3. 一覧の `Detail` から `/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
+4. 署名付き URL は画面に埋め込みません。画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します（埋め込むと、期限内はその URL が認証の外側で使え、期限が切れると画面を開き直すまで直りません）。JSON 応答だけが署名付き URL を含みます。
+5. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
+6. 各カードの **Regenerate** ボタンから `/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
    - **フル再生成**: ビジュアルアンカー（プロンプト文言）を編集し、プロンプトから作り直します。構図が変わりうる代わりに大きな変更にも対応できます。
    - **部分編集**（キーフレームが既にあるカットのみ選択可）: 「腕には絆創膏を1〜2枚のみにしてください」のような編集指示だけを入力します。今の画像を入力として同じ画像生成モデル（`IMAGE_MODELS` の先頭）に渡す会話型編集のため、構図・ポーズ・背景を保ったまま指示内容だけを反映します。同じキャラクターの他カットとの一貫性を保ちたい軽微な修正（小物の数・色など）に向いています。
 
    どちらのモードでも、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）と「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成/編集後に recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-6. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
-7. 詳細画面の **Delete** ボタン（または `DELETE /history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
+7. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
+8. 詳細画面の **Delete** ボタン（一覧では成果物の無いジョブにも出ます。または `DELETE /history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。ジョブ状態のドキュメントは成果物と別の場所（Firestore）にあるため走査では消えず、ハンドラーが合わせて削除します（`handlers.deleteJobStatus`）。
 
 ### 4. web / worker の分離
 
@@ -414,7 +413,9 @@ PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
 フリート全体の一覧（5 ワークロード分）と、tf の `precondition` による検査は `ap-infra` の
 README「タイムアウトの三段」にあります。
 
-`SERVER_ROLE=both` にすると両方の面を提供します。ローカル開発（`go run ./main.go`）はこの状態で動かします。
+`SERVER_ROLE=both` にすると 1 プロセスが両方の面を提供します。`go run ./main.go` で画面は
+確認できますが、**パイプラインは走りません。Cloud Tasks は localhost へ配送できないため、
+投入してもワーカーは動きません**。ロジックの確認は `go test ./... -race` で行ってください。
 
 `SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
 環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。

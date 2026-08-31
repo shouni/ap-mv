@@ -38,6 +38,10 @@ func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
 		Title:        "History",
 		HistoryItems: page.Items,
 		PageMeta:     page.PageMeta,
+		// 成果物の残っていないジョブは一覧から直接消せます（削除は fetch の DELETE なので
+		// トークンが要ります）。詳細画面を開けないジョブがあるため、ここに口が無いと
+		// 画面からは二度と消せません。
+		CSRFToken: csrfTokenFromContext(r.Context()),
 	}, "history.html")
 }
 

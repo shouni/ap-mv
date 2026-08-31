@@ -1,4 +1,6 @@
 {{define "content"}}
+<!-- 削除は fetch で送るため、フォームの外からも読める形で CSRF トークンを置きます。 -->
+<input type="hidden" id="csrf_token" value="{{.CSRFToken}}">
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -57,7 +59,17 @@
                         {{end}}
                     </td>
                     <td class="text-end">
+                        {{if .Progress.TotalCuts}}
                         <a class="btn btn-sm btn-primary" href="/history/{{.JobID}}">Detail</a>
+                        {{else}}
+                        {{/* カットが 1 つも無いジョブ。詳細は video_music_meta.json を読むので開けません
+                             （成果物を 1 つも残せずに失敗したジョブ、投入直後のジョブがこれです）。
+                             残っている情報は状態と失敗理由だけで、どちらもこの行に出ています。
+                             ここに口を置かないと、画面からは二度と消せません。 */}}
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                data-delete-url="/history/{{.JobID}}"
+                                data-delete-confirm="Delete job {{.JobID}}? (成果物は残っていません)">Delete</button>
+                        {{end}}
                     </td>
                 </tr>
                 {{end}}

@@ -7,16 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/caarlos0/env/v11"
 	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-serve-kit/serverrole"
 	"github.com/shouni/go-utils/strlist"
 
-	"github.com/caarlos0/env/v11"
-
 	"github.com/shouni/ap-mv/internal/domain"
 )
-
-const taskGeneratePath = "/tasks/generate"
 
 // ServerConfig はHTTPサーバーの起動・シャットダウンに関する設定です。
 type ServerConfig struct {
@@ -160,7 +157,7 @@ func (c *Config) normalize() error {
 	}
 	c.Server.Role = role
 
-	workerURL, err := normalizeWorkerURL(c.Server.ServiceURL, c.Tasks.WorkerURL)
+	workerURL, err := normalizeWorkerURL(c.Server.Role, c.Tasks.WorkerURL, c.Server.ServiceURL)
 	if err != nil {
 		return err
 	}
@@ -235,26 +232,31 @@ func LoadConfigFromEnv() (*Config, error) {
 	return &cfg, nil
 }
 
-// normalizeWorkerURL normalizes the worker URL or derives it from the service URL.
-func normalizeWorkerURL(serviceURL, workerURL string) (string, error) {
+// normalizeWorkerURL は配送先の worker サービス URL を整えます。返すのはサービスの
+// URL までで、タスクのパスは投入の直前（internal/builder）で継ぎ足します。
+//
+// SERVICE_URL から導出するのは Worker 面を担うプロセスだけです。分割デプロイの
+// SERVICE_URL は公開側に固定されているため、web 専用で導出すると全件 404 になります。
+func normalizeWorkerURL(role serverrole.Role, workerURL string, serviceURL string) (string, error) {
 	workerURL = strings.TrimSpace(workerURL)
 	if workerURL != "" {
+		if _, err := url.Parse(workerURL); err != nil {
+			return "", fmt.Errorf("invalid worker URL %q: %w", workerURL, err)
+		}
 		return workerURL, nil
 	}
-	return joinWorkerPath(serviceURL)
-}
+	if !role.ServesWorker() {
+		return "", nil
+	}
 
-// joinWorkerPath returns the default worker endpoint for a service URL.
-func joinWorkerPath(serviceURL string) (string, error) {
 	serviceURL = strings.TrimSpace(serviceURL)
 	if serviceURL == "" {
-		return taskGeneratePath, nil
+		return "", nil
 	}
-	joined, err := url.JoinPath(serviceURL, taskGeneratePath)
-	if err != nil {
+	if _, err := url.Parse(serviceURL); err != nil {
 		return "", fmt.Errorf("invalid service URL %q: %w", serviceURL, err)
 	}
-	return joined, nil
+	return serviceURL, nil
 }
 
 // GetGCSObjectURL は、指定されたパスから完全なGCSオブジェクトURL ("gs://...") を組み立てます。

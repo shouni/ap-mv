@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/netarmor/securenet"
+
+	"github.com/shouni/ap-mv/internal/domain"
 )
 
 // IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
@@ -40,6 +41,11 @@ func (c *Config) ValidateEssentialConfig() error {
 	// どちらの役割でも必須になる。
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+	}
+	// 未設定を SERVICE_URL から導出するのは worker 面を担うプロセスだけなので、web 専用
+	// プロセスではここが空のまま残る。通すと配送先なしでタスクを投入しようとする。
+	if c.Tasks.WorkerURL == "" {
+		return fmt.Errorf("WORKER_URL が設定されていません（worker サービスの URL を渡します）")
 	}
 	if !c.IsSecureWorkerURL() {
 		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)

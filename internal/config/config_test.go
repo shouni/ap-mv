@@ -100,7 +100,7 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.Tasks.TaskAudienceURL != cfg.Server.ServiceURL {
 		t.Fatalf("TaskAudienceURL = %q, want ServiceURL %q", cfg.Tasks.TaskAudienceURL, cfg.Server.ServiceURL)
 	}
-	if cfg.Tasks.WorkerURL != "http://localhost:8080/tasks/generate" {
+	if cfg.Tasks.WorkerURL != "http://localhost:8080" {
 		t.Fatalf("WorkerURL = %q, want localhost worker URL", cfg.Tasks.WorkerURL)
 	}
 	if cfg.AI.VeoPollInterval != 10*time.Second {
@@ -134,7 +134,7 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("SERVICE_URL", "https://example.com")
-	t.Setenv("WORKER_URL", "https://worker.example.com/tasks/generate")
+	t.Setenv("WORKER_URL", "https://worker.example.com")
 	t.Setenv("TASK_AUDIENCE_URL", "https://tasks.example.com")
 	t.Setenv("AP_MV_BUCKET", "gs://music-bucket/output/")
 	t.Setenv("GEMINI_MODELS", "gemini-a, gemini-b")
@@ -155,7 +155,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	if cfg.Tasks.TaskAudienceURL != "https://tasks.example.com" {
 		t.Fatalf("TaskAudienceURL = %q", cfg.Tasks.TaskAudienceURL)
 	}
-	if cfg.Tasks.WorkerURL != "https://worker.example.com/tasks/generate" {
+	if cfg.Tasks.WorkerURL != "https://worker.example.com" {
 		t.Fatalf("WorkerURL = %q", cfg.Tasks.WorkerURL)
 	}
 	if cfg.Storage.GCSBucket != "music-bucket/output" {
@@ -294,7 +294,10 @@ func TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault(t *testing.T)
 	}
 }
 
-// TestNormalizeWorkerURL verifies worker URL normalization.
+// TestNormalizeWorkerURL verifies worker service URL normalization.
+//
+// 返るのは worker サービスの URL までで、タスクのパスは付きません。継ぎ足しは
+// 投入の直前（domain.WorkerTaskURL）が受け持ち、その挙動は domain 側で固定しています。
 func TestNormalizeWorkerURL(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -305,7 +308,7 @@ func TestNormalizeWorkerURL(t *testing.T) {
 		{
 			name:    "default",
 			service: "https://example.com/",
-			want:    "https://example.com/tasks/generate",
+			want:    "https://example.com/",
 		},
 		{
 			name:    "explicit worker",
@@ -316,33 +319,33 @@ func TestNormalizeWorkerURL(t *testing.T) {
 		{
 			name:    "base path",
 			service: "https://example.com/base",
-			want:    "https://example.com/base/tasks/generate",
+			want:    "https://example.com/base",
 		},
 		{
 			name:    "query",
 			service: "https://example.com?q=1",
-			want:    "https://example.com/tasks/generate?q=1",
+			want:    "https://example.com?q=1",
 		},
 		{
 			name:    "fragment",
 			service: "https://example.com#frag",
-			want:    "https://example.com/tasks/generate#frag",
+			want:    "https://example.com#frag",
 		},
 		{
 			name:    "trailing slash with base path",
 			service: "https://example.com/base/",
-			want:    "https://example.com/base/tasks/generate",
+			want:    "https://example.com/base/",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizeWorkerURL(tt.service, tt.worker)
+			got, err := normalizeWorkerURL(serverrole.Worker, tt.worker, tt.service)
 			if err != nil {
-				t.Fatalf("normalizeWorkerURL(%q, %q) error = %v", tt.service, tt.worker, err)
+				t.Fatalf("normalizeWorkerURL(%q, %q) error = %v", tt.worker, tt.service, err)
 			}
 			if got != tt.want {
-				t.Fatalf("normalizeWorkerURL(%q, %q) = %q, want %q", tt.service, tt.worker, got, tt.want)
+				t.Fatalf("normalizeWorkerURL(%q, %q) = %q, want %q", tt.worker, tt.service, got, tt.want)
 			}
 		})
 	}
@@ -350,7 +353,7 @@ func TestNormalizeWorkerURL(t *testing.T) {
 
 // TestNormalizeWorkerURLRejectsInvalidServiceURL verifies invalid service URLs are rejected.
 func TestNormalizeWorkerURLRejectsInvalidServiceURL(t *testing.T) {
-	if _, err := normalizeWorkerURL("http://[::1", ""); err == nil {
+	if _, err := normalizeWorkerURL(serverrole.Worker, "", "http://[::1"); err == nil {
 		t.Fatal("normalizeWorkerURL() error = nil, want invalid service URL error")
 	}
 }
