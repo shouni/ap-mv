@@ -141,7 +141,7 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 }
 
 // musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
-// submits music_job_id (ap-comp と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
+// submits music_job_id (ap-music と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
 // M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts
 // plain text/image sources unrelated to a music job.
 //
