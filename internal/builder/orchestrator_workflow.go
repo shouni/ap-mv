@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 
 	characterassets "github.com/shouni/go-character-kit/assets"
 	"github.com/shouni/go-character-kit/character"
@@ -123,8 +122,8 @@ func buildCharacters() (*character.Characters, error) {
 
 // workflowOutputBaseURI returns the GCS base URI for workflow outputs.
 func workflowOutputBaseURI(cfg *config.Config) string {
-	if cfg == nil || strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
+	if cfg == nil || cfg.Storage.GCSBucket == "" {
 		return ""
 	}
-	return cfg.GetGCSObjectURL(path.Join(strings.TrimSpace(cfg.AI.VeoOutputPrefix), "jobs"))
+	return cfg.GetGCSObjectURL(path.Join(cfg.AI.VeoOutputPrefix, "jobs"))
 }

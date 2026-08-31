@@ -1,8 +1,6 @@
 package builder
 
 import (
-	"strings"
-
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/adapters/prompt"
@@ -30,10 +28,10 @@ func buildOrchestratorConfig(cfg *config.Config) orchestrator.Config {
 	orchCfg.ImageModel = cfg.AI.ImageModel
 	orchCfg.MaxConcurrency = cfg.AI.KeyframeMaxConcurrency
 	orchCfg.RateInterval = cfg.AI.KeyframeRateInterval
-	if ratio := strings.TrimSpace(cfg.AI.VeoAspectRatio); ratio != "" {
+	if ratio := cfg.AI.VeoAspectRatio; ratio != "" {
 		orchCfg.KeyframeAspectRatio = ratio
 	}
-	if size := strings.TrimSpace(cfg.AI.KeyframeImageSize); size != "" {
+	if size := cfg.AI.KeyframeImageSize; size != "" {
 		orchCfg.KeyframeImageSize = size
 	}
 	orchCfg.ApplyDefaults()

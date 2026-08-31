@@ -53,7 +53,7 @@ func buildPipeline(
 		WorkflowResolver:  newWorkflowResolver(cfg, store, httpClient, videoRunner, aiClient, workflows),
 		Notifier:          externals.notifier,
 		OutputBaseURI:     workflowOutputBaseURI(cfg),
-		Timeout:           cfg.AI.PipelineTimeout,
+		Timeout:           cfg.Tasks.PipelineTimeout,
 		JobStatus:         externals.jobStatus,
 	}
 	planner := &pipeline.DefaultPlanner{UsePreviousVideo: cfg.AI.VeoUsePreviousVideo}

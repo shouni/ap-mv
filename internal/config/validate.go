@@ -114,11 +114,11 @@ func (c *Config) validatePipelineTimeout() error {
 	if c.Tasks.DispatchDeadline <= 0 {
 		return fmt.Errorf("TASK_DISPATCH_DEADLINE が設定されていません（三段のタイムアウトはデプロイ設定が決めます。例: 30m）")
 	}
-	if c.AI.PipelineTimeout <= 0 {
+	if c.Tasks.PipelineTimeout <= 0 {
 		return fmt.Errorf("PIPELINE_TIMEOUT は worker では無制限にできません。Cloud Tasks の打ち切り（%s）より短い値を設定してください", c.Tasks.DispatchDeadline)
 	}
-	if c.AI.PipelineTimeout >= c.Tasks.DispatchDeadline {
-		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.AI.PipelineTimeout, c.Tasks.DispatchDeadline)
+	if c.Tasks.PipelineTimeout >= c.Tasks.DispatchDeadline {
+		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.Tasks.PipelineTimeout, c.Tasks.DispatchDeadline)
 	}
 	return nil
 }

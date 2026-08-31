@@ -58,7 +58,7 @@ func NewVertexVeoRunner(cfg *config.Config, aiClient gemini.VideoGenerator, stor
 	if aiClient == nil {
 		return nil, fmt.Errorf("vertex AI client is required")
 	}
-	if strings.TrimSpace(cfg.Storage.GCSBucket) == "" {
+	if cfg.Storage.GCSBucket == "" {
 		return nil, fmt.Errorf("AP_MV_BUCKET is required")
 	}
 
@@ -77,9 +77,9 @@ func NewVertexVeoRunner(cfg *config.Config, aiClient gemini.VideoGenerator, stor
 	return &VertexVeoRunner{
 		videos:           videos,
 		videoCopier:      store,
-		model:            strings.TrimSpace(cfg.AI.VeoModel),
+		model:            cfg.AI.VeoModel,
 		outputStorageURI: buildVeoOutputStorageURI(cfg.Storage.GCSBucket, cfg.AI.VeoOutputPrefix),
-		aspectRatio:      strings.TrimSpace(cfg.AI.VeoAspectRatio),
+		aspectRatio:      cfg.AI.VeoAspectRatio,
 		generateAudio:    cfg.AI.VeoGenerateAudio,
 		usePreviousVideo: cfg.AI.VeoUsePreviousVideo,
 	}, nil

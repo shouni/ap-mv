@@ -37,7 +37,7 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg.AI.VeoOperationTimeout = 10 * time.Minute
 	// env の既定値は素の struct には入らないため、実際の設定と同じ状態にしておきます。
 	// 0 のままだと worker の検証が「無制限」を理由に落ちます。
-	cfg.AI.PipelineTimeout = 25 * time.Minute
+	cfg.Tasks.PipelineTimeout = 25 * time.Minute
 	cfg.Tasks.DispatchDeadline = testDispatchDeadline
 	return cfg
 }
@@ -119,38 +119,45 @@ func TestValidateEssentialConfigRequiresAllowlistForWorker(t *testing.T) {
 	}
 }
 
-// TestTaskCallerServiceAccount は、caller SA の解決順を確認します。
+// TestNormalizeTrimsConfiguredValues は、env から読んだ値の前後空白を normalize() が
+// 落とすことを確認します。
 //
-// 新しい TASK_CALLER_SERVICE_ACCOUNT_EMAIL を優先し、無ければ旧 SERVICE_ACCOUNT_EMAIL に
-// フォールバックします。後者は Terraform を切り替えるまでの移行用で、適用後に削除します。
-func TestTaskCallerServiceAccount(t *testing.T) {
-	tests := []struct {
-		name   string
-		caller string
-		want   string
-	}{
-		{
-			name:   "新しい変数があればそれを使う",
-			caller: "caller@test-project.iam.gserviceaccount.com",
-			want:   "caller@test-project.iam.gserviceaccount.com",
-		},
-		{
-			name:   "前後の空白は落とす",
-			caller: "  caller@test-project.iam.gserviceaccount.com  ",
-			want:   "caller@test-project.iam.gserviceaccount.com",
-		},
-		{name: "未設定なら空"},
+// 正準形にする場所を 1 箇所に決めたのは、使う側で TrimSpace すると検証と実際の動作が
+// 食い違うためです。空白だけの VEO_OUTPUT_PREFIX は「設定されていません」の検査を
+// 通り抜け、出力先だけが gs://<bucket>/jobs/ にずれていました。
+func TestNormalizeTrimsConfiguredValues(t *testing.T) {
+	cfg := newRoleTestConfig(serverrole.Both)
+	cfg.Tasks.CallerServiceAccountEmail = "  caller@test-project.iam.gserviceaccount.com  "
+	cfg.AI.VeoOutputPrefix = "  veo  "
+
+	if err := cfg.normalize(); err != nil {
+		t.Fatalf("normalize() error = %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &Config{}
-			cfg.Tasks.CallerServiceAccountEmail = tt.caller
+	if got, want := cfg.TaskCallerServiceAccount(), "caller@test-project.iam.gserviceaccount.com"; got != want {
+		t.Errorf("TaskCallerServiceAccount() = %q, want %q", got, want)
+	}
+	if got, want := cfg.AI.VeoOutputPrefix, "veo"; got != want {
+		t.Errorf("VeoOutputPrefix = %q, want %q", got, want)
+	}
+}
 
-			if got := cfg.TaskCallerServiceAccount(); got != tt.want {
-				t.Errorf("TaskCallerServiceAccount() = %q, want %q", got, tt.want)
-			}
-		})
+// 空白だけの VEO_OUTPUT_PREFIX は起動時に落ちること。normalize() が空へ寄せるので、
+// 検証がそのまま関門になります。
+func TestValidateEssentialConfigRejectsBlankVeoOutputPrefix(t *testing.T) {
+	cfg := withWebAuth(newRoleTestConfig(serverrole.Both))
+	cfg.AI.VeoOutputPrefix = "   "
+
+	if err := cfg.normalize(); err != nil {
+		t.Fatalf("normalize() error = %v", err)
+	}
+
+	err := cfg.ValidateEssentialConfig()
+	if err == nil {
+		t.Fatal("空白だけの VEO_OUTPUT_PREFIX が起動時検証を通ってしまいました")
+	}
+	if !strings.Contains(err.Error(), "VEO_OUTPUT_PREFIX") {
+		t.Fatalf("error = %v, want it to mention VEO_OUTPUT_PREFIX", err)
 	}
 }
 
@@ -215,9 +222,9 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 	// ここが打ち切り以上だと、PIPELINE_TIMEOUT を渡さない worker が一切起動しなくなります。
 	// 既定値は持ちません。出どころはデプロイ設定（Terraform）1 箇所です。
 	t.Run("既定値を持たない", func(t *testing.T) {
-		field, ok := reflect.TypeFor[AIConfig]().FieldByName("PipelineTimeout")
+		field, ok := reflect.TypeFor[TasksConfig]().FieldByName("PipelineTimeout")
 		if !ok {
-			t.Fatal("AIConfig.PipelineTimeout not found")
+			t.Fatal("TasksConfig.PipelineTimeout not found")
 		}
 		if got := field.Tag.Get("envDefault"); got != "" {
 			t.Errorf("envDefault = %q, 既定値を持たせないでください", got)
@@ -238,7 +245,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newRoleTestConfig(serverrole.Worker)
-			cfg.AI.PipelineTimeout = tt.timeout
+			cfg.Tasks.PipelineTimeout = tt.timeout
 
 			err := cfg.ValidateEssentialConfig()
 			if err == nil {
@@ -253,7 +260,7 @@ func TestValidateEssentialConfigRequiresPipelineTimeoutUnderDispatchDeadline(t *
 	// web はパイプラインを組み立てないため、この検査の対象外です。
 	t.Run("web は無制限でも起動できる", func(t *testing.T) {
 		cfg := withWebAuth(newRoleTestConfig(serverrole.Web))
-		cfg.AI.PipelineTimeout = 0
+		cfg.Tasks.PipelineTimeout = 0
 
 		if err := cfg.ValidateEssentialConfig(); err != nil {
 			t.Fatalf("web should not be subject to the check: %v", err)
@@ -294,7 +301,7 @@ func TestDispatchDeadlineIsRequired(t *testing.T) {
 func TestDispatchDeadlineIsConfigurable(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.DispatchDeadline = 20 * time.Minute
-	cfg.AI.PipelineTimeout = 25 * time.Minute
+	cfg.Tasks.PipelineTimeout = 25 * time.Minute
 
 	if err := cfg.ValidateEssentialConfig(); err == nil {
 		t.Fatal("縮めた打ち切りより長い PIPELINE_TIMEOUT が通ってしまいました")

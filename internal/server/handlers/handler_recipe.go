@@ -156,10 +156,10 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	if err := jobid.Validate(musicJobID); err != nil {
 		return "", fmt.Errorf("invalid music_job_id: %w", err)
 	}
-	if strings.TrimSpace(h.MusicBucket) == "" {
+	if h.MusicBucket == "" {
 		return "", fmt.Errorf("AP_MUSIC_BUCKET is not configured")
 	}
-	return fmt.Sprintf("gs://%s/music/%s/recipe.json", strings.TrimSpace(h.MusicBucket), musicJobID), nil
+	return fmt.Sprintf("gs://%s/music/%s/recipe.json", h.MusicBucket, musicJobID), nil
 }
 
 // PostRecipe handles recipe submissions.
