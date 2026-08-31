@@ -207,12 +207,6 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 
 **履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます（状態だけは Firestore を 1 回引きます）。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
 
-**移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が書き起こします。材料は移行前の `status.json`（state と失敗理由はここにしかありません）と `video_music_meta.json`（一覧の見出し）で、**どちらか一方でも足りれば書きます** — 失敗して成果物が 1 つも残らなかったジョブこそ一覧に出したいためです。コマンドはジョブ ID の用途プレフィックスから決めます（記録された値は継続タスクが `video_gen_continuation` で上書きしていることがあり、そのまま入れると一覧から外れます）。既にドキュメントがあるジョブは触りません。
-
-```bash
-AP_MV_BUCKET=ap-mv VEO_OUTPUT_PREFIX=veo GCP_PROJECT_ID=<project> go run ./cmd/backfill-job-status -dry-run
-```
-
 ---
 
 ## 🔀 タスク固有の Workflows
@@ -374,16 +368,17 @@ sequenceDiagram
 ### 3. 履歴画面
 
 1. `/history` で job の一覧を確認します。Firestore のジョブ状態をコマンドで絞り込んで新しい順に引き、タイトル、作成時刻、cut 数、進行段階、ジョブ状態（`queued` / `running` / `failed`）をページング表示します。成果物を元のジョブへ書き戻す保守用のジョブ（キーフレーム・ZIP の再生成、セクション動画、仕上げの結合）は一覧に出ません。
-2. 一覧の `Detail` から `/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
-3. 署名付き URL は画面に埋め込みません。画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します（埋め込むと、期限内はその URL が認証の外側で使え、期限が切れると画面を開き直すまで直りません）。JSON 応答だけが署名付き URL を含みます。
-4. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
-5. 各カードの **Regenerate** ボタンから `/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
+2. 成果物が 1 つも残っていないジョブ（失敗して途中で落ちたもの、投入直後のもの）は、`Detail` の代わりに `Delete` が出ます。詳細画面は `video_music_meta.json` を読むので開けず、残っている情報（状態と失敗理由）は一覧の行に出ているためです。一覧に口が無いと、そのジョブは画面から二度と消せません。
+3. 一覧の `Detail` から `/history/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
+4. 署名付き URL は画面に埋め込みません。画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します（埋め込むと、期限内はその URL が認証の外側で使え、期限が切れると画面を開き直すまで直りません）。JSON 応答だけが署名付き URL を含みます。
+5. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
+6. 各カードの **Regenerate** ボタンから `/history/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
    - **フル再生成**: ビジュアルアンカー（プロンプト文言）を編集し、プロンプトから作り直します。構図が変わりうる代わりに大きな変更にも対応できます。
    - **部分編集**（キーフレームが既にあるカットのみ選択可）: 「腕には絆創膏を1〜2枚のみにしてください」のような編集指示だけを入力します。今の画像を入力として同じ画像生成モデル（`IMAGE_MODELS` の先頭）に渡す会話型編集のため、構図・ポーズ・背景を保ったまま指示内容だけを反映します。同じキャラクターの他カットとの一貫性を保ちたい軽微な修正（小物の数・色など）に向いています。
 
    どちらのモードでも、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）と「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成/編集後に recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-6. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
-7. 詳細画面の **Delete** ボタン（または `DELETE /history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。削除後は履歴 metadata cache と recipe cache も破棄します。
+7. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
+8. 詳細画面の **Delete** ボタン（一覧では成果物の無いジョブにも出ます。または `DELETE /history/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。ジョブ状態のドキュメントは成果物と別の場所（Firestore）にあるため走査では消えず、ハンドラーが合わせて削除します（`handlers.deleteJobStatus`）。
 
 ### 4. web / worker の分離
 
