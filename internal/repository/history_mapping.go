@@ -68,6 +68,8 @@ func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus)
 	return domain.VideoHistory{
 		JobID:            jobID,
 		Title:            title,
+		State:            status.State,
+		Error:            strings.TrimSpace(status.Error),
 		Mood:             strings.TrimSpace(status.Mood),
 		Tempo:            status.Tempo,
 		CreatedAt:        formatHistoryCreatedAt(jobID),
@@ -83,36 +85,18 @@ func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus)
 	}
 }
 
-func videoHistoryFromRecipe(jobID string, metadataURI string, recipe domain.VideoRecipe) domain.VideoHistory {
-	progress := domain.NewJobProgress(recipe.Cuts)
-	history := domain.VideoHistory{
-		JobID:         jobID,
-		Title:         strings.TrimSpace(firstNonEmpty(recipe.MusicRecipe.Title, recipe.ProjectTitle)),
-		Mood:          strings.TrimSpace(recipe.MusicRecipe.Mood),
-		Tempo:         recipe.MusicRecipe.Tempo,
-		CreatedAt:     formatHistoryCreatedAt(jobID),
-		VisualMode:    strings.TrimSpace(recipe.MusicRecipe.ComposeMode),
-		CutCount:      len(recipe.Cuts),
-		StorageURI:    metadataURI,
-		Generated:     progress.IsCompleted(),
-		Progress:      progress,
-		FinalVideoURL: strings.TrimSpace(recipe.FinalVideoURL),
-		AspectRatio:   strings.TrimSpace(recipe.AspectRatio),
-		// 秒数はレシピだけで確定するのでここで入れる。単価を掛けるのは表示側
-		// （設定から解決するため、キャッシュに単価を焼き込まない）。
-		GeneratedSeconds: domain.GeneratedSecondsOfCuts(recipe.Cuts),
-	}
-	if history.Title == "" {
-		history.Title = jobID
-	}
-	return history
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+// videoHistoryFromRecipe は、保存済みレシピから詳細 1 件分の見出しを組み立てます。
+//
+// レシピから見出しへの写しは domain.JobStatus.ApplyVideoRecipe が唯一の定義元で、ここは
+// それを通してから一覧と同じ変換にかけます。以前は一覧と詳細がそれぞれレシピを読み替えて
+// おり、片方に項目を足してもコンパイルは通るため、詳細にだけ出る項目が生まれていました。
+// 一覧の見出しが状態ドキュメントの写しになった今は、その食い違いが画面に出ます。
+//
+// State と Error は成果物からは分からないので、ここでは空のままです（GetHistory が
+// 状態ドキュメントから補います）。
+func (r *VideoHistoryRepository) videoHistoryFromRecipe(jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
+	var status domain.JobStatus
+	status.JobID = jobID
+	status.ApplyVideoRecipe(&recipe)
+	return r.videoHistoryFromStatus(status)
 }

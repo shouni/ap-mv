@@ -29,8 +29,7 @@ const historyFetchConcurrency = 10
 // buildHistoryFromFreshRecipe builds VideoHistory directly from the stored recipe, so
 // single-job reads (GetHistory) always reflect the latest storage state.
 func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context, jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
-	history := videoHistoryFromRecipe(jobID, r.metadataURI(jobID), recipe)
-	return r.finalizeHistory(ctx, jobID, history)
+	return r.finalizeHistory(ctx, jobID, r.videoHistoryFromRecipe(jobID, recipe))
 }
 
 // finalizeHistory fills in the fields that are never cached.

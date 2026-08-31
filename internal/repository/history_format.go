@@ -1,3 +1,4 @@
+// Package repository は、生成履歴（History）の永続化・一覧整形と、ジョブ状態の読み書きを行います。
 package repository
 
 import (

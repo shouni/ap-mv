@@ -90,7 +90,21 @@
 <span class="badge text-bg-info">{{.Label}}</span>
 {{else if eq .Stage "keyframes"}}
 <span class="badge text-bg-warning">{{.Label}}</span>
-{{else}}
+{{else if .Stage}}
 <span class="badge text-bg-secondary">{{.Label}}</span>
+{{end}}
+{{end}}
+
+{{/* ジョブそのものの状態バッジ。段階（jobStageBadge）はカットがどこまで焼けたかで、
+     こちらは処理が生きているかです。失敗したジョブは段階が途中で止まるだけなので、
+     これが無いと生成中のジョブと見分けが付きません。成功したジョブでは段階のバッジが
+     結果を語るため、何も出しません。引数は VideoHistory です。 */}}
+{{define "jobStateBadge"}}
+{{if eq .State "failed"}}
+<span class="badge text-bg-danger">failed</span>
+{{else if eq .State "running"}}
+<span class="badge text-bg-light text-dark border">running</span>
+{{else if eq .State "queued"}}
+<span class="badge text-bg-secondary">queued</span>
 {{end}}
 {{end}}

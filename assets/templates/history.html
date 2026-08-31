@@ -48,7 +48,13 @@
                         {{end}}
                     </td>
                     <td>
-                        {{template "jobStageBadge" .Progress}}
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            {{template "jobStateBadge" .}}
+                            {{template "jobStageBadge" .Progress}}
+                        </div>
+                        {{if .Error}}
+                        <div class="small text-danger text-truncate" style="max-width: 18rem;" title="{{.Error}}">{{.Error}}</div>
+                        {{end}}
                     </td>
                     <td class="text-end">
                         <a class="btn btn-sm btn-primary" href="/history/{{.JobID}}">Detail</a>

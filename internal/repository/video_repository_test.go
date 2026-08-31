@@ -103,50 +103,6 @@ func (r *fakeHistoryReader) Delete(ctx context.Context, name string) error {
 func (r *fakeHistoryReader) SignURL(_ context.Context, uri, _ string, _ time.Duration) (string, error) {
 	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
 }
-
-// Sub をライブラリの Sub へ委譲します。埋め込みから昇格した Sub をそのまま使うと、
-// スコープの土台が埋め込まれた Store になり、上の記録が素通しされます。
-func (r *fakeHistoryReader) Sub(prefix string) remoteio.Store {
-	r.ensure()
-	return remoteio.Sub(r, prefix)
-}
-
-// ListCount は指定プレフィックスに対する List 呼び出し回数を返します。
-func (r *fakeHistoryReader) ListCount(prefix string) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.listCount[prefix]
-}
-
-func (r *fakeHistoryReader) OpenCount(p string) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.openCount[p]
-}
-
-type countingHistorySigner struct {
-	mu    sync.Mutex
-	count map[string]int
-}
-
-func (s *countingHistorySigner) GenerateSignedURL(_ context.Context, uri string, _ string, _ time.Duration) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.count == nil {
-		s.count = map[string]int{}
-	}
-	s.count[uri]++
-	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
-}
-
-func (s *countingHistorySigner) Count(uri string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.count[uri]
-}
-
-// 一覧はジョブ状態のクエリで作ります。見出しはドキュメントに写してあり、保存先と
-// 作成日時だけをジョブ ID から導きます。
 func TestListHistoryPageBuildsRowsFromJobStatus(t *testing.T) {
 	t.Parallel()
 
@@ -248,6 +204,83 @@ func TestListHistoryPageWithoutJobStatusReturnsEmpty(t *testing.T) {
 	}
 	if len(page.Items) != 0 {
 		t.Fatalf("len(page.Items) = %d, want 0", len(page.Items))
+	}
+}
+
+// 一覧は状態ドキュメントから失敗と理由を引き継ぎます。段階はカット列から導くので、
+// 失敗したジョブも「keyframes 3/12」で止まるだけで、成果物からは失敗と分かりません。
+func TestListHistoryPageCarriesFailureFromJobStatus(t *testing.T) {
+	t.Parallel()
+
+	status := domain.JobStatus{Progress: domain.JobProgress{Stage: domain.StageKeyframes, TotalCuts: 12, KeyframeCuts: 3}}
+	status.JobID = "video-recipe-20260618-081931-abc"
+	status.State = domain.JobStateFailed
+	status.Error = "veo operation timed out"
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
+		Store:     &fakeHistoryReader{},
+		JobStatus: newFakeStatusStore(status),
+	})
+
+	page, err := repo.ListHistoryPage(context.Background(), 1, 20, "")
+	if err != nil {
+		t.Fatalf("ListHistoryPage() error = %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("len(page.Items) = %d, want 1", len(page.Items))
+	}
+	if got := page.Items[0].State; got != domain.JobStateFailed {
+		t.Errorf("State = %q, want failed", got)
+	}
+	if got := page.Items[0].Error; got != "veo operation timed out" {
+		t.Errorf("Error = %q", got)
+	}
+}
+
+// 詳細も同じ状態を出します。成果物は途中まで残るので、ここが空だと「なぜ止まったのか」を
+// Slack かログまで探しに行くことになります。記録が無いジョブ（移行前のもの）では空です。
+func TestGetHistoryFillsStateFromJobStatus(t *testing.T) {
+	t.Parallel()
+
+	const jobID = "video-recipe-20260618-081931-abc"
+	const metadataURI = "gs://bucket/ap-mv/veo/jobs/" + jobID + "/video_music_meta.json"
+	reader := &fakeHistoryReader{
+		files: map[string]string{
+			metadataURI: `{"title": "half baked", "cuts": [{"cut_index": 1, "duration_sec": 8, "visual_anchor": "stage", "status": "pending"}]}`,
+		},
+	}
+
+	status := domain.JobStatus{}
+	status.JobID = jobID
+	status.State = domain.JobStateFailed
+	status.Error = "veo operation timed out"
+
+	repo := NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
+		Store:     reader,
+		JobStatus: newFakeStatusStore(status),
+	})
+
+	detail, err := repo.GetHistory(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("GetHistory() error = %v", err)
+	}
+	if detail.State != domain.JobStateFailed || detail.Error != "veo operation timed out" {
+		t.Fatalf("State/Error = %q/%q, want failed/veo operation timed out", detail.State, detail.Error)
+	}
+
+	// 記録の無いジョブでも詳細そのものは返します。
+	repo = NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
+		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
+		Store:     reader,
+		JobStatus: newFakeStatusStore(),
+	})
+	detail, err = repo.GetHistory(context.Background(), jobID)
+	if err != nil {
+		t.Fatalf("GetHistory() without a status record error = %v", err)
+	}
+	if detail.State != "" || detail.Title != "half baked" {
+		t.Fatalf("State = %q, Title = %q; 記録が無くても詳細は返すこと", detail.State, detail.Title)
 	}
 }
 

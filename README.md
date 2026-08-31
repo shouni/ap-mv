@@ -203,7 +203,9 @@ M2M 認証が成功したリクエストは CSRF 検証をバイパスします�
 
 **一覧に出すのは 5 コマンド**（`video_recipe_create` / `video_recipe_draft` / `mv_from_keyframe_video_recipe` / `short_video_from_section` / `regenerate_cut_video`）です。残りの保守操作（キーフレーム再生成・ZIP 再生成・`section_video`・`finalize_video`）は成果物を**元のジョブへ**書き戻すので自分のディレクトリを持たず、以前も一覧に現れていません。出すと成果物の無い行が並ぶだけなので、コマンドで絞ります。進行状況は `/jobs/{jobID}` で追えます。継続タスク（`video_gen_continuation`）が `Command` を上書きしても一覧から消えないのは、記録するのが `domain.Task.ListedCommand()`（＝元のコマンド）だからです。
 
-**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
+**一覧と詳細は進行段階とジョブ状態の両方を出します。** 段階（`progress`）はカットがどこまで焼けたかで、状態（`state`）は処理が生きているかです。失敗したジョブは段階が途中で止まるだけなので、状態が無いと生成中のジョブと区別が付きません。失敗の理由（`error`）は一覧では省略表示、詳細ではそのまま出ます。移行前のジョブは状態の記録が無いため空になります。
+
+**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます（状態だけは Firestore を 1 回引きます）。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
 
 **移行前のジョブ**には状態のドキュメントがないため一覧に出ません。`go run ./cmd/backfill-job-status`（まず `-dry-run`）が `video_music_meta.json` から書き起こします。既にドキュメントがあるジョブは触りません。
 

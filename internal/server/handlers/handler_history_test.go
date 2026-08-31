@@ -288,6 +288,65 @@ func TestHistoryListRendersVeoCostColumn(t *testing.T) {
 	}
 }
 
+// 失敗したジョブは成果物が途中まで残るだけなので、段階のバッジは「keyframes 3/12」で
+// 止まります。それだけでは生成中のジョブと区別が付かないため、状態と理由を一覧に出します。
+// ジョブ状態が Firestore へ移るまで、失敗したジョブは一覧に現れませんでした。
+func TestHistoryListMarksFailedJobs(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		page: domain.VideoHistoryPage{
+			Items: []domain.VideoHistory{{
+				JobID:    "job-1",
+				Title:    "Halfway",
+				State:    domain.JobStateFailed,
+				Error:    "veo operation timed out",
+				Progress: domain.JobProgress{Stage: domain.StageKeyframes, TotalCuts: 12, KeyframeCuts: 3},
+			}},
+		},
+	}
+
+	rec := httptest.NewRecorder()
+	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("History status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"failed", "veo operation timed out", "keyframes 3/12"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("History body missing %q: %s", want, body)
+		}
+	}
+}
+
+// 投入直後のジョブはレシピがまだ無いので段階が空です。空のバッジを出さず、queued と
+// 分かるようにします（以前は中身の無い灰色のバッジが 1 つ並ぶだけでした）。
+func TestHistoryListShowsQueuedWithoutAnEmptyStageBadge(t *testing.T) {
+	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
+	if err != nil {
+		t.Fatalf("NewHandlerWithOptions() error = %v", err)
+	}
+	h.HistoryRepository = fakeHistoryRepository{
+		page: domain.VideoHistoryPage{
+			Items: []domain.VideoHistory{{JobID: "job-1", Title: "job-1", State: domain.JobStateQueued}},
+		},
+	}
+
+	rec := httptest.NewRecorder()
+	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "queued") {
+		t.Fatalf("History body missing the queued badge: %s", body)
+	}
+	if strings.Contains(body, `<span class="badge text-bg-secondary"></span>`) {
+		t.Fatalf("空の段階バッジが出ています: %s", body)
+	}
+}
+
 // TestHistoryDetailRendersRecordedUsage verifies the detail page shows what was actually
 // submitted to Veo alongside the finished runtime, and flags the regenerated cut. The finished
 // runtime alone cannot reveal that cut 2 was billed twice — that is the whole point of the tally.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/shouni/go-job-firestore/jobfirestore"
@@ -108,6 +109,28 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	return domain.VideoHistoryPage{Items: items, PageMeta: meta}, nil
 }
 
+// applyJobState は、成果物からは分からないジョブの状態を状態ドキュメントから補います。
+//
+// 失敗したジョブは成果物が途中まで残るだけで、レシピを見ても「keyframes 3/12 で止まって
+// いる」としか分かりません。失敗したのか、いま焼いている最中なのかは、ここでしか付きません。
+//
+// 記録が無いのは正常です（この機能より前のジョブ、投入直後の一瞬）。読めなかった場合も
+// 詳細そのものは返します。状態が付かないだけで、成果物の表示は成立するためです。
+func (r *VideoHistoryRepository) applyJobState(ctx context.Context, jobID string, history *domain.VideoHistory) {
+	if r.jobStatus == nil || history == nil {
+		return
+	}
+	status, err := r.jobStatus.Get(ctx, jobID)
+	if err != nil {
+		if !errors.Is(err, domain.ErrJobStatusNotFound) {
+			slog.WarnContext(ctx, "failed to load job status for history detail", "job_id", jobID, "error", err)
+		}
+		return
+	}
+	history.State = status.State
+	history.Error = strings.TrimSpace(status.Error)
+}
+
 // GetHistory loads generated MV job metadata and cut keyframe references.
 //
 // Unlike ListHistoryPage, this always reads storage directly rather than the TTL cache: a
@@ -127,6 +150,7 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 		return domain.VideoHistoryDetail{}, err
 	}
 	history := r.buildHistoryFromFreshRecipe(ctx, jobID, recipe)
+	r.applyJobState(ctx, jobID, &history)
 	detail := domain.VideoHistoryDetail{
 		VideoHistory: history,
 		Cuts:         make([]domain.VideoHistoryCut, 0, len(recipe.Cuts)),
