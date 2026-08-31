@@ -141,7 +141,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `AP_MUSIC_BUCKET` | なし | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json`（ap-comp と同じ規則）を解決するための GCS bucket |
 | `GEMINI_MODELS` | なし（必須） | 台本生成などのテキスト生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
 | `IMAGE_MODELS` | なし（必須） | 標準キーフレーム生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
-| `WORKER_URL` | `<SERVICE_URL>/tasks/generate` | Cloud Tasks が呼び出す worker endpoint。**worker 自身にも設定が必要**です（カット分割された動画生成が次のカットを自分で積み直すため） |
+| `WORKER_URL` | `<SERVICE_URL>` | worker **サービス**の URL。パスは含めません |
 | `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
 | `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
 | `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。ap-mv は worker も継続カットを投入するため、どちらの役割でも必要です。必須です（旧 `SERVICE_ACCOUNT_EMAIL` へのフォールバックは撤去済み） |

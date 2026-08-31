@@ -16,7 +16,7 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 	cfg := &Config{}
 	cfg.Server.ServiceURL = "https://ap-mv.example.run.app"
 	cfg.Server.Role = role
-	cfg.Tasks.WorkerURL = "https://ap-mv-worker.example.run.app/tasks/generate"
+	cfg.Tasks.WorkerURL = "https://ap-mv-worker.example.run.app"
 	cfg.Tasks.QueueID = "mv-queue"
 	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}

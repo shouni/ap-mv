@@ -41,6 +41,11 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
 	}
+	// 未設定を SERVICE_URL から導出するのは worker 面を担うプロセスだけなので、web 専用
+	// プロセスではここが空のまま残る。通すと配送先なしでタスクを投入しようとする。
+	if c.Tasks.WorkerURL == "" {
+		return fmt.Errorf("WORKER_URL が設定されていません（worker サービスの URL を渡します）")
+	}
 	if !c.IsSecureWorkerURL() {
 		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
 	}
