@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/shouni/genai-kit/gemini"
 	characterassets "github.com/shouni/go-character-kit/assets"
 	"github.com/shouni/go-character-kit/character"
-	"github.com/shouni/go-gemini-client/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -25,7 +25,7 @@ func buildWorkflow(
 	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.Model,
+	aiClient gemini.Generator,
 ) (*orchestrator.Workflows, error) {
 	return buildWorkflowWithConfig(ctx, workflowBuildParams{
 		cfg:         cfg,
@@ -58,7 +58,7 @@ type workflowBuildParams struct {
 	// タスクごとに組み直される（シード上書き・ビジュアルモード）ため、ここで都度
 	// 生成すると 1 タスクにつき 1 クライアント、つまり ADC のトークンソース解決まで
 	// やり直すことになります。
-	aiClient     gemini.Model
+	aiClient     gemini.Generator
 	visualMode   string
 	seedOverride *characterSeedOverride
 }

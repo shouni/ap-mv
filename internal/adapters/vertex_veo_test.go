@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/genai-kit/gemini"
 	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-mv/internal/ports"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/genai-kit/gemini"
 
 	"github.com/shouni/ap-mv/internal/config"
 )
@@ -32,7 +32,7 @@ func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 		InitialDelay: defaultVertexInitialDelay,
 	}
 
-	aiClient, err := gemini.NewClient(ctx, clientConfig)
+	aiClient, err := gemini.New(ctx, clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("vertex AI クライアントの初期化に失敗しました: %w", err)
 	}
