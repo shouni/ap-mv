@@ -109,7 +109,7 @@ func renderHistoryDetailPage(t *testing.T) string {
 }
 
 // TestNavMarksCurrentPage は、ナビが現在地を active + aria-current で示すことを確認します。
-// 兄弟アプリ（ap-comp / ap-story / ap-voice）はいずれも持っていて ap-mv だけ無く、
+// 兄弟アプリ（ap-music / ap-story / ap-voice）はいずれも持っていて ap-mv だけ無く、
 // どの画面にいるかがナビから読めませんでした。
 func TestNavMarksCurrentPage(t *testing.T) {
 	t.Parallel()

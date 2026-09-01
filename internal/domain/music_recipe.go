@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shouni/go-gemini-client/music"
+	"github.com/shouni/genai-kit/music"
 	"github.com/shouni/go-veo-orchestrator/veo"
 	"github.com/shouni/go-veo-orchestrator/video"
 )
 
-// LyricsDraft は go-gemini-client/music が定義する作詞フェーズの出力です。
+// LyricsDraft は genai-kit/music が定義する作詞フェーズの出力です。
 type LyricsDraft = music.LyricsDraft
 
-// MusicRecipe は go-gemini-client/music の楽曲設計図です。
+// MusicRecipe は genai-kit/music の楽曲設計図です。
 // 型だけの葉パッケージなので、lyria の生成ワークフロー一式を輸入せずに済みます。
 type MusicRecipe = music.Recipe
 
-// MusicSection は go-gemini-client/music の曲内セクションです。
+// MusicSection は genai-kit/music の曲内セクションです。
 type MusicSection = music.Section
 
 // VideoRecipe は go-veo-orchestrator が定義する動画台本です。

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/shouni/go-gemini-client/gemini"
-	"github.com/shouni/go-gemini-client/veo"
+	"github.com/shouni/genai-kit/gemini"
+	"github.com/shouni/genai-kit/veo"
 
 	"github.com/shouni/ap-mv/internal/ports"
 )

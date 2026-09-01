@@ -5,7 +5,7 @@
 // ports.ScriptPrompt / ports.KeyframePrompt を満たします。
 //
 // DI を担う internal/builder ではなくここに置いているのは、これがプロンプトという
-// 出力そのものを作る処理であって、依存の配線ではないためです（ap-comp の
+// 出力そのものを作る処理であって、依存の配線ではないためです（ap-music の
 // internal/adapters/prompt と同じ位置づけ）。
 package prompt
 

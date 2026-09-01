@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shouni/go-gemini-client/gemini"
-	"github.com/shouni/go-gemini-client/veo"
+	"github.com/shouni/genai-kit/gemini"
+	"github.com/shouni/genai-kit/veo"
 	"github.com/shouni/go-remote-io/remoteio"
 
 	"github.com/shouni/ap-mv/internal/config"
@@ -15,7 +15,7 @@ import (
 
 // VertexVeoRunner は Vertex AI Veo の動画生成を呼び出す Runner です。
 //
-// API 呼び出しとポーリングは go-gemini-client の veo パッケージが持ち、この型は
+// API 呼び出しとポーリングは genai-kit の veo パッケージが持ち、この型は
 // アプリ固有の関心だけを担当します: ジョブ単位の出力先の決定、生成物のジョブ配下
 // 正規パスへのコピー、タスク単位のモデル・アスペクト比の差し替えです。
 type VertexVeoRunner struct {

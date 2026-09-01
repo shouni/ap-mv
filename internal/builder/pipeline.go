@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/shouni/go-gemini-client/gemini"
+	"github.com/shouni/genai-kit/gemini"
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio"
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
@@ -34,7 +34,7 @@ func buildPipeline(
 	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.Model,
+	aiClient gemini.Generator,
 	externals pipelineExternals,
 ) (*pipeline.Runner, error) {
 	workflows, err := buildWorkflow(ctx, cfg, store, httpClient, videoRunner, aiClient)
@@ -73,7 +73,7 @@ func newWorkflowResolver(
 	store remoteio.Store,
 	httpClient httpkit.HTTPClient,
 	videoRunner ports.VideoRunner,
-	aiClient gemini.Model,
+	aiClient gemini.Generator,
 	shared *orchestrator.Workflows,
 ) *workflowResolver {
 	orchCfg := buildOrchestratorConfig(cfg)
