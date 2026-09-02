@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/shouni/go-serve-kit/serverrole"
-
 	"github.com/shouni/gcp-kit/auth/oidc"
+	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/gcp-kit/worker"
+	"github.com/shouni/go-serve-kit/serverrole"
 
 	"github.com/shouni/ap-mv/internal/app"
 	"github.com/shouni/ap-mv/internal/config"
@@ -37,8 +37,6 @@ func newRoleTestConfig(role serverrole.Role) *config.Config {
 	cfg.Tasks.TaskAudienceURL = "https://worker.example.test"
 	cfg.Auth.GoogleClientID = "test-client-id"
 	cfg.Auth.GoogleClientSecret = "test-client-secret"
-	cfg.Auth.SessionSecret = strings.Repeat("a", 32)
-	cfg.Auth.SessionEncryptKey = strings.Repeat("b", 32)
 	cfg.Auth.AllowedEmails = []string{"someone@example.test"}
 	cfg.NormalizeModels()
 	return cfg
@@ -67,7 +65,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			appCtx := &app.Container{Config: newRoleTestConfig(tt.role), Pipeline: stubPipeline{}}
+			appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: newRoleTestConfig(tt.role), Pipeline: stubPipeline{}}
 			h, err := BuildHandlers(appCtx)
 			if err != nil {
 				t.Fatalf("BuildHandlers() error = %v", err)
@@ -100,7 +98,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 	t.Parallel()
 
-	appCtx := &app.Container{Config: newRoleTestConfig(serverrole.Web)}
+	appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: newRoleTestConfig(serverrole.Web)}
 	h, err := BuildHandlers(appCtx)
 	if err != nil {
 		t.Fatalf("BuildHandlers() error = %v", err)
@@ -118,7 +116,7 @@ func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.TaskAudienceURL = ""
 
-	appCtx := &app.Container{Config: cfg, Pipeline: stubPipeline{}}
+	appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: cfg, Pipeline: stubPipeline{}}
 	if _, err := BuildHandlers(appCtx); err == nil {
 		t.Fatal("TASK_AUDIENCE_URL が無いのに BuildHandlers() が成功している")
 	}

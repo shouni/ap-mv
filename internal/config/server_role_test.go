@@ -45,8 +45,6 @@ func newRoleTestConfig(role serverrole.Role) *Config {
 func withWebAuth(cfg *Config) *Config {
 	cfg.Auth.GoogleClientID = "client-id"
 	cfg.Auth.GoogleClientSecret = "client-secret"
-	cfg.Auth.SessionSecret = "0123456789abcdef"
-	cfg.Auth.SessionEncryptKey = "0123456789abcdef"
 	cfg.Auth.AllowedEmails = []string{"user@example.com"}
 	return cfg
 }

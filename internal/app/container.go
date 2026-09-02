@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 
+	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/gcp-kit/tasks"
 	"github.com/shouni/go-http-kit/httpkit"
 	"github.com/shouni/go-remote-io/remoteio"
@@ -30,6 +31,8 @@ type Container struct {
 	// Asynchronous Task
 	TaskEnqueuer *tasks.Enqueuer[domain.Task]
 	TaskQueue    ports.TaskQueue
+	// SessionStore はログインセッションの保存先です。
+	SessionStore session.Store
 
 	// Worker pipeline
 	Pipeline ports.Pipeline

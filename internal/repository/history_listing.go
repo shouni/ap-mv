@@ -7,9 +7,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/shouni/go-job-firestore/jobfirestore"
+	"github.com/shouni/gcp-kit/jobstatus"
 	"github.com/shouni/go-remote-io/remoteio"
-
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -91,10 +90,10 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 		return domain.VideoHistoryPage{}, nil
 	}
 
-	opts := []jobfirestore.ListOption{jobfirestore.WithCommand(listedCommands...)}
+	opts := []jobstatus.ListOption{jobstatus.WithCommand(listedCommands...)}
 	if stage != "" {
 		// パスは firestore タグの名前です（domain.JobStatus.Progress → domain.JobProgress.Stage）。
-		opts = append(opts, jobfirestore.WithField("progress.stage", string(stage)))
+		opts = append(opts, jobstatus.WithField("progress.stage", string(stage)))
 	}
 
 	statuses, meta, err := r.jobStatus.List(ctx, page, perPage, opts...)

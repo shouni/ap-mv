@@ -56,7 +56,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 * **Bounded Concurrency & Rate Control**: go-veo-orchestrator が発射間隔・1回あたりの上限時間・同一リクエストの重複排除（singleflight）を担い、台本のテキスト生成とキーフレームの画像生成の両方に同じ制限を掛けます（クォータはプロジェクト単位のため）。`KEYFRAME_MAX_CONCURRENCY` / `KEYFRAME_RATE_INTERVAL` で調整します。
 * **Network Safety**: 外部HTTP取得には `go-http-kit` 系の安全な HTTP client を注入し、GCS 入出力は `go-remote-io` の GCS adapter に集約します。`SERVICE_URL` は `netarmor` による安全スキーム判定を通し、本番では HTTPS を必須化します。
 * **Singleflight Protection**: 大容量の動画・音声アセットの重複フェッチや二重アップロードをインメモリで完全に抑制。
-* **Session-backed CSRF**: WebフォームのCSRFトークンは `gorilla/sessions` のCookieセッションに保存し、POST / DELETE 時に定数時間比較で検証します。フォーム送信は `csrf_token` フィールド、JS からの fetch（DELETE など）は `X-CSRF-Token` ヘッダーで渡します。Cookie署名キーには起動時ランダム値ではなく `SESSION_SECRET` を使うため、Cloud Run の再起動や複数インスタンス間でも検証が安定します。
+* **Session-backed CSRF**: WebフォームのCSRFトークンはサーバー側のセッション（Firestore）に保存し、POST / DELETE 時に定数時間比較で検証します。フォーム送信は `csrf_token` フィールド、JS からの fetch（DELETE など）は `X-CSRF-Token` ヘッダーで渡します。セッションの実体が Cloud Run の外にあるため、再起動や複数インスタンス間でも検証が安定します。
 
 ---
 
@@ -180,8 +180,7 @@ worker も投入側になるため、worker の `ALLOWED_TASK_SERVICE_ACCOUNTS` 
 
 | 変数 | 用途 |
 | --- | --- |
-| `SESSION_SECRET` | OAuth セッションおよびCSRF CookieセッションのHMAC署名キー。productionでは必須。Cloud Run の全インスタンスで同じ値を設定してください。 |
-| `SESSION_ENCRYPT_KEY` | OAuth セッション暗号化キー。productionでは必須。16 / 24 / 32 bytes のいずれか。 |
+| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。**ジョブ状態用とは別のデータベースを指します** |
 | `GOOGLE_CLIENT_ID` | Google OAuth クライアントID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
 | `ALLOWED_EMAILS` | ログインを許可するメールアドレスのリスト |
@@ -190,7 +189,7 @@ worker も投入側になるため、worker の `ALLOWED_TASK_SERVICE_ACCOUNTS` 
 
 M2M 認証が成功したリクエストは CSRF 検証をバイパスします。
 
-`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。検証範囲は `SERVER_ROLE` に従い、`SESSION_SECRET` / `SESSION_ENCRYPT_KEY` / OAuth 設定 / 認可リストは **Web 面を提供する場合のみ**必須です。Cloud Tasks 設定・GCS・Veo 設定はどちらの役割でも必須になります。
+`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。検証範囲は `SERVER_ROLE` に従い、OAuth 設定と認可リストは **Web 面を提供する場合のみ**必須です。Cloud Tasks 設定・GCS・Veo 設定はどちらの役割でも必須になります。
 
 ### History Storage
 
