@@ -27,7 +27,7 @@ type SlackAdapter struct {
 }
 
 // NewSlackAdapter creates a Slack notification adapter. Empty webhook URL disables notifications.
-func NewSlackAdapter(httpClient httpkit.Requester, webhookURL, serviceURL string) (*SlackAdapter, error) {
+func NewSlackAdapter(httpClient httpkit.Poster, webhookURL, serviceURL string) (*SlackAdapter, error) {
 	notifier, err := slack.NewNotifier(httpClient, webhookURL)
 	if err != nil {
 		return nil, fmt.Errorf("initialize Slack client: %w", err)
