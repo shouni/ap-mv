@@ -160,7 +160,6 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成のカット間の同時実行数。1 カットの「生成 → 保存」が 1 goroutine で完結します |
 | `KEYFRAME_RATE_INTERVAL` | `60s` | AI 呼び出しの発射間隔の下限。**キーフレームの画像生成だけでなく台本のテキスト生成にも掛かります**（クォータはプロジェクト単位のため）。0 で無制限。なおスループットは並列度によらずこの間隔で頭打ちになるので、両方を上げる設定は矛盾します |
 | `KEYFRAME_IMAGE_SIZE` | `2K` | キーフレーム画像の出力解像度。`1K` / `2K` / `4K` のいずれか（**それ以外は起動時に落ちます**）|
-| `SHUTDOWN_TIMEOUT` | `15s` | graceful shutdown の待機時間 |
 | `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
 
 モデル名にアプリ側の既定値を置かないのは意図的です。モデル ID が古くなるのは Google のリリース周期であってこのリポジトリの都合ではないため、既定値があると「デプロイ設定を変えていないのに古いモデルを使い続ける」状態に誰も気付けません。`GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` は役割を問わず必須で、空だと起動時に落とします単価表（`VEO_PRICE_USD_PER_SEC`）も同じ理由で既定値を持ちません — モデル名と価格のどちらも Google 側の都合で変わるためです。

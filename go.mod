@@ -10,9 +10,9 @@ require (
 	github.com/shouni/gcp-kit v1.14.1
 	github.com/shouni/genai-kit v1.0.1
 	github.com/shouni/go-character-kit v1.3.0
-	github.com/shouni/go-http-kit v1.10.0
+	github.com/shouni/go-http-kit v1.11.0
 	github.com/shouni/go-job-firestore v1.2.1
-	github.com/shouni/go-notify v1.3.1
+	github.com/shouni/go-notify v1.4.0
 	github.com/shouni/go-prompt-kit v1.7.0
 	github.com/shouni/go-remote-io v1.11.2
 	github.com/shouni/go-serve-kit v1.0.0

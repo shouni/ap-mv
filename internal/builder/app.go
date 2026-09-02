@@ -53,7 +53,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 	closers = append(closers, enqueuer)
 
-	httpClient := httpkit.New(httpkit.DefaultHTTPTimeout)
+	httpClient := httpkit.New()
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	// 成果物と違って Firestore に置くため、履歴のプレフィックス削除では消えません

@@ -20,8 +20,7 @@ type ServerConfig struct {
 	ServiceURL string `env:"SERVICE_URL" envDefault:"http://localhost:8080"`
 	Port       string `env:"PORT" envDefault:"8080"`
 	// Role はこのプロセスが担う役割です。明示が必須で、未設定は起動時エラーになります。
-	Role            serverrole.Role `env:"SERVER_ROLE"`
-	ShutdownTimeout time.Duration   `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
+	Role serverrole.Role `env:"SERVER_ROLE"`
 }
 
 // GCPConfig は Vertex AI / Cloud Tasks 呼び出しに使う GCP プロジェクト情報です。

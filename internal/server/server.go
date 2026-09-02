@@ -40,12 +40,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// 起動・シグナル待ち・正常停止は cloudrun が持ちます。WriteTimeout だけは
 	// Veo の実行時間に合わせて明示します（既定では縛られません）。
 	return cloudrun.Serve(ctx, cloudrun.Config{
-		Port:            cfg.Server.Port,
-		Handler:         NewRouter(h, cfg.GCP.ProjectID),
-		ReadTimeout:     10 * time.Second,
-		WriteTimeout:    writeTimeout(cfg),
-		IdleTimeout:     60 * time.Second,
-		ShutdownTimeout: cfg.Server.ShutdownTimeout,
+		Port:         cfg.Server.Port,
+		Handler:      NewRouter(h, cfg.GCP.ProjectID),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: writeTimeout(cfg),
+		IdleTimeout:  60 * time.Second,
 	})
 }
 

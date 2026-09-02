@@ -147,12 +147,12 @@ github.com/shouni/genai-kit v1.0.1 h1:uwZiMKp+bIYIOStpmUNd4JIVylgUDu81WTWkkIjK6s
 github.com/shouni/genai-kit v1.0.1/go.mod h1:93RD8PTxteOyOTfXrEdAaXx7Vg2YwOcLhnvcovV3KKE=
 github.com/shouni/go-character-kit v1.3.0 h1:hVX6aPRZELLulNGDRPGR6lgzlrWQsNDorrNF/8BfDLk=
 github.com/shouni/go-character-kit v1.3.0/go.mod h1:y0xe3U+Jk1zF4t1+KbxQ/ADgbMbzcDyhfj47NRSOpYE=
-github.com/shouni/go-http-kit v1.10.0 h1:2L5zPnZpbEgxGeTsdDP5fKFcS6efpXOOvMBCcbzzlHQ=
-github.com/shouni/go-http-kit v1.10.0/go.mod h1:rk5iB0MB/Z3cnMGrQlTubCoDA+QUFHGMF7g7PA7ArQo=
+github.com/shouni/go-http-kit v1.11.0 h1:IrCkC+yxpX7AMPIHNPsVySeu5Lgzngnxuge9TB/qtCQ=
+github.com/shouni/go-http-kit v1.11.0/go.mod h1:rk5iB0MB/Z3cnMGrQlTubCoDA+QUFHGMF7g7PA7ArQo=
 github.com/shouni/go-job-firestore v1.2.1 h1:k3YwF+0RQVRFunztEf/VZ8rtnNdLAoFyIc7J6NUuUWw=
 github.com/shouni/go-job-firestore v1.2.1/go.mod h1:12oCOhGT4gW+JScIysDjQuNHtk6v97zTGgv0BaGZ4f8=
-github.com/shouni/go-notify v1.3.1 h1:fzaSiT0fX2IKXd7hH1pZSXsFXzMc8DrpHXZJRaoF1rk=
-github.com/shouni/go-notify v1.3.1/go.mod h1:vgnXQGdz8LnWReoqrTEAMKjEJlTzeCmVwiUL1Qfb2Vw=
+github.com/shouni/go-notify v1.4.0 h1:bQFOhgX1NWmkywdylwLchNJL+sYe1RO7lNjFrATdNEQ=
+github.com/shouni/go-notify v1.4.0/go.mod h1:7gHETk05PvFztvkjBYZNUWfDJb5UUVRmv1XPgh4Js9U=
 github.com/shouni/go-prompt-kit v1.7.0 h1:uOma6R5jJh1ywy0TepXnRSRYtGX41B3/tN7su7E4vcs=
 github.com/shouni/go-prompt-kit v1.7.0/go.mod h1:nWHeZnzuXiB9UoQ8AFUd6VF+QJAlg1BLmViWuWeRKUM=
 github.com/shouni/go-remote-io v1.11.2 h1:x/j5Ij6HETZk3B2CvJ11ETEndDVIDU4pUYS44k0uDaQ=
