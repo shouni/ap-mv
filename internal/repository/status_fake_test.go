@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/shouni/go-job-firestore/jobfirestore"
+	"github.com/shouni/gcp-kit/jobstatus"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -47,7 +47,7 @@ func (f *fakeStatusStore) Save(context.Context, string, domain.JobStatus) error 
 
 func (f *fakeStatusStore) Delete(context.Context, string) error { return nil }
 
-func (f *fakeStatusStore) List(_ context.Context, page, perPage int, opts ...jobfirestore.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
+func (f *fakeStatusStore) List(_ context.Context, page, perPage int, opts ...jobstatus.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

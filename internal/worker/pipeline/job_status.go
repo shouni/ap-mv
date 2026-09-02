@@ -3,7 +3,7 @@ package pipeline
 import (
 	"context"
 
-	"github.com/shouni/go-job-firestore/jobfirestore"
+	"github.com/shouni/gcp-kit/jobstatus"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
@@ -11,22 +11,22 @@ import (
 
 // statusRecorder はジョブ状態の記録を担当します。
 //
-// 再実行ガード・前回記録からの引き継ぎ・記録失敗を握り潰す振る舞いは jobfirestore.Recorder に
+// 再実行ガード・前回記録からの引き継ぎ・記録失敗を握り潰す振る舞いは jobstatus.Recorder に
 // 集約しており、ここが与えるのは ap-mv 固有の状態の組み立てだけです。
 // 記録先が未設定でもパイプラインは動作し、記録だけが行われません。
 type statusRecorder struct {
-	recorder *jobfirestore.Recorder[domain.JobStatus]
+	recorder *jobstatus.Recorder[domain.JobStatus]
 }
 
 // newStatusRecorder は ports.JobStatusStore を裏付けとした statusRecorder を構築します。
 // store が nil の場合、記録は行われません。
 //
-// ports.JobStatusStore は jobfirestore.StatusStore と同じシグネチャなので、そのまま渡せます。
+// ports.JobStatusStore は jobstatus.StatusStore と同じシグネチャなので、そのまま渡せます。
 func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 	if store == nil {
-		return statusRecorder{recorder: jobfirestore.NewRecorder[domain.JobStatus](nil)}
+		return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](nil)}
 	}
-	return statusRecorder{recorder: jobfirestore.NewRecorder[domain.JobStatus](store)}
+	return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](store)}
 }
 
 // begin は、そのジョブが既に完了していれば true を返し、未完了なら処理開始を記録して

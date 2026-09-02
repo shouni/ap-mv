@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shouni/go-job-firestore/jobfirestore"
+	"github.com/shouni/gcp-kit/jobstatus"
+	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/worker/filter"
-	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
 )
 
 // fakeJobStatusStore はメモリ上でジョブ状態を保持するテスト用ストアです。
@@ -43,7 +43,7 @@ func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.J
 }
 
 // List は一覧のためのクエリで、パイプラインは呼びません。ports を満たすためだけの実装です。
-func (s *fakeJobStatusStore) List(context.Context, int, int, ...jobfirestore.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
+func (s *fakeJobStatusStore) List(context.Context, int, int, ...jobstatus.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
 	return nil, domain.PageMeta{}, nil
 }
 

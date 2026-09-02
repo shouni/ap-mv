@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 
+	"cloud.google.com/go/firestore"
+	"github.com/shouni/gcp-kit/auth/session"
+	"github.com/shouni/gcp-kit/jobstatus"
 	"github.com/shouni/go-http-kit/httpkit"
-	"github.com/shouni/go-job-firestore/jobfirestore"
 	"github.com/shouni/go-remote-io/remoteio/gcs"
 
 	"github.com/shouni/ap-mv/internal/adapters"
@@ -53,14 +55,32 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	resources = append(resources, enqueuer)
 	closers = append(closers, enqueuer)
 
+	// セッションはジョブ状態とは別のデータベースに置きます（SessionDatabase）。
+	// 役割で分岐しないのは、このファイルが他の資源もそうしているためです。
+	sessionFirestore, err := firestore.NewClientWithDatabase(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase)
+	if err != nil {
+		return nil, fmt.Errorf("セッション用 Firestore の初期化に失敗しました: %w", err)
+	}
+	resources = append(resources, sessionFirestore)
+	closers = append(closers, sessionFirestore)
+
+	sessionStore, err := session.NewFirestoreStore(session.FirestoreConfig{
+		Client:      sessionFirestore,
+		Collection:  cfg.Auth.SessionCollection,
+		StoreConfig: session.StoreConfig{Secure: cfg.IsSecureServiceURL()},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("セッションストアの構築に失敗しました: %w", err)
+	}
+
 	httpClient := httpkit.New()
 	queue := taskQueueAdapter{enqueuer: enqueuer}
 	// Web プロセスは投入時の queued を、Worker プロセスは実行結果を書き込みます。
 	// 成果物と違って Firestore に置くため、履歴のプレフィックス削除では消えません
 	// （消すのはハンドラーの仕事です。ports.JobStatusStore.Delete を参照）。
-	firestoreFactory, err := jobfirestore.New(ctx,
-		jobfirestore.WithProjectID(cfg.GCP.ProjectID),
-		jobfirestore.WithDatabase(cfg.Storage.FirestoreDatabase),
+	firestoreFactory, err := jobstatus.New(ctx,
+		jobstatus.WithProjectID(cfg.GCP.ProjectID),
+		jobstatus.WithDatabase(cfg.Storage.FirestoreDatabase),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Firestore: %w", err)
@@ -133,6 +153,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 		HTTPClient:        httpClient,
 		TaskEnqueuer:      enqueuer,
 		TaskQueue:         queue,
+		SessionStore:      sessionStore,
 		Pipeline:          pipe,
 		HistoryRepository: historyRepository,
 		JobStatus:         jobStatus,

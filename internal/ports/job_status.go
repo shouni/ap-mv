@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/shouni/go-job-firestore/jobfirestore"
+	"github.com/shouni/gcp-kit/jobstatus"
 
 	"github.com/shouni/ap-mv/internal/domain"
 )
@@ -15,8 +15,8 @@ import (
 // 一覧がここにあるのは、履歴の見出しを状態ドキュメントへ写したからです。以前は成果物の
 // 置き場を走査して 1 件ずつメタデータを開いていたので、一覧は成果物側の関心でした。
 //
-// Save / Get / Delete のシグネチャは go-job-firestore の Store に揃えてあります。
-// これにより *jobfirestore.Store[domain.JobStatus] がそのまま実装となり、Recorder へ
+// Save / Get / Delete のシグネチャは gcp-kit の Store に揃えてあります。
+// これにより *jobstatus.Store[domain.JobStatus] がそのまま実装となり、Recorder へ
 // 渡すためのアダプタが要りません（以前はジョブ ID を状態に含める形だったため、
 // 形を合わせるだけのアダプタを 3 サービスがそれぞれ持っていました）。
 type JobStatusStore interface {
@@ -31,5 +31,5 @@ type JobStatusStore interface {
 	Delete(ctx context.Context, jobID string) error
 	// List はジョブ状態を新しい順に 1 ページ分返します。
 	// 総件数は集計クエリで求めるため、ページの外にあるドキュメントは読みません。
-	List(ctx context.Context, page, perPage int, opts ...jobfirestore.ListOption) ([]domain.JobStatus, domain.PageMeta, error)
+	List(ctx context.Context, page, perPage int, opts ...jobstatus.ListOption) ([]domain.JobStatus, domain.PageMeta, error)
 }

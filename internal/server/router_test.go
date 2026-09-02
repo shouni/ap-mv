@@ -130,13 +130,12 @@ func newWebRoleTestRouter(t *testing.T) http.Handler {
 	)
 
 	authHandler, err := session.New(session.Config{
-		ClientID:          "client-id",
-		ClientSecret:      "client-secret",
-		RedirectURL:       "http://localhost:8080/auth/callback",
-		SessionAuthKey:    authKey,
-		SessionEncryptKey: encryptKey,
-		SessionName:       sessionName,
-		AllowedEmails:     []string{userEmail},
+		ClientID:      "client-id",
+		ClientSecret:  "client-secret",
+		RedirectURL:   "http://localhost:8080/auth/callback",
+		Store:         session.NewMemoryStore(session.StoreConfig{}),
+		SessionName:   sessionName,
+		AllowedEmails: []string{userEmail},
 	})
 	if err != nil {
 		t.Fatalf("auth.NewHandler() error = %v", err)

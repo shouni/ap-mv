@@ -88,7 +88,7 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 
 // buildWebHandlers は Web 面（OAuth・Web UI・M2M 検証）のハンドラーを組み立てます。
 func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
-	authHandler, err := createAuthHandler(appCtx.Config)
+	authHandler, err := createAuthHandler(appCtx.Config, appCtx.SessionStore)
 	if err != nil {
 		return fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
 	}
@@ -177,22 +177,21 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 }
 
 // createAuthHandler は、認証ハンドラーを初期化して返します。
-func createAuthHandler(cfg *config.Config) (*session.Handler, error) {
+func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handler, error) {
 	redirectURL, err := url.JoinPath(cfg.Server.ServiceURL, "/auth/callback")
 	if err != nil {
 		return nil, fmt.Errorf("リダイレクトURLの構築に失敗しました: %w", err)
 	}
 
 	return session.New(session.Config{
-		ClientID:          cfg.Auth.GoogleClientID,
-		ClientSecret:      cfg.Auth.GoogleClientSecret,
-		RedirectURL:       redirectURL,
-		SessionAuthKey:    cfg.Auth.SessionSecret,
-		SessionEncryptKey: cfg.Auth.SessionEncryptKey,
-		SessionName:       defaultSessionName,
-		IsSecureCookie:    cfg.IsSecureServiceURL(),
-		AllowedEmails:     cfg.Auth.AllowedEmails,
-		AllowedDomains:    cfg.Auth.AllowedDomains,
+		ClientID:       cfg.Auth.GoogleClientID,
+		ClientSecret:   cfg.Auth.GoogleClientSecret,
+		RedirectURL:    redirectURL,
+		Store:          store,
+		SessionName:    defaultSessionName,
+		IsSecureCookie: cfg.IsSecureServiceURL(),
+		AllowedEmails:  cfg.Auth.AllowedEmails,
+		AllowedDomains: cfg.Auth.AllowedDomains,
 	})
 }
 
