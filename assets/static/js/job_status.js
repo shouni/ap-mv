@@ -45,7 +45,7 @@
             spinnerEl.classList.add('d-none');
             // 再生成系は成果物が元ジョブ側に書かれるため、そちらの履歴へ案内する。
             const jobForHistory = status.original_job_id || jobID;
-            historyLink.href = `/history/${encodeURIComponent(jobForHistory)}`;
+            historyLink.href = `/jobs/${encodeURIComponent(jobForHistory)}`;
             historyLink.classList.remove('d-none');
             stop();
             return;

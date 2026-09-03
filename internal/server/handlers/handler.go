@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -190,6 +191,9 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 		}
 	}
 	h.recordQueuedStatus(r, task)
+	// Location は進捗のポーリング先です。本文を読まなくても次に叩く URL が分かるよう、
+	// 画面向けの応答にも同じヘッダを付けます。
+	w.Header().Set("Location", "/jobs/"+url.PathEscape(task.JobID))
 	if !respond.WantsJSON(w, r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusAccepted)
@@ -239,15 +243,15 @@ func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, data PageDa
 
 // navPathFor はナビの現在地キーを返します。
 //
-// 履歴一覧は ?stage=script のとき Scripts、それ以外は History を現在地にします。
+// ジョブ一覧は ?stage=script のとき Scripts、それ以外は History を現在地にします。
 // 同じテンプレートを 2 つのナビ項目が指すため、パスだけでは決まりません。
 func navPathFor(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
 	path := r.URL.Path
-	if path == "/history" && r.URL.Query().Get("stage") == "script" {
-		return "/history?stage=script"
+	if path == "/jobs" && r.URL.Query().Get("stage") == "script" {
+		return "/jobs?stage=script"
 	}
 	return path
 }

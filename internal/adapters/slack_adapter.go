@@ -128,5 +128,5 @@ func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) 
 // historyDetailURL は履歴詳細ページのURLを返します。
 func (s *SlackAdapter) historyDetailURL(jobID string) string {
 	// serviceURL か jobID が空なら空を返し、通知側が行ごと省きます（JoinURL の契約）。
-	return notify.JoinURL(s.serviceURL, "/history", jobID)
+	return notify.JoinURL(s.serviceURL, "/jobs", jobID)
 }

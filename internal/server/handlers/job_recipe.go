@@ -22,11 +22,11 @@ import (
 // (filter.maxRecipeJSONSize): it is the same document read from the other direction.
 const maxRecipeJSONSize = 5 * 1024 * 1024
 
-// GetJobRecipe returns a job's stored VideoRecipe as {"job_id": ..., "recipe": {...}}.
+// JobRecipe returns a job's stored VideoRecipe as {"job_id": ..., "recipe": {...}}.
 //
-// 表示用に整形する履歴詳細とは別経路です。読んだものをそのまま直して PutJobRecipe へ
+// 表示用に整形する履歴詳細とは別経路です。読んだものをそのまま直して JobRecipeUpdate へ
 // 返せる形にしてあり、署名 URL や概算コストのような表示専用の値は混ざりません。
-func (h *Handler) GetJobRecipe(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobRecipe(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -48,9 +48,9 @@ func (h *Handler) GetJobRecipe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PutJobRecipe overwrites a job's VideoRecipe.
+// JobRecipeUpdate overwrites a job's VideoRecipe.
 //
-// 本文は GetJobRecipe の応答と同じ形（{"recipe": {...}}）を受け取ります。VideoRecipe を
+// 本文は JobRecipe の応答と同じ形（{"recipe": {...}}）を受け取ります。VideoRecipe を
 // そのまま本文にした形も受け付けます（"cuts" を持つ物体はレシピ本体としか解釈しようが
 // ないため、取り違えは起きません）。
 //
@@ -59,7 +59,7 @@ func (h *Handler) GetJobRecipe(w http.ResponseWriter, r *http.Request) {
 // なり、絵と台本の対応が静かに壊れます。焼き直したいカットは再生成の導線を使います。
 //
 // 注意: ここで保存した尺は、生成時に SceneSplitFilter が Veo のサポート尺へ丸め直します。
-func (h *Handler) PutJobRecipe(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobRecipeUpdate(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())

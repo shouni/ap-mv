@@ -31,11 +31,11 @@ func (inlineTaskQueue) EnqueueWithName(context.Context, string, *domain.Task) er
 func TestProtectedRoutesRedirectWhenUnauthenticated(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
+	req := httptest.NewRequest(http.MethodGet, "/compose", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusFound {
-		t.Fatalf("GET /video-recipe-create status = %d, want %d", rec.Code, http.StatusFound)
+		t.Fatalf("GET /compose status = %d, want %d", rec.Code, http.StatusFound)
 	}
 	if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/auth/login") {
 		t.Fatalf("redirect location = %q, want /auth/login", location)
@@ -88,7 +88,7 @@ func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
 	router := newWorkerRoleTestRouter(t)
 
-	for _, path := range []string{"/", "/history", "/auth/login"} {
+	for _, path := range []string{"/", "/jobs", "/auth/login"} {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 

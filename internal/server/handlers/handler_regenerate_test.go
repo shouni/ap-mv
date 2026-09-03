@@ -37,14 +37,14 @@ func TestPostRegenerateCutKeyframeInheritsHistoryAspectRatio(t *testing.T) {
 	}
 
 	form := url.Values{"csrf_token": {"token"}}
-	req := newRegenerateRequest(http.MethodPost, "/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
+	req := newRegenerateRequest(http.MethodPost, "/jobs/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostRegenerateCutKeyframe(rec, req)
+	h.RegenerateCutKeyframe(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostRegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("RegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -78,7 +78,7 @@ func TestPostGenerateVideoFromHistoryInheritsAspectRatio(t *testing.T) {
 		"target":       {"full"},
 		"aspect_ratio": {"16:9"}, // must be ignored even if a stale client still sends it
 	}
-	req := httptest.NewRequest(http.MethodPost, "/history/job-1/generate-video", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/jobs/job-1/generate-video", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
@@ -86,10 +86,10 @@ func TestPostGenerateVideoFromHistoryInheritsAspectRatio(t *testing.T) {
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostGenerateVideoFromHistory(rec, req)
+	h.GenerateVideo(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostGenerateVideoFromHistory status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("GenerateVideo status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -140,7 +140,7 @@ func TestRegenerateSectionKeyframesFormRendersSectionCuts(t *testing.T) {
 	}
 	h.HistoryRepository = fakeHistoryRepository{detail: sectionRegenHistory()}
 
-	req := newRegenerateSectionRequest(http.MethodGet, "/history/job-1/sections/0/regenerate", "job-1", "0", nil)
+	req := newRegenerateSectionRequest(http.MethodGet, "/jobs/job-1/sections/0/regenerate", "job-1", "0", nil)
 	rec := httptest.NewRecorder()
 
 	h.RegenerateSectionKeyframesForm(rec, req)
@@ -150,7 +150,7 @@ func TestRegenerateSectionKeyframesFormRendersSectionCuts(t *testing.T) {
 	}
 	body := rec.Body.String()
 	// モード切り替えはカット単位のフォームと共通の外部スクリプトが受け持ちます。
-	for _, want := range []string{"Verse", "/history/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2",
+	for _, want := range []string{"Verse", "/jobs/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2",
 		`src="/static/js/regenerate_mode.js"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("form body missing %q: %s", want, body)
@@ -170,7 +170,7 @@ func TestRegenerateSectionKeyframesFormRejectsUnknownSection(t *testing.T) {
 	}
 	h.HistoryRepository = fakeHistoryRepository{detail: sectionRegenHistory()}
 
-	req := newRegenerateSectionRequest(http.MethodGet, "/history/job-1/sections/9/regenerate", "job-1", "9", nil)
+	req := newRegenerateSectionRequest(http.MethodGet, "/jobs/job-1/sections/9/regenerate", "job-1", "9", nil)
 	rec := httptest.NewRecorder()
 
 	h.RegenerateSectionKeyframesForm(rec, req)
@@ -194,10 +194,10 @@ func TestPostRegenerateSectionKeyframesEnqueuesSectionTask(t *testing.T) {
 	h.Queue = queue
 
 	body := strings.NewReader("overwrite=on&edit_prompt=" + url.QueryEscape("もっと明るく"))
-	req := newRegenerateSectionRequest(http.MethodPost, "/history/job-1/sections/1/regenerate-keyframes", "job-1", "1", body)
+	req := newRegenerateSectionRequest(http.MethodPost, "/jobs/job-1/sections/1/regenerate-keyframes", "job-1", "1", body)
 	rec := httptest.NewRecorder()
 
-	h.PostRegenerateSectionKeyframes(rec, req)
+	h.RegenerateSectionKeyframes(rec, req)
 
 	if queue.task == nil {
 		t.Fatalf("no task enqueued; status=%d body=%s", rec.Code, rec.Body.String())
@@ -256,7 +256,7 @@ func TestRegenerateCutKeyframeFormRendersCutData(t *testing.T) {
 		},
 	}
 
-	req := newRegenerateRequest(http.MethodGet, "/history/job-1/cuts/1/regenerate", "job-1", "1", nil)
+	req := newRegenerateRequest(http.MethodGet, "/jobs/job-1/cuts/1/regenerate", "job-1", "1", nil)
 	rec := httptest.NewRecorder()
 
 	h.RegenerateCutKeyframeForm(rec, req)
@@ -291,7 +291,7 @@ func TestRegenerateCutKeyframeFormPrefillsCharacterSeed(t *testing.T) {
 		},
 	}
 
-	req := newRegenerateRequest(http.MethodGet, "/history/job-1/cuts/1/regenerate", "job-1", "1", nil)
+	req := newRegenerateRequest(http.MethodGet, "/jobs/job-1/cuts/1/regenerate", "job-1", "1", nil)
 	rec := httptest.NewRecorder()
 
 	h.RegenerateCutKeyframeForm(rec, req)
@@ -326,14 +326,14 @@ func TestPostRegenerateCutKeyframeSkipsSeedOverrideWhenUnchanged(t *testing.T) {
 	}
 
 	form := url.Values{"csrf_token": {"token"}, "seed": {"20260707"}}
-	req := newRegenerateRequest(http.MethodPost, "/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
+	req := newRegenerateRequest(http.MethodPost, "/jobs/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostRegenerateCutKeyframe(rec, req)
+	h.RegenerateCutKeyframe(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostRegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("RegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -357,7 +357,7 @@ func TestRegenerateCutKeyframeFormReturnsNotFoundForUnknownCut(t *testing.T) {
 		},
 	}
 
-	req := newRegenerateRequest(http.MethodGet, "/history/job-1/cuts/9/regenerate", "job-1", "9", nil)
+	req := newRegenerateRequest(http.MethodGet, "/jobs/job-1/cuts/9/regenerate", "job-1", "9", nil)
 	rec := httptest.NewRecorder()
 
 	h.RegenerateCutKeyframeForm(rec, req)
@@ -391,14 +391,14 @@ func TestPostRegenerateCutKeyframeAppliesOverridesAndOriginalJobID(t *testing.T)
 		"seed":          {"12345"},
 		"overwrite":     {"on"},
 	}
-	req := newRegenerateRequest(http.MethodPost, "/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
+	req := newRegenerateRequest(http.MethodPost, "/jobs/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostRegenerateCutKeyframe(rec, req)
+	h.RegenerateCutKeyframe(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostRegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("RegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -433,14 +433,14 @@ func TestPostRegenerateCutKeyframeRejectsSeedWithoutCharacter(t *testing.T) {
 	}
 
 	form := url.Values{"csrf_token": {"token"}, "seed": {"1"}}
-	req := newRegenerateRequest(http.MethodPost, "/history/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
+	req := newRegenerateRequest(http.MethodPost, "/jobs/job-1/cuts/1/regenerate-keyframe", "job-1", "1", strings.NewReader(form.Encode()))
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostRegenerateCutKeyframe(rec, req)
+	h.RegenerateCutKeyframe(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("PostRegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf("RegenerateCutKeyframe status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	if queue.task != nil {
 		t.Fatal("expected no task to be queued")

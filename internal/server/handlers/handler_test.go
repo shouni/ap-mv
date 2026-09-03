@@ -129,10 +129,10 @@ func TestLatestVideoForHomePrefersFinalVideo(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "/history/job-1/video" {
+	if got.VideoURL != "/jobs/job-1/video" {
 		t.Errorf("VideoURL = %q, want the final-video web path", got.VideoURL)
 	}
-	if got.PosterURL != "/history/job-1/cuts/1/keyframe" {
+	if got.PosterURL != "/jobs/job-1/cuts/1/keyframe" {
 		t.Errorf("PosterURL = %q, want the first cut's keyframe web path", got.PosterURL)
 	}
 }
@@ -160,10 +160,10 @@ func TestLatestVideoForHomeFallsBackToLastCutWithoutFinalVideo(t *testing.T) {
 	if got == nil {
 		t.Fatal("latestVideoForHome() = nil, want a result")
 	}
-	if got.VideoURL != "/history/job-1/cuts/2/video" {
+	if got.VideoURL != "/jobs/job-1/cuts/2/video" {
 		t.Errorf("VideoURL = %q, want the last cut's video web path", got.VideoURL)
 	}
-	if got.PosterURL != "/history/job-1/cuts/2/keyframe" {
+	if got.PosterURL != "/jobs/job-1/cuts/2/keyframe" {
 		t.Errorf("PosterURL = %q, want the last cut's keyframe web path", got.PosterURL)
 	}
 }
@@ -185,14 +185,14 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil)
+	req := httptest.NewRequest(http.MethodGet, "/compose", nil)
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.VideoRecipeCreateForm(rec, req)
+	h.ComposeForm(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("VideoRecipeCreateForm status = %d, want %d", rec.Code, http.StatusOK)
+		t.Fatalf("ComposeForm status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
@@ -211,10 +211,10 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 		`value="tsumugi" selected`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("VideoRecipeCreateForm body missing %q: %s", want, body)
+			t.Fatalf("ComposeForm body missing %q: %s", want, body)
 		}
 	}
 	if strings.Contains(body, `name="audio_url"`) {
-		t.Fatalf("VideoRecipeCreateForm should not render audio_url input: %s", body)
+		t.Fatalf("ComposeForm should not render audio_url input: %s", body)
 	}
 }

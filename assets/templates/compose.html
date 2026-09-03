@@ -2,7 +2,7 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
         <h1 class="h3 fw-bold mb-4"><i class="bi bi-film me-2" aria-hidden="true"></i>Video Recipe Create</h1>
-        <form method="post" action="/video-recipe-create">
+        <form method="post" action="/compose">
             <input type="hidden" id="csrf_token" name="csrf_token" value="{{.CSRFToken}}">
 
             <div class="mb-3">
@@ -68,12 +68,12 @@
             <!-- 下書きを先に置きます。カット割りを確かめてからキーフレームを焼く流れが
                  通常運用で、本生成はカット数ぶんの画像生成コストがかかるためです。 -->
             <div class="d-grid gap-2 mt-4">
-                <button class="btn btn-primary btn-lg" type="submit" formaction="/compose-draft">Queue Draft Job</button>
+                <button class="btn btn-primary btn-lg" type="submit" name="command" value="video_recipe_draft">Queue Draft Job</button>
                 <button class="btn btn-outline-primary" type="submit">Queue Video Recipe Job</button>
             </div>
             <div class="form-text mt-2">
                 Draft Job はカット割りまでで止まり、キーフレーム画像を1枚も生成しません。
-                カット数と尺を <a href="/history?stage=script">Scripts</a> で確認してから本生成へ進めます。
+                カット数と尺を <a href="/jobs?stage=script">Scripts</a> で確認してから本生成へ進めます。
             </div>
         </form>
     </div>

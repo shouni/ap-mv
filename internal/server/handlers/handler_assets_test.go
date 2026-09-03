@@ -31,7 +31,7 @@ func TestPagesLoadTheirScripts(t *testing.T) {
 	if !strings.Contains(body, `id="csrf_token"`) {
 		t.Error("CSRF トークンの hidden input がありません")
 	}
-	if !strings.Contains(body, `data-delete-url="/history/`) {
+	if !strings.Contains(body, `data-delete-url="/jobs/`) {
 		t.Error("削除ボタンに data-delete-url がありません")
 	}
 }
@@ -71,7 +71,7 @@ func renderHistoryPage(t *testing.T) string {
 	}
 
 	rec := httptest.NewRecorder()
-	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+	h.JobList(rec, httptest.NewRequest(http.MethodGet, "/jobs", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("History status = %d; body=%s", rec.Code, rec.Body.String())
 	}
@@ -95,13 +95,13 @@ func renderHistoryDetailPage(t *testing.T) string {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/"+jobID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/"+jobID, nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", jobID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d; body=%s", rec.Code, rec.Body.String())
 	}
@@ -118,8 +118,8 @@ func TestNavMarksCurrentPage(t *testing.T) {
 		target   string
 		wantHref string
 	}{
-		"履歴":     {target: "/history", wantHref: `href="/history"`},
-		"台本のみ一覧": {target: "/history?stage=script", wantHref: `href="/history?stage=script"`},
+		"履歴":     {target: "/jobs", wantHref: `href="/jobs"`},
+		"台本のみ一覧": {target: "/jobs?stage=script", wantHref: `href="/jobs?stage=script"`},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -130,7 +130,7 @@ func TestNavMarksCurrentPage(t *testing.T) {
 			h.HistoryRepository = fakeHistoryRepository{}
 
 			rec := httptest.NewRecorder()
-			h.History(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
+			h.JobList(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
 
 			body := rec.Body.String()
 			if !strings.Contains(body, `aria-current="page" `+tt.wantHref) {

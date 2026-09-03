@@ -40,13 +40,13 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -55,7 +55,7 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 	for _, want := range []string{
 		"軌跡のアーキテクト",
 		// 画面が指すのは同一オリジンのパスです。実体へはハンドラーが 302 で送ります。
-		`src="/history/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
+		`src="/jobs/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
 		"blue stage",
 		"Cut 1",
 	} {
@@ -98,13 +98,13 @@ func TestHistoryDetailAppliesAspectRatioClass(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -143,13 +143,13 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -157,7 +157,7 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"完成動画",
-		`src="/history/job-1/video"`,
+		`src="/jobs/job-1/video"`,
 		"Copy MV Job ID",
 		// コピー対象は data 属性で渡す。JS の引数にテンプレート値を埋めていた頃は、
 		// JS 文字列リテラル文脈のエスケープ（"/" → "\/" など）が絡んでいた。
@@ -193,13 +193,13 @@ func TestHistoryDetailRendersVeoCostEstimate(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -236,13 +236,13 @@ func TestHistoryDetailOmitsCostForKeyframeOnlyJob(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -272,10 +272,10 @@ func TestHistoryListRendersVeoCostColumn(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
 	rec := httptest.NewRecorder()
 
-	h.History(rec, req)
+	h.JobList(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("History status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -309,7 +309,7 @@ func TestHistoryListMarksFailedJobs(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+	h.JobList(rec, httptest.NewRequest(http.MethodGet, "/jobs", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("History status = %d, want %d", rec.Code, http.StatusOK)
@@ -338,25 +338,25 @@ func TestHistoryListOffersDeleteForJobsWithoutArtifacts(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.History(rec, req)
+	h.JobList(rec, req)
 
 	body := rec.Body.String()
 	// 削除は fetch の DELETE なので、フォームの外から読めるトークンが要ります。
 	if !strings.Contains(body, `id="csrf_token" value="token"`) {
 		t.Fatalf("CSRF トークンがありません: %s", body)
 	}
-	if !strings.Contains(body, `data-delete-url="/history/empty-job"`) {
+	if !strings.Contains(body, `data-delete-url="/jobs/empty-job"`) {
 		t.Errorf("成果物の無いジョブに削除ボタンがありません: %s", body)
 	}
 	// 成果物のあるジョブは今までどおり詳細へ送ります（削除はその画面にあります）。
-	if strings.Contains(body, `data-delete-url="/history/real-job"`) {
+	if strings.Contains(body, `data-delete-url="/jobs/real-job"`) {
 		t.Errorf("成果物のあるジョブにまで削除ボタンが出ています: %s", body)
 	}
-	if !strings.Contains(body, `href="/history/real-job"`) {
+	if !strings.Contains(body, `href="/jobs/real-job"`) {
 		t.Errorf("成果物のあるジョブの Detail リンクがありません: %s", body)
 	}
 }
@@ -375,7 +375,7 @@ func TestHistoryListShowsQueuedWithoutAnEmptyStageBadge(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.History(rec, httptest.NewRequest(http.MethodGet, "/history", nil))
+	h.JobList(rec, httptest.NewRequest(http.MethodGet, "/jobs", nil))
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "queued") {
@@ -417,13 +417,13 @@ func TestHistoryDetailRendersRecordedUsage(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -463,13 +463,13 @@ func TestHistoryDetailWithoutUsageSaysSo(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -502,13 +502,13 @@ func TestHistoryDetailSurvivesUsageReadFailure(t *testing.T) {
 		usageErr: errors.New("storage unavailable"),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/job-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/job-1", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "job-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
@@ -544,7 +544,7 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, routeContext)
@@ -552,7 +552,7 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("HistoryDetail status = %d; body=%s", rec.Code, rec.Body.String())
@@ -601,13 +601,13 @@ func TestHistoryDetailRendersProgressBadge(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/history/video-recipe-20260618-081931-abc", nil)
+	req := httptest.NewRequest(http.MethodGet, "/jobs/video-recipe-20260618-081931-abc", nil)
 	routeContext := chi.NewRouteContext()
 	routeContext.URLParams.Add("jobID", "video-recipe-20260618-081931-abc")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "videos 2/3") {
