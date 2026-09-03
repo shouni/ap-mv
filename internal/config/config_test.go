@@ -294,7 +294,7 @@ func TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault(t *testing.T)
 // TestNormalizeWorkerURL verifies worker service URL normalization.
 //
 // 返るのは worker サービスの URL までで、タスクのパスは付きません。継ぎ足しは
-// 投入の直前（domain.WorkerTaskURL）が受け持ち、その挙動は domain 側で固定しています。
+// 投入側の tasks.Config.WorkerPath が受け持ちます。
 func TestNormalizeWorkerURL(t *testing.T) {
 	tests := []struct {
 		name    string

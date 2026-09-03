@@ -12,16 +12,13 @@ import (
 
 // buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer[domain.Task], error) {
-	taskURL, err := domain.WorkerTaskURL(cfg.Tasks.WorkerURL)
-	if err != nil {
-		return nil, err
-	}
 
 	taskCfg := tasks.Config{
 		ProjectID:  cfg.GCP.ProjectID,
 		LocationID: cfg.GCP.LocationID,
 		QueueID:    cfg.Tasks.QueueID,
-		WorkerURL:  taskURL,
+		WorkerURL:  cfg.Tasks.WorkerURL,
+		WorkerPath: domain.WorkerTaskPath,
 		// タスクに指定する caller SA。トークンを生成して付与するのは Cloud Tasks で、
 		// このプロセスが署名するわけではありません。受信側の許可リスト
 		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。

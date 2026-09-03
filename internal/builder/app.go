@@ -65,9 +65,8 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 	closers = append(closers, sessionFirestore)
 
 	sessionStore, err := session.NewFirestoreStore(session.FirestoreConfig{
-		Client:      sessionFirestore,
-		Collection:  cfg.Auth.SessionCollection,
-		StoreConfig: session.StoreConfig{Secure: cfg.IsSecureServiceURL()},
+		Client:     sessionFirestore,
+		Collection: cfg.Auth.SessionCollection,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("セッションストアの構築に失敗しました: %w", err)

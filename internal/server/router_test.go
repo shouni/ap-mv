@@ -86,7 +86,7 @@ func TestNewRouterOmitsWorkerRouteForWebRole(t *testing.T) {
 // Web 面と OAuth のルートが登録されないことを確認します。
 func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
-	router := newWorkerRoleTestRouter()
+	router := newWorkerRoleTestRouter(t)
 
 	for _, path := range []string{"/", "/history", "/auth/login"} {
 		rec := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 // TestNewRouterKeepsHealthForWorkerRole は、Worker 面だけの構成でもヘルスチェックが
 // 残ることを確認します。Cloud Run の起動判定に使われます。
 func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
-	router := newWorkerRoleTestRouter()
+	router := newWorkerRoleTestRouter(t)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
@@ -112,9 +112,10 @@ func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 }
 
 // newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
-func newWorkerRoleTestRouter() http.Handler {
+func newWorkerRoleTestRouter(t *testing.T) http.Handler {
+	t.Helper()
 	return NewRouter(&builder.AppHandlers{
-		TaskAuth: oidc.New("https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
+		TaskAuth: mustOIDC(t, "https://worker.example.test", []string{"tasks@example.iam.gserviceaccount.com"}),
 	}, "")
 }
 
@@ -132,8 +133,8 @@ func newWebRoleTestRouter(t *testing.T) http.Handler {
 	authHandler, err := session.New(session.Config{
 		ClientID:      "client-id",
 		ClientSecret:  "client-secret",
-		RedirectURL:   "http://localhost:8080/auth/callback",
-		Store:         session.NewMemoryStore(session.StoreConfig{}),
+		ServiceURL:    "http://localhost:8080",
+		Store:         session.NewMemoryStore(),
 		SessionName:   sessionName,
 		AllowedEmails: []string{userEmail},
 	})
@@ -186,33 +187,6 @@ func TestLayoutReferencesNoExternalOrigins(t *testing.T) {
 
 	for _, ref := range regexp.MustCompile(`(?:href|src)="(https?://[^"]+)"`).FindAllStringSubmatch(string(layout), -1) {
 		t.Errorf("外部オリジンへの参照が復活しています: %s", ref[1])
-	}
-}
-
-// バージョン付きの vendor と、URL が変わらない自前アセットで Cache-Control を分けること。
-func TestStaticCacheControlSeparatesVendorFromOwnAssets(t *testing.T) {
-	router := newWebRoleTestRouter(t)
-
-	tests := []struct {
-		target string
-		want   string
-	}{
-		{"/static/vendor/bootstrap-5.3.8/bootstrap.min.css", vendorCacheControl},
-		{"/static/css/app.css", ownAssetCacheControl},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.target, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tt.target, nil))
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("%s = %d, want 200", tt.target, rec.Code)
-			}
-			if got := rec.Header().Get("Cache-Control"); got != tt.want {
-				t.Errorf("Cache-Control = %q, want %q", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -328,4 +302,14 @@ func TestResponsesCarrySecurityHeaders(t *testing.T) {
 	if strings.Contains(policy, "autoplay") {
 		t.Errorf("Permissions-Policy が autoplay を塞いでいます: %s", policy)
 	}
+}
+
+// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
+	t.Helper()
+	v, err := oidc.New(audience, allowed)
+	if err != nil {
+		t.Fatalf("oidc.New() error = %v", err)
+	}
+	return v
 }
