@@ -3,7 +3,6 @@ package builder
 import (
 	"errors"
 	"fmt"
-	"net/url"
 
 	"github.com/shouni/gcp-kit/auth/oidc"
 	"github.com/shouni/gcp-kit/auth/session"
@@ -68,12 +67,9 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 		}
 		// audience と許可する caller SA の両方が揃わないと検証は常に失敗する
 		// （fail-closed）ため、起動時に構成を確かめておきます。
-		taskAuth := oidc.New(
-			appCtx.Config.Tasks.TaskAudienceURL,
-			appCtx.Config.Tasks.AllowedServiceAccounts,
-		)
-		if !taskAuth.Configured() {
-			return nil, fmt.Errorf("cloud Tasks の OIDC 検証を構成できません: TASK_AUDIENCE_URL と ALLOWED_TASK_SERVICE_ACCOUNTS が必要です")
+		taskAuth, err := oidc.New(appCtx.Config.Tasks.TaskAudienceURL, appCtx.Config.Tasks.AllowedServiceAccounts)
+		if err != nil {
+			return nil, fmt.Errorf("cloud Tasks の OIDC 検証を構成できません: TASK_AUDIENCE_URL と ALLOWED_TASK_SERVICE_ACCOUNTS が必要です: %w", err)
 		}
 		h.TaskAuth = taskAuth
 		h.Worker = worker.NewHandler[domain.Task](appCtx.Pipeline)
@@ -178,18 +174,12 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 
 // createAuthHandler は、認証ハンドラーを初期化して返します。
 func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handler, error) {
-	redirectURL, err := url.JoinPath(cfg.Server.ServiceURL, "/auth/callback")
-	if err != nil {
-		return nil, fmt.Errorf("リダイレクトURLの構築に失敗しました: %w", err)
-	}
-
 	return session.New(session.Config{
 		ClientID:       cfg.Auth.GoogleClientID,
 		ClientSecret:   cfg.Auth.GoogleClientSecret,
-		RedirectURL:    redirectURL,
+		ServiceURL:     cfg.Server.ServiceURL,
 		Store:          store,
 		SessionName:    defaultSessionName,
-		IsSecureCookie: cfg.IsSecureServiceURL(),
 		AllowedEmails:  cfg.Auth.AllowedEmails,
 		AllowedDomains: cfg.Auth.AllowedDomains,
 	})
@@ -207,9 +197,9 @@ func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handle
 // gcp-kit 側だからです。許可リストの空だけを config で見ると audience（SERVICE_URL）の
 // 欠落を拾えず、kit が要件を増やしても追随しません。
 func newM2MVerifier(serviceURL string, allowedServiceAccounts []string) (*oidc.Verifier, error) {
-	m2m := oidc.New(serviceURL, allowedServiceAccounts)
-	if !m2m.Configured() {
-		return nil, fmt.Errorf("m2m の OIDC 検証を構成できません: SERVICE_URL と ALLOWED_M2M_SERVICE_ACCOUNTS が必要です")
+	m2m, err := oidc.New(serviceURL, allowedServiceAccounts)
+	if err != nil {
+		return nil, fmt.Errorf("m2m の OIDC 検証を構成できません（SERVICE_URL と ALLOWED_M2M_SERVICE_ACCOUNTS）: %w", err)
 	}
 	return m2m, nil
 }

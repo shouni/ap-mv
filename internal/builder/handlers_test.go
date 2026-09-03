@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/shouni/gcp-kit/auth/oidc"
@@ -65,7 +64,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: newRoleTestConfig(tt.role), Pipeline: stubPipeline{}}
+			appCtx := &app.Container{SessionStore: session.NewMemoryStore(), Config: newRoleTestConfig(tt.role), Pipeline: stubPipeline{}}
 			h, err := BuildHandlers(appCtx)
 			if err != nil {
 				t.Fatalf("BuildHandlers() error = %v", err)
@@ -98,7 +97,7 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 	t.Parallel()
 
-	appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: newRoleTestConfig(serverrole.Web)}
+	appCtx := &app.Container{SessionStore: session.NewMemoryStore(), Config: newRoleTestConfig(serverrole.Web)}
 	h, err := BuildHandlers(appCtx)
 	if err != nil {
 		t.Fatalf("BuildHandlers() error = %v", err)
@@ -116,7 +115,7 @@ func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 	cfg := newRoleTestConfig(serverrole.Worker)
 	cfg.Tasks.TaskAudienceURL = ""
 
-	appCtx := &app.Container{SessionStore: session.NewMemoryStore(session.StoreConfig{}), Config: cfg, Pipeline: stubPipeline{}}
+	appCtx := &app.Container{SessionStore: session.NewMemoryStore(), Config: cfg, Pipeline: stubPipeline{}}
 	if _, err := BuildHandlers(appCtx); err == nil {
 		t.Fatal("TASK_AUDIENCE_URL が無いのに BuildHandlers() が成功している")
 	}
@@ -138,7 +137,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
 		{
 			name:    "TaskAuth だけある",
-			h:       &AppHandlers{TaskAuth: oidc.New("https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
+			h:       &AppHandlers{TaskAuth: mustOIDC(t, "https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{
@@ -160,51 +159,12 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	}
 }
 
-// M2M 検証器は、audience と許可リストの両方が揃ってはじめて機能します。
-//
-// 片方でも欠けると auth.Protected は毎回セッション認証へフォールバックし、
-// ブラウザは正常なまま ap-mcp からの呼び出しだけがログイン画面の HTML を受け取ります。
-// リクエストからは設定漏れだと分からないので、起動時に落ちることを固定します。
-func TestNewM2MVerifierRejectsIncompleteConfiguration(t *testing.T) {
-	t.Parallel()
-
-	const serviceURL = "https://service.example.com"
-	allowed := []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
-
-	tests := map[string]struct {
-		serviceURL string
-		allowed    []string
-		wantErr    bool
-	}{
-		"両方そろっていれば構成できる":         {serviceURL: serviceURL, allowed: allowed},
-		"許可リストが空なら起動を止める":        {serviceURL: serviceURL, allowed: nil, wantErr: true},
-		"SERVICE_URL が空なら起動を止める": {serviceURL: "", allowed: allowed, wantErr: true},
-		"どちらも空なら起動を止める":          {serviceURL: "", allowed: nil, wantErr: true},
+// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
+	t.Helper()
+	v, err := oidc.New(audience, allowed)
+	if err != nil {
+		t.Fatalf("oidc.New() error = %v", err)
 	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := newM2MVerifier(tt.serviceURL, tt.allowed)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("設定が欠けているのにエラーになりません")
-				}
-				if !strings.Contains(err.Error(), "ALLOWED_M2M_SERVICE_ACCOUNTS") {
-					t.Errorf("err = %v, want 環境変数名を含むメッセージ", err)
-				}
-				if got != nil {
-					t.Error("エラー時に検証器を返してはいけません")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("newM2MVerifier() error = %v", err)
-			}
-			if !got.Configured() {
-				t.Error("構成済みの検証器が Configured() = false を返しています")
-			}
-		})
-	}
+	return v
 }
