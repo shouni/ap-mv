@@ -114,48 +114,43 @@ func setupStaticRoutes(r chi.Router) {
 	r.Handle("/static/*", files)
 }
 
-// registerWebRoutes registers web routes.
+// registerWebRoutes は Web 面のルートを登録します。
+//
+// ジョブが唯一の主リソースです。投入から削除まで同じ /jobs/{jobID} で指し、成果物と
+// アクションはその配下に置きます（public-docs の URL 命名規約）。台本のみのジョブは
+// 別の資源ではなく、同じ一覧の ?stage=script です。
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Get("/", h.Home)
-	r.Get("/compose", h.VideoRecipeCreateForm)
-	r.Post("/compose", h.PostVideoRecipeCreate)
-	r.Get("/video-recipe-create", h.VideoRecipeCreateForm)
-	r.Post("/video-recipe-create", h.PostVideoRecipeCreate)
-	// 台本のみのジョブ（旧「下書き」）は compose と同じ入力で、キーフレームを焼かずに
-	// カット割りまでで止まります。成果物は完成ジョブと同じ場所に保存され、履歴一覧に
-	// script 段階として並びます（?stage=script で絞り込めます）。
-	r.Post("/compose-draft", h.PostVideoRecipeDraft)
-	r.Post("/video-recipe-draft", h.PostVideoRecipeDraft)
-	// フォーム画面は履歴詳細の動画生成フォームへ統合済み。POST は ap-mcp 等の
-	// M2M 呼び出しの互換性のために残している。
-	r.Post("/generate-from-recipe", h.PostRecipe)
-	r.Post("/mv-from-keyframe-video-recipe", h.PostRecipe)
-	r.Get("/jobs/{jobID}", h.JobStatusDetail)
-	r.Get("/history", h.History)
-	r.Get("/history/{jobID}", h.HistoryDetail)
-	r.Delete("/history/{jobID}", h.DeleteHistory)
-	r.Get("/history/{jobID}/keyframes.zip", h.DownloadKeyframes)
-	// 画面が指すメディアの入口。GCS の署名付き URL は HTML に出さず、ここで 302 します
-	// （handler_media.go に理由）。認証グループの中にあるので、アセット 1 本ごとに
-	// セッション検証が効きます。
-	r.Get("/history/{jobID}/metadata", h.HistoryMetadata)
-	r.Get("/history/{jobID}/video", h.HistoryVideo)
-	r.Get("/history/{jobID}/cuts/{cutIndex}/video", h.CutVideo)
-	r.Get("/history/{jobID}/cuts/{cutIndex}/keyframe", h.CutKeyframe)
-	// レシピの読み出しと編集。表示用に整形した履歴詳細とは別経路で、読んだものを
-	// そのまま直して返せます。編集は台本のみの段階に限られます（PutJobRecipe 参照）。
-	r.Get("/history/{jobID}/recipe", h.GetJobRecipe)
-	r.Put("/history/{jobID}/recipe", h.PutJobRecipe)
-	r.Get("/history/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
-	r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.PostRegenerateCutKeyframe)
-	r.Post("/history/{jobID}/cuts/{cutIndex}/regenerate-video", h.PostRegenerateCutVideo)
-	r.Get("/history/{jobID}/sections/{sectionIndex}/regenerate", h.RegenerateSectionKeyframesForm)
-	r.Post("/history/{jobID}/sections/{sectionIndex}/regenerate-keyframes", h.PostRegenerateSectionKeyframes)
-	// セクション単位で「キーフレーム → 動画」を進め、結果を元ジョブへ書き戻します。
-	// 仕上げの結合は finalize が別途担当します（PostSectionVideo 参照）。
-	r.Post("/history/{jobID}/sections/{sectionIndex}/video", h.PostSectionVideo)
-	r.Post("/history/{jobID}/finalize", h.PostFinalizeVideo)
-	r.Post("/history/{jobID}/regenerate-zip", h.PostRegenerateZip)
-	r.Post("/history/{jobID}/generate-video", h.PostGenerateVideoFromHistory)
+	// 入力フォームは JSON の対応物を持たない画面なので、資源とは別に置きます。
+	r.Get("/compose", h.ComposeForm)
 
+	r.Route("/jobs", func(r chi.Router) {
+		r.Post("/", h.JobCreate)
+		r.Get("/", h.JobList)
+		r.Get("/{jobID}", h.Job)
+		r.Delete("/{jobID}", h.JobDelete)
+		// 成果物。GCS の署名付き URL は HTML に出さず、ここで 302 します（job_media.go に理由）。
+		// 認証グループの中にあるので、アセット 1 本ごとにセッション検証が効きます。
+		r.Get("/{jobID}/keyframes", h.JobKeyframes)
+		r.Get("/{jobID}/metadata", h.JobMetadata)
+		r.Get("/{jobID}/video", h.JobVideo)
+		r.Get("/{jobID}/cuts/{cutIndex}/video", h.CutVideo)
+		r.Get("/{jobID}/cuts/{cutIndex}/keyframe", h.CutKeyframe)
+		// レシピの読み出しと編集。表示用に整形した詳細とは別経路で、読んだものを
+		// そのまま直して返せます。編集は台本のみの段階に限られます（JobRecipeUpdate 参照）。
+		r.Get("/{jobID}/recipe", h.JobRecipe)
+		r.Put("/{jobID}/recipe", h.JobRecipeUpdate)
+		// アクション。作り直し系は成果物を元ジョブへ書き戻し、動画生成は新しいジョブになります。
+		r.Get("/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
+		r.Post("/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.RegenerateCutKeyframe)
+		r.Post("/{jobID}/cuts/{cutIndex}/regenerate-video", h.RegenerateCutVideo)
+		r.Get("/{jobID}/sections/{sectionIndex}/regenerate", h.RegenerateSectionKeyframesForm)
+		r.Post("/{jobID}/sections/{sectionIndex}/regenerate-keyframes", h.RegenerateSectionKeyframes)
+		// セクション単位で「キーフレーム → 動画」を進め、結果を元ジョブへ書き戻します。
+		// 仕上げの結合は finalize が別途担当します（GenerateSectionVideo 参照）。
+		r.Post("/{jobID}/sections/{sectionIndex}/generate-video", h.GenerateSectionVideo)
+		r.Post("/{jobID}/finalize", h.Finalize)
+		r.Post("/{jobID}/regenerate-zip", h.RegenerateZip)
+		r.Post("/{jobID}/generate-video", h.GenerateVideo)
+	})
 }

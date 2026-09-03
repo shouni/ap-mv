@@ -40,18 +40,18 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 		"character_id": {"zundamon"},
 		"audio_url":    {"gs://bucket/music.mp3"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "Queued") {
-		t.Fatalf("PostVideoRecipeCreate body missing queued page: %s", rec.Body.String())
+		t.Fatalf("JobCreate body missing queued page: %s", rec.Body.String())
 	}
 	// 投入後の画面はジョブ状態をポーリングして queued → running → succeeded/failed を
 	// 表示する（サーバー側の /web/jobs/{jobID} は以前から存在し、UI 側が未接続だった）。
@@ -107,15 +107,15 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 		"music_job_id": {"20260711132823-256e9128"},
 		"visual_mode":  {"sparkle_rock"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -139,15 +139,15 @@ func TestPostVideoRecipeCreateFallsBackToURLForM2M(t *testing.T) {
 		"csrf_token": {"token"},
 		"url":        {"gs://bucket/source.json"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil || queue.task.SourceURL != "gs://bucket/source.json" {
 		t.Fatalf("queued source URL = %v, want gs://bucket/source.json", queue.task)
@@ -168,15 +168,15 @@ func TestPostVideoRecipeCreateRejectsInvalidMusicJobID(t *testing.T) {
 		"csrf_token":   {"token"},
 		"music_job_id": {"not a valid id!"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	if queue.task != nil {
 		t.Fatal("task should not have been queued for an invalid music_job_id")
@@ -196,19 +196,19 @@ func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
 		"csrf_token":   {"token"},
 		"music_job_id": {"20260711132823-256e9128"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"status":"queued"`) {
-		t.Fatalf("PostVideoRecipeCreate JSON body = %s", rec.Body.String())
+		t.Fatalf("JobCreate JSON body = %s", rec.Body.String())
 	}
 }
 
@@ -224,15 +224,15 @@ func TestPostVideoRecipeCreateDefaultsToVideoRecipeCreate(t *testing.T) {
 		"csrf_token": {"token"},
 		"text":       {"source text"},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/video-recipe-create", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/compose", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostVideoRecipeCreate(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
-		t.Fatalf("PostVideoRecipeCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
+		t.Fatalf("JobCreate status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 	if queue.task == nil {
 		t.Fatal("queued task is nil")
@@ -256,6 +256,7 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 
 	form := url.Values{
+		"command":     {"mv_from_keyframe_video_recipe"},
 		"csrf_token":  {"token"},
 		"text_model":  {"gemini-b"},
 		"image_model": {"image-b"},
@@ -266,12 +267,12 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 			]
 		}`},
 	}
-	req := httptest.NewRequest(http.MethodPost, "/mv-from-keyframe-video-recipe", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(http.MethodPost, "/jobs", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req = req.WithContext(session.WithCSRFToken(req.Context(), "token"))
 	rec := httptest.NewRecorder()
 
-	h.PostRecipe(rec, req)
+	h.JobCreate(rec, req)
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("PostRecipe status = %d, want %d; body=%s", rec.Code, http.StatusAccepted, rec.Body.String())
@@ -302,9 +303,9 @@ func TestComposeTemplateOffersAllAspectRatios(t *testing.T) {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 	rec := httptest.NewRecorder()
-	h.VideoRecipeCreateForm(rec, httptest.NewRequest(http.MethodGet, "/video-recipe-create", nil))
+	h.ComposeForm(rec, httptest.NewRequest(http.MethodGet, "/compose", nil))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("VideoRecipeCreateForm status = %d", rec.Code)
+		t.Fatalf("ComposeForm status = %d", rec.Code)
 	}
 	body := rec.Body.String()
 	for _, ratio := range domain.AllowedAspectRatios {

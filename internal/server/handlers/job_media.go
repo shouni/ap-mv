@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -38,12 +40,12 @@ const redirectCacheControl = "private, max-age=600"
 
 // MetadataWebPath などは、画面が辿る同一オリジンのパスを組み立てます。
 func MetadataWebPath(jobID string) string {
-	return "/history/" + url.PathEscape(jobID) + "/" + mediaPathMetadata
+	return "/jobs/" + url.PathEscape(jobID) + "/" + mediaPathMetadata
 }
 
 // FinalVideoWebPath は結合済み完成動画のパスです。
 func FinalVideoWebPath(jobID string) string {
-	return "/history/" + url.PathEscape(jobID) + "/" + mediaPathVideo
+	return "/jobs/" + url.PathEscape(jobID) + "/" + mediaPathVideo
 }
 
 // CutVideoWebPath はカット単体の動画のパスです。
@@ -57,7 +59,7 @@ func CutKeyframeWebPath(jobID string, cutIndex int) string {
 }
 
 func cutAssetWebPath(jobID string, cutIndex int, kind string) string {
-	return fmt.Sprintf("/history/%s/cuts/%d/%s", url.PathEscape(jobID), cutIndex, kind)
+	return fmt.Sprintf("/jobs/%s/cuts/%d/%s", url.PathEscape(jobID), cutIndex, kind)
 }
 
 // applyWebMediaURLs は、画面が辿るパスを履歴詳細へ埋めます。
@@ -83,15 +85,15 @@ func applyWebMediaURLs(detail *domain.VideoHistoryDetail) {
 	}
 }
 
-// HistoryMetadata redirects to the signed URL of the job's metadata JSON.
-func (h *Handler) HistoryMetadata(w http.ResponseWriter, r *http.Request) {
+// JobMetadata redirects to the signed URL of the job's metadata JSON.
+func (h *Handler) JobMetadata(w http.ResponseWriter, r *http.Request) {
 	h.redirectJobAsset(w, r, func(detail domain.VideoHistoryDetail) (string, error) {
 		return detail.StorageURI, nil
 	})
 }
 
-// HistoryVideo redirects to the signed URL of the job's finalized video.
-func (h *Handler) HistoryVideo(w http.ResponseWriter, r *http.Request) {
+// JobVideo redirects to the signed URL of the job's finalized video.
+func (h *Handler) JobVideo(w http.ResponseWriter, r *http.Request) {
 	h.redirectJobAsset(w, r, func(detail domain.VideoHistoryDetail) (string, error) {
 		return detail.FinalVideoURL, nil
 	})
@@ -164,4 +166,78 @@ func (h *Handler) redirectJobAsset(w http.ResponseWriter, r *http.Request, pick 
 
 	w.Header().Set("Cache-Control", redirectCacheControl)
 	http.Redirect(w, r, signedURL, http.StatusFound)
+}
+
+// JobKeyframes は、キーフレーム一式の zip を返します（GET /jobs/{jobID}/keyframes）。
+// 事前に作られた zip の署名付き URL へ 302 し、
+// Falls back to on-demand zip generation for jobs that predate the pipeline change.
+func (h *Handler) JobKeyframes(w http.ResponseWriter, r *http.Request) {
+	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
+	if err := jobid.Validate(jobID); err != nil {
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	if h.HistoryRepository == nil {
+		respond.Error(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
+		return
+	}
+
+	// Try to redirect to the pre-built zip uploaded by the pipeline.
+	// Continue to on-demand fallback even on signing error — intentional fail-soft.
+	signedURL, err := h.HistoryRepository.KeyframeZipSignedURL(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "keyframe zip signed URL failed, falling back to on-demand generation", "job_id", jobID, "error", err)
+	}
+	if signedURL != "" {
+		http.Redirect(w, r, signedURL, http.StatusFound)
+		return
+	}
+
+	// Fall back: build zip on-demand for jobs without a pre-built zip.
+	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
+		respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+	hasKeyframes := false
+	for _, cut := range history.Cuts {
+		if strings.TrimSpace(cut.KeyframeReference) != "" {
+			hasKeyframes = true
+			break
+		}
+	}
+	if !hasKeyframes {
+		respond.Error(w, r, http.StatusNotFound, "no keyframes available")
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="keyframes-%s.zip"`, jobID))
+	zw := zip.NewWriter(w)
+	if err := h.HistoryRepository.DownloadKeyframes(r.Context(), jobID, func(name string, reader io.Reader) error {
+		fw, err := zw.Create(name)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to create zip entry", "job_id", jobID, "file", name, "error", err)
+			return err
+		}
+		if _, err := io.Copy(fw, reader); err != nil {
+			slog.ErrorContext(r.Context(), "failed to write zip entry", "job_id", jobID, "file", name, "error", err)
+			return err
+		}
+		return nil
+	}); err != nil {
+		slog.ErrorContext(r.Context(), "failed to stream keyframe zip", "job_id", jobID, "error", err)
+		return
+	}
+	if assContent := domain.GenerateASS(history.Cuts, domain.ASSColors{}, history.Tempo); assContent != "" {
+		fw, err := zw.Create("lyrics.ass")
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to create ass zip entry", "job_id", jobID, "error", err)
+		} else if _, err := io.WriteString(fw, assContent); err != nil {
+			slog.ErrorContext(r.Context(), "failed to write ass zip entry", "job_id", jobID, "error", err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		slog.ErrorContext(r.Context(), "failed to finalize zip", "job_id", jobID, "error", err)
+	}
 }

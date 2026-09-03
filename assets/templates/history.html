@@ -60,14 +60,14 @@
                     </td>
                     <td class="text-end">
                         {{if .Progress.TotalCuts}}
-                        <a class="btn btn-sm btn-primary" href="/history/{{.JobID}}">Detail</a>
+                        <a class="btn btn-sm btn-primary" href="/jobs/{{.JobID}}">Detail</a>
                         {{else}}
                         {{/* カットが 1 つも無いジョブ。詳細は video_music_meta.json を読むので開けません
                              （成果物を 1 つも残せずに失敗したジョブ、投入直後のジョブがこれです）。
                              残っている情報は状態と失敗理由だけで、どちらもこの行に出ています。
                              ここに口を置かないと、画面からは二度と消せません。 */}}
                         <button type="button" class="btn btn-sm btn-outline-danger"
-                                data-delete-url="/history/{{.JobID}}"
+                                data-delete-url="/jobs/{{.JobID}}"
                                 data-delete-confirm="Delete job {{.JobID}}? (成果物は残っていません)">Delete</button>
                         {{end}}
                     </td>
@@ -84,13 +84,13 @@
         <nav class="mt-4">
             <ul class="pagination mb-0">
                 <li class="page-item {{if not .PageMeta.HasPrev}}disabled{{end}}">
-                    <a class="page-link" href="/history?page={{.PageMeta.PrevPage}}">Prev</a>
+                    <a class="page-link" href="/jobs?page={{.PageMeta.PrevPage}}">Prev</a>
                 </li>
                 <li class="page-item disabled">
                     <span class="page-link">{{.PageMeta.Page}} / {{.PageMeta.TotalPages}}</span>
                 </li>
                 <li class="page-item {{if not .PageMeta.HasNext}}disabled{{end}}">
-                    <a class="page-link" href="/history?page={{.PageMeta.NextPage}}">Next</a>
+                    <a class="page-link" href="/jobs?page={{.PageMeta.NextPage}}">Next</a>
                 </li>
             </ul>
         </nav>

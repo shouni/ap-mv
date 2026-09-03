@@ -170,8 +170,8 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 	}, "regenerate_cut.html")
 }
 
-// PostRegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
-func (h *Handler) PostRegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
+// RegenerateCutKeyframe enqueues a keyframe regeneration task for a single cut.
+func (h *Handler) RegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -250,8 +250,8 @@ func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.
 	}, "regenerate_section.html")
 }
 
-// PostRegenerateSectionKeyframes enqueues a keyframe regeneration task for every cut of one section.
-func (h *Handler) PostRegenerateSectionKeyframes(w http.ResponseWriter, r *http.Request) {
+// RegenerateSectionKeyframes enqueues a keyframe regeneration task for every cut of one section.
+func (h *Handler) RegenerateSectionKeyframes(w http.ResponseWriter, r *http.Request) {
 	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
 	if err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -306,9 +306,9 @@ func sectionCharacterID(group domain.VideoHistorySectionGroup) string {
 	return ""
 }
 
-// PostRegenerateZip enqueues a ZIP re-creation task for an existing job.
+// RegenerateZip enqueues a ZIP re-creation task for an existing job.
 // Optional form fields primary_color and secondary_color (CSS hex) override the default karaoke colors.
-func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RegenerateZip(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -334,13 +334,13 @@ func (h *Handler) PostRegenerateZip(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// PostRegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すタスクを投入します。
+// RegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すタスクを投入します。
 //
 // キーフレームは元ジョブのものをそのまま使い、作り直さないカットは生成済みのままスキップ
 // されます。継続チェーン方式では同じチェーンの後続カットもまとめて作り直されます
 // （CutVideoSelectFilter）。結果は新しいジョブとして保存され、元ジョブは変更しません
 // （履歴詳細の「動画生成」と同じ扱い。既に完成しているMVを途中まで壊した状態にしないため）。
-func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) RegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -366,18 +366,18 @@ func (h *Handler) PostRegenerateCutVideo(w http.ResponseWriter, r *http.Request)
 		CutIndex:  &cutIndex,
 		VeoModel:  h.veoModelFromForm(r),
 		// アスペクト比はキーフレーム作成時に決まった値を必ず引き継ぐ
-		// （PostGenerateVideoFromHistory と同じ理由）。
+		// （GenerateVideo と同じ理由）。
 		VeoAspectRatio: history.AspectRatio,
 		CreatedAt:      time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }
 
-// PostGenerateVideoFromHistory は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
+// GenerateVideo は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
 // target=full で全カットのフルMV生成、target=<セクションインデックス> でそのセクションだけの
 // ショート動画生成になります。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
 // サーバー側で解決するため、フォーム入力は対象と Veo モデル・アスペクト比だけです。
-func (h *Handler) PostGenerateVideoFromHistory(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GenerateVideo(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())

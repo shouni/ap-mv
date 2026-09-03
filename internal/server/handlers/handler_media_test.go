@@ -63,13 +63,13 @@ func TestMediaHandlersRedirectToSignedURL(t *testing.T) {
 		params  map[string]string
 		wantSrc string
 	}{
-		{"metadata", h.HistoryMetadata, "/history/job-1/metadata",
+		{"metadata", h.JobMetadata, "/jobs/job-1/metadata",
 			map[string]string{"jobID": "job-1"}, "video_music_meta.json"},
-		{"final video", h.HistoryVideo, "/history/job-1/video",
+		{"final video", h.JobVideo, "/jobs/job-1/video",
 			map[string]string{"jobID": "job-1"}, "videos/final.mp4"},
-		{"cut video", h.CutVideo, "/history/job-1/cuts/1/video",
+		{"cut video", h.CutVideo, "/jobs/job-1/cuts/1/video",
 			map[string]string{"jobID": "job-1", "cutIndex": "1"}, "videos/cut1.mp4"},
-		{"cut keyframe", h.CutKeyframe, "/history/job-1/cuts/1/keyframe",
+		{"cut keyframe", h.CutKeyframe, "/jobs/job-1/cuts/1/keyframe",
 			map[string]string{"jobID": "job-1", "cutIndex": "1"}, "images/cut1.png"},
 	}
 
@@ -99,7 +99,7 @@ func TestCutMediaRejectsUnknownCut(t *testing.T) {
 	h := mediaHandler(t)
 
 	rec := httptest.NewRecorder()
-	h.CutVideo(rec, mediaRequest("/history/job-1/cuts/99/video",
+	h.CutVideo(rec, mediaRequest("/jobs/job-1/cuts/99/video",
 		map[string]string{"jobID": "job-1", "cutIndex": "99"}))
 
 	if rec.Code != http.StatusNotFound {
@@ -112,27 +112,35 @@ func TestCutMediaRejectsUnknownCut(t *testing.T) {
 func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 	h := mediaHandler(t)
 
-	req := mediaRequest("/history/job-1", map[string]string{"jobID": "job-1"})
+	req := mediaRequest("/jobs/job-1", map[string]string{"jobID": "job-1"})
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 
-	h.HistoryDetail(rec, req)
+	h.Job(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 
-	var payload struct {
-		SignedURL           string `json:"signed_url"`
-		FinalVideoSignedURL string `json:"final_video_signed_url"`
-		Cuts                []struct {
-			KeyframeURL    string `json:"keyframe_url"`
-			VideoSignedURL string `json:"video_signed_url"`
-		} `json:"cuts"`
+	// 状態と詳細は 1 つの文書で、詳細は detail の下に入れ子です（jobDocument）。
+	var doc struct {
+		State  string `json:"state"`
+		Detail *struct {
+			SignedURL           string `json:"signed_url"`
+			FinalVideoSignedURL string `json:"final_video_signed_url"`
+			Cuts                []struct {
+				KeyframeURL    string `json:"keyframe_url"`
+				VideoSignedURL string `json:"video_signed_url"`
+			} `json:"cuts"`
+		} `json:"detail"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
 		t.Fatalf("JSON を読めない: %v", err)
 	}
+	if doc.State != "succeeded" || doc.Detail == nil {
+		t.Fatalf("状態と詳細が 1 つの文書になっていません: %s", rec.Body.String())
+	}
+	payload := *doc.Detail
 
 	if payload.SignedURL == "" || payload.FinalVideoSignedURL == "" {
 		t.Errorf("JSON に署名付き URL がありません: %s", rec.Body.String())
@@ -141,7 +149,7 @@ func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 		t.Errorf("カットの署名付き URL がありません: %s", rec.Body.String())
 	}
 	// 画面用のパスは JSON に出しません（domain 側で json:"-"）。
-	if strings.Contains(rec.Body.String(), "/history/job-1/cuts/") {
+	if strings.Contains(rec.Body.String(), "/jobs/job-1/cuts/") {
 		t.Errorf("画面用のパスが JSON に混ざっています: %s", rec.Body.String())
 	}
 }
