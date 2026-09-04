@@ -13,8 +13,8 @@ import (
 	"github.com/shouni/ap-mv/internal/adapters"
 	"github.com/shouni/ap-mv/internal/config"
 	"github.com/shouni/ap-mv/internal/domain"
+	"github.com/shouni/ap-mv/internal/pipeline"
 	"github.com/shouni/ap-mv/internal/ports"
-	"github.com/shouni/ap-mv/internal/worker/pipeline"
 )
 
 // pipelineExternals は、BuildContainer 側で先に組み立てられ buildPipeline へ渡される

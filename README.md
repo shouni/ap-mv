@@ -31,13 +31,13 @@ Web UI からの非同期受付、Cloud Tasks による worker 起動、外部�
 * **Seed-Based Determinism**: キャラクター固有 Seed 値の完全管理による再現性の担保。
 * **Keyframe Anchor (Image-to-Video)**: `genai-kit` の `imagegen` を応用。キャラクター Seed と参照画像から、ブレのない静止画キーフレームを高精度生成し、Veo へ Image-to-Video 入力として渡します。キャラ立ち絵は `referenceImages`（優先）、キーフレームは `image` としてそれぞれ Veo API にセットされます。
 * **Audio-Driven Prompting**: Music Recipe の `audio_cue`（例: `synchronized with the heavy bass drop at 0:10`）を Veo 用プロンプトへ自動インジェクション。
-* **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoURI` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。Veo の video_extension は前回の生成結果を条件入力として再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積するため（実運用で確認済み）、各世代の出力をそのカットのシーン用キーフレーム画像へ彩度補正で引き戻し（`internal/worker/filter/video_gen.go` の `colorCorrectExtensionCut`）、補正後の動画を次カットの `PreviousVideoURI` として連鎖させます。
+* **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoURI` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。Veo の video_extension は前回の生成結果を条件入力として再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積するため（実運用で確認済み）、各世代の出力をそのカットのシーン用キーフレーム画像へ彩度補正で引き戻し（`internal/pipeline/step/video_gen.go` の `colorCorrectExtensionCut`）、補正後の動画を次カットの `PreviousVideoURI` として連鎖させます。
 
 ### 🔁 Resumable Video Chain (レジューム機能)
 
 動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成済み状態を含む `video_music_meta.json` または Recipe を再投入した場合、`status=generated` のカットをスキップし、保持済みの `video_id` を次カットの `PreviousVideoURI` に引き継げます。これにより、生成済みメタデータを起点に途中カットから再開しやすい回復性（Resilience）を備えています。
 
-`VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/worker/pipeline/planner.go` の `DefaultPlanner.Plan` は `video_gen_continuation` を Video Gen → Chain Finalize → Publishing のみのフィルター列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`go-veo-orchestrator/ports` の `VeoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
+`VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/pipeline/planner.go` の `DefaultPlanner.Plan` は `video_gen_continuation` を Video Gen → Chain Finalize → Publishing のみのステップ列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`go-veo-orchestrator/ports` の `VeoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
 
 継続チェーンの累積尺が `orchestrator.VeoContinuationMaxDurationSec`（24秒、`go-veo-orchestrator/ports`）に達する手前で、自動的に新しいチェーンへリセットします（Veo の video_extension が「前の動画」として受け付けられる実際の上限は累積約30秒で、超えると `code=3` で失敗するため、余裕を持って手前で切ります）。リセットされたカットは `PreviousVideoURI` を使わない新規ベース（image_to_video または reference_to_video）として、直前チェーンの最終フレーム（`ExtractLastFrame` で抽出）を参照画像に差し替えて生成されます。
 
@@ -62,11 +62,11 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 
 ## 🎨 ワークフローと生成フィルター (Workflows)
 
-`internal/worker/filter/` 配下の各フィルターは、`domain.MusicRecipe`（`genai-kit/music.Recipe` alias）と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。動画生成の `cuts`、`video_id`、`keyframe_reference` などの状態は `VideoRecipe` 側で保持します。
+`internal/pipeline/step/` 配下の各ステップは、`domain.MusicRecipe`（`genai-kit/music.Recipe` alias）と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。動画生成の `cuts`、`video_id`、`keyframe_reference` などの状態は `VideoRecipe` 側で保持します。
 
-実行するフィルター列はコマンドごとに `internal/worker/pipeline/planner.go` の `DefaultPlanner.Plan` が決定します:
+実行するステップ列はコマンドごとに `internal/pipeline/planner.go` の `DefaultPlanner.Plan` が決定します:
 
-| コマンド | 主な投入元 | フィルター列 |
+| コマンド | 主な投入元 | ステップ列 |
 | --- | --- | --- |
 | `video_recipe_draft` | `POST /jobs`（`command=video_recipe_draft`）（作成フォームの「下書きだけ作る」）、ap-mcp の `compose_video_recipe` | Scripting → Scene Split → Recipe Save（**キーフレームを1枚も焼かずに停止**） |
 | `video_recipe_create` | `/compose`（`/compose` も同じフォーム）、ap-mcp | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload（キーフレームまでで停止） |
@@ -77,7 +77,7 @@ Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks
 | `regenerate_cut_video` | 履歴詳細の各カットの「動画を作り直す」、ap-mcp の `regenerate_cut_video` | Recipe Load → Cut Video Select → Video Gen → Chain Finalize → Publishing（**scene_split は通さない**） |
 | `video_gen_continuation` | `VideoGenerationFilter` が内部的に enqueue | Video Gen → Chain Finalize → Publishing |
 
-各フィルターの役割は次のとおりです（表の並びはフルMVチェーンの実行順。末尾2つはコマンド専用フィルター）:
+各ステップの役割は次のとおりです（表の並びはフルMVチェーンの実行順。末尾2つはコマンド専用フィルター）:
 
 | フィルター工程 | 担当モジュール | 役割・内容 |
 | --- | --- | --- |
@@ -153,7 +153,7 @@ Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。�
 | `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
 | `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
 | `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
-| `PIPELINE_TIMEOUT` | なし（worker で必須） | ワーカータスク1件の実行時間の上限。フィルター列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され、理由が画面と Slack に残ります。カット分割された継続タスクにはそれぞれ個別に適用されます。**dispatch deadline（30m）以上の値と無制限は worker の起動時に拒否されます**（理由は「web / worker の分離」を参照）|
+| `PIPELINE_TIMEOUT` | なし（worker で必須） | ワーカータスク1件の実行時間の上限。ステップ列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され、理由が画面と Slack に残ります。カット分割された継続タスクにはそれぞれ個別に適用されます。**dispatch deadline（30m）以上の値と無制限は worker の起動時に拒否されます**（理由は「web / worker の分離」を参照）|
 | `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
 | `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoURI` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
 | `VEO_PRICE_USD_PER_SEC` | なし | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。未設定なら全モデルが `domain.DefaultVeoPriceUSDPerSecond`（0.40）になります。あくまで目安で、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して設定してください |
@@ -247,8 +247,8 @@ ap-mv/
     ├── server/              # chi ルーティング、OAuth、CSRF、Cloud Tasks OIDC、HTTP server起動
     │   └── handlers/       # Web UI / task handler / CSRF context
     └── worker/
-        ├── pipeline/       # Task command から filter chain を実行
-        └── filter/         # go-veo-orchestrator/workflow runner を呼ぶ各処理フィルター（実行順はコマンドごとに pipeline/planner.go が決定。詳細は後述の Workflows 表を参照）
+        ├── pipeline/       # Task command から step chain を実行
+        └── step/           # go-veo-orchestrator/workflow runner を呼ぶ各処理ステップ（実行順はコマンドごとに pipeline/planner.go が決定。詳細は後述の Workflows 表を参照）
 
 ```
 
@@ -406,7 +406,7 @@ PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
 拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も Slack 通知も
 走らないまま、`max_attempts = 1` の `mv-queue` は再試行しないため、ジョブが `running` のまま
 残るためです。この記録は打ち切られた context から切り離して行っています
-（`internal/worker/pipeline/pipeline.go` の `statusContext`）。
+（`gcp-kit/worker.Lifecycle` が Finish に切り離した ctx を渡す）。
 
 フリート全体の一覧（5 ワークロード分）と、tf の `precondition` による検査は `ap-infra` の
 README「タイムアウトの三段」にあります。
@@ -430,7 +430,7 @@ README「タイムアウトの三段」にあります。
 - `SERVER_ROLE=web` では Vertex AI クライアント・Veo runner・Slack 通知・worker パイプラインを構築しません。`ap-mv-web-runner` は `aiplatform.user` も `SLACK_WEBHOOK_URL` へのアクセス権も持たない（`ap-infra/app_ap_mv.tf`）ため、持たせる理由がありません。
 - Cloud Tasks のエンキューアと GCS・履歴リポジトリはどちらの役割でも構築します。worker も継続カットを自分で投入し、ジョブ状態を書き戻すためです。
 
-> **ap-music との違い**: ap-mv の worker は**自分でもタスクを投入します**。動画をカット単位で分割生成し、残りがあれば次のカットを積み直すためです（`internal/worker/filter/video_gen.go`）。そのため `CLOUD_TASKS_QUEUE_ID` と `WORKER_URL` は worker 側にも必須で、`WORKER_URL` は **worker 自身**を指します。ap-music の worker は投入しないので、この配線は不要でした。
+> **ap-music との違い**: ap-mv の worker は**自分でもタスクを投入します**。動画をカット単位で分割生成し、残りがあれば次のカットを積み直すためです（`internal/pipeline/step/video_gen.go`）。そのため `CLOUD_TASKS_QUEUE_ID` と `WORKER_URL` は worker 側にも必須で、`WORKER_URL` は **worker 自身**を指します。ap-music の worker は投入しないので、この配線は不要でした。
 
 ### 5. HTTP エンドポイント
 

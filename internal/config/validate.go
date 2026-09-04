@@ -37,7 +37,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	}
 	// ap-music と違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
 	// 分割生成し、残りがあれば次のカットを自分で積み直すため
-	// （internal/worker/filter/video_gen.go）。したがってキューと WORKER_URL は
+	// （internal/pipeline/step/video_gen.go）。したがってキューと WORKER_URL は
 	// どちらの役割でも必須になる。
 	if c.Tasks.QueueID == "" {
 		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
