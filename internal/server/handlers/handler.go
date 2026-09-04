@@ -179,18 +179,25 @@ func pageFromQuery(r *http.Request) int {
 }
 
 // enqueue validates and submits a task to the configured queue.
+//
+// 検証 → queued の記録 → 投入、の順です。Cloud Tasks は数十ミリ秒で届くため、
+// 記録を投入の後に回すと Worker が書いた running を遅れてきた queued が上書きし、
+// 実行中のジョブが履歴では受付済みのまま止まって見えます（兄弟アプリが本番で踏んだ
+// 順序で、public-docs のワーカー規約 2.1 が固定しています）。投入に失敗したときは
+// 記録を取り消し、積めなかったジョブが履歴に残らないようにします。
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.recordQueuedStatus(r, task)
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
+			h.deleteJobStatus(r, task.JobID)
 			respond.Error(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
-	h.recordQueuedStatus(r, task)
 	// Location は進捗のポーリング先です。本文を読まなくても次に叩く URL が分かるよう、
 	// 画面向けの応答にも同じヘッダを付けます。
 	w.Header().Set("Location", "/jobs/"+url.PathEscape(task.JobID))

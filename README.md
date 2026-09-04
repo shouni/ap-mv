@@ -1,4 +1,4 @@
-# 🎬 AP MV (AP Music Video Orchestrator)
+# 🎬 AP MV
 
 [![CI](https://github.com/shouni/ap-mv/actions/workflows/ci.yml/badge.svg)](https://github.com/shouni/ap-mv/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-Active-brightgreen)](#)
@@ -8,470 +8,287 @@
 
 ## 🚀 概要 (About) - 楽曲の拍と盛り上がりに合わせて、カットを繋ぐ
 
-**AP MV (AP Music Video Orchestrator)** は、**Music Recipe（音楽レシピ / 楽曲構成書）** から時間軸のタイムラインを自動補完・構造化し、Google の動画生成 AI **Veo (Vertex AI)** と Gemini 系モデルによる台本生成・キーフレーム生成をつなぐ、Cloud Run / Cloud Tasks 前提の非同期オーケストレーターです。
+**AP MV** は、楽曲生成サービスが書き出した Music Recipe（楽曲構成書 JSON）からミュージックビデオを
+作る Cloud Run + Cloud Tasks 上のサービスです。Gemini にカット割りの台本（VideoRecipe: カットごとの
+`visual_anchor` / `audio_cue` / 歌詞）を書かせ、カットごとにキーフレーム画像を生成し、
+Veo (Vertex AI) でカットの動画を作り、ffmpeg で 1 本に結合します。成果物はジョブごとの
+`video_music_meta.json` と画像・動画で、`gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/` に置きます。
 
-Web UI からの非同期受付、Cloud Tasks による worker 起動、外部モジュール `github.com/shouni/go-veo-orchestrator` の workflow による Script / Keyframe / Video / Publish の実処理、そして **Image-to-Video（キーフレーム＋キャラ立ち絵を起点とした動画生成）** と **Video-to-Video（動画ID連鎖）** による文脈維持をひとつのアプリケーションとして構成します。
+**台本・キーフレーム・動画は別々に進められます。** 台本だけで止めて（`video_recipe_draft`）カット割りを
+確認し、`PUT /jobs/{jobID}/recipe` で直してから画像を焼き、動画は全カット・セクション単位・
+カット単位のどれでも作り直せます。動画はカット 1 本ずつ生成し、続きは worker が自分で
+Cloud Tasks へ再投入するため、長尺でも 1 タスクの時間上限に収まります。生成済みのカットは
+スキップされるので、同じレシピを投げ直せば途中から再開できます。
 
-「時間軸のタイムライン制御（Timeline Logic）」へと進化させ、映像指示、BGMの拍子・感情・盛り上がり（Audio Cue）がミリ秒単位で完全にシンクロした商業クオリティの映像パイプラインを提供します。
-
-生成済みジョブは `/jobs` から確認できます。GCS 上の `video_music_meta.json` をページング一覧し、詳細画面 `/jobs/{jobID}` では各 cut のキーフレーム画像と動画を表示します。**画面が指すのは同一オリジンのパス**（`/jobs/{jobID}/cuts/{cutIndex}/keyframe` など）で、ハンドラーが GCS の署名付き URL へ 302 します。署名付き URL を HTML に埋めないのは、期限内はアプリの認証の外側で使えてしまうことと、詳細画面はカットを見比べて作り直す判断をするため滞在が長く、開いたまま期限を過ぎると再生が 403 になって手動リロードするまで戻らないためです。**JSON 応答（ap-mcp）だけは署名付き URL を返します** — リダイレクトを辿らずに URL 自体を使うためです。
-
----
-
-## ✨ コア・アーキテクチャ・原則 (Design Principles)
-
-本システムは、外部サービス境界には ports/adapters による疎結合を維持しつつ、生成処理の本体はデータ変換の流れが追いやすい **「パイプ＆フィルター (Pipe and Filter)」** として構成しています。
-
-また、Web UI からの受付と重い生成処理を分離するため、Cloud Tasks を用いた **非同期タスク駆動 (Task/Event-Driven) Worker Execution** を採用し、タイムアウトしやすい動画生成バッチを安全に継続・再実行できる構成にしています。
-
-### 🧬 クアッド・ファクター・コンシステンシー制御 (Consistency Control)
-
-動画AI（Veo）における最大の課題である「カットごとの容姿・文脈の破綻」を防ぐため、以下の4大要素を同期させて1つのリクエストを決定論的に構築します。
-
-* **Seed-Based Determinism**: キャラクター固有 Seed 値の完全管理による再現性の担保。
-* **Keyframe Anchor (Image-to-Video)**: `genai-kit` の `imagegen` を応用。キャラクター Seed と参照画像から、ブレのない静止画キーフレームを高精度生成し、Veo へ Image-to-Video 入力として渡します。キャラ立ち絵は `referenceImages`（優先）、キーフレームは `image` としてそれぞれ Veo API にセットされます。
-* **Audio-Driven Prompting**: Music Recipe の `audio_cue`（例: `synchronized with the heavy bass drop at 0:10`）を Veo 用プロンプトへ自動インジェクション。
-* **Context Chain (Video-to-Video)**: 前のループで生成された `VideoID` を次カットの `PreviousVideoURI` として数珠繋ぎに連鎖させ、カット間の文脈を極限まで維持。Veo の video_extension は前回の生成結果を条件入力として再利用する性質上、継続を重ねるたびに彩度・コントラストがドリフトして蓄積するため（実運用で確認済み）、各世代の出力をそのカットのシーン用キーフレーム画像へ彩度補正で引き戻し（`internal/pipeline/step/video_gen.go` の `colorCorrectExtensionCut`）、補正後の動画を次カットの `PreviousVideoURI` として連鎖させます。
-
-### 🔁 Resumable Video Chain (レジューム機能)
-
-動画生成パイプラインは極めて重い処理であるため、各 `cut` は `status`、`video_id`、`video_url` をメタデータとして保持します。生成済み状態を含む `video_music_meta.json` または Recipe を再投入した場合、`status=generated` のカットをスキップし、保持済みの `video_id` を次カットの `PreviousVideoURI` に引き継げます。これにより、生成済みメタデータを起点に途中カットから再開しやすい回復性（Resilience）を備えています。
-
-`VEO_USE_PREVIOUS_VIDEO=true` の場合はさらに一歩進み、`VideoGenerationFilter` が1カットずつ Veo へリクエストを送るたびに、残りカットが残っていれば内部コマンド `video_gen_continuation` で自身の続きタスクを Cloud Tasks へ再投入し、当該タスクは `ErrPipelineDeferred` として即座に終了します（`internal/pipeline/planner.go` の `DefaultPlanner.Plan` は `video_gen_continuation` を Video Gen → Chain Finalize → Publishing のみのステップ列として扱い、Recipe Load/Scripting/Keyframe Gen は再実行しません）。生成先カットの尺は video_extension（video-to-video）専用のサポート値である7秒固定へ正規化されます（`go-veo-orchestrator/ports` の `VeoVideoExtensionDurationSec`）。この分割enqueueにより、Cloud Tasks 1回あたりの実行時間制限内で長尺MVでも安全に最後まで生成を継続できます。
-
-継続チェーンの累積尺が `orchestrator.VeoContinuationMaxDurationSec`（24秒、`go-veo-orchestrator/ports`）に達する手前で、自動的に新しいチェーンへリセットします（Veo の video_extension が「前の動画」として受け付けられる実際の上限は累積約30秒で、超えると `code=3` で失敗するため、余裕を持って手前で切ります）。リセットされたカットは `PreviousVideoURI` を使わない新規ベース（image_to_video または reference_to_video）として、直前チェーンの最終フレーム（`ExtractLastFrame` で抽出）を参照画像に差し替えて生成されます。
-
-### ⛓ Cloud Tasks Worker Execution
-
-Web UI はリクエストを Cloud Tasks に投入し、worker ルート `/tasks/generate` が OIDC 検証後に pipeline を実行します。現在の実処理は `go-veo-orchestrator/workflow` に集約しており、Script / Cut Keyframe / Video / Publish の各 runner を worker 実行内で順に呼び出します。`status=generated` のカットは `VideoTimelineRunner` 側でスキップされ、保持済みの `video_id` を次カットの `PreviousVideoURI` として引き継ぎます。
-
-完了通知では `SERVICE_URL` が設定されている場合、Slack メッセージに History Detail へのリンクも含めます。
-
-### ⏳ Audio-Driven Timeline Logic (柔軟なタイムライン展開)
-
-原稿から抽出された `MusicRecipe` JSON が `sections` ベース（長尺セクション単位）で届いた場合でも、`genai-kit/music.Recipe` の `duration_seconds` から `go-veo-orchestrator/ports.VideoRecipe` の `cuts` 列（秒数、開始・終了時間）を自動計算・展開。テンポ（`tempo`）や雰囲気（`mood`）に同期したタイムラインを動的に組み立てます。
-
-### 🛡 エンタープライズ・コンカレンシー & 防壁 (Security Layer)
-
-* **Bounded Concurrency & Rate Control**: go-veo-orchestrator が発射間隔・1回あたりの上限時間・同一リクエストの重複排除（singleflight）を担い、台本のテキスト生成とキーフレームの画像生成の両方に同じ制限を掛けます（クォータはプロジェクト単位のため）。`KEYFRAME_MAX_CONCURRENCY` / `KEYFRAME_RATE_INTERVAL` で調整します。
-* **Network Safety**: 外部HTTP取得には `go-http-kit` 系の安全な HTTP client を注入し、GCS 入出力は `go-remote-io` の GCS adapter に集約します。`SERVICE_URL` は `netarmor` による安全スキーム判定を通し、本番では HTTPS を必須化します。
-* **Singleflight Protection**: 大容量の動画・音声アセットの重複フェッチや二重アップロードをインメモリで完全に抑制。
-* **Session-backed CSRF**: WebフォームのCSRFトークンはサーバー側のセッション（Firestore）に保存し、POST / DELETE 時に定数時間比較で検証します。フォーム送信は `csrf_token` フィールド、JS からの fetch（DELETE など）は `X-CSRF-Token` ヘッダーで渡します。セッションの実体が Cloud Run の外にあるため、再起動や複数インスタンス間でも検証が安定します。
+1 つのイメージを `SERVER_ROLE` で **Web 面（公開）と Worker 面（非公開）の 2 サービス**として
+デプロイします。画面が指す画像・動画は同一オリジンのパスで、ハンドラーが GCS の署名付き URL へ
+302 します。`Accept: application/json` の応答だけが署名付き URL そのものを返します。
 
 ---
 
-## 🎨 ワークフローと生成フィルター (Workflows)
+## 📦 使い方
 
-`internal/pipeline/step/` 配下の各ステップは、`domain.MusicRecipe`（`genai-kit/music.Recipe` alias）と `go-veo-orchestrator/ports.VideoRecipe` を変換しながら、`go-veo-orchestrator/workflow` の runner を呼び出します。動画生成の `cuts`、`video_id`、`keyframe_reference` などの状態は `VideoRecipe` 側で保持します。
+### 1. 環境設定
 
-実行するステップ列はコマンドごとに `internal/pipeline/planner.go` の `DefaultPlanner.Plan` が決定します:
+`ValidateEssentialConfig` はロールごとに必要なものだけを検証します。
 
-| コマンド | 主な投入元 | ステップ列 |
-| --- | --- | --- |
-| `video_recipe_draft` | `POST /jobs`（`command=video_recipe_draft`）（作成フォームの「下書きだけ作る」）、ap-mcp の `compose_video_recipe` | Scripting → Scene Split → Recipe Save（**キーフレームを1枚も焼かずに停止**） |
-| `video_recipe_create` | `/compose`（`/compose` も同じフォーム）、ap-mcp | Scripting → Scene Split → Cut Keyframe Gen → Zip Upload（キーフレームまでで停止） |
-| `mv_from_keyframe_video_recipe` | `POST /jobs`（`command=mv_from_keyframe_video_recipe`）（M2M）、履歴詳細の動画生成フォーム（`target=full`） | Recipe Load → Scene Split → Cut Keyframe Gen → Zip Upload → Video Gen → Chain Finalize → Publishing |
-| `short_video_from_section` | 履歴詳細の動画生成フォーム（`target=<セクション>`） | Recipe Load → Section Select → Video Gen → Chain Finalize → Publishing |
-| `regenerate_cut_keyframe` | 履歴詳細の Regenerate 画面 | Recipe Load → Regen Cut Keyframe → Zip Upload |
-| `regenerate_zip` | `POST /jobs/{jobID}/regenerate-zip` | Recipe Load → Zip Upload |
-| `regenerate_cut_video` | 履歴詳細の各カットの「動画を作り直す」、ap-mcp の `regenerate_cut_video` | Recipe Load → Cut Video Select → Video Gen → Chain Finalize → Publishing（**scene_split は通さない**） |
-| `video_gen_continuation` | `VideoGenerationFilter` が内部的に enqueue | Video Gen → Chain Finalize → Publishing |
+**どのロールでも必須**
 
-各ステップの役割は次のとおりです（表の並びはフルMVチェーンの実行順。末尾2つはコマンド専用フィルター）:
-
-| フィルター工程 | 担当モジュール | 役割・内容 |
-| --- | --- | --- |
-| **Recipe Load** | `recipe_load.go` | 履歴詳細の動画生成フォームや M2M（`POST /jobs` の `command=mv_from_keyframe_video_recipe`）で指定された Keyframe VideoRecipe GCS URL / JSON または従来の MusicRecipe GCS URL / JSON を読み込み、pipeline 内の Recipe / VideoRecipe として正規化します。この経路では `Scripting` をスキップし、Keyframe VideoRecipe から MV 生成へ進みます。 |
-| **Scripting** | `scripting.go` | `/compose` の videoレシピ作成フローで `Workflows.Script.Run` を呼び、Character、MusicRecipe GCS URL / JSON、Visual Mode 的プロンプトから Video Recipe を生成します。テキスト入力は `data:text/plain;base64,...` として reader に渡します。 |
-| **Scene Split** | `scene_split.go` | キーフレーム生成の前に、1カットがVeo1回で生成できる尺に収まるよう長いカットを分割します（`SceneSplitFilter`、`UsePreviousVideo` は `VideoGenerationFilter` と同じ値を渡す必要があります）。`UsePreviousVideo=false`（静止画アンカー方式）の場合は `{4,6,8}` 秒単位に分割し、各サブカットの `audio_cue`/`visual_anchor`/歌詞行を均等配分します。`UsePreviousVideo=true`（動画チェーン方式）の場合は 1本の継続チェーンとして生成できる合計尺の候補（`videoToVideoChainDurations`。image_to_video ベースなら `{4,6,8,11,13,15,18,20,22}`、reference_to_video ベースなら `{8,15,22}`。値はライブラリの `orchestrator.ChainDurations` がベース尺と継続上限から導出するため、ここにハードコードされた集合はありません）へ `allocateChainDurations` が誤差拡散で割り付け、2つ目以降のブロックには `IsSectionStart=true` を付与して独立したキーフレーム/継続チェーンの起点として扱います。分割後の `Cuts` は `CutIndex` を1から振り直し、それぞれが次段の Cut Keyframe Gen で個別にキーフレームを受け取ります。 既にキーフレームを持つカットが1ブロックへそのまま再割り当てされた場合は `keyframe_reference` を残し（次段の Cut Keyframe Gen が焼き直しを省けます）、複数ブロックへ割れた場合は破棄します（1枚の絵が scene beat の異なる複数カットに対応してしまうため）。同じレシピを二度通しても結果が変わらないこと（冪等性）は `TestSceneSplitFilterIsIdempotent` が固定しています。 |
-| **Cut Keyframe Gen** | `cut_gen.go` | `Workflows.CutKeyframe.RunAndSave` を呼び、各カットのキーフレーム画像と更新済み `video_music_meta.json` を GCS に保存します。**`keyframe_reference` を持つカットは焼き直されません**（判定は `CutKeyframeRunner.RunAndSave` 側。go-veo-orchestrator v1.10.0 以降）。履歴詳細の「動画生成→フルMV」は `Recipe Load → Scene Split → Cut Keyframe Gen` を通るため、これが無いと動画を作り直すたびに画像代を払うことになります。参照が正しい形で下流へ届くことは ap-mv 側の担当で、`Scene Split` が 1:1 再割り当て時に参照を残し、`Recipe Load` が元ジョブ相対の参照を絶対 URI 化します。意図的に焼き直すには `regenerate_cut_keyframe` / `regenerate_section_keyframes` を使います（キャラクターの参照画像やシードの変更を反映するにはこちらが必要で、動画の作り直しでは反映されません）。保存後に `applyLyricsToVideoRecipeCuts` を実行し、`music_recipe.lyrics.lyrics` をセクション単位で分解して各カットの `dialogue` フィールドへ割り当てます。 |
-| **Zip Upload** | `zip_upload.go` | 生成済みキーフレーム、`inputs.txt`、`subtitles.ass`（歌詞がある場合）を ZIP にまとめ `{outputPath}keyframes.zip` へストリーミングアップロードします。`regenerate_cut_keyframe` コマンドでは `OverwriteKeyframe=true` のときのみ実行し、`regenerate_cut_keyframe` / `regenerate_zip` コマンドでは元ジョブの出力パスを `RecipeURL` から逆算して上書きします。 |
-| **Video Gen (Veo)** | `video_gen.go` | `Workflows.Video.Run` を呼び、キーフレーム、音源の GCS URI（`Music Audio GCS URL` または `VideoRecipe.cuts[].audio_reference`）、プロンプト、`PreviousVideoURI`、Seed を `VertexVeoRunner` へ渡します。音源同期させる場合は `gs://...mp3` / `gs://...wav` などの参照可能な GCS URI が必要です。`VideoTimelineRunner` 単体では保存済み `keyframe_reference` を利用できますが、現在の ap-mv pipeline は前段の `CutKeyframeFilter` でキーフレーム生成・保存を実行します。`VEO_USE_PREVIOUS_VIDEO=true` の場合の挙動は上記の Resumable Video Chain 節を参照してください。 |
-| **Veo Usage 記録** | `veo_usage.go` | Video Gen がカット1本を生成し終えるたび（＝課金が発生した直後）に `{outputPath}veo_usage.json` を read-modify-write し、成功した生成の回数・尺・モデルをカット単位で積み上げます。`video_music_meta.json` から算出できるのは「完成品の尺」だけで、再配信などで同じカットを焼き直した分は完成品に現れないため、実際に投げた量はここでしか分かりません。両者の差が再生成で捨てた分として履歴詳細に表示されます。記録の失敗は警告ログのみで生成は続行します（会計のために生成を止めると、既に課金済みのカットを Cloud Tasks が焼き直しにくるため）。ジョブが同時に2つ走ると更新を取りこぼしうるので、実績は過小になる可能性があります。 |
-| **Chain Finalize** | `chain_finalize.go` | 全カット生成完了後（Video Gen が `ErrPipelineDeferred` を返さず正常終了した回のみ）、Video Gen → Publishing の間で1度だけ実行されます。各継続チェーンの最終カット動画（次カットが `IsChainStart` の位置、`video_gen.go` のマーキングと対）を登場順に集め、`VideoProcessor.ConcatHardCut`（FFmpeg）でハードカット結合して `FinalVideoURL` に設定します。結合後は `VideoProcessor.Probe` で完成動画の実尺と音声トラックの有無を実測し、台本の総尺と食い違う場合や無音の場合は警告ログを残します（動画自体は生成できているためジョブは失敗させません）。動画生成を伴わないコマンド（キーフレームのみのパス）には含まれません。 |
-| **Publishing** | `publishing.go` | `Workflows.Publish.Run` を呼び、最終的な `video_music_meta.json` を GCS に保存します。 |
-| **Regen Cut Keyframe** | `regen_cut_keyframe.go` | `regenerate_cut_keyframe` コマンド専用。指定カット（`CutIndex`）のキーフレームのみ再生成・編集します。`EditPrompt` が指定されている場合は「編集モード」となり、既存の `keyframe_reference` を編集元画像として `CutKeyframe.EditAndSave`（内部的には `genai-kit` の `imagegen.Generator.Generate` に既存画像を参照として渡す会話型編集、通常生成と同じ画像生成モデル（`IMAGE_MODELS` の先頭）を使用）を呼び、構図・ポーズ・背景を保ったまま指示内容だけを反映します（このとき `VisualAnchorOverride` は無視されます）。`EditPrompt` が空の場合は「フル再生成モード」で、`VisualAnchorOverride` が指定されていれば対象カットのプロンプト文言（`visual_anchor`）を差し替えたうえで `CutKeyframe.RunAndSave` を実行します。`SeedOverride`/`SeedOverrideCharacterID` が指定されている場合、どちらのモードでもこの 1 回に限りキャラクターシードを一時的に差し替えます（他カットとの一貫性は崩れうるため一時的な用途向け）。`OverwriteKeyframe=true`（デフォルト）の場合は recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）を更新して `Publish.Run` で metadata を上書き保存します。 |
-| **Recipe Save** | `recipe_save.go` | `video_recipe_draft` コマンド専用。Scene Split を通したあとの `VideoRecipe` を 完成ジョブと同じ `video_music_meta.json` に保存し、キーフレーム生成の手前でパイプラインを終わらせます。保存するのが Scripting 直後ではなく Scene Split 後なのは、台本直後のカット列は尺が未確定（Scene Split が達成可能なチェーン長へ割り付け、丸め誤差を次カットへ送り、`StartSec`/`EndSec` を連結後の映像タイムラインへ振り直す）で、見せても実際に焼かれるカット割りとは別物になるためです。保存前に `domain.ValidateVideoRecipe` を通し、一覧には載るがキーフレーム生成で落ちるレシピが残らないようにします。 |
-| **Cut Video Select** | `cut_video_select.go` | `regenerate_cut_video` コマンド専用。保存済みレシピの全カットを残したまま、対象カット（`CutIndex`）の生成状態だけを初期化して動画生成の対象へ戻します。キーフレームは元ジョブのものをそのまま使い（相対参照は元ジョブのルートで絶対URI化）、作り直さないカットは `status=generated` のままなので `VideoTimelineRunner` がスキップし、`ChainFinalizeFilter` が既存の動画と合わせて1本へ結合し直します。`UsePreviousVideo=true`（継続チェーン方式）では、対象カットの動画を差し替えるとそれを `PreviousVideoURI` として参照する後続カットの入力が古くなるため、**次のチェーン起点の手前までをまとめて初期化します**（対象がチェーン末尾なら1カットだけ）。`SectionSelectFilter` と違ってカットを絞り込まないのは、完成動画が全カットの結合だからです（絞り込むとその部分だけのショート動画になります）。 |
-| **Section Select** | `section_select.go` | `short_video_from_section` コマンド専用。保存済みレシピのカット列を、`SectionIndex` で指定されたセクション（`start_seconds`〜`end_seconds` に `StartSec` が含まれるカット群）だけへ絞り込みます。絞り込んだカットは生成状態（`status` / `video_id` / `video_url`）を初期化し、相対 `keyframe_reference` は元ジョブのルートで絶対 URI 化します。Veo の image_to_video はカット尺 4/6/8 秒のみサポートするため、8 秒超のカット（キーフレームのみ生成したレシピはセクション尺のままのことがある）は同じキーフレームを引き継いだサブカット列へ分割し、各尺をサポート値に丸め、歌詞は行単位でサブカットへ均等配分します（`CutIndex` は 1 から振り直し。この尺の正規化は Video Gen フィルタでフルMVフローにも適用され、生成済みカットは変更されません）。さらにショートは YouTube ショートの上限 60 秒に収まるよう超過カットを切り詰めます。後段は通常の Video Gen → Publishing が新規ジョブとして実行され、タスクの `veo_model` / `veo_aspect_ratio`（例: `9:16`）が `VertexVeoRunner` に適用されます。 |
-
-### Recipe / Audio GCS Inputs
-
-| 入力 | 場所 | 内部フィールド | 用途 |
-| --- | --- | --- | --- |
-| Keyframe VideoRecipe JSON | `POST /jobs`（`command=mv_from_keyframe_video_recipe`） の `Keyframe VideoRecipe JSON` | `Task.VideoRecipe` | keyframe_reference を含む VideoRecipe から MV 生成を開始します。 |
-| Keyframe VideoRecipe GCS URL | `POST /jobs`（`command=mv_from_keyframe_video_recipe`） の `Keyframe VideoRecipe GCS URL` | `Task.RecipeURL` | `gs://.../video_music_meta.json` を worker の `RecipeLoadFilter` が読み込みます。 |
-| MusicRecipe JSON | `POST /jobs`（`command=mv_from_keyframe_video_recipe`） の JSON 入力 | `Task.Recipe` | 互換入力です。VideoRecipe に変換して `Scripting` をスキップします。 |
-| MusicRecipe GCS URL | `/compose` の `MusicRecipe GCS URL` | `Task.SourceURL` | VideoRecipe 作成の入力です。`gs://.../music_recipe.json` を `Workflows.Script.Run` に渡します。 |
-| MusicRecipe GCS URL | `POST /jobs`（`command=mv_from_keyframe_video_recipe`） の GCS URL | `Task.RecipeURL` | 互換入力です。`gs://.../music_recipe.json` を worker の `RecipeLoadFilter` が読み込みます。 |
-| Music Audio GCS URL | `POST /jobs`（`command=mv_from_keyframe_video_recipe`） の `Music Audio GCS URL` | `Task.AudioURL` | 全 cut の空の `audio_reference` に補完され、`VertexVeoRunner` の `audio.gcsUri` として送られます。 |
-| Cut別 Audio URI | VideoRecipe JSON の `cuts[].audio_reference` | `Task.VideoRecipe.Cuts[].AudioReference` | cut ごとに異なる音源セグメントを指定したい場合に使います。`Task.AudioURL` より優先されます。 |
-
----
-
-## 🔌 Veo Adapter Boundary
-
-Veo API への実通信は **`ports.VideoRunner`** インターフェースに分離しています。`ports.VideoRunner` / `VideoGenerationRequest` / `VideoResponse` は `github.com/shouni/go-veo-orchestrator` の型を alias しており、オーケストレーター側の契約と同じ形で扱います。
-
-Cloud Run 実行では `internal/adapters.VertexVeoRunner` を DI します。ローカル専用モードは持たず、Cloud Run 上で OAuth / Cloud Tasks / Veo 経路を確認する前提です。
-
-### `VertexVeoRunner` の責務
-
-* Application Default Credentials で `https://www.googleapis.com/auth/cloud-platform` の OAuth token を取得
-* Vertex AI Veo の `:predictLongRunning` にリクエストを送信
-* `:fetchPredictOperation` をポーリングし、完了した `gcsUri` を取得
-* OAuth2 HTTP クライアントには30秒の単一リクエストタイムアウトを設定
-* ポーリング中の一時的な通信エラーは連続10回まで許容
-* `ImageReference` がある場合は `image.gcsUri` として投入
-* 前カットの `VideoID` が `gs://...mp4` の場合は `video.gcsUri` として投入し、Video-to-Video 連鎖を維持
-* 生成結果の `gcsUri` を `VideoResponse.CloudURL` と `VideoResponse.VideoID` に返し、次カットへ引き継ぐ
-
-### Runtime Environment Variables
-
-| 変数 | デフォルト | 用途 |
-| --- | --- | --- |
-| `PORT` | `8080` | HTTP サーバの待ち受けポート。Cloud Run が注入するため通常は設定不要です |
-| `LOG_LEVEL` | `INFO` | ログ出力レベル（`DEBUG` / `INFO` / `WARN` / `ERROR`）。ログは Cloud Logging が解釈する `severity` / `message` 形式で出力され、`X-Cloud-Trace-Context` があればリクエスト単位でトレースに紐付きます |
-| `SERVER_ROLE` | なし（必須） | このプロセスが担う役割。`web` / `worker` / `both`。未設定と未知の値は起動時エラーです。詳細は「web / worker の分離」節を参照 |
-| `SERVICE_URL` | `http://localhost:8080` | OAuth callback、Cloud Tasks worker URL の導出、Slack の History Detail リンクに使う**公開**URL。web/worker を分けた場合、worker にも**非公開の worker 自身ではなく web の URL**を設定します（Slack のリンクがこの値から作られるため） |
-| `GCP_PROJECT_ID` | なし | Vertex AI、Cloud Tasks、Gemini Vertex 経路で使う GCP project |
-| `GCP_LOCATION_ID` | なし | Vertex AI / Gemini の location |
-| `AP_MV_BUCKET` | なし | workflow 出力、Recipe 読み込み、History repository が使う GCS bucket。`my-bucket` / `gs://my-bucket` のどちらも可 |
-| `FIRESTORE_DATABASE` | `job-status` | ジョブ状態を置く Firestore データベース。フリートで共有し、コレクション (`ap-mv`) でサービスを分けます。コレクション名はサービスの身元なのでアプリ側の定数です |
-| `AP_MUSIC_BUCKET` | なし | Video Recipe Create フォームの Music Job ID から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json`（ap-music と同じ規則）を解決するための GCS bucket |
-| `GEMINI_MODELS` | なし（必須） | 台本生成などのテキスト生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
-| `IMAGE_MODELS` | なし（必須） | 標準キーフレーム生成モデル。カンマ区切りで、先頭が既定モデル、全体が Web UI の選択肢になります。**空だと起動時エラー** |
-| `WORKER_URL` | `<SERVICE_URL>` | worker **サービス**の URL。パスは含めません |
-| `TASK_AUDIENCE_URL` | `SERVICE_URL` | Cloud Tasks OIDC token の audience。web/worker を分けた場合は**呼び先である worker サービスの URL**を明示指定します（Cloud Run の IAM が audience 不一致を 403 で弾くため） |
-| `CLOUD_TASKS_QUEUE_ID` | なし | Cloud Tasks queue ID |
-| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | なし | 投入するタスクの `oidcToken.serviceAccountEmail` に指定する caller SA。トークンを生成して付与するのは Cloud Tasks であって、このサービスではありません。ap-mv は worker も継続カットを投入するため、どちらの役割でも必要です。必須です（旧 `SERVICE_ACCOUNT_EMAIL` へのフォールバックは撤去済み） |
-| `ALLOWED_TASK_SERVICE_ACCOUNTS` | なし（worker で必須） | worker が**受け付ける** caller SA の許可リスト（カンマ区切り）。web と worker で caller SA が別になるため 2 件必要です（ap-mv は worker も継続カットを投入するため） |
-| `VEO_MODELS` | なし（必須） | Vertex AI Publisher Model ID。カンマ区切りで、先頭が既定モデル、全体が Web UI（ショート動画生成フォーム等）の選択肢になります。**空だと起動時エラー** |
-| `VEO_LOCATION_ID` | `GCP_LOCATION_ID` の値 | Veo API を呼び出す Vertex AI location。`global` も指定可能（グローバルエンドポイント `aiplatform.googleapis.com` を使用）。Veo は提供リージョンが限られるため、データ所在地の要件がなければ `global` を、リージョン固定が必要なら `us-central1` 等を指定します |
-| `VEO_OUTPUT_PREFIX` | なし（必須） | Veo 生成物の GCS 出力 prefix。履歴の走査先（`gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/`）でもあるため、既定値は持ちません。**空だと起動時エラー** |
-| `VEO_ASPECT_RATIO` | `16:9` | `16:9` または `9:16`。タスク側の指定（ショート動画生成の `veo_aspect_ratio`）があればそちらを優先 |
-| `VEO_GENERATE_AUDIO` | `false` | Veo 3 系の `generateAudio` 指定。別途音楽トラックを合成する場合は `false` を推奨 |
-| `VEO_POLL_INTERVAL` | `10s` | long-running operation のポーリング間隔 |
-| `VEO_OPERATION_TIMEOUT` | `20m` | 1カット生成の最大待機時間 |
-| `PIPELINE_TIMEOUT` | なし（worker で必須） | ワーカータスク1件の実行時間の上限。ステップ列全体（レシピ生成・キーフレーム・動画生成・公開）を包む上限で、超過したタスクは `failed` として記録され、理由が画面と Slack に残ります。カット分割された継続タスクにはそれぞれ個別に適用されます。**dispatch deadline（30m）以上の値と無制限は worker の起動時に拒否されます**（理由は「web / worker の分離」を参照）|
-| `VEO_POLL_MAX_ERRORS` | `10` | `fetchPredictOperation` ポーリングが連続失敗してよい最大回数。超えるとカット生成を失敗として扱います |
-| `VEO_USE_PREVIOUS_VIDEO` | `false` | `true` の場合、先頭カット以降を Veo の video_extension（video-to-video、前カットの動画を `PreviousVideoURI` として引き継ぐ生成）専用のサポート尺である7秒固定に正規化し、image_to_video 用の keyframe/referenceImages ではなく前カット動画を入力として動画生成します。詳細は下記の Resumable Video Chain 節を参照 |
-| `VEO_PRICE_USD_PER_SEC` | なし | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成1秒` をカンマ区切り）。空キー（`:0.40`）は表に無いモデルへのフォールバック。未設定なら全モデルが `domain.DefaultVeoPriceUSDPerSecond`（0.40）になります。あくまで目安で、実際の単価はモデル・`VEO_GENERATE_AUDIO`・契約で変わります。**請求額と一致することは保証しません**（用途はジョブ間の比較と再生成による無駄の検出）。正確な値は Vertex AI の価格表を確認して設定してください |
-| `KEYFRAME_MAX_CONCURRENCY` | `1` | キーフレーム生成のカット間の同時実行数。1 カットの「生成 → 保存」が 1 goroutine で完結します |
-| `KEYFRAME_RATE_INTERVAL` | `60s` | AI 呼び出しの発射間隔の下限。**キーフレームの画像生成だけでなく台本のテキスト生成にも掛かります**（クォータはプロジェクト単位のため）。0 で無制限。なおスループットは並列度によらずこの間隔で頭打ちになるので、両方を上げる設定は矛盾します |
-| `KEYFRAME_IMAGE_SIZE` | `2K` | キーフレーム画像の出力解像度。`1K` / `2K` / `4K` のいずれか（**それ以外は起動時に落ちます**）|
-| `SLACK_WEBHOOK_URL` | なし | 設定時に完了/失敗通知を Slack Incoming Webhook へ送信 |
-
-モデル名にアプリ側の既定値を置かないのは意図的です。モデル ID が古くなるのは Google のリリース周期であってこのリポジトリの都合ではないため、既定値があると「デプロイ設定を変えていないのに古いモデルを使い続ける」状態に誰も気付けません。`GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` は役割を問わず必須で、空だと起動時に落とします単価表（`VEO_PRICE_USD_PER_SEC`）も同じ理由で既定値を持ちません — モデル名と価格のどちらも Google 側の都合で変わるためです。
-
-Cloud Run 実行では `SERVICE_URL` / `WORKER_URL` に HTTPS が必須です。実行サービスアカウントは web / worker で分かれており、必要な権限も異なります。
-
-| | `ap-mv-web-runner` | `ap-mv-worker-runner` |
-| --- | --- | --- |
-| `AP_MV_BUCKET` | 読み書き | 読み書き |
-| `AP_MUSIC_BUCKET` | 不要（`gs://` の URI を組み立てるだけ） | **読み取り**（`music_job_id` から `recipe.json` を読む） |
-| Vertex AI | 不要 | 必要（Veo / Gemini） |
-| Cloud Tasks 投入 | 必要 | **必要**（継続カットの自己投入） |
-| 自分自身への `iam.serviceAccountTokenCreator` | 必要（署名付き URL） | 必要 |
-
-worker も投入側になるため、worker の `ALLOWED_TASK_SERVICE_ACCOUNTS` には 2 つの SA を両方並べてください。権限定義は `ap-infra` リポジトリの `app_ap_mv.tf` にあります。
-
-### Web Security Environment Variables
-
-| 変数 | 用途 |
+| 変数名 | 説明 |
 | --- | --- |
-| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。**ジョブ状態用とは別のデータベースを指します** |
-| `GOOGLE_CLIENT_ID` | Google OAuth クライアントID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット |
-| `ALLOWED_EMAILS` | ログインを許可するメールアドレスのリスト |
-| `ALLOWED_DOMAINS` | ログインを許可するドメインのリスト |
-| `ALLOWED_M2M_SERVICE_ACCOUNTS` | `/*` エンドポイントを OIDC Bearer トークン（`Authorization: Bearer <ID Token>`, audience=`SERVICE_URL`）で呼び出せるサービスアカウントのメールアドレス一覧（カンマ区切り）。**`web` 面では必須**で、未設定だと起動に失敗します（M2M 経路は無効化できず、未設定のまま起動するとブラウザは正常なのに ap-mcp だけログイン画面の HTML を受け取る形で壊れるため） |
+| `SERVER_ROLE` | `web` / `worker` / `both`（`both` はローカル開発用）。**未設定・未知の値は起動時エラー**です。担当する面だけを組み立て、ルートもその面のものだけを登録します。 |
+| `GCP_PROJECT_ID` / `GCP_LOCATION_ID` | GCP プロジェクトと、Cloud Tasks / Vertex AI のリージョン。Gemini と Veo は Vertex AI 経由でのみ呼びます（API キー経路はありません）。 |
+| `CLOUD_TASKS_QUEUE_ID` | 投入先のキュー名。**worker も継続タスクを投入するため、どちらのロールでも必須**です。 |
+| `WORKER_URL` | worker **サービス**の URL。パスは含めません。worker を担うロールでは未設定なら `SERVICE_URL` を使いますが、`web` では明示が必要です。本番では HTTPS が必須です。 |
+| `TASK_CALLER_SERVICE_ACCOUNT_EMAIL` | タスクに載せる caller SA。トークンを発行するのは Cloud Tasks で、このプロセスが署名するわけではありません。 |
+| `AP_MV_BUCKET` | 成果物の置き場。`my-bucket` / `gs://my-bucket` のどちらでも指定できます。 |
+| `GEMINI_MODELS` / `IMAGE_MODELS` / `VEO_MODELS` | 台本・キーフレーム・動画のモデル名。**カンマ区切りで複数指定でき、先頭が既定モデル**、全体がフォームの選択肢になります。**既定値は持たず、どれか 1 つでも空なら起動時にエラー**になります。 |
+| `VEO_OUTPUT_PREFIX` | 成果物のプレフィックス（`gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` の下にジョブが並びます）。**既定値は持たず、空なら起動時にエラー**です。 |
 
-M2M 認証が成功したリクエストは CSRF 検証をバイパスします。
+**Web 面（`web` / `both`）で必須**
 
-`server.Run` は起動時に `ValidateEssentialConfig()` を実行します。検証範囲は `SERVER_ROLE` に従い、OAuth 設定と認可リストは **Web 面を提供する場合のみ**必須です。Cloud Tasks 設定・GCS・Veo 設定はどちらの役割でも必須になります。
+| 変数名 | 説明 |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth のクライアント。 |
+| `ALLOWED_EMAILS` / `ALLOWED_DOMAINS` | ログインを許可する相手（カンマ区切り）。**どちらも空だと起動しません。** |
+| `ALLOWED_M2M_SERVICE_ACCOUNTS` | 機械（MCP ゲートウェイなど）が OIDC Bearer で叩くときに許可する SA（カンマ区切り）。audience は `SERVICE_URL` です。**空だと起動しません。** |
+| `SESSION_FIRESTORE_DATABASE` / `SESSION_FIRESTORE_COLLECTION` | セッションを置く Firestore（既定はどちらも `sessions`）。**ジョブ状態用とは別のデータベースを指します。** |
 
-### History Storage
+**Worker 面（`worker` / `both`）で必須**
 
-成果物は `AP_MV_BUCKET` と `VEO_OUTPUT_PREFIX` から構築される `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/` 配下に置きます。詳細画面はジョブごとの `video_music_meta.json` を読み、`cuts[]` から keyframe / video / status などを表示します。
+| 変数名 | 説明 |
+| --- | --- |
+| `TASK_AUDIENCE_URL` | Cloud Tasks の OIDC 検証の audience（worker 自身の URL）。未設定なら `SERVICE_URL` を使うため、web/worker を分けた場合は明示します。 |
+| `ALLOWED_TASK_SERVICE_ACCOUNTS` | 受け付ける caller SA（カンマ区切り）。web と worker の両方の SA を並べます（worker も継続タスクを投入するため）。 |
+| `TASK_DISPATCH_DEADLINE` | Cloud Tasks がワーカーの応答を待つ上限（例: `30m`）。既定値は持ちません。 |
+| `PIPELINE_TIMEOUT` | タスク 1 件の実行上限（例: `25m`）。継続タスクにはそれぞれ個別に掛かります。**`PIPELINE_TIMEOUT < TASK_DISPATCH_DEADLINE <= Cloud Run の timeout` を守り、等号と無制限（0 以下）は起動時に拒否されます。** |
 
-**一覧は Firestore のクエリです。** 一覧に出す見出し（題名・ムード・テンポ・映像モード・アスペクト比・進行段階・カット数・生成秒数・完成動画 URI）はジョブ状態のドキュメントへ写してあり、走査もメモリ上の並べ替えも短期キャッシュも要りません。総件数は集計クエリで求めるため、ページの外にあるジョブは読みません。写した値が古くならないのは、状態を記録するたびに `JobStatus.ApplyVideoRecipe` が塗り直すからです（投入時・処理開始時・終端の 3 か所すべてで通ります）。
+**任意**
 
-**台本のみのジョブ**（`video_recipe_draft`）も、完成ジョブと同じ `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。以前は `drafts/` という兄弟プレフィックスと専用ファイル名に分けていましたが、中身は同じ `VideoRecipe` で走査規則も同じだったため、一覧・取得・削除を 2 系統維持するだけの分離でした。進行段階は `domain.JobProgress` がカット列（キーフレームの有無・動画の生成状況）から導くので、保存場所で区別する必要がありません。台本のみのジョブは履歴一覧に `script` 段階として並び、`/jobs?stage=script` で絞り込めます。
+| 変数名 | 説明 |
+| --- | --- |
+| `SERVICE_URL` / `PORT` | 公開 URL と待ち受けポート (Default: `http://localhost:8080` / `8080`)。本番の `SERVICE_URL` は HTTPS 必須で、OAuth のコールバック・M2M 検証の audience・Slack 通知のリンク元を兼ねるため、**worker にも web の URL** を設定します。 |
+| `LOG_LEVEL` | ログレベル `DEBUG` / `INFO` / `WARN` / `ERROR` (Default: `INFO`)。`main.go` が読みます。 |
+| `FIRESTORE_DATABASE` | ジョブ状態を置く Firestore データベース (Default: `job-status`)。コレクション名 `ap-mv` は設定にしません。 |
+| `AP_MUSIC_BUCKET` | 作成フォームの Music Job ID から `gs://<bucket>/music/<jobID>/recipe.json` を組み立てるためのバケット。**楽曲生成サービス・ナレーション生成サービスと同じ変数名・同じ規則です。** |
+| `VEO_LOCATION_ID` | Veo を呼ぶ Vertex AI のロケーション (Default: `GCP_LOCATION_ID` の値)。`global` も指定できます。 |
+| `VEO_ASPECT_RATIO` | `16:9` または `9:16` (Default: `16:9`)。タスクの `veo_aspect_ratio` があればそちらを使います。 |
+| `VEO_GENERATE_AUDIO` | Veo の `generateAudio` (Default: `false`)。 |
+| `VEO_POLL_INTERVAL` / `VEO_OPERATION_TIMEOUT` / `VEO_POLL_MAX_ERRORS` | 生成オペレーションのポーリング間隔・1 カットの待機上限・連続失敗の許容回数 (Default: `10s` / `20m` / `10`)。 |
+| `VEO_USE_PREVIOUS_VIDEO` | `true` で前カットの動画を入力にする video_extension（video-to-video）方式にします (Default: `false`)。 |
+| `VEO_PRICE_USD_PER_SEC` | 履歴画面に出す概算コストの単価表（`モデル名:USD/生成 1 秒` をカンマ区切り。空キー `:0.40` は表に無いモデルの既定）。未設定なら全モデル `0.40`。請求額と一致することは保証しません。 |
+| `KEYFRAME_MAX_CONCURRENCY` / `KEYFRAME_RATE_INTERVAL` | AI 呼び出しの同時実行数と発射間隔の下限 (Default: `1` / `60s`)。間隔は台本のテキスト生成にも掛かり、スループットは並列度によらず `1/KEYFRAME_RATE_INTERVAL` で頭打ちです（両方を上げると起動時に警告）。 |
+| `KEYFRAME_IMAGE_SIZE` | キーフレームの解像度 `1K` / `2K` / `4K` (Default: `2K`)。**それ以外は起動時に落ちます。** |
+| `SLACK_WEBHOOK_URL` | 完了・失敗の通知先。未設定なら通知は無効になります。 |
 
-**一覧に出すのは 5 コマンド**（`video_recipe_create` / `video_recipe_draft` / `mv_from_keyframe_video_recipe` / `short_video_from_section` / `regenerate_cut_video`）です。残りの保守操作（キーフレーム再生成・ZIP 再生成・`section_video`・`finalize_video`）は成果物を**元のジョブへ**書き戻すので自分のディレクトリを持たず、以前も一覧に現れていません。出すと成果物の無い行が並ぶだけなので、コマンドで絞ります。進行状況は `/jobs/{jobID}` で追えます。継続タスク（`video_gen_continuation`）が `Command` を上書きしても一覧から消えないのは、記録するのが `domain.Task.ListedCommand()`（＝元のコマンド）だからです。
+> 環境変数が持つのは**デプロイ先が決める設定**だけです。入力元・モデル・対象カットといった
+> 実行ごとに変わる値は、タスクのペイロード（JSON）で渡します。実行 SA の権限は
+> `ap-infra` の Terraform が持ちます。
 
-**一覧と詳細は進行段階とジョブ状態の両方を出します。** 段階（`progress`）はカットがどこまで焼けたかで、状態（`state`）は処理が生きているかです。失敗したジョブは段階が途中で止まるだけなので、状態が無いと生成中のジョブと区別が付きません。失敗の理由（`error`）は一覧では省略表示、詳細ではそのまま出ます。移行前のジョブは状態の記録が無いため空になります。
+### 2. 起動
 
-**履歴詳細**（`GetHistory`）と**キーフレームダウンロード**（`DownloadKeyframes`）は常に GCS から直接読み込みます（状態だけは Firestore を 1 回引きます）。署名付き URL は表示ごとに生成し、期限付き URL 自体は保存しません。
-
----
-
-## 🔀 タスク固有の Workflows
-
-`workflow.New` で組み立てた orchestrator の `Workflows` はプロセス全体で共有しますが、
-タスクがモデル（`TextModel` / `ImageModel`）・シード・Veo 設定（`VeoModel` / `VeoAspectRatio`）を
-上書きしている場合だけ、そのタスク専用の `Workflows` を構築して使います
-（`internal/builder` の `workflowResolver`）。
-
-判定と構築を1か所に閉じているため、タスク固有オプションを増やすときはここだけを変更すれば済みます。
-
-**専用に構築した `Workflows` はタスク完了時に `Close()` します。** `workflow.New` は
-画像キャッシュのクリーンアップ goroutine を起こすため、閉じ忘れるとジョブごとに goroutine が
-積み上がります。共有インスタンスは閉じてはいけないので、`Resolve` は Workflows と一緒に
-後始末用の関数を返し、呼び出し側はそれを `defer` します（どちらを受け取ったかは
-呼び出し側から判別できないため、後始末を返せるのは解決した側だけです）。
-
----
-
-## 📂 プロジェクト構造 (Project Structure)
-
-データフローの時系列に沿って綺麗にパッキングされ、無駄な階層移動を極限まで削ぎ落とした洗練されたフォルダレイアウトです。
-
-```text
-ap-mv/
-├── main.go                 # エントリーポイント
-├── Dockerfile              # Cloud Run 向け FROM scratch コンテナ定義
-├── assets/                 # embed.FS で配布する静的・プロンプト資産
-│   ├── prompts/            # VideoRecipe 生成・Visual Mode・Veo動画生成モード別（image_to_video / reference_to_video / video_extension）のプロンプトテンプレート
-│   └── templates/          # Web UI テンプレート（compose / recipe / history / history_detail）
-└── internal/
-    ├── adapters/           # 外部サービス連携（Vertex AI Veo adapter, Slack, ffmpeg）
-    │   └── prompt/         # Gemini へ送るプロンプト組み立て（台本・キーフレーム）
-    ├── app/                # DI container（Storage は remoteio.Factory、Store はそこから取り出した窓口）
-    ├── builder/            # config から container / handlers / workflow / pipeline を構築（配線のみ）
-    ├── config/             # caarlos0/env による環境変数ロードと設定検証（Veo/GCS/OAuth等）
-    ├── domain/             # タスクモデルと music/video recipe 型 alias、job_id検証
-    ├── ports/              # アプリ内境界。VideoRunner は go-veo-orchestrator の型 alias
-    ├── repository/         # 履歴（一覧は Firestore のクエリ、詳細は GCS の video_music_meta.json）とジョブ状態
-    ├── server/              # chi ルーティング、OAuth、CSRF、Cloud Tasks OIDC、HTTP server起動
-    │   └── handlers/       # Web UI / task handler / CSRF context
-    └── worker/
-        ├── pipeline/       # Task command から step chain を実行
-        └── step/           # go-veo-orchestrator/workflow runner を呼ぶ各処理ステップ（実行順はコマンドごとに pipeline/planner.go が決定。詳細は後述の Workflows 表を参照）
-
+```bash
+go run .        # SERVER_ROLE が必須
 ```
 
----
+`SERVER_ROLE` が担う面だけを組み立てます。
 
-## 🔄 シーケンスフロー (Sequence Flow)
-
-```mermaid
-sequenceDiagram
-    participant User as User
-    participant Browser as Browser
-    participant Web as AP MV Web (Cloud Run)
-    participant Queue as Cloud Tasks
-    participant FS as Firestore (job status)
-    participant Worker as Worker Handler
-    participant Pipeline as MV Pipeline
-    participant F1 as Scripting
-    participant F2 as CutGen
-    participant F3 as VideoGen (Veo)
-    participant F4 as Publishing
-    participant WF as go-veo-orchestrator/workflow
-    participant GCS as Cloud Storage (remote-io)
-
-    %% 認証フェーズ
-    User->>Browser: Google ログイン
-    Browser->>Web: GET /auth/login
-    Web-->>Browser: OAuth リダイレクト・セッション確立
-
-    %% リクエスト受付フェーズ
-    User->>Browser: Video Recipe Createフォーム入力
-    Browser->>Web: POST /jobs (csrf_token)
-    Web->>Web: Handler.JobCreate -> Task{command: video_recipe_create}
-    Web->>Queue: 型安全タスク投入 (gcp-kit/worker)
-    Web->>FS: queued を記録（一覧の見出しもここで埋まる）
-    Web-->>Browser: 202 Accepted / queued(job_id)
-
-    %% 進行状況の確認（ブラウザは終端までポーリング）
-    loop succeeded / failed になるまで
-        Browser->>Web: GET /jobs/{job_id}
-        Web->>FS: 状態を読む
-        Web-->>Browser: state / progress
-    end
-
-    %% 非同期ワーカー・パイプラインフェーズ
-    Queue->>Worker: POST /tasks/generate (OIDC 検証付き)
-    Worker->>Pipeline: Execute(ctx, task)
-    Pipeline->>FS: 完了済みなら打ち切り、未完了なら running を記録（再実行ガード）
-
-    rect rgb(240, 255, 240)
-        Note over Pipeline, F1: [command == video_recipe_create / video_recipe_draft のみ実行]
-        Pipeline->>F1: Execute(task)
-        F1->>WF: Script.Run(source, mode)
-        WF-->>F1: *ports.VideoRecipe
-        F1-->>Pipeline: VideoRecipe + music.Recipe
-    end
-
-    Pipeline->>F2: Execute(recipe)
-    F2->>WF: CutKeyframe.RunAndSave(recipe, outputPath)
-    WF->>GCS: images/keyframe_N.png + video_music_meta.json
-    WF-->>F2: recipe with keyframe_reference
-
-    alt command == video_recipe_create
-        Pipeline->>FS: succeeded を記録（見出しを実行後のレシピで塗り直す）
-        Pipeline-->>Worker: nil (VideoRecipe saved)
-    else command == mv_from_keyframe_video_recipe（短縮版。実際は Scene Split / Zip Upload / Chain Finalize も実行）
-        Pipeline->>F3: Execute(recipe, keyframes)
-        F3->>WF: Video.Run(recipe)
-        WF->>WF: BuildVideoRequest(lastVideoID, keyframe_reference, audio_cue)
-        WF-->>F3: recipe with video_id / video_url / status
-
-        opt カットが残っている（時間上限）
-            F3->>Queue: video_gen_continuation を投入（同じ job_id）
-            Note over Pipeline, FS: 継続中は running のまま。ここで succeeded にすると<br/>再実行ガードが残りのカットを止める
-        end
-
-        Pipeline->>F4: Execute(recipe)
-        F4->>WF: Publish.Run(recipe, outputPath)
-        WF->>GCS: final video_music_meta.json
-        Pipeline->>FS: succeeded を記録
-        Pipeline-->>Worker: nil (Task Success)
-    end
-
-    opt 失敗したとき
-        Pipeline->>FS: failed と理由を記録（履歴一覧と詳細に出る）
-    end
-```
-
----
-
-## 🚀 使い方 (Usage)
-
-### 1. videoレシピ作成
-
-1. Google OAuthで安全にログインします。
-2. `/compose` から `MusicRecipe GCS URL`、Visual Mode、Character、利用モデルを選んで送信します。Web handler は Cloud Tasks に投入し、`202 Accepted` と `job_id` を返します。POST handler は互換入力として `text` / `image_url` も受け付けますが、現在のフォームに表示される主入力は `music_recipe_url` です。
-3. Cloud Tasks から `/tasks/generate` が呼ばれ、OIDC 検証後に pipeline が起動します。`video_recipe_create` では `Scripting -> Scene Split -> Cut Keyframe Gen -> Zip Upload` の順に進み、セクション単位の keyframe を含む VideoRecipe を `gs://<AP_MV_BUCKET>/<VEO_OUTPUT_PREFIX>/jobs/<jobID>/video_music_meta.json` に保存します。
-
-### 1-b. 下書きで確認してから進める
-
-キーフレーム画像はカット数ぶん生成されるため、カット割りが的外れだとその枚数がまるごと無駄になります。確認してから進めたい場合は次の順で操作します。
-
-1. 作成フォーム（`/compose`）で入力し、**「下書きだけ作る」** を押します（`POST /jobs` の `command=video_recipe_draft`）。`Scripting -> Scene Split -> Recipe Save` まで走り、キーフレームは1枚も生成されません。
-2. `/jobs?stage=script` で一覧を開き、カット数・尺の合計を確認します。**尺の合計が曲尺と大きくズレていればカット割りの取り違え**なので、ここで捨てて作り直します。詳細画面（`/jobs/{jobID}`）ではカットごとの `visual_anchor` を確認でき、そのままカット単位・セクション単位でキーフレームを焼けます。レシピ全体を読む場合は ap-mcp の `get_video_recipe`（`GET /jobs/{jobID}/recipe`）を使います。
-3. 直したい場合は ap-mcp の `update_video_recipe`（`PUT /jobs/{jobID}/recipe`）で書き戻します。**キーフレームを焼いた後は 409 で拒否されます**（カット割りを差し替えると、保存済みの `keyframe_reference` が別のカットを指すため）。**キーフレームを1枚も生成しないため、読む→直す→読み直すは何周してもコストがかかりません。** 直して効くのは `visual_anchor`（キーフレームと Veo のプロンプト）・`audio_cue`（曲の展開との対応）・`character_id`・`dialogue` です。尺（`duration_sec` / `start_sec` / `end_sec`）を書き換えても、生成時に `SceneSplitFilter` が楽曲タイムラインを正として割り付け直すため、そのままは反映されません。
-4. 進める場合は一覧の **「この下書きからMVを作る」** を押します。下書きの GCS URI が `recipe_url` として `mv_from_keyframe_video_recipe` に渡り、別の Job ID で本生成が走ります（下書きは残ります）。
-
-`SceneSplitFilter` は同じレシピを二度通しても結果が変わらないため（`TestSceneSplitFilterIsIdempotent` / `TestDraftSaveRoundTripKeepsCutPlan`）、本生成側で Scene Split が再実行されてもカット割りは下書きで確認したまま保たれます。
-
-### 2. Keyframe VideoRecipe からの MV 作成 / レジューム
-
-1. `POST /jobs`（`command=mv_from_keyframe_video_recipe`） 画面を開きます。
-2. `keyframe_reference` を含む `VideoRecipe` JSON データをフォームに直接貼り付けるか、Keyframe VideoRecipe GCS URL に `gs://.../video_music_meta.json` を指定して送信します。必要に応じて `Music Audio GCS URL` に `gs://.../music.mp3` を指定します。
-3. Web handler または worker の `RecipeLoadFilter` が VideoRecipe JSON を読み込み、`Scripting` をスキップして MV 生成を実行します。従来の `MusicRecipe` JSON / GCS URL も互換入力として受け付け、VideoRecipe に変換してから処理します。既に `status=generated`、`video_id`、`video_url` を持つカットは `VideoTimelineRunner` 側でスキップされます。
-
-### 3. 履歴画面
-
-1. `/jobs` で job の一覧を確認します。Firestore のジョブ状態をコマンドで絞り込んで新しい順に引き、タイトル、作成時刻、cut 数、進行段階、ジョブ状態（`queued` / `running` / `failed`）をページング表示します。成果物を元のジョブへ書き戻す保守用のジョブ（キーフレーム・ZIP の再生成、セクション動画、仕上げの結合）は一覧に出ません。
-2. 成果物が 1 つも残っていないジョブ（失敗して途中で落ちたもの、投入直後のもの）は、`Detail` の代わりに `Delete` が出ます。詳細画面は `video_music_meta.json` を読むので開けず、残っている情報（状態と失敗理由）は一覧の行に出ているためです。一覧に口が無いと、そのジョブは画面から二度と消せません。
-3. 一覧の `Detail` から `/jobs/{jobID}` を開くと、metadata の概要と各 cut のキーフレーム画像、status、duration、visual anchor、dialogue、keyframe / video リンクを確認できます。詳細画面には **Metadata**（recipe JSON へのリンク。ハンドラーが署名付き URL へ 302 します）、**Download Keyframes**（zip 一括ダウンロード）、**Delete** ボタンが並んでいます。
-4. 署名付き URL は画面に埋め込みません。画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します（埋め込むと、期限内はその URL が認証の外側で使え、期限が切れると画面を開き直すまで直りません）。JSON 応答だけが署名付き URL を含みます。
-5. **Download Keyframes** ボタンで `keyframes-{jobID}.zip` をダウンロードできます。zip にはキーフレーム画像（`cut_01.png` 形式）に加えて、ffmpeg concat demuxer 用の `inputs.txt` と ASS カラオケ字幕ファイル `subtitles.ass` が含まれます。`subtitles.ass` は `music_recipe.lyrics` の歌詞テキストをセクション・BPM 単位でカットへ割り当てた内容です。ffmpeg でキーフレームと音源を合成する例: `ffmpeg -f concat -safe 0 -i inputs.txt -i music.mp3 -vf "ass=subtitles.ass" -c:v libx264 -pix_fmt yuv420p output.mp4`
-6. 各カードの **Regenerate** ボタンから `/jobs/{jobID}/cuts/{cutIndex}/regenerate` の専用画面に遷移し、そのカットのキーフレームのみ再生成・編集できます。画面上部の「モード」で以下のいずれかを選びます。
-   - **フル再生成**: ビジュアルアンカー（プロンプト文言）を編集し、プロンプトから作り直します。構図が変わりうる代わりに大きな変更にも対応できます。
-   - **部分編集**（キーフレームが既にあるカットのみ選択可）: 「腕には絆創膏を1〜2枚のみにしてください」のような編集指示だけを入力します。今の画像を入力として同じ画像生成モデル（`IMAGE_MODELS` の先頭）に渡す会話型編集のため、構図・ポーズ・背景を保ったまま指示内容だけを反映します。同じキャラクターの他カットとの一貫性を保ちたい軽微な修正（小物の数・色など）に向いています。
-
-   どちらのモードでも、シード値の一時的な上書き（対象カットにキャラクターが設定されている場合のみ有効。入力欄にはそのキャラクターの現在のシード値が初期値として表示され、未変更のまま送信した場合は上書き扱いにならず既定のワークフローを再利用します）と「上書き」チェックボックス（デフォルト ON）を設定してから送信します。「上書き」が ON の場合、再生成/編集後に recipe の `keyframe_reference`（フル再生成モードでは `visual_anchor` も）が更新され、次回の詳細表示で新しいキーフレーム画像が反映されます。OFF にした場合は画像のみ GCS に保存し、recipe は更新しません。
-7. 詳細画面の **動画生成 (Veo)** フォームで、対象（フルMV＝全カット、またはセクション単位のショート動画）・Veo モデル（`VEO_MODELS` の選択肢）・アスペクト比を選んで送信できます。保存済みキーフレームと歌詞をそのまま使い、フルは `mv_from_keyframe_video_recipe`、ショートは `short_video_from_section` タスクとして新規ジョブで動画生成が走ります（元ジョブの metadata は変更しません）。ショートは YouTube ショートの上限に合わせて合計 60 秒で切り詰められます。完了後は履歴一覧に新しいジョブとして表示されます。
-8. 詳細画面の **Delete** ボタン（一覧では成果物の無いジョブにも出ます。または `DELETE /jobs/{jobID}`）で job 配下の GCS object を削除できます。DELETE リクエストには `X-CSRF-Token` ヘッダーが必要です。ジョブ状態のドキュメントは成果物と別の場所（Firestore）にあるため走査では消えず、ハンドラーが合わせて削除します（`handlers.deleteJobStatus`）。
-
-### 4. web / worker の分離
-
-本番では 1 つのイメージを 2 つの Cloud Run サービスとしてデプロイし、`SERVER_ROLE` で役割を切り替えます（`cloudbuild.yaml`）。
-
-| | `ap-mv`（web） | `ap-mv-worker` |
+| ロール | 組み立てるもの | 公開されるルート |
 | --- | --- | --- |
-| `SERVER_ROLE` | `web` | `worker` |
-| 提供するルート | `/*`, `/auth/*` | `/tasks/generate` |
-| 公開 | あり | **なし**（ingress と Cloud Run の IAM で遮断） |
-| ingress | `all` | **`internal`**（到達経路を Cloud Tasks に限定） |
-| memory / cpu | 512Mi / 1 | 1Gi / 2 |
-| concurrency / timeout | 20 / 300s | 4 / 1800s |
+| `web` | 投入フォーム・履歴画面・Cloud Tasks への投入・Firestore/GCS の読み書き | `/`, `/compose`, `/jobs/*`, `/auth/*` |
+| `worker` | パイプライン（Gemini + Veo + ffmpeg + GCS + 通知）と Cloud Tasks への投入（継続タスク） | `POST /tasks/generate` |
+| `both` | 両方（ローカル開発用） | 上記すべて |
 
-worker の実行時間の上限を決める値は 3 つあり、この大小関係を守ります。
+`both` で `go run .` すると画面は確認できますが、**Cloud Tasks は localhost へ配送できないため
+パイプラインは走りません。** ロジックの確認は `go test ./... -race` で行います。
 
-```
-PIPELINE_TIMEOUT  <  dispatch deadline  <=  Cloud Run の timeout
-   25m (アプリ)        30m (タスク)            1800s (サービス)
-```
+### 3. HTTP エンドポイント
 
-実効上限を決めるのは**いちばん小さい値**です。dispatch deadline だけは未指定でも既定の
-10 分が効くため、指定を忘れると Cloud Run の timeout を 3600s にしていても 10 分で
-ワーカーが打ち切られます（値は `internal/config/config.go` の `TaskDispatchDeadline`）。
-
-**この大小関係は起動時に強制されます**（`config.validatePipelineTimeout`）。等号も無制限も
-拒否するのは、打ち切りが Cloud Tasks 側から来るとプロセスごと止められ、失敗の記録も Slack 通知も
-走らないまま、`max_attempts = 1` の `mv-queue` は再試行しないため、ジョブが `running` のまま
-残るためです。この記録は打ち切られた context から切り離して行っています
-（`gcp-kit/worker.Lifecycle` が Finish に切り離した ctx を渡す）。
-
-フリート全体の一覧（5 ワークロード分）と、tf の `precondition` による検査は `ap-infra` の
-README「タイムアウトの三段」にあります。
-
-`SERVER_ROLE=both` にすると 1 プロセスが両方の面を提供します。`go run ./main.go` で画面は
-確認できますが、**パイプラインは走りません。Cloud Tasks は localhost へ配送できないため、
-投入してもワーカーは動きません**。ロジックの確認は `go test ./... -race` で行ってください。
-
-`SERVER_ROLE` に既定値は無く、未設定なら起動時に落ちます。未設定を `both` とみなすと、本番の
-環境変数が 1 つ欠けただけで公開 web に `/tasks/generate` が復活するためです。
-
-分離する理由は 3 つあります。
-
-1. **デプロイ設定を役割ごとに最適化できる** — 動画生成は数分〜数十分かかるため worker は長い timeout が要りますが、その上限を Web 面にまで課す必要はありません
-2. **ログとメトリクスが役割ごとに読める** — Cloud Run の組み込みメトリクスはサービス単位です。同居していると長時間ジョブがレイテンシの p99 を支配し、Web の遅延もメモリのピーク要因も判別できません
-3. **タスク受付口を非公開にできる** — 同居していると `/tasks/generate` が公開サービス上に存在し、防御はアプリ内の OIDC 検証ミドルウェアだけでした。分離後は Cloud Run の IAM がコンテナに届く前に弾きます
-
-役割ごとに構築される依存も変わります（`internal/builder/app.go`・`handlers.go`）。
-
-- `SERVER_ROLE=worker` では OAuth ハンドラを構築せず、Cloud Tasks の検証は OAuth 設定を要求しない `auth.TaskVerifier`（gcp-kit v1.6.0 以降）で行うため、OAuth 系シークレットが不要になります。
-- `SERVER_ROLE=web` では Vertex AI クライアント・Veo runner・Slack 通知・worker パイプラインを構築しません。`ap-mv-web-runner` は `aiplatform.user` も `SLACK_WEBHOOK_URL` へのアクセス権も持たない（`ap-infra/app_ap_mv.tf`）ため、持たせる理由がありません。
-- Cloud Tasks のエンキューアと GCS・履歴リポジトリはどちらの役割でも構築します。worker も継続カットを自分で投入し、ジョブ状態を書き戻すためです。
-
-> **ap-music との違い**: ap-mv の worker は**自分でもタスクを投入します**。動画をカット単位で分割生成し、残りがあれば次のカットを積み直すためです（`internal/pipeline/step/video_gen.go`）。そのため `CLOUD_TASKS_QUEUE_ID` と `WORKER_URL` は worker 側にも必須で、`WORKER_URL` は **worker 自身**を指します。ap-music の worker は投入しないので、この配線は不要でした。
-
-### 5. HTTP エンドポイント
+**認証は 1 つです。** `auth.Protected` が OIDC の Bearer（audience は `SERVICE_URL`、
+`ALLOWED_M2M_SERVICE_ACCOUNTS` の SA）とセッションの両方を通すため、同じ URL を人も機械も
+叩けます。`GET /health` と `/static/*` だけが認証の外側で、ロールに関係なく登録されます。
 
 | メソッド | パス | 用途 |
 | --- | --- | --- |
-| `GET` | `/health` | ヘルスチェック |
-| `GET` | `/static/*` | embed.FS の静的ファイル配信。`vendor/` 配下は Bootstrap / Bootstrap Icons を自前配信（CDN を参照しないため CSP を `default-src 'self'` にできる）。バージョンがパスに入る `vendor/` は `Cache-Control: public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
-| `GET` | `/auth/login` | Google OAuth ログイン開始 |
-| `GET` | `/auth/callback` | OAuth コールバック |
-| `GET` | `/` | ホーム |
-| `GET` | `/compose` | VideoRecipe 作成フォーム。「Queue Draft Job」「Queue Video Recipe Job」のどちらを押したかが `command` になります |
-| `POST` | `/jobs` | ジョブの投入。本文の `command` で分かれます: `video_recipe_create`（既定。Music Recipe から VideoRecipe を作りキーフレームまで焼く）/ `video_recipe_draft`（同じ入力でカット割りまでで止まる台本のみのジョブ。履歴には script 段階として並ぶ）/ `mv_from_keyframe_video_recipe`（`recipe_json` の Keyframe VideoRecipe から MV 作成。ap-mcp 等の M2M 用で、画面のフォームは履歴詳細の動画生成フォームへ統合済み）。受付は `202` と `Location: /jobs/{jobID}` |
-| `GET` | `/jobs?stage=&page=` | ジョブ一覧。`stage` は `script`（台本のみ）/ `keyframes` / `keyframes_done` / `videos` / `completed` |
-| `GET` | `/jobs/{jobID}` | ジョブ 1 件。投入から削除まで同じ URL です。未完了・失敗のジョブは進行状況（HTML は自動更新、JSON は `queued` / `running` / `succeeded` / `failed` と失敗理由・試行回数）。完成したジョブは詳細画面で、JSON は状態に `detail`（履歴詳細。署名付き URL 入り）を入れ子にした 1 つの文書です |
-| `DELETE` | `/jobs/{jobID}` | ジョブの成果物と記録の削除 |
-| `GET` | `/jobs/{jobID}/recipe` | ジョブの `VideoRecipe` を JSON で返す。表示用に整形した詳細とは別経路で、そのまま直して PUT へ返せる |
-| `PUT` | `/jobs/{jobID}/recipe` | レシピを上書き保存。本文は `{"recipe": {...}}`（GET の応答と同じ形）または `VideoRecipe` 単体。**台本のみの段階でのみ許可**（それ以降は 409） |
-| `GET` | `/jobs/{jobID}/metadata` | `video_music_meta.json` の署名付き URL へ 302。画面の **Metadata** リンクの実体 |
+| `GET` | `/health` | ヘルスチェック（`/healthz` は Cloud Run の既定ドメイン側で予約パス扱いになるため使いません）。認証不要 |
+| `GET` | `/static/*` | 埋め込みの CSS / JS と `vendor/` 配下の Bootstrap。認証不要。`vendor/` は `public, max-age=31536000, immutable`、自前アセットは `public, max-age=300, must-revalidate` |
+| `GET` | `/auth/login` `/auth/callback` `/auth/logout` | Google OAuth のログイン・コールバック・ログアウト |
+| `GET` | `/` | ホーム（直近 10 件と、最新の完成動画） |
+| `GET` | `/compose` | 作成フォーム。押したボタンで `command` が決まります（「Queue Draft Job」= `video_recipe_draft`、「Queue Video Recipe Job」= `video_recipe_create`） |
+| `POST` | `/jobs` | ジョブを投入。フォーム本文の `command` で分かれます: `video_recipe_create`（既定。台本 → キーフレームまで）/ `video_recipe_draft`（台本まで）/ `mv_from_keyframe_video_recipe`（`recipe_json` または `recipe_url` の VideoRecipe から動画まで。機械向け）。受付は `202` と `Location: /jobs/{jobID}` |
+| `GET` | `/jobs` | ジョブを新しい順に 20 件ずつ。`?page=` / `?stage=`（`script` / `keyframes` / `keyframes_done` / `videos` / `completed`。未知の値は絞り込みなし）。一覧に出るのは `video_recipe_create` / `video_recipe_draft` / `mv_from_keyframe_video_recipe` / `short_video_from_section` / `regenerate_cut_video` のジョブで、元ジョブへ書き戻す保守コマンドは出ません。成果物の無いジョブは行から削除できます |
+| `GET` | `/jobs/{jobID}` | ジョブ 1 件。投入から削除まで同じ URL です。未完了・失敗のジョブは進行状況（画面は自動更新、JSON は `queued` / `running` / `succeeded` / `failed` と失敗理由・試行回数）。完成したジョブは詳細画面（カットごとのキーフレーム・動画・`visual_anchor`・`dialogue`、概算コスト、作り直しの導線）で、JSON は状態に `detail`（署名付き URL 入り）を入れ子にした 1 つの文書です |
+| `DELETE` | `/jobs/{jobID}` | ジョブの成果物と状態の記録をまとめて削除。画面の削除ボタンも fetch で DELETE を送ります |
+| `GET` | `/jobs/{jobID}/recipe` | 保存済みの VideoRecipe を `{"job_id", "recipe"}` で返す。表示用に整形した詳細とは別経路で、そのまま直して PUT へ返せます |
+| `PUT` | `/jobs/{jobID}/recipe` | レシピを上書き保存（本文は `{"recipe": {...}}` か VideoRecipe 単体、5MB まで）。**台本のみの段階（`script`）でのみ許可**で、キーフレームを焼いた後は 409 です。直して効くのは `visual_anchor` / `audio_cue` / `character_id` / `dialogue` で、尺は生成時に楽曲タイムラインから割り付け直されます |
+| `GET` | `/jobs/{jobID}/metadata` | `video_music_meta.json` の署名付き URL へ 302 |
 | `GET` | `/jobs/{jobID}/video` | 結合済み完成動画の署名付き URL へ 302 |
 | `GET` | `/jobs/{jobID}/cuts/{cutIndex}/video` | カット単体の動画の署名付き URL へ 302 |
 | `GET` | `/jobs/{jobID}/cuts/{cutIndex}/keyframe` | カットのキーフレーム画像の署名付き URL へ 302 |
-| `GET` | `/jobs/{jobID}/keyframes` | 有効なキーフレームを zip 一括ダウンロード |
-| `GET` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate` | 指定カットのキーフレーム再生成フォーム（プロンプト/シード上書き設定） |
-| `POST` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | 指定カットのキーフレーム再生成サブミット。`edit_prompt` を送ると編集モード、空ならフル再生成（`visual_anchor` でプロンプト差し替え可）。`overwrite=on` でレシピを上書き。`seed` はこの 1 回だけのキャラクターシード上書き |
-| `POST` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate-video` | 指定カットの動画だけを作り直す（キーフレームは再利用、結果は新ジョブ）。`veo_model` 指定可 |
+| `GET` | `/jobs/{jobID}/keyframes` | キーフレームを `keyframes-{jobID}.zip` で一括ダウンロード（`cut_01.png` 形式の画像、ffmpeg concat demuxer 用 `inputs.txt`、歌詞があれば ASS カラオケ字幕 `subtitles.ass`） |
+| `GET` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate` | カットのキーフレーム再生成フォーム |
+| `POST` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate-keyframe` | カットのキーフレームを作り直す。`edit_prompt` を送ると既存画像を保った編集モード、空ならフル再生成（`visual_anchor` でプロンプト差し替え可）。`overwrite=on` でレシピを更新、`seed` はこの 1 回だけのキャラクターシード上書き。結果は元ジョブへ書き戻します |
+| `POST` | `/jobs/{jobID}/cuts/{cutIndex}/regenerate-video` | カットの動画だけを作り直す（キーフレームは再利用。`veo_model` 指定可）。結果は**新しいジョブ**になり、元ジョブは変わりません |
 | `GET` | `/jobs/{jobID}/sections/{sectionIndex}/regenerate` | セクション単位のキーフレーム再生成フォーム（`sectionIndex` は 0 始まり） |
-| `POST` | `/jobs/{jobID}/sections/{sectionIndex}/regenerate-keyframes` | セクションの全カットのキーフレームをまとめて再生成。レシピの読み書きが 1 回で済むため、カット単位を並列投入したときの後勝ち上書きが起きない。`edit_prompt` / `overwrite` / `seed` はカット単位と同じ（`visual_anchor` は不可。アンカーはカットごとに違う文言なので各カットの保存済み値を使う） |
-| `POST` | `/jobs/{jobID}/sections/{sectionIndex}/generate-video` | セクション 1 つ分を「キーフレーム → 動画」まで進め、結果を元ジョブへ書き戻す。仕上げの結合は `finalize` が担当 |
-| `POST` | `/jobs/{jobID}/finalize` | セクションごとに作った動画を 1 本へ結合して仕上げる |
-| `POST` | `/jobs/{jobID}/regenerate-zip` | 保存済みレシピから `keyframes.zip` を再生成して元ジョブの出力パスへ上書き |
-| `POST` | `/jobs/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフルMV、`target=<セクションインデックス>` でショート動画（`veo_model` / `aspect_ratio` 指定可） |
-| `POST` | `/tasks/generate` | Cloud Tasks worker エンドポイント |
+| `POST` | `/jobs/{jobID}/sections/{sectionIndex}/regenerate-keyframes` | セクションの全カットのキーフレームをまとめて作り直す。`edit_prompt` / `overwrite` / `seed` はカット単位と同じ（`visual_anchor` は不可） |
+| `POST` | `/jobs/{jobID}/sections/{sectionIndex}/generate-video` | セクション 1 つ分を「足りないキーフレーム → 動画」まで進め、結果を元ジョブへ書き戻す（`veo_model` 指定可）。結合はしません |
+| `POST` | `/jobs/{jobID}/finalize` | セクションごとに作った動画を 1 本へ結合する。生成はしないので追加の課金はありません |
+| `POST` | `/jobs/{jobID}/regenerate-zip` | `keyframes.zip` を作り直して元ジョブへ上書き。`primary_color` / `secondary_color` で字幕の色を指定できます |
+| `POST` | `/jobs/{jobID}/generate-video` | 保存済みレシピから動画生成。`target=full` でフル MV（`mv_from_keyframe_video_recipe`）、`target=<セクションインデックス>` で 60 秒以内のショート動画（`short_video_from_section`）。`veo_model` 指定可。アスペクト比はキーフレーム作成時の値を引き継ぎます。結果は新しいジョブです |
+| `POST` | `/tasks/generate` | Cloud Tasks 専用のワーカー。OIDC 検証を通らないリクエストは 401、`SERVER_ROLE=web` では**ルートごと登録されない**ため 404 |
 
-### 6. 実装メモ
+**同じリソースはルートも 1 本です。** 表現は `Accept` で決まり、`application/json` を送れば JSON が、
+ブラウザの `Accept` なら画面が返ります。パスの切り方は public-docs の URL 命名規約に従います。
 
-* ジョブの進行状況は Firestore のコレクション `ap-mv`（データベースは `FIRESTORE_DATABASE`）に、ジョブ ID をドキュメント ID として記録します。Web プロセスが投入時に `queued` を、Worker プロセスが `running` → `succeeded` / `failed` を書き込みます。**成果物とは別の場所にあるため、履歴のプレフィックス一括削除では消えません。** ジョブを削除するときは状態のドキュメントも消します（`handlers.deleteJobStatus`）。
-* Cloud Tasks は at-least-once 配信のため、`Runner.Execute` は開始時に完了済み（`succeeded`）のジョブを検出したら処理を打ち切ります。通知失敗などでワーカーが一度エラーを返しただけでも再配信されるため、このガードが無いと Veo の生成コストが二重に発生します。
-* カット分割された動画生成が継続タスクへ引き継がれる間（`ErrPipelineDeferred`）は `running` のままにします。ここで `succeeded` にすると、同じ `job_id` を引き継ぐ継続タスクが再実行ガードで打ち切られ、残りのカットが生成されなくなります。なお、このガードはジョブ単位のため、実行中（`running`）に再配信された場合のカット単位の重複生成までは防げません。
-* 履歴一覧は Firestore のクエリなので、出力ディレクトリの走査もキャッシュもありません。絞り込みと並べ替えには複合索引が要ります（ap-infra の `mv_history` / `mv_history_stage`）。索引が無いクエリは実行時にエラーになり、エミュレータでは検出できません。
-* ジョブ ID の生成・検証・正規化に加え、**埋め込まれた作成時刻の復元も** `go-utils/jobid` に集約しています。ap-music が発行したジョブ ID（`music_job_id`）も同じ規則で検証され、採番形式が違っても `jobid.CreatedAt` で時刻を読めます。
-* 履歴一覧の並び順は Firestore の `queued_at` 降順です。作成日時の**表示**はジョブ ID に埋め込まれた UTC の採番時刻を `go-utils/jst` で JST へ変換したもので、実行環境のタイムゾーン設定には依存しません。
+**副作用のあるメソッドには CSRF トークンが要ります。** フォームは `csrf_token` の hidden で、
+画面の JS は `X-CSRF-Token` ヘッダーで送ります。OIDC Bearer で認証した機械はこの検証に入りません。
+
+### 4. タスクのペイロード
+
+`POST /jobs` と各アクションはフォーム本文を受け取り、次の `command` を持つタスク（`domain.Task`）を
+Cloud Tasks に載せます。工程列は `internal/pipeline/planner.go` の `DefaultPlanner.Plan` が決め、
+各工程は `internal/pipeline/step/` にあります（ファイル名は実行順を表しません）。
+
+| `command` | 何をするか | 必須フィールド | 工程列（`step/` の型名） |
+| --- | --- | --- | --- |
+| `video_recipe_draft` | 台本とカット割りまで作って保存。**キーフレームは焼きません** | `source_url` / `text` / `image_url` のいずれか | `ScriptingStep` → `SceneSplitStep` → `RecipeSaveStep` |
+| `video_recipe_create` | 台本 → 全カットのキーフレーム → zip | 同上 | `ScriptingStep` → `SceneSplitStep` → `CutKeyframeStep` → `ZipUploadStep` |
+| `mv_from_keyframe_video_recipe` | 保存済みレシピから動画まで。キーフレームがあるカットは焼き直しません | `recipe` / `video_recipe` / `recipe_url` のいずれか | `RecipeLoadStep` → `SceneSplitStep` → `CutKeyframeStep` → `ZipUploadStep` → `VideoGenerationStep` → `ChainFinalizeStep` → `PublishingStep` |
+| `short_video_from_section` | 1 セクションだけを 60 秒以内のショートとして新しいジョブに作る | 同上 + `section_index` | `RecipeLoadStep` → `SectionSelectStep` → `VideoGenerationStep` → `ChainFinalizeStep` → `PublishingStep` |
+| `section_video` | 1 セクションの足りないキーフレームと動画を作り、レシピ全体を元ジョブへ書き戻す。結合しません | 同上 + `section_index` | `RecipeLoadStep` → `OriginalJobOutputStep` → `SectionKeyframeStep` → `ZipUploadStep` → `VideoGenerationStep`（セクション限定） → `PublishingStep` |
+| `finalize_video` | 生成済みカットの動画を 1 本へ結合し直す。生成はしません | `recipe` / `video_recipe` / `recipe_url` のいずれか | `RecipeLoadStep` → `OriginalJobOutputStep` → `ChainFinalizeStep` → `PublishingStep` |
+| `regenerate_cut_video` | 1 カット（video_extension 方式ではそのチェーンの残りも）の動画を作り直し、新しいジョブに結合し直す | 同上 + `cut_index` | `RecipeLoadStep` → `CutVideoSelectStep` → `VideoGenerationStep` → `ChainFinalizeStep` → `PublishingStep` |
+| `regenerate_cut_keyframe` / `regenerate_section_keyframes` | カット 1 枚 / セクションの全カットのキーフレームを作り直し、元ジョブへ書き戻す | 同上 + `cut_index` / `section_index` | `RecipeLoadStep` → `RegenerateCutKeyframeStep` → `ZipUploadStep` |
+| `regenerate_zip` | `keyframes.zip` を作り直す | `recipe_url` | `RecipeLoadStep` → `ZipUploadStep` |
+| `video_gen_continuation` | `VideoGenerationStep` が内部で投入する続き。`origin_command` の計画を引き継ぎます | （worker が組み立てます） | `VideoGenerationStep` → `ChainFinalizeStep` → `PublishingStep`（`section_video` の続きは `OriginalJobOutputStep` → `VideoGenerationStep` → `PublishingStep`） |
+
+| フィールド | 説明 |
+| --- | --- |
+| `job_id` | ジョブの識別子。成果物の置き場もこれで決まります。作り直し系は新しい ID を採番し、元ジョブへ書き戻すものは `original_job_id` に元の ID を持ちます。 |
+| `command` | 上の表のいずれか。**省略できません。** |
+| `source_url` / `text` / `image_url` | 台本の入力。フォームは `music_job_id` から `gs://<AP_MUSIC_BUCKET>/music/<jobID>/recipe.json` を組み立てて `source_url` に入れます（機械は `url` で直接渡せます）。`source_url` は `gs://` のみ。 |
+| `recipe` / `video_recipe` / `recipe_url` | 保存済みレシピの入力。`recipe_url` は `gs://.../video_music_meta.json`（Music Recipe の JSON も互換入力として読み、VideoRecipe に変換します）。フォームでは `recipe_json` / `recipe_url`。 |
+| `audio_url` | 音源の `gs://` URI。全カットの空の `audio_reference` に補完されます。カットごとに変えたいときは `video_recipe.cuts[].audio_reference` を使います（こちらが優先）。 |
+| `visual_mode` / `character_id` | 映像スタイル（`assets/prompts/visual_modes/*.md`）とキャラクター。 |
+| `text_model` / `image_model` / `veo_model` / `veo_aspect_ratio` | モデルとアスペクト比（`16:9` / `9:16`）の上書き。空なら各 `*_MODELS` の先頭と `VEO_ASPECT_RATIO`。 |
+| `cut_index` / `section_index` | 対象のカット番号（1 始まり）/ セクションの配列インデックス（0 始まり）。 |
+| `edit_prompt` / `visual_anchor_override` / `seed_override` / `seed_override_character_id` / `overwrite_keyframe` | キーフレーム再生成の指示（編集モード / プロンプト差し替え / シードの一時上書き / レシピを更新するか）。 |
+| `ass_primary_color` / `ass_secondary_color` | カラオケ字幕の歌唱済み / 未歌唱の色（CSS hex）。 |
+
+```json
+{
+  "command": "video_recipe_create",
+  "job_id": "video-recipe-20260904-101500-1a2b3c4d5e6f",
+  "source_url": "gs://ap-music/music/20260711132823-256e9128/recipe.json",
+  "visual_mode": "default",
+  "character_id": "zunda",
+  "veo_aspect_ratio": "16:9"
+}
+```
+
+```json
+{
+  "command": "mv_from_keyframe_video_recipe",
+  "job_id": "mv-20260904-113000-9f8e7d6c5b4a",
+  "recipe_url": "gs://ap-mv/veo/jobs/video-recipe-20260904-101500-1a2b3c4d5e6f/video_music_meta.json",
+  "audio_url": "gs://ap-music/music/20260711132823-256e9128/music.mp3",
+  "veo_model": "veo-3.1-generate-preview"
+}
+```
+
+**継続タスクはレシピをペイロードで持ち回ります。** `video_gen_continuation` は生成済みの状態を含む
+`video_recipe` と `origin_command` を載せ、同じ `job_id` で投入されます。
+
+---
+
+## 🔄 処理シーケンス図
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 利用者
+    participant Web as Web 面 (公開)
+    participant Tasks as Cloud Tasks
+    participant Worker as Worker 面 (非公開)
+    participant AI as Vertex AI (Gemini / Veo)
+    participant Store as GCS
+    participant State as Firestore
+    participant Slack as Slack
+
+    Note over User, Slack: 1. 台本とキーフレームを作る (command=video_recipe_create)
+    User->>Web: POST /jobs （music_job_id・visual_mode・character_id）
+    Web->>Web: ジョブ ID を発行し、Task を検証
+    Web->>State: queued を記録（一覧の見出しもここで埋まる）
+    Note right of Web: **enqueue より先に**。逆だと Worker の running を上書きしかねません
+    Web->>Tasks: enqueue(Task)
+    Note right of Web: 投入に失敗したら queued の記録を取り消します
+    Web-->>User: 202 受付 + Location: /jobs/{jobID}
+    loop succeeded / failed になるまで
+        User->>Web: GET /jobs/{jobID} (Accept: application/json)
+        Web->>State: 状態を読む
+        Web-->>User: state / progress
+    end
+    Tasks->>Worker: POST /tasks/generate (OIDC)
+    Worker->>State: 完了済みなら打ち切り、未完了なら running を記録（再配信ガード）
+    Worker->>Store: Music Recipe を読む
+    Worker->>AI: 台本を生成 (ScriptingStep)
+    Worker->>Worker: カット割り (SceneSplitStep)
+    Worker->>AI: カットごとにキーフレームを生成 (CutKeyframeStep)
+    Worker->>Store: images/*.png・keyframes.zip・video_music_meta.json を書く
+    Worker->>State: succeeded を記録（見出しを実行後のレシピで塗り直す）
+    Worker->>Slack: 完了通知（履歴詳細のリンク付き）
+
+    Note over User, Slack: 2. 動画を作る (command=mv_from_keyframe_video_recipe)
+    User->>Web: POST /jobs/{jobID}/generate-video （target=full・veo_model）
+    Web->>State: 新しい job_id で queued を記録
+    Web->>Tasks: enqueue(Task{recipe_url})
+    Web-->>User: 202 受付
+    Tasks->>Worker: POST /tasks/generate (OIDC)
+    Worker->>State: running を記録
+    Worker->>Store: video_music_meta.json を読む (RecipeLoadStep)
+    Note right of Worker: keyframe_reference のあるカットは焼き直しません
+    loop カット 1 本ごと（生成済みはスキップ）
+        Worker->>AI: 動画を生成 (VideoGenerationStep)
+        Worker->>Store: videos/*.mp4 と veo_usage.json を書く
+        opt 未生成のカットが残っている
+            Worker->>Tasks: video_gen_continuation を投入（同じ job_id・決定的なタスク名）
+            Note right of Worker: ErrPipelineDeferred で終了。running のまま
+            Tasks->>Worker: POST /tasks/generate（続き）
+        end
+    end
+    Worker->>Worker: チェーンを ffmpeg で 1 本に結合 (ChainFinalizeStep)
+    Worker->>Store: 完成動画と video_music_meta.json を書く (PublishingStep)
+    Worker->>State: succeeded を記録
+    Worker->>Slack: 完了通知（履歴詳細のリンク付き）
+
+    Note over User, Slack: 3. 見る
+    User->>Web: GET /jobs/{jobID}/video
+    Web-->>User: 302 → 署名付き URL
+    User->>Store: 署名付き URL で直接取得
+```
+
+## 🌳 プロジェクト構成ツリー図
+
+```text
+ap-mv/
+├── main.go                  # エントリポイント（ロガー設定・サーバー起動）
+├── Dockerfile               # scratch イメージ（静的バイナリのみ）
+├── cloudbuild.yaml          # ビルドして 2 サービス（ap-mv / ap-mv-worker）へデプロイ
+├── assets/                  # 埋め込み（prompts/{video_recipe,visual_modes,video_gen}・templates/*.html・static/）
+└── internal/
+    ├── config/              # 環境変数の読み込みとロール別検証
+    ├── server/              # chi ルーター・グレースフルシャットダウン
+    │   └── handlers/        #   Web 面（投入フォーム・一覧・詳細・成果物の 302・作り直し）
+    ├── domain/              # タスクモデル・コマンド定数・ジョブ状態と進行段階・レシピ型・字幕・コスト
+    ├── ports/               # アプリ内境界（VideoRunner / TaskQueue / HistoryRepository / VideoProcessor）
+    ├── app/                 # DI コンテナとリソース管理
+    ├── builder/             # 外部依存・ハンドラー・パイプラインの組み立て（Cloud Tasks の投入もここ）
+    ├── repository/          # 履歴（一覧は Firestore、詳細と zip は GCS）・レシピの読み書き・ジョブ状態
+    ├── pipeline/            # ワーカー本体。planner.go が command から工程列を決める
+    │   └── step/            #   各工程（recipe_load / scripting / scene_split / cut_gen / video_gen / chain_finalize / publishing ほか）
+    └── adapters/            # Vertex AI（Gemini・Veo）/ ffmpeg / Slack
+        └── prompt/          #   Gemini へ送るプロンプト（台本・キーフレーム）
+```
 
 ---
 
