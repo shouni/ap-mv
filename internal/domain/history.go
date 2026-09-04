@@ -111,7 +111,7 @@ type AudioCueParts struct {
 // AudioCueParts splits AudioCue into its components for a more scannable history detail
 // display. AudioCue is free-form text: ScriptingFilter's LLM output describes the section
 // then quotes the sung line (phrasing varies — "Vocal:", "Vocal begins:", "Vocal continues:",
-// ...), and SceneSplitFilter (internal/worker/filter/scene_split.go's sceneAudioCue) appends
+// ...), and SceneSplitFilter (internal/pipeline/step/scene_split.go's sceneAudioCue) appends
 // " / scene beat N/M: <guidance>" when a cut is split into sub-cuts. Rather than matching one
 // exact "Vocal:" label, this looks for "Vocal" followed by a quoted line, so any phrasing works.
 // Parsing is best-effort: text that doesn't match either marker stays in Description, so
