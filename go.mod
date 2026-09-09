@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.17.1
-	github.com/shouni/genai-kit v1.0.1
+	github.com/shouni/genai-kit v1.3.0
 	github.com/shouni/go-character-kit v1.3.0
 	github.com/shouni/go-http-kit v1.11.0
 	github.com/shouni/go-notify v1.4.0
