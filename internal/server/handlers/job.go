@@ -13,9 +13,10 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// recordQueuedStatus は投入直後のジョブ状態を記録します。
-// これがあることで、ワーカーが動き出す前でも投入済みジョブを追跡できます。
-// 記録に失敗してもタスク自体は既にキューへ入っているため、警告ログに留めて受付は成功とします。
+// recordQueuedStatus は queued のジョブ状態を記録します。呼ぶのは投入より前です
+// （順序の理由は Handler.enqueue を参照）。これがあることで、ワーカーが動き出す前でも
+// 投入済みジョブを追跡できます。
+// 記録に失敗しても投入は続けます。状態は進行を知るためのもので、成果物より重くはありません。
 func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	if h.JobStatus == nil || task == nil {
 		return
