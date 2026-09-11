@@ -141,12 +141,12 @@ github.com/shouni/genai-kit v1.3.0 h1:41PNJ+a+d5e52c5dtNdlhezmoF2zAg3w7NnZxM0TSM
 github.com/shouni/genai-kit v1.3.0/go.mod h1:93RD8PTxteOyOTfXrEdAaXx7Vg2YwOcLhnvcovV3KKE=
 github.com/shouni/go-character-kit v1.3.0 h1:hVX6aPRZELLulNGDRPGR6lgzlrWQsNDorrNF/8BfDLk=
 github.com/shouni/go-character-kit v1.3.0/go.mod h1:y0xe3U+Jk1zF4t1+KbxQ/ADgbMbzcDyhfj47NRSOpYE=
-github.com/shouni/go-http-kit v1.11.0 h1:IrCkC+yxpX7AMPIHNPsVySeu5Lgzngnxuge9TB/qtCQ=
-github.com/shouni/go-http-kit v1.11.0/go.mod h1:rk5iB0MB/Z3cnMGrQlTubCoDA+QUFHGMF7g7PA7ArQo=
+github.com/shouni/go-http-kit v1.11.1 h1:t7CMhctYN9TVi3ke7OLd88tKJt6AMp7/w0Yh2FFGXzU=
+github.com/shouni/go-http-kit v1.11.1/go.mod h1:/5XK6+S8BTiqk1Mm22UEq4xZrYQohwjEi3isPrhWLLs=
 github.com/shouni/go-notify v1.4.0 h1:bQFOhgX1NWmkywdylwLchNJL+sYe1RO7lNjFrATdNEQ=
 github.com/shouni/go-notify v1.4.0/go.mod h1:7gHETk05PvFztvkjBYZNUWfDJb5UUVRmv1XPgh4Js9U=
-github.com/shouni/go-prompt-kit v1.7.0 h1:uOma6R5jJh1ywy0TepXnRSRYtGX41B3/tN7su7E4vcs=
-github.com/shouni/go-prompt-kit v1.7.0/go.mod h1:nWHeZnzuXiB9UoQ8AFUd6VF+QJAlg1BLmViWuWeRKUM=
+github.com/shouni/go-prompt-kit v1.7.1 h1:Vx+NF7iNMyE8xhD5bvfNdOUwfCg9bUEVZ0Ly+mx3pnc=
+github.com/shouni/go-prompt-kit v1.7.1/go.mod h1:8Dl139O5E8VwfD/JtdgLdfgJDpflD6LmhniIyjbBKUQ=
 github.com/shouni/go-remote-io v1.11.4 h1:WKcYqpNhMYe7p7HSPJ9hkWFNShDqlTnEV4gb8TF061I=
 github.com/shouni/go-remote-io v1.11.4/go.mod h1:gMpbZ79KPGkjAS/Lb52luwyY78iAJ+K+tK71VD71Mwk=
 github.com/shouni/go-serve-kit v1.1.0 h1:6d4ell2u0UMs81m3qNV28jnrX/wEN2zgzZfc/rdJqDU=
@@ -155,8 +155,8 @@ github.com/shouni/go-utils v1.7.1 h1:CrwvhR59Bef2DqJqdpniyW/rJFMip1RzXCKJlE5Ge+o
 github.com/shouni/go-utils v1.7.1/go.mod h1:z35gD3jCEREuezx2ZnVk44XbJoN0GF35OACYlbrxcAc=
 github.com/shouni/go-veo-orchestrator v1.15.0 h1:32uYwBzTCi6yll2qRoD3Ux+32W1dFKRGQZULQoW+gXE=
 github.com/shouni/go-veo-orchestrator v1.15.0/go.mod h1:2yhD6DA9BXvftiMb/+SbFS9xFeCHrj6qqVI7JO1SOOY=
-github.com/shouni/netarmor v1.4.0 h1:ePG5m1Ao3jvDwdNarsGHqekGYeRJDdoSmHrivqN2TfE=
-github.com/shouni/netarmor v1.4.0/go.mod h1:BeqmhJtYfJ4bw0OpT5pu4HUXHkHHY6y5Wu0BDjsyr28=
+github.com/shouni/netarmor v1.4.1 h1:jteCxDB2QT545PlB8r3KIQb46hFLxJsW3PESG4ZddZg=
+github.com/shouni/netarmor v1.4.1/go.mod h1:BeqmhJtYfJ4bw0OpT5pu4HUXHkHHY6y5Wu0BDjsyr28=
 github.com/slack-go/slack v0.29.0 h1:ohhMNgp9DmPKiLhH/pNZV4NxhOXKgNy0SH8FzVHNerI=
 github.com/slack-go/slack v0.29.0/go.mod h1:UEe+jmo9WLlwHB04qsOrTDvqM7Aa4rQL3O5wF3n0hx4=
 github.com/spiffe/go-spiffe/v2 v2.8.1 h1:eXZMLsu+3MLEPJyGJkolqtVrteZfQdUpOWj6LTiDl/E=
