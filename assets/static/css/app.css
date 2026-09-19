@@ -79,3 +79,12 @@ footer hr {
 .history-keyframe-empty {
     min-height: 180px;
 }
+
+.flow-prompt-panel > summary {
+    cursor: pointer;
+}
+
+.flow-prompt-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}

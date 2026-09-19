@@ -2,7 +2,8 @@
 //
 // ここには I/O がありません（埋め込みアセットの読み出しを除く）。台本生成用の Script と
 // キーフレーム生成用の Keyframe の 2 つがあり、どちらも go-veo-orchestrator の
-// ports.ScriptPrompt / ports.KeyframePrompt を満たします。
+// ports.ScriptPrompt / ports.KeyframePrompt を満たします。このほか flow_music.go が、
+// 保存済みレシピを Google Flow Music へ貼る本文にします（送信はせず、人が貼る文面です）。
 //
 // DI を担う internal/builder ではなくここに置いているのは、これがプロンプトという
 // 出力そのものを作る処理であって、依存の配線ではないためです（ap-music の

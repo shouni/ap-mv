@@ -140,6 +140,7 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		// そのまま直して返せます。編集は台本のみの段階に限られます（JobRecipeUpdate 参照）。
 		r.Get("/{jobID}/recipe", h.JobRecipe)
 		r.Put("/{jobID}/recipe", h.JobRecipeUpdate)
+		r.Get("/{jobID}/prompt", h.JobPrompt)
 		// アクション。作り直し系は成果物を元ジョブへ書き戻し、動画生成は新しいジョブになります。
 		r.Get("/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
 		r.Post("/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.RegenerateCutKeyframe)
