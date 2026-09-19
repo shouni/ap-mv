@@ -113,6 +113,9 @@ func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 	webHandler.JobStatus = appCtx.JobStatus
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 	webHandler.VeoPricing = domain.VeoPricing(appCtx.Config.AI.VeoPriceUSDPerSec)
+	if webHandler.Characters, err = buildCharacters(); err != nil {
+		return fmt.Errorf("キャラクターの初期化に失敗しました: %w", err)
+	}
 
 	h.Auth = authHandler
 	h.Web = webHandler

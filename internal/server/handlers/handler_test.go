@@ -35,6 +35,8 @@ type fakeHistoryRepository struct {
 	// usage は nil のままなら「実績記録なし」を表します（実績記録の導入前に走ったジョブ）。
 	usage    *domain.VeoUsage
 	usageErr error
+	// recipe は nil のままなら空のレシピを返します。
+	recipe *domain.VideoRecipe
 }
 
 func (r fakeHistoryRepository) GetVeoUsage(context.Context, string) (*domain.VeoUsage, error) {
@@ -50,6 +52,9 @@ func (r fakeHistoryRepository) GetHistory(context.Context, string) (domain.Video
 }
 
 func (r fakeHistoryRepository) GetRecipe(context.Context, string) (*domain.VideoRecipe, error) {
+	if r.recipe != nil {
+		return r.recipe, nil
+	}
 	return &domain.VideoRecipe{}, nil
 }
 

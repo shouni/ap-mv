@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	characterkit "github.com/shouni/go-character-kit/character"
+
 	"github.com/shouni/ap-mv/internal/domain"
 	"github.com/shouni/ap-mv/internal/ports"
 
@@ -33,6 +35,9 @@ type Handler struct {
 	// VeoPricing は履歴画面に出す概算コストの単価表です。nil のときは
 	// domain.DefaultVeoPriceUSDPerSecond へフォールバックするため、未設定でも表示は壊れません。
 	VeoPricing domain.VeoPricing
+	// Characters は、Flow Music へ貼る本文（JobPrompt）でキャラクターの名前と立ち絵を引く
+	// ためのカタログです。nil なら名前は character_id のまま、立ち絵は返しません。
+	Characters *characterkit.Characters
 }
 
 // applyCostEstimate は履歴詳細に概算コストを埋めます。
@@ -222,7 +227,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 // ページとスクリプトの対応は固定なので、各ハンドラに書かせずここで一元的に決めます。
 var pageScripts = map[string][]string{
 	"queued.html":             {"/static/js/job_status.js"},
-	"history_detail.html":     {"/static/js/history_detail.js"},
+	"history_detail.html":     {"/static/js/history_detail.js", "/static/js/flow_prompt.js"},
 	"regenerate_cut.html":     {"/static/js/regenerate_mode.js"},
 	"regenerate_section.html": {"/static/js/regenerate_mode.js"},
 }

@@ -121,6 +121,7 @@ go run .        # SERVER_ROLE が必須
 | `DELETE` | `/jobs/{jobID}` | ジョブの成果物と状態の記録をまとめて削除。画面の削除ボタンも fetch で DELETE を送ります |
 | `GET` | `/jobs/{jobID}/recipe` | 保存済みの VideoRecipe を `{"job_id", "recipe"}` で返す。表示用に整形した詳細とは別経路で、そのまま直して PUT へ返せます |
 | `PUT` | `/jobs/{jobID}/recipe` | レシピを上書き保存（本文は `{"recipe": {...}}` か VideoRecipe 単体、5MB まで）。**台本のみの段階（`script`）でのみ許可**で、キーフレームを焼いた後は 409 です。直して効くのは `visual_anchor` / `audio_cue` / `character_id` / `dialogue` で、尺は生成時に楽曲タイムラインから割り付け直されます |
+| `GET` | `/jobs/{jobID}/prompt` | レシピを Google Flow Music の MV 作成へ貼る本文にして返す。曲の音源（と任意の立ち絵）と一緒に渡す、曲全体の演出メモ 1 本で、キャラクターの外見は冒頭に 1 回だけ書きます。既定は `text/plain`、`Accept: application/json` なら `{"job_id", "prompt", "reference_images"}`。本文は保存しておらず毎回レシピから組み直します |
 | `GET` | `/jobs/{jobID}/metadata` | `video_music_meta.json` の署名付き URL へ 302 |
 | `GET` | `/jobs/{jobID}/video` | 結合済み完成動画の署名付き URL へ 302 |
 | `GET` | `/jobs/{jobID}/cuts/{cutIndex}/video` | カット単体の動画の署名付き URL へ 302 |
