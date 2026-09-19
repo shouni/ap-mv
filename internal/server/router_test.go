@@ -313,3 +313,44 @@ func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	}
 	return v
 }
+
+// TestTemplateFormActionsHaveAPostRoute は、テンプレートのフォームが送信する先に POST の
+// ルートがあることを確かめます。
+//
+// URL を /jobs 配下へ寄せたとき、作成フォームだけ action="/compose" のまま残りました。
+// /compose には GET しか無いので送信は 405 になり、ブラウザには「このページは動作して
+// いません」としか出ません。ハンドラのテストはハンドラを直接呼ぶので、この食い違いは
+// どこにも引っかかりませんでした。
+//
+// 未認証の POST はログインへのリダイレクト（または CSRF の 403）で返るので、見るのは
+// 「ルートが無い」ことを表す 404 と 405 だけです。
+func TestTemplateFormActionsHaveAPostRoute(t *testing.T) {
+	router := newWebRoleTestRouter(t)
+	formAction := regexp.MustCompile(`<form[^>]*\baction="([^"]*)"`)
+	templateValue := regexp.MustCompile(`\{\{[^}]*\}\}`)
+
+	entries, err := assets.Templates.ReadDir("templates")
+	if err != nil {
+		t.Fatalf("ReadDir(templates) error = %v", err)
+	}
+	checked := 0
+	for _, entry := range entries {
+		raw, err := assets.Templates.ReadFile("templates/" + entry.Name())
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", entry.Name(), err)
+		}
+		for _, match := range formAction.FindAllStringSubmatch(string(raw), -1) {
+			// {{.JobID}} などの埋め込みは、どんな値でもルートの形は同じなので 1 に置きます。
+			target := templateValue.ReplaceAllString(match[1], "1")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, target, nil))
+			if rec.Code == http.StatusNotFound || rec.Code == http.StatusMethodNotAllowed {
+				t.Errorf("%s: form posts to %q, which has no POST route (status %d)", entry.Name(), match[1], rec.Code)
+			}
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no form actions found; the pattern no longer matches the templates")
+	}
+}
