@@ -121,11 +121,7 @@ func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get history detail",
-			"job_id", jobID,
-			"error", err,
-		)
-		respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to get history detail", "job_id", jobID)
 		return
 	}
 	h.applyCostEstimate(r.Context(), jobID, &history)
@@ -133,8 +129,7 @@ func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID stri
 		// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らず URL 自体を受け取るため、
 		// ここでだけ署名します。画面はこの下で同一オリジンのパスを埋めます。
 		if err := h.HistoryRepository.SignHistoryURLs(r.Context(), &history); err != nil {
-			slog.ErrorContext(r.Context(), "failed to sign history URLs", "job_id", jobID, "error", err)
-			respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to sign history URLs", "job_id", jobID)
 			return
 		}
 		respond.JSON(w, r, http.StatusOK, jobDocument{JobStatus: completedStatus(jobID, status), Detail: &history})
@@ -162,7 +157,7 @@ func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.HistoryRepository.DeleteHistory(r.Context(), jobID); err != nil {
-		respond.Error(w, r, http.StatusInternalServerError, err.Error())
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to delete history", "job_id", jobID)
 		return
 	}
 	h.deleteJobStatus(r, jobID)

@@ -210,7 +210,7 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 // キャラクターにシードが無い場合のみ 0 を返します（従来挙動）。
 func videoSeed(sc *Context, cut *video.Cut) int64 {
 	if sc.Characters != nil {
-		if char := sc.Characters.GetCharacter(strings.TrimSpace(cut.CharacterID)); char != nil && char.Seed != nil {
+		if char := sc.Characters.GetCharacter(cut.CharacterID); char != nil && char.Seed != nil {
 			return *char.Seed
 		}
 	}
