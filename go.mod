@@ -7,24 +7,24 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-cmp v0.7.0
-	github.com/shouni/gcp-kit v1.17.3
-	github.com/shouni/genai-kit v1.3.1
+	github.com/shouni/gcp-kit v1.17.5
+	github.com/shouni/genai-kit v1.3.3
 	github.com/shouni/go-character-kit v1.3.0
-	github.com/shouni/go-http-kit v1.11.1
-	github.com/shouni/go-notify v1.4.1
+	github.com/shouni/go-http-kit v1.12.0
+	github.com/shouni/go-notify v1.4.3
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.11.5
-	github.com/shouni/go-serve-kit v1.2.0
+	github.com/shouni/go-remote-io v1.11.9
+	github.com/shouni/go-serve-kit v1.2.1
 	github.com/shouni/go-utils v1.7.1
-	github.com/shouni/go-veo-orchestrator v1.15.1
-	github.com/shouni/netarmor v1.4.1
+	github.com/shouni/go-veo-orchestrator v1.15.4
+	github.com/shouni/netarmor v1.4.2
 	golang.org/x/sync v0.23.0
 )
 
 require (
 	cel.dev/expr v0.25.3 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.23.2 // indirect
+	cloud.google.com/go/auth v0.23.3 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/cloudtasks v1.19.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
@@ -68,7 +68,7 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	google.golang.org/api v0.297.0 // indirect
+	google.golang.org/api v0.298.0 // indirect
 	google.golang.org/genai v1.71.0 // indirect
 	google.golang.org/genproto v0.0.0-20260825221802-da73d73af1c5 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260825221802-da73d73af1c5 // indirect
