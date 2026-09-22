@@ -107,7 +107,7 @@ func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request,
 	}
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to get history for regeneration", "job_id", jobID)
 		return domain.VideoHistoryDetail{}, false
 	}
 	if strings.TrimSpace(history.StorageURI) == "" {
@@ -123,7 +123,7 @@ func (h *Handler) loadHistoryForMutation(w http.ResponseWriter, r *http.Request,
 func mintJobID(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
 	jobID, err := jobid.New(prefix)
 	if err != nil {
-		respond.Error(w, r, http.StatusInternalServerError, err.Error())
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to mint a job ID", "prefix", prefix)
 		return "", false
 	}
 	return jobID, true

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 
-	"cloud.google.com/go/firestore"
 	"github.com/shouni/gcp-kit/auth/session"
 	"github.com/shouni/gcp-kit/jobstatus"
 	"github.com/shouni/go-http-kit/httpkit"
@@ -57,20 +56,13 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	// セッションはジョブ状態とは別のデータベースに置きます（SessionDatabase）。
 	// 役割で分岐しないのは、このファイルが他の資源もそうしているためです。
-	sessionFirestore, err := firestore.NewClientWithDatabase(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase)
-	if err != nil {
-		return nil, fmt.Errorf("セッション用 Firestore の初期化に失敗しました: %w", err)
-	}
-	resources = append(resources, sessionFirestore)
-	closers = append(closers, sessionFirestore)
-
-	sessionStore, err := session.NewFirestoreStore(session.FirestoreConfig{
-		Client:     sessionFirestore,
-		Collection: cfg.Auth.SessionCollection,
-	})
+	// クライアントの寿命はストアが持つので、Closers にはストアを登録します。
+	sessionStore, err := session.OpenFirestoreStore(ctx, cfg.GCP.ProjectID, cfg.Auth.SessionDatabase, cfg.Auth.SessionCollection)
 	if err != nil {
 		return nil, fmt.Errorf("セッションストアの構築に失敗しました: %w", err)
 	}
+	resources = append(resources, sessionStore)
+	closers = append(closers, sessionStore)
 
 	httpClient := httpkit.New()
 	queue := taskQueueAdapter{enqueuer: enqueuer}

@@ -199,7 +199,7 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	if h.Queue != nil {
 		if err := h.Queue.Enqueue(r.Context(), task); err != nil {
 			h.deleteJobStatus(r, task.JobID)
-			respond.Error(w, r, http.StatusBadGateway, err.Error())
+			respond.ServerError(w, r, http.StatusBadGateway, err, "failed to enqueue task", "job_id", task.JobID)
 			return
 		}
 	}

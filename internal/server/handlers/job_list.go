@@ -16,7 +16,7 @@ func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := h.HistoryRepository.ListHistoryPage(r.Context(), pageFromQuery(r), 20, stageFromQuery(r))
 	if err != nil {
-		respond.Error(w, r, http.StatusInternalServerError, err.Error())
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to list history")
 		return
 	}
 	// 単価は保存せず表示時に解決するため、JSON 応答にも同じ値が乗るよう分岐の前で適用する。

@@ -141,7 +141,7 @@ func NewJobStatus(task *Task, state JobState) JobStatus {
 // 生成が終わるまで一覧に題名すら出ません。
 func NewQueuedJobStatus(task *Task, now time.Time) JobStatus {
 	status := NewJobStatus(task, JobStateQueued)
-	status.QueuedAt = now
+	// QueuedAt は Store が保存時に打刻します（未設定なら now）。
 	status.UpdatedAt = now
 	return status
 }

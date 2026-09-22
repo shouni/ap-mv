@@ -142,8 +142,7 @@ func (h *Handler) redirectJobAsset(w http.ResponseWriter, r *http.Request, pick 
 
 	detail, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to load history for asset redirect", "job_id", jobID, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to load history for asset redirect", "job_id", jobID)
 		return
 	}
 
@@ -159,8 +158,7 @@ func (h *Handler) redirectJobAsset(w http.ResponseWriter, r *http.Request, pick 
 
 	signedURL, err := h.HistoryRepository.SignedObjectURL(r.Context(), uri)
 	if err != nil || strings.TrimSpace(signedURL) == "" {
-		slog.ErrorContext(r.Context(), "failed to sign asset URL", "job_id", jobID, "uri", uri, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, "failed to build the asset URL")
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to sign asset URL", "job_id", jobID, "uri", uri)
 		return
 	}
 
@@ -196,8 +194,7 @@ func (h *Handler) JobKeyframes(w http.ResponseWriter, r *http.Request) {
 	// Fall back: build zip on-demand for jobs without a pre-built zip.
 	history, err := h.HistoryRepository.GetHistory(r.Context(), jobID)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to get history for keyframe download", "job_id", jobID, "error", err)
-		respond.Error(w, r, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to get history for keyframe download", "job_id", jobID)
 		return
 	}
 	hasKeyframes := false
