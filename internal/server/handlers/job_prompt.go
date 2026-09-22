@@ -87,7 +87,7 @@ func (h *Handler) promptReferenceImages(recipe *domain.VideoRecipe) []promptRefe
 		if char == nil {
 			continue
 		}
-		if uri := strings.TrimSpace(char.ReferenceURLFor(recipe.AspectRatio)); uri != "" {
+		if uri := char.ReferenceURLFor(recipe.AspectRatio); uri != "" {
 			images = append(images, promptReferenceImage{CharacterID: id, Name: char.Name, URI: uri})
 		}
 	}
