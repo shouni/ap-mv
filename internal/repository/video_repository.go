@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/shouni/go-remote-io/remoteio"
 	"github.com/shouni/go-utils/jobid"
 
 	"github.com/shouni/ap-mv/internal/domain"
@@ -90,22 +91,8 @@ func (r *VideoHistoryRepository) DeleteHistory(ctx context.Context, jobID string
 	if err := jobid.Validate(jobID); err != nil {
 		return err
 	}
-	paths, err := r.listObjectsUnder(ctx, r.baseURI+"/"+jobID+"/")
-	if err != nil {
-		return fmt.Errorf("list history objects for deletion: %w", err)
-	}
-	if len(paths) == 0 {
-		paths = append(paths, r.metadataURI(jobID))
-	}
-
-	var errs []error
-	for _, p := range paths {
-		if err := r.store.Delete(ctx, p); err != nil {
-			errs = append(errs, fmt.Errorf("delete %s: %w", p, err))
-		}
-	}
-	if err := errors.Join(errs...); err != nil {
-		return err
+	if _, err := remoteio.DeletePrefix(ctx, r.store, r.baseURI+"/"+jobID+"/"); err != nil {
+		return fmt.Errorf("delete history objects: %w", err)
 	}
 	// 一覧はジョブ状態のクエリなので、キャッシュを落として回る必要はありません。
 	// 状態のドキュメントは成果物と別の場所にあり、消すのはハンドラーの仕事です

@@ -225,15 +225,3 @@ func (r *VideoHistoryRepository) signedURL(ctx context.Context, uri string) (str
 	}
 	return r.store.SignURL(ctx, uri, "GET", 15*time.Minute)
 }
-
-// listObjectsUnder は prefix 配下のオブジェクト URI を集めます。
-func (r *VideoHistoryRepository) listObjectsUnder(ctx context.Context, prefix string) ([]string, error) {
-	var paths []string
-	for entry, err := range r.store.List(ctx, prefix) {
-		if err != nil {
-			return nil, err
-		}
-		paths = append(paths, entry.URI)
-	}
-	return paths, nil
-}
