@@ -80,7 +80,7 @@
         <p class="text-muted mb-0">No history yet.</p>
         {{end}}
 
-        {{if .PageMeta.TotalPages}}
+        {{if gt .PageMeta.TotalPages 1}}
         <nav class="mt-4">
             <ul class="pagination mb-0">
                 <li class="page-item {{if not .PageMeta.HasPrev}}disabled{{end}}">
