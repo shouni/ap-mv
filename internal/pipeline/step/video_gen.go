@@ -8,6 +8,7 @@ import (
 	"time"
 
 	orchestrator "github.com/shouni/go-veo-orchestrator/ports"
+	veorunner "github.com/shouni/go-veo-orchestrator/runner"
 	"github.com/shouni/go-veo-orchestrator/veo"
 	"github.com/shouni/go-veo-orchestrator/video"
 
@@ -117,8 +118,8 @@ func (f VideoGenerationStep) runWithWorkflow(ctx context.Context, sc *Context) e
 func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 	applyTaskCharacterIDToVideoRecipe(sc.Task, sc.VideoRecipe)
 	sc.VideoRecipe.Normalize()
-	runner := f.resolvedVideoRunner(sc)
-	if runner == nil {
+	videoRunner := f.resolvedVideoRunner(sc)
+	if videoRunner == nil {
 		return fmt.Errorf("video runner is not configured")
 	}
 
@@ -127,59 +128,68 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 		return err
 	}
 
-	lastVideoID := ""
-	for i := range sc.VideoRecipe.Cuts {
-		cut := &sc.VideoRecipe.Cuts[i]
-		if cut.IsGenerated() {
-			if cut.VideoID != "" {
-				lastVideoID = cut.VideoID
-			}
-			continue
+	timeline := veorunner.NewVideoTimelineRunner(videoRunner).
+		WithRequestBuilder(videoRequestBuilder{characters: sc.Characters, usePreviousVideo: f.UsePreviousVideo}).
+		WithCutGate(f.beforeCut(sc, inScope)).
+		WithCutObserver(f.afterCut(sc, inScope))
+
+	if _, err := timeline.Run(ctx, sc.VideoRecipe); err != nil {
+		// 継続タスクを撒いた後の中断は失敗ではない。Run は observer のエラーを
+		// 「cut N の後処理で停止しました」で包むので、そのまま返すと失敗として記録され、
+		// 再開を担う継続タスクがあるのにジョブが failed になる。印だけ取り出して返す。
+		if errors.Is(err, ErrPipelineDeferred) {
+			return ErrPipelineDeferred
 		}
+		return err
+	}
+
+	domainRecipe, err := toDomainRecipe(sc.VideoRecipe)
+	if err != nil {
+		return err
+	}
+	sc.Recipe = domainRecipe
+	return nil
+}
+
+// beforeCut は、1カットの生成に入る直前の判断をまとめた runner.CutGate を返します。
+//
+// 担当外セクションのカットを飛ばすのと、チェーン起点の参照画像を直前チェーンの最終フレームへ
+// 差し替えるのが仕事です。飛ばしたカットの向こう側をチェーンの起点として扱う（引き継ぎ元を
+// 切り、印を付ける）のはライブラリ側の役目なので、ここではしません。
+func (f VideoGenerationStep) beforeCut(sc *Context, inScope func(int) bool) veorunner.CutGate {
+	return func(ctx context.Context, recipe *video.Recipe, i int) (bool, error) {
+		cut := &recipe.Cuts[i]
 		if !inScope(cut.SectionIndex) {
-			// 対象外セクションの未生成カット。ここには動画が存在しないので、次に生成する
-			// カットはこの穴を跨いで前の動画へ繋ぐことができない。チェーンの引き継ぎ元を
-			// 空へ戻し、穴の向こう側を新しいチェーンの起点として生成させる。
-			lastVideoID = ""
-			continue
+			return false, nil
 		}
-		// ExpandCutsToSupportedDurations は、video_extension の累積尺がVeoの上限に達する
-		// 手前でチェーンをリセットし、そのカットを7秒固定ではなく{4,6,8}秒のいずれかに
-		// 揃える。7秒固定でない = チェーンリセット後の新規ベースカットなので、
-		// PreviousVideoURI を引き継がずに生成する。
-		if f.UsePreviousVideo && cut.DurationSec != veo.VideoExtensionDurationSec {
-			lastVideoID = ""
-			cut.IsChainStart = true
-			// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成された
-			// チェーンが存在することを意味する。その最終フレームを次チェーンの
-			// 参照画像として引き継ぎ、静的な立ち絵からの独立生成による見た目の
-			// ブレ（衣装ズレ等）を抑える。ただし IsSectionStart は「意図的な場面転換」
-			// （実際の曲のセクション境界、または scene_split.go によるシーン内リセット
-			// のどちらか。詳細は veo.ExpandCutsToSupportedDurations の
-			// コメント参照）なので、どちらの理由でも直前の絵を引き継がず、そのカット
-			// 自身に割り当てられたキーフレーム参照のまま生成する。
-			if i > 0 && !cut.IsSectionStart {
-				if err := f.applyChainResetKeyframe(ctx, sc, cut, sc.VideoRecipe.Cuts[i-1].VideoURL); err != nil {
-					return err
-				}
+		// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成されたチェーンが
+		// 存在することを意味する。その最終フレームを次チェーンの参照画像として引き継ぎ、
+		// 静的な立ち絵からの独立生成による見た目のブレ（衣装ズレ等）を抑える。ただし
+		// IsSectionStart は「意図的な場面転換」（実際の曲のセクション境界、または
+		// scene_split.go によるシーン内リセットのどちらか。詳細は
+		// veo.ExpandCutsToSupportedDurations のコメント参照）なので、どちらの理由でも
+		// 直前の絵を引き継がず、そのカット自身に割り当てられたキーフレーム参照のまま生成する。
+		if f.UsePreviousVideo && cut.IsChainStart && !cut.IsSectionStart && i > 0 {
+			if err := f.applyChainResetKeyframe(ctx, sc, cut, recipe.Cuts[i-1].VideoURL); err != nil {
+				return false, err
 			}
 		}
-		// 引き継ぐ動画が無い状態で生成するカットは、それ自体が新しいチェーンの起点です。
-		// ここで印を付けないと chain_finalize が境界を見落とし、直前のチェーンの最終動画を
-		// 結合対象から落とします（＝完成動画からそのぶんが丸ごと消えます）。尺の条件で
-		// リセットされた場合は上で既に立っているので、ここは冪等な念押しです。
-		if f.UsePreviousVideo && lastVideoID == "" {
-			cut.IsChainStart = true
-		}
-		if err := f.generateCut(ctx, runner, sc, cut, lastVideoID, video.Cuts(sc.VideoRecipe.Cuts).NextLastFrameReference(i)); err != nil {
-			return err
-		}
+		return true, nil
+	}
+}
+
+// afterCut は、1カットの生成が終わるたびの後処理をまとめた runner.CutObserver を返します。
+//
+// 生成済みカットには呼ばれないので、再開のたびに過去のカットぶんの課金記録や色補正が
+// 走り直すことはありません。
+func (f VideoGenerationStep) afterCut(sc *Context, inScope func(int) bool) veorunner.CutObserver {
+	return func(ctx context.Context, cut *video.Cut, _ *video.Response) error {
+		recordVeoUsage(ctx, sc, cut)
 		if f.UsePreviousVideo && cut.DurationSec == veo.VideoExtensionDurationSec {
 			if err := f.colorCorrectExtensionCut(ctx, sc, cut); err != nil {
 				return err
 			}
 		}
-		lastVideoID = cut.VideoID
 		// 継続タスクのエンキューに失敗した場合、このジョブはここで止まる。キューは
 		// max-attempts=1 で運用しており、失敗したタスクは再配信されないため、残りの
 		// カットを生成する担い手がいなくなる（成果物が出てこないことで気付く）。
@@ -193,65 +203,8 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 		if hasPendingCuts(sc.VideoRecipe, inScope) && sc.TaskQueue != nil {
 			return enqueueContinuation(ctx, sc, cut.CutIndex)
 		}
+		return nil
 	}
-	domainRecipe, err := toDomainRecipe(sc.VideoRecipe)
-	if err != nil {
-		return err
-	}
-	sc.Recipe = domainRecipe
-	return nil
-}
-
-// videoSeed は Veo 動画生成へ渡すシードを解決します。カットのキャラクターに紐づくシード
-// （キーフレーム画像生成と同じ値、go-veo-orchestrator@v1.6.0/keyframe/generator.go が
-// 常に char.Seed のみを使うのと揃えています）を返します。シード無し（0 = Veoリクエストから
-// 省略）の独立生成はチェーン起点ごとに見た目が確率的にブレるため、少なくともキャラクター
-// 単位で固定したシードを常に渡すことで、同一ジョブ内・ジョブ間のキャラ一貫性を高めます。
-// キャラクターにシードが無い場合のみ 0 を返します（従来挙動）。
-func videoSeed(sc *Context, cut *video.Cut) int64 {
-	if sc.Characters != nil {
-		if char := sc.Characters.GetCharacter(cut.CharacterID); char != nil && char.Seed != nil {
-			return *char.Seed
-		}
-	}
-	return 0
-}
-
-// generateCut runs a single cut through the video runner and updates its status, VideoID, and
-// VideoURL in place. lastVideoID chains the previous cut's video as this cut's PreviousVideoURI
-// context (video-to-video continuation). lastFrameRef is the next cut's keyframe used as this
-// cut's ending frame (frames_to_video interpolation). The request is built first and then
-// classified via ports.ClassifyVeoRequest — the same decision the adapter makes when building
-// the Veo body — so the prompt guidance always matches how Veo actually interprets the request.
-func (f VideoGenerationStep) generateCut(ctx context.Context, runner ports.VideoRunner, sc *Context, cut *video.Cut, lastVideoID, lastFrameRef string) error {
-	req := ports.VideoGenerationRequest{
-		CutIndex:           cut.CutIndex,
-		DurationSec:        cut.DurationSec,
-		Seed:               videoSeed(sc, cut),
-		PreviousVideoURI:   lastVideoID,
-		ImageReference:     cut.KeyframeReference,
-		LastFrameReference: lastFrameRef,
-		ReferenceImages:    video.CutReferenceImages(*cut, sc.Characters),
-		AudioReference:     cut.AudioReference,
-	}
-	mode := ports.ClassifyVeoRequest(req, f.UsePreviousVideo, ports.RunnerCapabilities(runner))
-	// lastFrame として実際に使われない参照はリクエストに残さない（ログ・再現時の
-	// リクエスト内容を adapter が送る内容と一致させる）。
-	if mode != ports.VeoModeFramesToVideo {
-		req.LastFrameReference = ""
-	}
-	req.Prompt = videoPrompt(*cut, mode)
-	res, err := runner.Run(ctx, req)
-	if err != nil {
-		return fmt.Errorf("generate cut %d: %w", cut.CutIndex, err)
-	}
-	cut.Status = video.CutStatusGenerated
-	cut.VideoID = res.VideoID
-	cut.VideoURL = res.CloudURL
-	// 課金が発生した直後に記録する。完成品の尺（レシピから常に算出できる）と違い、
-	// 「何回投げたか」はこの瞬間にしか分からず、再配信で焼き直された分はここでしか数えられない。
-	recordVeoUsage(ctx, sc, cut)
-	return nil
 }
 
 // enqueueContinuation persists the in-progress VideoRecipe and enqueues a
