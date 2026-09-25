@@ -374,7 +374,7 @@ func (r *durationCaptureRunner) Run(_ context.Context, req ports.VideoGeneration
 	r.requests = append(r.requests, req)
 	return &ports.VideoResponse{
 		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
-		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		VideoID:  fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
 		CutIndex: req.CutIndex,
 	}, nil
 }
@@ -398,7 +398,7 @@ func (r *seedCaptureRunner) Run(_ context.Context, req ports.VideoGenerationRequ
 	r.seeds = append(r.seeds, req.Seed)
 	return &ports.VideoResponse{
 		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
-		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		VideoID:  fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
 		CutIndex: req.CutIndex,
 	}, nil
 }
@@ -410,7 +410,7 @@ type indexedURLRunner struct{}
 func (indexedURLRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	return &ports.VideoResponse{
 		CloudURL: fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
-		VideoID:  fmt.Sprintf("video-%d", req.CutIndex),
+		VideoID:  fmt.Sprintf("gs://bucket/cut_%d.mp4", req.CutIndex),
 		CutIndex: req.CutIndex,
 	}, nil
 }
@@ -421,7 +421,7 @@ type sequenceRunner struct{}
 func (sequenceRunner) Run(_ context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	return &ports.VideoResponse{
 		CloudURL: "gs://bucket/cut.mp4",
-		VideoID:  "video-id",
+		VideoID:  "gs://bucket/cut.mp4",
 		CutIndex: req.CutIndex,
 	}, nil
 }
@@ -435,7 +435,7 @@ func (r *contextCaptureRunner) Run(ctx context.Context, req ports.VideoGeneratio
 	r.baseURI, _ = ports.VideoOutputBaseURIFromContext(ctx)
 	return &ports.VideoResponse{
 		CloudURL: "gs://bucket/cut.mp4",
-		VideoID:  "video-id",
+		VideoID:  "gs://bucket/cut.mp4",
 		CutIndex: req.CutIndex,
 	}, nil
 }
