@@ -11,12 +11,12 @@ require (
 	github.com/shouni/genai-kit v1.5.3
 	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-http-kit v1.13.1
-	github.com/shouni/go-notify v1.6.1
+	github.com/shouni/go-notify v1.6.2
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.13.4
+	github.com/shouni/go-remote-io v1.13.5
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
-	github.com/shouni/go-veo-orchestrator v1.16.2
+	github.com/shouni/go-veo-orchestrator v1.16.3
 	github.com/shouni/netarmor v1.4.2
 	golang.org/x/sync v0.24.0
 )
