@@ -5,18 +5,18 @@ go 1.27
 require (
 	cloud.google.com/go/firestore v1.26.0
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.20.3
 	github.com/shouni/genai-kit v1.5.3
 	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-http-kit v1.13.1
-	github.com/shouni/go-notify v1.6.1
+	github.com/shouni/go-notify v1.6.2
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.13.4
+	github.com/shouni/go-remote-io v1.13.5
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
-	github.com/shouni/go-veo-orchestrator v1.16.2
+	github.com/shouni/go-veo-orchestrator v1.16.4
 	github.com/shouni/netarmor v1.4.2
 	golang.org/x/sync v0.24.0
 )
