@@ -26,3 +26,9 @@ const statusCollection = "ap-mv"
 func NewJobStatusRepository(client *firestore.Client) *jobstatus.Store[domain.JobStatus] {
 	return jobstatus.NewStore[domain.JobStatus](client, statusCollection)
 }
+
+// Recorder.Begin は、Store が Modifier を満たすことを型で見つけ、再実行ガードと
+// running の記録を 1 つの Firestore トランザクションで行います。Store を包んだり
+// gcp-kit を v1.21.0 より前へ下げたりすると、ここでコンパイルが止まります。満たさない
+// まま動くと、ガードは黙って Get と Save が別々の（割り込みうる）経路へ戻ります。
+var _ jobstatus.Modifier[domain.JobStatus] = (*jobstatus.Store[domain.JobStatus])(nil)
