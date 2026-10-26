@@ -3,7 +3,7 @@ module github.com/shouni/ap-mv
 go 1.27
 
 require (
-	cloud.google.com/go/firestore v1.27.0
+	cloud.google.com/go/firestore v1.29.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
@@ -16,7 +16,7 @@ require (
 	github.com/shouni/go-remote-io v1.13.8
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
-	github.com/shouni/go-veo-orchestrator v1.16.6
+	github.com/shouni/go-veo-orchestrator v1.16.7
 	github.com/shouni/netarmor v1.4.3
 	golang.org/x/sync v0.24.0
 )
