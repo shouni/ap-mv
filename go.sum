@@ -10,8 +10,8 @@ cloud.google.com/go/cloudtasks v1.20.0 h1:v0xfHn7t84PVRr2LrflMVqunBG/keh0CmcWpGY
 cloud.google.com/go/cloudtasks v1.20.0/go.mod h1:qhHo3AHGV3EDX8OpVR+dEI8tRt/tnWSWAoYE5LlABJk=
 cloud.google.com/go/compute/metadata v0.10.0 h1:pyKMUQSwchgkIBBJGdILqQbs/BNJXqwSA7Ej6LAvvtY=
 cloud.google.com/go/compute/metadata v0.10.0/go.mod h1:rGFHRrIif570kSibjFTMbt6/4/tzgJWFGI/HVol4GIk=
-cloud.google.com/go/firestore v1.27.0 h1:zGcfBV2AwUGYsqj3+KcAx9MMWOiGYsAS8Xche13kM+c=
-cloud.google.com/go/firestore v1.27.0/go.mod h1:igzGLe8KqzF6LwK3n5skIqtozEmRJ3DXxJk10JgZZkc=
+cloud.google.com/go/firestore v1.29.0 h1:fplxMS69zAV4PWnRV9iWtqjsMSYOCpAa4LA8Tb1JaVw=
+cloud.google.com/go/firestore v1.29.0/go.mod h1:igzGLe8KqzF6LwK3n5skIqtozEmRJ3DXxJk10JgZZkc=
 cloud.google.com/go/iam v1.14.0 h1:YRIB1/4xxwJ+NfI6RQr1WaOoHHeV0MizJEj940nBXJA=
 cloud.google.com/go/iam v1.14.0/go.mod h1:JTPZfbHdGXJrOYREtkRoFzCDGaBdbA7ILLKO/DDuav0=
 cloud.google.com/go/logging v1.20.0 h1:l7yzCB8/JSY5PHT9RsaqdT1jaBGbM6KlSJDX210HlXM=
@@ -149,8 +149,8 @@ github.com/shouni/go-serve-kit v1.3.0 h1:7A2CTnTNNPNiyYLtJYzROYWYbUhgvvaRLgA3SlW
 github.com/shouni/go-serve-kit v1.3.0/go.mod h1:Mmy3q40YTCejIKYcKqid+7xfQBkcMz/OtdVo1wPAxlQ=
 github.com/shouni/go-utils v1.8.1 h1:70UeJiwW+uIdSojRmTgk+AvZtlYg/43h4W/bRKUahp0=
 github.com/shouni/go-utils v1.8.1/go.mod h1:z35gD3jCEREuezx2ZnVk44XbJoN0GF35OACYlbrxcAc=
-github.com/shouni/go-veo-orchestrator v1.16.6 h1:IO2WxeZTCwZ2YgoQrG7yaU76xctX2w1ObpCJCB4GhYc=
-github.com/shouni/go-veo-orchestrator v1.16.6/go.mod h1:o3xtvuTPisAjoibwBt1WS6KfgfFTLhgg1uy3D9PEpv0=
+github.com/shouni/go-veo-orchestrator v1.16.7 h1:X7gpscwgw86wTB2dCtG2JTRtgBKcbcvQAhIc+fOpAXs=
+github.com/shouni/go-veo-orchestrator v1.16.7/go.mod h1:7b9yrmV/bPdjGPfru9DTomDvB1AwEYqQplQkt51Fe1c=
 github.com/shouni/netarmor v1.4.3 h1:/FiL5H7XeheFE3+PPI2l5Ne38mmSW9oDWbMBJ0RcoIk=
 github.com/shouni/netarmor v1.4.3/go.mod h1:BeqmhJtYfJ4bw0OpT5pu4HUXHkHHY6y5Wu0BDjsyr28=
 github.com/spiffe/go-spiffe/v2 v2.9.0 h1:g5qTg3qIP1HXV+GzuyEfSJFVxUCpEP5Ui1OINVJHPB4=
