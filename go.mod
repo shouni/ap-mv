@@ -8,15 +8,15 @@ require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.21.0
-	github.com/shouni/genai-kit v1.6.0
+	github.com/shouni/genai-kit v1.6.1
 	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-http-kit v1.13.3
 	github.com/shouni/go-notify v1.6.3
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.13.8
+	github.com/shouni/go-remote-io v1.13.10
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
-	github.com/shouni/go-veo-orchestrator v1.16.7
+	github.com/shouni/go-veo-orchestrator v1.16.8
 	github.com/shouni/netarmor v1.4.3
 	golang.org/x/sync v0.24.0
 )
@@ -45,8 +45,8 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/s2a-go v0.1.11 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.23 // indirect
-	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.24 // indirect
+	github.com/googleapis/gax-go/v2 v2.27.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -67,8 +67,8 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	google.golang.org/api v0.306.0 // indirect
-	google.golang.org/genai v1.75.0 // indirect
+	google.golang.org/api v0.308.0 // indirect
+	google.golang.org/genai v1.76.0 // indirect
 	google.golang.org/genproto v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
