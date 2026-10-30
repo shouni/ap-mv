@@ -7,13 +7,13 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
-	github.com/shouni/gcp-kit v1.21.0
+	github.com/shouni/gcp-kit v1.21.1
 	github.com/shouni/genai-kit v1.6.1
 	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-http-kit v1.13.3
 	github.com/shouni/go-notify v1.6.3
 	github.com/shouni/go-prompt-kit v1.7.1
-	github.com/shouni/go-remote-io v1.13.10
+	github.com/shouni/go-remote-io v1.13.12
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
 	github.com/shouni/go-veo-orchestrator v1.16.8
@@ -26,12 +26,12 @@ require (
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.24.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
-	cloud.google.com/go/cloudtasks v1.20.0 // indirect
+	cloud.google.com/go/cloudtasks v1.21.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	cloud.google.com/go/iam v1.14.0 // indirect
 	cloud.google.com/go/longrunning v1.3.0 // indirect
 	cloud.google.com/go/monitoring v1.31.0 // indirect
-	cloud.google.com/go/storage v1.69.0 // indirect
+	cloud.google.com/go/storage v1.70.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.62.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.62.0 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.1 // indirect
