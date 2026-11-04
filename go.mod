@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.21.2
-	github.com/shouni/genai-kit v1.6.1
+	github.com/shouni/genai-kit v1.7.0
 	github.com/shouni/go-character-kit v1.3.1
 	github.com/shouni/go-http-kit v1.13.3
 	github.com/shouni/go-notify v1.6.3
@@ -68,7 +68,7 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/api v0.309.0 // indirect
-	google.golang.org/genai v1.76.0 // indirect
+	google.golang.org/genai v1.77.0 // indirect
 	google.golang.org/genproto v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
