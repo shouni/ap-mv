@@ -4,15 +4,15 @@ go 1.27
 
 require (
 	cloud.google.com/go/firestore v1.29.2
-	github.com/caarlos0/env/v11 v11.4.1
+	github.com/caarlos0/env/v11 v11.4.2
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.21.2
 	github.com/shouni/genai-kit v1.8.0
 	github.com/shouni/go-character-kit v1.3.1
-	github.com/shouni/go-http-kit v1.13.3
+	github.com/shouni/go-http-kit v1.13.4
 	github.com/shouni/go-notify v1.6.3
-	github.com/shouni/go-prompt-kit v1.7.1
+	github.com/shouni/go-prompt-kit v1.7.2
 	github.com/shouni/go-remote-io v1.13.13
 	github.com/shouni/go-serve-kit v1.3.0
 	github.com/shouni/go-utils v1.8.1
@@ -34,7 +34,7 @@ require (
 	cloud.google.com/go/storage v1.70.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.62.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.62.0 // indirect
-	github.com/cenkalti/backoff/v7 v7.0.1 // indirect
+	github.com/cenkalti/backoff/v7 v7.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0 // indirect
