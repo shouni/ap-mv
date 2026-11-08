@@ -22,7 +22,7 @@ type HistoryRepository interface {
 	// カット 1 本ずつ前払いすると、詳細 1 画面で数十回の IAM SignBlob 往復になります。
 	GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error)
 	// SignHistoryURLs は GetHistory が空のままにした署名付き URL を埋めます。
-	// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らずに URL 自体を受け取るため、
+	// JSON の呼び出し元（MCP ゲートウェイ）はリダイレクトを辿らずに URL 自体を受け取るため、
 	// この経路だけが署名を必要とします。
 	SignHistoryURLs(ctx context.Context, detail *domain.VideoHistoryDetail) error
 	// SignedObjectURL は、読み込み済みの履歴から取り出した gs:// URI を署名します。

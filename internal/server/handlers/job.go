@@ -126,7 +126,7 @@ func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 	h.applyCostEstimate(r.Context(), jobID, &history)
 	if respond.WantsJSON(w, r) {
-		// JSON の呼び出し元（ap-mcp）はリダイレクトを辿らず URL 自体を受け取るため、
+		// JSON の呼び出し元（MCP ゲートウェイ）はリダイレクトを辿らず URL 自体を受け取るため、
 		// ここでだけ署名します。画面はこの下で同一オリジンのパスを埋めます。
 		if err := h.HistoryRepository.SignHistoryURLs(r.Context(), &history); err != nil {
 			respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to sign history URLs", "job_id", jobID)

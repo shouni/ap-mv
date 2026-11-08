@@ -34,7 +34,7 @@ type promptReferenceImage struct {
 // JobPrompt は、ジョブのレシピを Google Flow Music の MV 作成へ貼る本文にして返します。
 //
 // 同じ MV を別の入口で作りたいときに、レシピの JSON ではなく貼れる本文を渡すための経路です
-// （ap-music の GET /jobs/{jobID}/prompt と同じ位置づけ）。Flow Music は曲の音源と本文 1 本を
+// （楽曲生成サービスの GET /jobs/{jobID}/prompt と同じ位置づけ）。Flow Music は曲の音源と本文 1 本を
 // 受け取るので、返すのは Veo のカット別本文ではなく、曲全体の演出メモです
 // （prompt.FlowMusicBrief）。本文は保存しておらず、保存済みレシピから毎回組み直します。
 func (h *Handler) JobPrompt(w http.ResponseWriter, r *http.Request) {

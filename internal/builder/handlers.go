@@ -192,7 +192,7 @@ func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handle
 //
 // auth.Protected は M2M を無効化できません。許可リストか audience が欠けていても
 // 経路は生き続け、検証が必ず失敗してセッション認証へフォールバックします。つまり設定漏れは
-// 「ブラウザは正常に動くが ap-mcp だけログイン画面の HTML を受け取る」という形でしか
+// 「ブラウザは正常に動くが MCP ゲートウェイだけログイン画面の HTML を受け取る」という形でしか
 // 現れません。意図的な無効化と設定漏れを区別する手段が無い以上、空は後者としか解釈できない
 // ので、TaskVerifier と同じく起動時に弾きます。
 //

@@ -76,7 +76,7 @@ func TestValidateEssentialConfigRequiresWebSettings(t *testing.T) {
 }
 
 // TestValidateEssentialConfigRequiresQueueForBothRoles は、Worker もキューを必要とすることを
-// 確認します。ap-music と違い ap-mv の Worker は動画をカット単位で分割生成し、
+// 確認します。楽曲生成サービスと違い ap-mv の Worker は動画をカット単位で分割生成し、
 // 残りがあれば次のカットを自分で積み直すため、投入側でもあります
 // （internal/pipeline/step/video_gen.go）。
 func TestValidateEssentialConfigRequiresQueueForBothRoles(t *testing.T) {

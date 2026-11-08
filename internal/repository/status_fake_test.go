@@ -12,7 +12,7 @@ import (
 // fakeStatusStore は ports.JobStatusStore のフェイクです。
 //
 // 絞り込みも並べ替えもここでは行いません。ListOption は Firestore へ渡す不透明な値で、
-// 外から中身を見られないためです。それらの担保はエミュレータと ap-infra の索引の側にあり、
+// 外から中身を見られないためです。それらの担保はエミュレータとインフラのリポジトリの索引の側にあり、
 // ここで確かめるのは状態から一覧 1 行への変換と、ページ番号・オプション数の受け渡しです。
 type fakeStatusStore struct {
 	mu sync.Mutex
