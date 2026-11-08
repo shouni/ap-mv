@@ -16,7 +16,7 @@ import (
 // 入口は 1 本で、本文の command で分かれます。video_recipe_create（既定）と
 // video_recipe_draft は Music Recipe を入力にする作成系で、違いはカット割りの先へ進むか
 // どうかだけです。mv_from_keyframe_video_recipe は VideoRecipe JSON からの動画生成で、
-// ap-mcp 等の M2M 呼び出しが使います（フォーム画面は履歴詳細の動画生成フォームへ統合済み）。
+// MCP ゲートウェイ等の M2M 呼び出しが使います（フォーム画面は履歴詳細の動画生成フォームへ統合済み）。
 func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid form")
@@ -68,8 +68,8 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 }
 
 // musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
-// submits music_job_id (ap-music と同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
-// M2M callers (ap-mcp's compose_video) keep sending a raw url, since that field also accepts
+// submits music_job_id (楽曲生成サービスと同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
+// M2M callers (the MCP gateway's compose_video) keep sending a raw url, since that field also accepts
 // plain text/image sources unrelated to a music job.
 //
 // 両者は同じ Task.SourceURL に畳まれ、指す対象も同じです（url は music_job_id が組み立てる

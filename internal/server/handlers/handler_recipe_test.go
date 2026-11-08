@@ -30,7 +30,7 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
-	h.MusicBucket = "ap-music"
+	h.MusicBucket = "music-bucket"
 
 	form := url.Values{
 		"csrf_token":   {"token"},
@@ -76,7 +76,7 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if queue.task.CharacterID != "zundamon" {
 		t.Fatalf("queued character ID = %q, want zundamon", queue.task.CharacterID)
 	}
-	if queue.task.SourceURL != "gs://ap-music/music/20260711132823-256e9128/recipe.json" {
+	if queue.task.SourceURL != "gs://music-bucket/music/20260711132823-256e9128/recipe.json" {
 		t.Fatalf("queued source URL = %q, want music recipe URL derived from music_job_id", queue.task.SourceURL)
 	}
 	if queue.task.VisualMode != "default" {
@@ -100,7 +100,7 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
-	h.MusicBucket = "ap-music"
+	h.MusicBucket = "music-bucket"
 
 	form := url.Values{
 		"csrf_token":   {"token"},
@@ -126,7 +126,7 @@ func TestPostVideoRecipeCreateQueuesVisualMode(t *testing.T) {
 }
 
 // TestPostVideoRecipeCreateFallsBackToURLForM2M verifies the raw `url` form field (used by
-// ap-mcp's compose_video tool, which also accepts plain text/image sources unrelated to a music
+// the MCP gateway's compose_video tool, which also accepts plain text/image sources unrelated to a music
 // job) still works when music_job_id is absent.
 func TestPostVideoRecipeCreateFallsBackToURLForM2M(t *testing.T) {
 	queue := &recordingQueue{}
@@ -162,7 +162,7 @@ func TestPostVideoRecipeCreateRejectsInvalidMusicJobID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
-	h.MusicBucket = "ap-music"
+	h.MusicBucket = "music-bucket"
 
 	form := url.Values{
 		"csrf_token":   {"token"},
@@ -190,7 +190,7 @@ func TestPostVideoRecipeCreateReturnsJSONWhenRequested(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
-	h.MusicBucket = "ap-music"
+	h.MusicBucket = "music-bucket"
 
 	form := url.Values{
 		"csrf_token":   {"token"},

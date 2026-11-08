@@ -110,7 +110,7 @@ type AIConfig struct {
 	// 空キー（":0.40" のように書く）は表に無いモデルへのフォールバックになります。
 	//
 	// 既定値は持ちません。モデル名と価格はどちらも Google 側の都合で変わるため、
-	// 表そのものをデプロイ設定（ap-infra）に置きます。未設定なら全モデルが
+	// 表そのものをデプロイ設定（インフラのリポジトリ）に置きます。未設定なら全モデルが
 	// domain.DefaultVeoPriceUSDPerSecond になり、表示は壊れません。
 	VeoPriceUSDPerSec map[string]float64 `env:"VEO_PRICE_USD_PER_SEC" envSeparator:"," envKeyValSeparator:":"`
 }

@@ -94,7 +94,7 @@ func BuildContainer(ctx context.Context, cfg *config.Config) (container *app.Con
 
 	// 生成系（Vertex AI・Veo・Slack 通知・パイプライン）を組み立てるのは Worker 面だけです。
 	// Web 面で組み立てないことで、ap-mv-web-runner が aiplatform.user も
-	// SLACK_WEBHOOK_URL へのアクセス権も持たないという ap-infra 側の前提と一致します
+	// SLACK_WEBHOOK_URL へのアクセス権も持たないというインフラ側の前提と一致します
 	// （持たせる理由が無く、持たせれば分離した意味が薄れます）。
 	//
 	// pipe は nil のままなら Container.Close も BuildHandlers も参照しません。

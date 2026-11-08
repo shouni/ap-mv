@@ -83,7 +83,7 @@ Cloud Tasks へ再投入するため、長尺でも 1 タスクの時間上限�
 
 > 環境変数が持つのは**デプロイ先が決める設定**だけです。入力元・モデル・対象カットといった
 > 実行ごとに変わる値は、タスクのペイロード（JSON）で渡します。実行 SA の権限は
-> `ap-infra` の Terraform が持ちます。
+> インフラを管理する別リポジトリの Terraform が持ちます。
 
 ### 2. 起動
 
@@ -180,7 +180,7 @@ Cloud Tasks に載せます。工程列は `internal/pipeline/planner.go` の `D
 {
   "command": "video_recipe_create",
   "job_id": "video-recipe-20260904-101500-1a2b3c4d5e6f",
-  "source_url": "gs://ap-music/music/20260711132823-256e9128/recipe.json",
+  "source_url": "gs://<music-bucket>/music/20260711132823-256e9128/recipe.json",
   "visual_mode": "default",
   "character_id": "zunda",
   "veo_aspect_ratio": "16:9"
@@ -192,7 +192,7 @@ Cloud Tasks に載せます。工程列は `internal/pipeline/planner.go` の `D
   "command": "mv_from_keyframe_video_recipe",
   "job_id": "mv-20260904-113000-9f8e7d6c5b4a",
   "recipe_url": "gs://ap-mv/veo/jobs/video-recipe-20260904-101500-1a2b3c4d5e6f/video_music_meta.json",
-  "audio_url": "gs://ap-music/music/20260711132823-256e9128/music.mp3",
+  "audio_url": "gs://<music-bucket>/music/20260711132823-256e9128/music.mp3",
   "veo_model": "veo-3.1-generate-preview"
 }
 ```

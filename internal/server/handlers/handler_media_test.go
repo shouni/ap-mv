@@ -107,7 +107,7 @@ func TestCutMediaRejectsUnknownCut(t *testing.T) {
 	}
 }
 
-// JSON の呼び出し元（ap-mcp）は署名付き URL を受け取り続けること。
+// JSON の呼び出し元（MCP ゲートウェイ）は署名付き URL を受け取り続けること。
 // リダイレクトを辿らずに URL 自体を使うため、ここを空にすると成果物へ到達できなくなります。
 func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 	h := mediaHandler(t)

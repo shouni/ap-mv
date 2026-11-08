@@ -102,13 +102,13 @@ func TestBuildCompleteContentLinksGCSPaths(t *testing.T) {
 		JobID:     "video-draft-1",
 		Command:   string(domain.CommandVideoRecipeDraft),
 		OutputURI: "gs://ap-mv/veo/jobs/recipe-20260804-101112-abc/",
-		SourceURL: "gs://ap-music/music/comp-1/recipe.json",
+		SourceURL: "gs://music-bucket/music/comp-1/recipe.json",
 	}).String()
 
 	if !strings.Contains(got, "console.cloud.google.com/storage/browser/ap-mv/veo/jobs/recipe-20260804-101112-abc/") {
 		t.Errorf("content = %q, want a console link for Output", got)
 	}
-	if !strings.Contains(got, "console.cloud.google.com/storage/browser/_details/ap-music/music/comp-1/recipe.json") {
+	if !strings.Contains(got, "console.cloud.google.com/storage/browser/_details/music-bucket/music/comp-1/recipe.json") {
 		t.Errorf("content = %q, want a console details link for Source", got)
 	}
 	if !strings.Contains(got, "gs://ap-mv/veo/jobs/recipe-20260804-101112-abc/") {
@@ -161,7 +161,7 @@ func TestNotifyTaskErrorAppendsCause(t *testing.T) {
 	req := domain.NotificationRequest{
 		JobID:     "video-recipe-1",
 		Command:   string(domain.CommandVideoRecipeCreate),
-		SourceURL: "gs://ap-music/music/comp-1/recipe.json",
+		SourceURL: "gs://music-bucket/music/comp-1/recipe.json",
 	}
 	if err := adapter.NotifyTaskError(context.Background(), errors.New("Veo timed out"), req); err != nil {
 		t.Fatalf("NotifyTaskError() error = %v", err)

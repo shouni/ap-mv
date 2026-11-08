@@ -8,11 +8,11 @@
             <div class="mb-3">
                 <label class="form-label fw-semibold">Music Job ID</label>
                 <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
-                <div class="form-text">ap-music で作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
+                <div class="form-text">楽曲生成サービスで作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
             </div>
             {{/* 生の url 欄は出しません。Music Job ID から組み立てる先と同じ場所を手で書く欄で、
                  綴りを1文字間違えれば「解決できない GCS URI」として失敗するだけでした。
-                 ハンドラーは url を受け付け続けます（ap-mcp の compose_video が使う M2M 経路）。 */}}
+                 ハンドラーは url を受け付け続けます（MCP ゲートウェイの compose_video が使う M2M 経路）。 */}}
             <div class="mb-3">
                 <label class="form-label fw-semibold">Free Text <span class="text-muted fw-normal">(実験用)</span></label>
                 <textarea class="form-control" name="text" rows="3" placeholder="曲のテーマや構成の説明から台本を起こします"></textarea>

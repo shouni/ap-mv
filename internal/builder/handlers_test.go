@@ -30,7 +30,7 @@ func newRoleTestConfig(role serverrole.Role) *config.Config {
 	cfg.Server.Role = role
 	cfg.Server.ServiceURL = "https://web.example.test"
 	// Web 面は M2M 検証器の構成に許可リストを要求します（newM2MVerifier 参照）。
-	cfg.Auth.AllowedM2MServiceAccounts = []string{"ap-mcp-runner@test-project.iam.gserviceaccount.com"}
+	cfg.Auth.AllowedM2MServiceAccounts = []string{"mcp-gateway@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.TaskAudienceURL = "https://worker.example.test"

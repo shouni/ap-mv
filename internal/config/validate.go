@@ -35,7 +35,7 @@ func (c *Config) ValidateEssentialConfig() error {
 	if c.TaskCallerServiceAccount() == "" {
 		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL が設定されていません")
 	}
-	// ap-music と違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
+	// 楽曲生成サービスと違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
 	// 分割生成し、残りがあれば次のカットを自分で積み直すため
 	// （internal/pipeline/step/video_gen.go）。したがってキューと WORKER_URL は
 	// どちらの役割でも必須になる。
