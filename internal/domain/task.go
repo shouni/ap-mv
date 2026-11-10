@@ -9,65 +9,65 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// AIModels は、テキスト・画像生成に使用するモデルとシード値を保持します。
+// AIModels holds the models and seed used for text and image generation.
 type AIModels struct {
-	// TextModel は歌詞生成およびレシピ構築（LLM）に使用するモデル
+	// TextModel is the model used for lyrics generation and recipe building (LLM)
 	TextModel string `json:"text_model,omitempty"`
-	// ImageModel はジャケット画像生成に使用するモデル
+	// ImageModel is the model used for cover image generation
 	ImageModel string `json:"image_model,omitempty"`
 	Seed       *int64 `json:"seed,omitempty"`
 }
 
-// TaskCommand は、キューに投入されるタスクの種類を表します。
+// TaskCommand is the kind of task enqueued.
 type TaskCommand string
 
 const (
-	// CommandVideoRecipeCreate は、VideoRecipeを作成するコマンドです。
+	// CommandVideoRecipeCreate creates a VideoRecipe.
 	CommandVideoRecipeCreate TaskCommand = "video_recipe_create"
-	// CommandVideoRecipeDraft は、台本生成とカット割りまでを実行し、キーフレームを
-	// 1枚も焼かずに VideoRecipe を下書きとして保存するコマンドです。カット数がそのまま
-	// キーフレーム画像の生成枚数になるため、割り付けを確認してから進めたいときに使います。
-	// 保存した下書きは recipe_url として mv_from_keyframe_video_recipe へ渡します。
+	// CommandVideoRecipeDraft runs script generation and cut splitting, then saves the
+	// VideoRecipe as a draft without rendering a single keyframe. The number of cuts is the
+	// number of keyframe images generated, so use it to check the allocation before going on.
+	// The saved draft is passed to mv_from_keyframe_video_recipe as recipe_url.
 	CommandVideoRecipeDraft TaskCommand = "video_recipe_draft"
-	// CommandMVFromKeyframeVideoRecipe は、VideoRecipeからMVを生成するコマンドです。
+	// CommandMVFromKeyframeVideoRecipe generates an MV from a VideoRecipe.
 	CommandMVFromKeyframeVideoRecipe TaskCommand = "mv_from_keyframe_video_recipe"
-	// CommandRegenerateCutKeyframe は、指定カットのキーフレームを再生成するコマンドです。
+	// CommandRegenerateCutKeyframe regenerates the keyframe of the given cut.
 	CommandRegenerateCutKeyframe TaskCommand = "regenerate_cut_keyframe"
-	// CommandRegenerateSectionKeyframes は、指定セクションに属する全カットのキーフレームを
-	// まとめて再生成するコマンドです。1カットずつ焼き直すと、scene_split が付けたセクション内の
-	// 役割分担（establishing / transition といった scene beat）が片方だけ新しい絵になって
-	// 崩れるため、セクション単位でまとめて焼き直せるようにしています。
+	// CommandRegenerateSectionKeyframes regenerates the keyframes of every cut in the given
+	// section at once. Re-rendering one cut at a time leaves only one side of the division of
+	// roles scene_split assigned within the section (scene beats such as establishing /
+	// transition) with a new picture and breaks it, so a whole section can be re-rendered together.
 	CommandRegenerateSectionKeyframes TaskCommand = "regenerate_section_keyframes"
-	// CommandRegenerateZip は、キーフレームZIPを再生成するコマンドです。
+	// CommandRegenerateZip regenerates the keyframe ZIP.
 	CommandRegenerateZip TaskCommand = "regenerate_zip"
-	// CommandRegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すコマンドです。
-	// キーフレームは元ジョブのものをそのまま使い、他のカットは生成済みのままスキップされます。
-	// 継続チェーン方式（VEO_USE_PREVIOUS_VIDEO=true）では、対象カットの動画を差し替えると
-	// それを PreviousVideoID として参照する後続カットの入力が古くなるため、同じチェーンの
-	// 残りもまとめて作り直します（CutVideoSelectFilter）。結果は新しいジョブとして保存され、
-	// 元ジョブは変更しません。
+	// CommandRegenerateCutVideo remakes only the video of the given cut of an existing job.
+	// The keyframes are the original job's as they are, and other cuts are skipped as already generated.
+	// In the continuation-chain approach (VEO_USE_PREVIOUS_VIDEO=true), replacing the target cut's
+	// video leaves the input of later cuts that reference it as PreviousVideoID stale, so the rest
+	// of the same chain is remade too (CutVideoSelectFilter). The result is saved as a new job and
+	// the original job is not changed.
 	CommandRegenerateCutVideo TaskCommand = "regenerate_cut_video"
-	// CommandShortVideoFromSection は、既存ジョブのレシピから指定セクションのカット群だけを
-	// 動画化してショート動画を生成するコマンドです。
+	// CommandShortVideoFromSection generates a short video by turning only the cuts of the
+	// given section of an existing job's recipe into video.
 	CommandShortVideoFromSection TaskCommand = "short_video_from_section"
-	// CommandSectionVideo は、指定セクションのカットだけを動画化し、結果を**元のジョブへ
-	// 書き戻す**コマンドです。MV を 1 セクションずつ積み上げるための操作で、画作りが
-	// 意図と違ったときの損失がそのセクション分に留まります。
+	// CommandSectionVideo turns only the given section's cuts into video and **writes the result
+	// back to the original job**. It is the operation for building an MV up one section at a time,
+	// so when the visuals miss the intent the loss stays within that section.
 	//
-	// short_video_from_section との違いは出力先と切り出し方です。ショートは新しいジョブへ
-	// 60 秒に収めた独立作品を作るため、SectionSelectFilter がレシピのカット列そのものを
-	// そのセクションだけに差し替えます。こちらは元のレシピを一切削らず、対象外のカットを
-	// 「生成をスキップする」だけに留めます。削ったレシピをそのまま保存すると他セクションの
-	// カットが消えるうえ、継続タスクはレシピをペイロードで持ち回る（enqueueContinuation
-	// 参照）ため、削れた状態が最後の Publishing まで運ばれてしまいます。
+	// It differs from short_video_from_section in where it writes and how it cuts. A short makes a
+	// standalone piece fitted into 60 seconds in a new job, so SectionSelectFilter replaces the
+	// recipe's cut list itself with just that section. This one never trims the original recipe and
+	// only "skips generation" of the cuts outside the target. Saving a trimmed recipe as-is would
+	// delete the other sections' cuts, and since continuation tasks carry the recipe in the payload
+	// (see enqueueContinuation), the trimmed state would be carried all the way to the final Publishing.
 	//
-	// 結合（ChainFinalizeFilter）は実行しません。セクションを 1 つ焼くたびに結合し直すと
-	// final_video_url が「途中まで繋がった動画」になり、完成品と見分けが付かなくなります。
-	// 全セクションが揃ったところで finalize_video を実行して 1 本にまとめます。
+	// It does not join (ChainFinalizeFilter). Re-joining every time a section is rendered would make
+	// final_video_url a "video joined up to some point", impossible to tell from the finished one.
+	// Once every section is in place, run finalize_video to put them into one.
 	CommandSectionVideo TaskCommand = "section_video"
-	// CommandFinalizeVideo は、生成済みカットの動画を 1 本の完成動画へ結合し直すコマンドです。
-	// section_video で積み上げた結果を仕上げるための操作で、生成は一切行いません
-	// （＝追加の課金は発生しません）。
+	// CommandFinalizeVideo re-joins the generated cut videos into one finished video.
+	// It is the operation that finishes what section_video built up, and it generates nothing
+	// (= no additional charge).
 	CommandFinalizeVideo TaskCommand = "finalize_video"
 
 	// CommandVideoGenContinuation is enqueued internally by VideoGenerationFilter to resume
@@ -78,11 +78,12 @@ const (
 	CommandVideoGenContinuation TaskCommand = "video_gen_continuation"
 )
 
-// ListedCommand は、ジョブ状態に記録するコマンドを返します。
+// ListedCommand returns the command to record in the job status.
 //
-// 継続タスクは Command を video_gen_continuation で上書きするため、そのまま記録すると
-// 継続を挟んだジョブだけ元のコマンドを失います。履歴一覧はコマンドで絞り込むので、
-// 失うと video_recipe_create のジョブが継続を 1 回挟んだ時点で一覧から消えます。
+// A continuation task overwrites Command with video_gen_continuation, so recording it as-is
+// loses the original command for exactly the jobs that went through a continuation. The history
+// listing filters by command, so losing it drops a video_recipe_create job from the listing as
+// soon as it goes through one continuation.
 func (t *Task) ListedCommand() TaskCommand {
 	if t == nil {
 		return ""
@@ -93,61 +94,61 @@ func (t *Task) ListedCommand() TaskCommand {
 	return t.Command
 }
 
-// Task は、キューに投入される動画生成タスク1件分のペイロードです。
+// Task is the payload of one video-generation task enqueued.
 type Task struct {
 	JobID   string      `json:"job_id"`
 	Command TaskCommand `json:"command"`
-	// OriginCommand は、video_gen_continuation を生んだ元のコマンドです。継続タスクは
-	// Command を上書きしてしまうため、これが無いと「どのコマンドの続きなのか」が失われ、
-	// 実行計画（結合するか否か）を継続側で復元できません。継続タスク以外では空です。
+	// OriginCommand is the command that spawned video_gen_continuation. A continuation task
+	// overwrites Command, so without this "which command this continues" is lost and the
+	// continuation cannot restore the execution plan (whether to join). Empty outside continuations.
 	OriginCommand TaskCommand `json:"origin_command,omitempty"`
 	AIModels
 	SourceURL string `json:"source_url,omitempty"`
 	Text      string `json:"text,omitempty"`
 	ImageURL  string `json:"image_url,omitempty"`
-	// VisualMode は visual_modes プロンプト群から選ぶ映像スタイルです。
+	// VisualMode is the visual style chosen from the visual_modes prompts.
 	VisualMode string `json:"visual_mode,omitempty"`
-	// CharacterID はキーフレーム生成で使うキャラクターIDです。
+	// CharacterID is the character ID used for keyframe generation.
 	CharacterID string `json:"character_id,omitempty"`
-	// CutIndex は再生成対象のカットインデックスです（regenerate_cut_keyframe コマンド専用）。
+	// CutIndex is the index of the cut to regenerate (regenerate_cut_keyframe only).
 	CutIndex *int `json:"cut_index,omitempty"`
-	// SectionIndex は対象のセクション配列インデックス（0始まり）です
-	// （short_video_from_section = 動画化対象 / regenerate_section_keyframes = 再生成対象）。
-	// セクション名はサビ等で重複しうるため、名前ではなくインデックスで指定します。
+	// SectionIndex is the target section's array index (0-based)
+	// (short_video_from_section = what to turn into video / regenerate_section_keyframes = what to regenerate).
+	// Section names can repeat (choruses and so on), so it is given by index rather than by name.
 	SectionIndex *int `json:"section_index,omitempty"`
-	// VeoModel が空でないとき、動画生成に使う Veo モデルをタスク単位で差し替えます。
+	// VeoModel, when non-empty, replaces the Veo model used for video generation for this task.
 	VeoModel string `json:"veo_model,omitempty"`
-	// VeoAspectRatio が空でないとき、アスペクト比（"16:9" または "9:16"）をタスク単位で指定します。
-	// 新規レシピ作成（video_recipe_create/compose系）ではキーフレーム生成に使われ、
-	// その値が VideoRecipe.AspectRatio に記録されます。既存ジョブに対する操作
-	// （動画生成・カット再生成）では、ハンドラが記録済みの VideoRecipe.AspectRatio を
-	// そのままここへ設定し直すため、キーフレームと動画のアスペクト比が常に一致します。
+	// VeoAspectRatio, when non-empty, sets the aspect ratio ("16:9" or "9:16") for this task.
+	// When creating a new recipe (video_recipe_create / compose family) it is used for keyframe
+	// generation and recorded on VideoRecipe.AspectRatio. For operations on an existing job
+	// (video generation, cut regeneration) the handler sets the recorded VideoRecipe.AspectRatio
+	// back here as-is, so keyframes and videos always share the aspect ratio.
 	VeoAspectRatio string `json:"veo_aspect_ratio,omitempty"`
-	// OverwriteKeyframe が true のとき、再生成したキーフレームでレシピを上書きします
-	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
+	// OverwriteKeyframe, when true, overwrites the recipe with the regenerated keyframe
+	// (regenerate_cut_keyframe / regenerate_section_keyframes only).
 	OverwriteKeyframe bool `json:"overwrite_keyframe,omitempty"`
-	// OriginalJobID は、再生成タスクの結果が実際に書き込まれる元ジョブのIDです
-	// （regenerate_cut_keyframe / regenerate_section_keyframes / regenerate_zip コマンド専用）。
-	// JobID は新規生成されたタスク自身のIDのため、通知等で参照先の History Detail を示すにはこちらを使います。
+	// OriginalJobID is the ID of the original job the regeneration task actually writes to
+	// (regenerate_cut_keyframe / regenerate_section_keyframes / regenerate_zip only).
+	// JobID is the newly minted task's own ID, so use this one to point notifications and the like at the right History Detail.
 	OriginalJobID string `json:"original_job_id,omitempty"`
-	// VisualAnchorOverride が空でないとき、再生成対象カットのビジュアルアンカー（プロンプト文言）をこの値に差し替えます（regenerate_cut_keyframe コマンド専用）。
-	// カットごとに異なる文言を持つ値のため、セクション一括再生成では受け付けません。
-	// EditPrompt が指定されている場合はそちらが優先され、VisualAnchorOverride は無視されます。
+	// VisualAnchorOverride, when non-empty, replaces the target cut's visual anchor (the prompt wording) with this value (regenerate_cut_keyframe only).
+	// The wording differs per cut, so it is not accepted for a section-wide regeneration.
+	// When EditPrompt is set it wins and VisualAnchorOverride is ignored.
 	VisualAnchorOverride string `json:"visual_anchor_override,omitempty"`
-	// EditPrompt が空でないとき、フル再生成ではなく既存キーフレーム画像を編集する「編集モード」になります
-	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。構図・ポーズ・背景は保ったまま、
-	// この指示内容だけを反映します。セクション対象の場合は同じ指示を各カットへ順に適用します。
+	// EditPrompt, when non-empty, switches to "edit mode", which edits the existing keyframe image rather than regenerating it
+	// (regenerate_cut_keyframe / regenerate_section_keyframes only). Composition, pose and background are kept and
+	// only this instruction is applied. For a section, the same instruction is applied to each cut in turn.
 	EditPrompt string `json:"edit_prompt,omitempty"`
-	// SeedOverride が非nilのとき、再生成に使うキャラクターシードを一時的にこの値へ差し替えます
-	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
+	// SeedOverride, when non-nil, temporarily replaces the character seed used for regeneration with this value
+	// (regenerate_cut_keyframe / regenerate_section_keyframes only).
 	SeedOverride *int64 `json:"seed_override,omitempty"`
-	// SeedOverrideCharacterID は、SeedOverride を適用する対象キャラクターIDです。
-	// ハンドラーが再生成対象カットの既存 CharacterID を解決して設定します
-	// （regenerate_cut_keyframe / regenerate_section_keyframes コマンド専用）。
+	// SeedOverrideCharacterID is the character ID SeedOverride applies to.
+	// The handler resolves the target cut's existing CharacterID and sets it
+	// (regenerate_cut_keyframe / regenerate_section_keyframes only).
 	SeedOverrideCharacterID string `json:"seed_override_character_id,omitempty"`
-	// ASSPrimaryColor は歌唱済みシラブルの色（CSS hex, e.g. "#FFFF00"）。空のときはデフォルト黄色。
+	// ASSPrimaryColor is the colour of sung syllables (CSS hex, e.g. "#FFFF00"). Empty means the default yellow.
 	ASSPrimaryColor string `json:"ass_primary_color,omitempty"`
-	// ASSSecondaryColor は未歌唱シラブルの色（CSS hex, e.g. "#FFFFFF"）。空のときはデフォルト白。
+	// ASSSecondaryColor is the colour of not-yet-sung syllables (CSS hex, e.g. "#FFFFFF"). Empty means the default white.
 	ASSSecondaryColor string       `json:"ass_secondary_color,omitempty"`
 	RecipeURL         string       `json:"recipe_url,omitempty"`
 	AudioURL          string       `json:"audio_url,omitempty"`
@@ -206,7 +207,7 @@ func (t *Task) Validate() error {
 		}
 		return nil
 	case CommandFinalizeVideo:
-		// 生成を伴わないため、必要なのは仕上げ対象のレシピだけです。
+		// It generates nothing, so all it needs is the recipe to finish.
 		return t.validateRecipeSourceTask()
 	case CommandRegenerateZip:
 		if strings.TrimSpace(t.RecipeURL) == "" {
@@ -218,11 +219,11 @@ func (t *Task) Validate() error {
 	}
 }
 
-// validateRecipeSourceTask は、保存済みレシピを入力に取るコマンド群
-// （mv_from_keyframe_video_recipe / 継続 / 再生成系 / ショート）に共通の三連
-// 「recipe ∨ video_recipe ∨ recipe_url が必要 → recipe_url は GCS URI →
-// aspect_ratio は許可値」を検証します。以前は 5 つの case がこの並びを丸ごと
-// 繰り返しており、コマンド追加のたびに 1 箇所だけ検証が抜ける余地がありました。
+// validateRecipeSourceTask checks the triple shared by the commands that take a stored recipe
+// as input (mv_from_keyframe_video_recipe / continuation / regeneration / short):
+// "recipe ∨ video_recipe ∨ recipe_url is required → recipe_url is a GCS URI →
+// aspect_ratio is an allowed value". Five cases used to repeat this sequence in full,
+// leaving room for one place to miss a check whenever a command was added.
 func (t *Task) validateRecipeSourceTask() error {
 	if t.Recipe == nil && t.VideoRecipe == nil && strings.TrimSpace(t.RecipeURL) == "" {
 		return fmt.Errorf("%s task requires recipe, video_recipe, or recipe_url", t.Command)
@@ -241,30 +242,30 @@ func (t *Task) ASSColors() ASSColors {
 	return ASSColors{Primary: t.ASSPrimaryColor, Secondary: t.ASSSecondaryColor}
 }
 
-// AllowedAspectRatios は Veo 生成で受け付けるアスペクト比の唯一の定義です。
-// config のバリデーションとタスク検証がこれを共有します（compose.html の選択肢も
-// この値と一致させてください — テンプレートは定数を参照できないため、
-// TestComposeTemplateOffersAllAspectRatios が同期を検証します）。
+// AllowedAspectRatios is the single definition of the aspect ratios accepted for Veo generation.
+// Config validation and task validation share it (keep compose.html's options in line with
+// these values too — templates cannot reference constants, so
+// TestComposeTemplateOffersAllAspectRatios checks that they agree).
 var AllowedAspectRatios = []string{"16:9", "9:16"}
 
-// DefaultAspectRatio は、タスクにも設定にも指定が無いときに使うアスペクト比です。
+// DefaultAspectRatio is the aspect ratio used when neither the task nor the config gives one.
 //
-// go-veo-orchestrator は画作りの既定値を持たなくなったため（キットが既定を持つと
-// VEO_ASPECT_RATIO と出所が二重になり、片方だけ変えたときに黙って食い違うため）、
-// 既定はアプリ側のこの1箇所で決めます。
+// go-veo-orchestrator no longer holds visual defaults (if the kit held one, it and
+// VEO_ASPECT_RATIO would be two sources that silently disagree when only one changes),
+// so the default is decided in this one place in the app.
 const DefaultAspectRatio = "16:9"
 
-// AllowedImageSizes はキーフレーム画像の出力解像度として受け付ける値の唯一の定義です。
-// AllowedAspectRatios と同じく、go-veo-orchestrator が既定値を持たなくなったため
-// アプリ側がこの語彙を持ちます。
+// AllowedImageSizes is the single definition of the values accepted as keyframe output resolution.
+// As with AllowedAspectRatios, go-veo-orchestrator no longer holds defaults, so the app owns
+// this vocabulary.
 var AllowedImageSizes = []string{"1K", "2K", "4K"}
 
-// IsAllowedImageSize は value が許可された解像度かを返します。
+// IsAllowedImageSize reports whether value is an allowed resolution.
 func IsAllowedImageSize(value string) bool {
 	return slices.Contains(AllowedImageSizes, value)
 }
 
-// IsAllowedAspectRatio は value が許可されたアスペクト比かを返します。
+// IsAllowedAspectRatio reports whether value is an allowed aspect ratio.
 func IsAllowedAspectRatio(value string) bool {
 	return slices.Contains(AllowedAspectRatios, value)
 }

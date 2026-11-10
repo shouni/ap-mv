@@ -1,7 +1,7 @@
-// 履歴詳細（/history/{jobID}）。生成対象の選択に合わせてカット一覧を絞ります。
+// History detail (/history/{jobID}). Narrows the cut list to match the selected generation target.
 //
-// 削除とコピーは全ページ共通の data 属性（data-delete-url / data-copy-text）に載せているため、
-// このページ固有のものはこの絞り込みだけです。
+// Delete and copy ride on data attributes shared by every page (data-delete-url / data-copy-text),
+// so this narrowing is the only thing specific to this page.
 (() => {
     'use strict';
 

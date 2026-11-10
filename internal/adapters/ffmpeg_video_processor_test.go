@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestParseProbeOutput は、ffmpeg ヘッダ出力からの尺・音声トラック解析を検証します。
-// 実際の ffmpeg 出力（-i のヘッダ部分）を模した入力に対する規則の回帰テストで、
-// バイナリ無しで走ります。
+// TestParseProbeOutput checks parsing duration and audio tracks from ffmpeg's header output.
+// It is a regression test of the rules against input modelled on real ffmpeg output (the header
+// part of -i), and runs without the binary.
 func TestParseProbeOutput(t *testing.T) {
 	out := []byte(`Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'final.mp4':
   Duration: 00:03:07.40, start: 0.000000, bitrate: 5561 kb/s
@@ -50,8 +50,8 @@ func TestParseProbeOutputWithoutDuration(t *testing.T) {
 	}
 }
 
-// TestWriteConcatList は concat demuxer リストのクォートエスケープを検証します。
-// シングルクォートを含むパスは '\” 形式でエスケープしないと ffmpeg 側で壊れます。
+// TestWriteConcatList checks the quote escaping of the concat demuxer list.
+// Paths containing single quotes break on the ffmpeg side unless escaped in the '\” form.
 func TestWriteConcatList(t *testing.T) {
 	listPath, err := writeConcatList([]string{"/tmp/normal.mp4", "/tmp/it's here.mp4"})
 	if err != nil {

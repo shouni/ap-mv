@@ -60,7 +60,7 @@ func TestJobPromptDefaultsToPlainText(t *testing.T) {
 			t.Errorf("body missing %q:\n%s", want, body)
 		}
 	}
-	// 貼り先は Flow Music。Veo のモード別ガイダンスは、そこに無い入力を指すので入れない。
+	// The paste target is Flow Music. Veo's per-mode guidance refers to inputs that do not exist there, so it is not included.
 	if strings.Contains(body, "starting keyframe image") {
 		t.Errorf("the Flow Music brief must not carry Veo's per-mode guidance:\n%s", body)
 	}

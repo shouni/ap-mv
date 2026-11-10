@@ -18,38 +18,38 @@ import (
 
 const defaultSessionName = "ap-mv-session"
 
-// AppHandlers は生成されたHTTPハンドラーを保持します。
+// AppHandlers holds the HTTP handlers built.
 type AppHandlers struct {
 	Auth   *session.Handler
 	Web    *handlers.Handler
 	Worker *worker.Handler[domain.Task]
 	M2M    *oidc.Verifier
-	// TaskAuth は Cloud Tasks からの OIDC を検証します。Auth と違い OAuth 設定を
-	// 必要としないため、Web 面を持たない Worker プロセスでも構築できます。
+	// TaskAuth verifies OIDC from Cloud Tasks. Unlike Auth it needs no OAuth settings, so it can be
+	// built in a worker process without a web face.
 	TaskAuth *oidc.Verifier
 }
 
-// Validate は、組み立て結果が役割として筋の通った形になっていることを確かめます。
+// Validate checks that the assembled result has a shape that makes sense for the role.
 //
-// TaskAuth と Worker は「Cloud Tasks の検証」と「その先の処理」で対になっており、
-// 片方だけが nil なのは DI の不整合です。router.go は nil を見てルート登録を省くため、
-// 放置すると /tasks/generate が黙って 404 になるだけで、原因が設定なのか実装なのか
-// リクエストからは区別できません。ルーターが 404 を返す前に起動を失敗させます。
+// TaskAuth and Worker pair up as "verifying Cloud Tasks" and "the processing behind it", and only
+// one being nil is a DI inconsistency. router.go omits route registration on nil, so left alone,
+// /tasks/generate would just silently 404 and a request could not tell whether the cause is
+// configuration or implementation. Startup fails before the router ever returns 404.
 func (h *AppHandlers) Validate() error {
 	if (h.TaskAuth == nil) != (h.Worker == nil) {
-		return errors.New("TaskAuth と Worker は同時に構成する必要があります")
+		return errors.New("TaskAuth and Worker must be configured together")
 	}
 	return nil
 }
 
-// BuildHandlers は各ハンドラーの依存関係を SERVER_ROLE に応じて組み立てます。
-// 担当しない面のハンドラーは nil のままにし、router 側でルート登録ごと省かれるようにします。
+// BuildHandlers assembles each handler's dependencies according to SERVER_ROLE.
+// Handlers of faces it does not serve stay nil, so the router omits their route registration.
 func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 	if appCtx == nil || appCtx.Config == nil {
 		return nil, fmt.Errorf("app container and config are required")
 	}
 	if appCtx.Config.Server.ServiceURL == "" {
-		return nil, fmt.Errorf("認証リダイレクトのために ServiceURL の設定が必要です")
+		return nil, fmt.Errorf("ServiceURL must be set for authentication redirects")
 	}
 
 	h := &AppHandlers{}
@@ -65,11 +65,11 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 		if appCtx.Pipeline == nil {
 			return nil, fmt.Errorf("pipeline is not configured")
 		}
-		// audience と許可する caller SA の両方が揃わないと検証は常に失敗する
-		// （fail-closed）ため、起動時に構成を確かめておきます。
+		// Without both an audience and allowed caller SAs, verification always fails (fail-closed), so
+		// check the configuration at startup.
 		taskAuth, err := oidc.New(appCtx.Config.Tasks.TaskAudienceURL, appCtx.Config.Tasks.AllowedServiceAccounts)
 		if err != nil {
-			return nil, fmt.Errorf("cloud Tasks の OIDC 検証を構成できません: TASK_AUDIENCE_URL と ALLOWED_TASK_SERVICE_ACCOUNTS が必要です: %w", err)
+			return nil, fmt.Errorf("cannot configure Cloud Tasks OIDC verification: TASK_AUDIENCE_URL and ALLOWED_TASK_SERVICE_ACCOUNTS are required: %w", err)
 		}
 		h.TaskAuth = taskAuth
 		h.Worker = worker.NewHandler[domain.Task](appCtx.Pipeline)
@@ -82,20 +82,20 @@ func BuildHandlers(appCtx *app.Container) (*AppHandlers, error) {
 	return h, nil
 }
 
-// buildWebHandlers は Web 面（OAuth・Web UI・M2M 検証）のハンドラーを組み立てます。
+// buildWebHandlers assembles the web face's handlers (OAuth, web UI, M2M verification).
 func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 	authHandler, err := createAuthHandler(appCtx.Config, appCtx.SessionStore)
 	if err != nil {
-		return fmt.Errorf("認証Handlerの初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialise the auth handler: %w", err)
 	}
 
 	characterOptions, err := buildCharacterOptions()
 	if err != nil {
-		return fmt.Errorf("キャラクター選択肢の初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialise the character options: %w", err)
 	}
 	visualOptions, err := buildVisualModeOptions()
 	if err != nil {
-		return fmt.Errorf("visual Mode選択肢の初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialise the visual mode options: %w", err)
 	}
 
 	webHandler, err := handlers.NewHandlerWithOptions(assets.Templates, appCtx.TaskQueue, handlers.ModelOptions{
@@ -107,14 +107,14 @@ func buildWebHandlers(appCtx *app.Container, h *AppHandlers) error {
 		DefaultVeoModel:    appCtx.Config.AI.VeoModel,
 	}, characterOptions, visualOptions)
 	if err != nil {
-		return fmt.Errorf("WebHandlerの初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialise the web handler: %w", err)
 	}
 	webHandler.HistoryRepository = appCtx.HistoryRepository
 	webHandler.JobStatus = appCtx.JobStatus
 	webHandler.MusicBucket = appCtx.Config.Storage.MusicBucket
 	webHandler.VeoPricing = domain.VeoPricing(appCtx.Config.AI.VeoPriceUSDPerSec)
 	if webHandler.Characters, err = buildCharacters(); err != nil {
-		return fmt.Errorf("キャラクターの初期化に失敗しました: %w", err)
+		return fmt.Errorf("failed to initialise the characters: %w", err)
 	}
 
 	h.Auth = authHandler
@@ -137,8 +137,8 @@ func buildVisualModeOptions() (handlers.VisualModeOptions, error) {
 		Modes: make([]handlers.VisualModeOption, 0, len(templates)),
 	}
 	for mode := range templates {
-		// 部品は他テンプレートからの参照専用で、選択肢に出す名前ではありません。
-		// 判定は Builder が Build の対象を決めるのと同じ関数に任せます。
+		// Partials are only referenced from other templates, not names to offer as options.
+		// The decision is left to the same function Builder uses to decide what to Build.
 		if promptkit.IsPartial(mode, promptkit.DefaultPartialPrefix) {
 			continue
 		}
@@ -175,7 +175,7 @@ func buildCharacterOptions() (handlers.CharacterOptions, error) {
 	return options, nil
 }
 
-// createAuthHandler は、認証ハンドラーを初期化して返します。
+// createAuthHandler initialises and returns the authentication handler.
 func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handler, error) {
 	return session.New(session.Config{
 		ClientID:       cfg.Auth.GoogleClientID,
@@ -188,21 +188,21 @@ func createAuthHandler(cfg *config.Config, store session.Store) (*session.Handle
 	})
 }
 
-// newM2MVerifier は M2M(サーバー間通信)用の OIDC 検証器を構成します。
+// newM2MVerifier configures the OIDC verifier for M2M (server-to-server communication).
 //
-// auth.Protected は M2M を無効化できません。許可リストか audience が欠けていても
-// 経路は生き続け、検証が必ず失敗してセッション認証へフォールバックします。つまり設定漏れは
-// 「ブラウザは正常に動くが MCP ゲートウェイだけログイン画面の HTML を受け取る」という形でしか
-// 現れません。意図的な無効化と設定漏れを区別する手段が無い以上、空は後者としか解釈できない
-// ので、TaskVerifier と同じく起動時に弾きます。
+// auth.Protected cannot disable M2M. Even with the allowlist or audience missing the path stays
+// alive, verification always fails and falls back to session authentication. So a missing setting
+// shows up only as "the browser works fine but the MCP gateway alone receives the login page's
+// HTML". With no way to tell a deliberate disable from a missing setting, empty can only mean the
+// latter, so like TaskVerifier it is rejected at startup.
 //
-// 構成の可否を config ではなく検証器自身に尋ねるのは、必要な設定が何かを知っているのが
-// gcp-kit 側だからです。許可リストの空だけを config で見ると audience（SERVICE_URL）の
-// 欠落を拾えず、kit が要件を増やしても追随しません。
+// The verifier itself, rather than config, is asked whether it can be configured, because gcp-kit
+// is what knows which settings are required. Checking only an empty allowlist in config would miss
+// a missing audience (SERVICE_URL) and would not follow if the kit added requirements.
 func newM2MVerifier(serviceURL string, allowedServiceAccounts []string) (*oidc.Verifier, error) {
 	m2m, err := oidc.New(serviceURL, allowedServiceAccounts)
 	if err != nil {
-		return nil, fmt.Errorf("m2m の OIDC 検証を構成できません（SERVICE_URL と ALLOWED_M2M_SERVICE_ACCOUNTS）: %w", err)
+		return nil, fmt.Errorf("cannot configure M2M OIDC verification (SERVICE_URL and ALLOWED_M2M_SERVICE_ACCOUNTS): %w", err)
 	}
 	return m2m, nil
 }

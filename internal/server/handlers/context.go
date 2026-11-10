@@ -6,11 +6,11 @@ import (
 	"github.com/shouni/gcp-kit/auth/session"
 )
 
-// csrfTokenFromContext は、コンテキストに保存された CSRF トークンを取得します。
+// csrfTokenFromContext gets the CSRF token stored in the context.
 //
-// 格納するのは gcp-kit/auth/session の Authenticate なので、取得も同じキーを
-// 見る必要があります。ここで委譲しているのは、テンプレート描画側から見た呼び名を
-// handlers パッケージに残すためだけです。
+// It is stored by gcp-kit/auth/session's Authenticate, so getting it has to look at the same key.
+// It delegates here only to keep, in the handlers package, the name the template rendering side
+// uses.
 func csrfTokenFromContext(ctx context.Context) string {
 	return session.CSRFTokenFromContext(ctx)
 }

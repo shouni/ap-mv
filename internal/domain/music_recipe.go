@@ -11,23 +11,23 @@ import (
 	"github.com/shouni/go-veo-orchestrator/video"
 )
 
-// LyricsDraft は genai-kit/music が定義する作詞フェーズの出力です。
+// LyricsDraft is the output of the lyric-writing phase defined by genai-kit/music.
 type LyricsDraft = music.LyricsDraft
 
-// MusicRecipe は genai-kit/music の楽曲設計図です。
-// 型だけの葉パッケージなので、lyria の生成ワークフロー一式を輸入せずに済みます。
+// MusicRecipe is genai-kit/music's song blueprint.
+// It is a types-only leaf package, so the whole lyria generation workflow does not have to be imported.
 type MusicRecipe = music.Recipe
 
-// MusicSection は genai-kit/music の曲内セクションです。
+// MusicSection is a section within a song from genai-kit/music.
 type MusicSection = music.Section
 
-// VideoRecipe は go-veo-orchestrator が定義する動画台本です。
+// VideoRecipe is the video script defined by go-veo-orchestrator.
 type VideoRecipe = video.Recipe
 
-// VideoCut は go-veo-orchestrator が定義する動画カットです。
+// VideoCut is the video cut defined by go-veo-orchestrator.
 type VideoCut = video.Cut
 
-// CutStatusGenerated は、キーフレーム生成が完了したカットのステータス値です。
+// CutStatusGenerated is the status value of a cut whose keyframe generation has finished.
 const CutStatusGenerated = string(video.CutStatusGenerated)
 
 // UnmarshalRecipeOrVideoRecipe parses either a MusicRecipe JSON or a VideoRecipe JSON.
@@ -194,16 +194,16 @@ func ValidateMusicRecipe(r *MusicRecipe) error {
 
 // ValidateVideoRecipe checks the receiver for invalid state.
 //
-// 実体は VideoRecipe（orchestrator の型）自身の Validate です。型の不変条件は型と同じ場所に
-// 置き、AI 生成の直後（VideoScriptRunner）と手入力の投入時の両方で同じ規則が効くようにします。
+// The implementation is VideoRecipe's (the orchestrator type's) own Validate. A type's invariants
+// live with the type, so the same rule applies both right after AI generation (VideoScriptRunner) and when hand input is submitted.
 func ValidateVideoRecipe(r *VideoRecipe) error {
 	return r.Validate()
 }
 
-// ApplyLyricsToVideoRecipeCuts は music_recipe の歌詞テキストをセクション単位に分解し、
-// 各カットの所属セクション（cut.SectionIndex、1始まり。VideoRecipe.Normalize が StartSec から
-// 自動補完）の歌詞行を cut.Dialogue に書き込みます。すでに Dialogue が設定済みのカットは
-// スキップします。DownloadKeyframes など、保存済みレシピを読んで処理する経路でも呼び出せます。
+// ApplyLyricsToVideoRecipeCuts splits the music_recipe's lyric text by section and writes the
+// lyric lines of each cut's section (cut.SectionIndex, 1-based; VideoRecipe.Normalize fills it
+// from StartSec) into cut.Dialogue. Cuts that already have Dialogue are skipped. It can also be
+// called from paths that read and process a stored recipe, such as DownloadKeyframes.
 func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	if recipe == nil || recipe.MusicRecipe.Lyrics == nil {
 		return
@@ -212,9 +212,9 @@ func ApplyLyricsToVideoRecipeCuts(recipe *VideoRecipe) {
 	if lyricsText == "" {
 		return
 	}
-	// cut.SectionIndex を使ってセクションの所属を判定するため、（呼び出し元がまだ
-	// Normalize していない可能性に備えて）ここで確実に補完しておく。Normalize は
-	// 冪等なので、既に呼ばれていても無害。
+	// cut.SectionIndex decides which section a cut belongs to, so make sure it is filled in here
+	// (in case the caller has not normalised yet). Normalize is idempotent, so calling it again
+	// is harmless.
 	recipe.Normalize()
 	sectionLines := parseLyricsSections(lyricsText)
 
@@ -301,8 +301,8 @@ func SectionEndSeconds(startSeconds, endSeconds, duration int) int {
 
 // DistributeLines splits lines proportionally across `total` buckets and returns the lines
 // assigned to bucket `pos` (0-indexed), joined by newlines.
-// 実装は尺プランナーと共に go-veo-orchestrator へ移動しました（配分規則が
-// サブカット分割と一致している必要があるため、定義は1つにします）。
+// The implementation moved to go-veo-orchestrator along with the duration planner (the
+// distribution rule has to match sub-cut splitting, so there is one definition).
 func DistributeLines(lines []string, pos, total int) string {
 	return veo.DistributeLines(lines, pos, total)
 }

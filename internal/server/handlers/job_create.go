@@ -11,12 +11,13 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// JobCreate は、新しいジョブを投入します（POST /jobs）。
+// JobCreate submits a new job (POST /jobs).
 //
-// 入口は 1 本で、本文の command で分かれます。video_recipe_create（既定）と
-// video_recipe_draft は Music Recipe を入力にする作成系で、違いはカット割りの先へ進むか
-// どうかだけです。mv_from_keyframe_video_recipe は VideoRecipe JSON からの動画生成で、
-// MCP ゲートウェイ等の M2M 呼び出しが使います（フォーム画面は履歴詳細の動画生成フォームへ統合済み）。
+// There is one entrance, split by the body's command. video_recipe_create (the default) and
+// video_recipe_draft are the creating commands that take a Music Recipe as input; they differ only
+// in whether they go past the cut list. mv_from_keyframe_video_recipe generates video from
+// VideoRecipe JSON and is used by M2M callers such as the MCP gateway (its form page has been
+// merged into the history detail's video-generation form).
 func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid form")
@@ -30,14 +31,15 @@ func (h *Handler) JobCreate(w http.ResponseWriter, r *http.Request) {
 	case domain.CommandMVFromKeyframeVideoRecipe:
 		h.postVideoRecipeTask(w, r)
 	default:
-		respond.Error(w, r, http.StatusBadRequest, fmt.Sprintf("command は %s / %s / %s のいずれかです",
+		respond.Error(w, r, http.StatusBadRequest, fmt.Sprintf("command must be one of %s / %s / %s",
 			domain.CommandVideoRecipeCreate, domain.CommandVideoRecipeDraft, domain.CommandMVFromKeyframeVideoRecipe))
 	}
 }
 
-// postMusicRecipeTask は、Music Recipe を入力とする作成系（本生成と台本のみ）の共通実装です。
-// 違いはコマンドとジョブ ID プレフィックスだけで、台本のみはキーフレームを 1 枚も焼かずに
-// カット割りまでで止まります（履歴には script 段階として並び、?stage=script で絞れます）。
+// postMusicRecipeTask is the shared implementation of the creating commands that take a Music
+// Recipe (full generation and script only). They differ only in command and job ID prefix; script
+// only stops at the cut list without rendering a single keyframe (it is listed at the script stage
+// and can be filtered with ?stage=script).
 func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jobPrefix string, command domain.TaskCommand) {
 	if err := r.ParseForm(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid form")
@@ -68,13 +70,13 @@ func (h *Handler) postMusicRecipeTask(w http.ResponseWriter, r *http.Request, jo
 }
 
 // musicRecipeSourceURL resolves the MusicRecipe source for video recipe creation. The Web UI
-// submits music_job_id (楽曲生成サービスと同じ規則で gs://<MusicBucket>/music/<jobID>/recipe.json を組み立てる)。
+// submits music_job_id (building gs://<MusicBucket>/music/<jobID>/recipe.json by the same rule as the music-generation service).
 // M2M callers (the MCP gateway's compose_video) keep sending a raw url, since that field also accepts
 // plain text/image sources unrelated to a music job.
 //
-// 両者は同じ Task.SourceURL に畳まれ、指す対象も同じです（url は music_job_id が組み立てる
-// URI を手で書いたもの）。両方来た場合は music_job_id を優先します。そのため Web UI の
-// 入力欄は music_job_id だけで、生の url は M2M 専用です。
+// Both fold into the same Task.SourceURL and point at the same thing (url is the URI music_job_id
+// builds, written by hand). When both come, music_job_id wins. So the web UI's input field is
+// music_job_id only, and the raw url is for M2M only.
 func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	musicJobID := strings.TrimSpace(r.FormValue("music_job_id"))
 	if musicJobID == "" {
@@ -89,7 +91,7 @@ func (h *Handler) musicRecipeSourceURL(r *http.Request) (string, error) {
 	return fmt.Sprintf("gs://%s/music/%s/recipe.json", h.MusicBucket, musicJobID), nil
 }
 
-// postVideoRecipeTask は VideoRecipe JSON からの動画生成を投入します（command=mv_from_keyframe_video_recipe）。
+// postVideoRecipeTask enqueues video generation from VideoRecipe JSON (command=mv_from_keyframe_video_recipe).
 func (h *Handler) postVideoRecipeTask(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, "invalid form")

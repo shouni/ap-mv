@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// VisualModeOption は、フォームで選択可能な映像スタイル1件分の情報です。
+// VisualModeOption is the information for one visual style selectable in the form.
 type VisualModeOption struct {
 	ID        string
 	Name      string
 	IsDefault bool
 }
 
-// VisualModeOptions は、フォームで選択可能な映像スタイル一覧とデフォルト選択を保持します。
+// VisualModeOptions holds the visual styles selectable in the form and the default selection.
 type VisualModeOptions struct {
 	Modes         []VisualModeOption
 	DefaultModeID string
@@ -86,10 +86,10 @@ func (h *Handler) visualModeFromForm(r *http.Request) string {
 	return options.DefaultModeID
 }
 
-// DisplayVisualModeName は visual mode の ID から表示名を作ります（アンダースコア区切りを
-// タイトルケースへ）。builder 側にモード名のハードコード switch が併存していた頃は、
-// 新しい .md を追加すると UI に raw ID が出る手作業リストの更新漏れがありました。
-// 生成的な変換 1 本にしたので、モード追加時のコード変更は不要です。
+// DisplayVisualModeName builds a display name from a visual mode ID (underscore-separated to title
+// case). When a hard-coded switch of mode names coexisted on the builder side, adding a new .md
+// sometimes left a raw ID in the UI because the hand-maintained list was not updated. With one
+// generic conversion, adding a mode needs no code change.
 func DisplayVisualModeName(id string) string {
 	id = strings.TrimSpace(id)
 	if id == "" {

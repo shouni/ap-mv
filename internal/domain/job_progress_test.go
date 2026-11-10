@@ -28,32 +28,32 @@ func TestNewJobProgressStages(t *testing.T) {
 		wantStage JobStage
 		wantLabel string
 	}{
-		"カットなしは台本のみ": {
+		"no cuts is script only": {
 			cuts:      nil,
 			wantStage: StageScript,
 			wantLabel: "script",
 		},
-		"キーフレーム0枚は台本のみ": {
+		"zero keyframes is script only": {
 			cuts:      []VideoCut{{}, {}},
 			wantStage: StageScript,
 			wantLabel: "script",
 		},
-		"キーフレーム途中": {
+		"keyframes partway": {
 			cuts:      []VideoCut{cutWithKeyframe("gs://k1.png"), {}, {}},
 			wantStage: StageKeyframes,
 			wantLabel: "keyframes 1/3",
 		},
-		"キーフレーム完了・動画0本": {
+		"keyframes done, zero videos": {
 			cuts:      []VideoCut{cutWithKeyframe("gs://k1.png"), cutWithKeyframe("gs://k2.png")},
 			wantStage: StageKeyframesDone,
 			wantLabel: "keyframes done",
 		},
-		"動画あと1本": {
+		"one video left": {
 			cuts:      []VideoCut{generatedCut("gs://k1.png"), generatedCut("gs://k2.png"), cutWithKeyframe("gs://k3.png")},
 			wantStage: StageVideos,
 			wantLabel: "videos 2/3",
 		},
-		"完了": {
+		"completed": {
 			cuts:      []VideoCut{generatedCut("gs://k1.png"), generatedCut("gs://k2.png")},
 			wantStage: StageCompleted,
 			wantLabel: "completed",

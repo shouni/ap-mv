@@ -8,17 +8,17 @@ import (
 	"github.com/shouni/go-veo-orchestrator/video"
 )
 
-// CutVideoSelectStep は、保存済みレシピのうち指定カット（とその継続チェーンの残り）だけを
-// 動画生成対象へ戻すパイプラインステップです。他のカットは status=generated のまま残すため、
-// 後続の VideoGenerationStep がそれらをスキップし、ChainFinalizeStep が既存の動画と
-// 合わせて 1 本へ結合し直します。
+// CutVideoSelectStep is the pipeline step that returns only the given cut (and the rest of its
+// continuation chain) of a stored recipe to video generation. The other cuts stay
+// status=generated, so the later VideoGenerationStep skips them and ChainFinalizeStep re-joins
+// them with the existing videos into one.
 //
-// SectionSelectStep と違ってカットを絞り込まない（全カットをレシピに残す）のは、完成動画が
-// 全カットの結合だからです。絞り込むとその部分だけのショート動画になってしまいます。
+// Unlike SectionSelectStep it does not narrow the cuts (every cut stays in the recipe), because
+// the finished video is the join of every cut. Narrowing would turn it into a short of just that part.
 //
-// UsePreviousVideo は VideoGenerationStep と一致させます。継続チェーン方式では、あるカットの
-// 動画を作り直すと、それを PreviousVideoURI として参照していた後続カットの入力が古いままに
-// なります。そのため対象カットだけでなく、同じチェーンの残りも作り直します。
+// UsePreviousVideo must match VideoGenerationStep. In the continuation-chain approach, remaking
+// one cut's video leaves stale the input of the later cuts that referenced it as
+// PreviousVideoURI. So not only the target cut but the rest of the same chain is remade too.
 type CutVideoSelectStep struct {
 	UsePreviousVideo bool
 }
@@ -35,7 +35,7 @@ func (f CutVideoSelectStep) Execute(_ context.Context, sc *Context) error {
 		return err
 	}
 	sc.VideoRecipe.Normalize()
-	// 保存済みレシピに歌詞由来の dialogue が未設定の場合（旧ジョブ含む）に備えて補完する。
+	// Fill in lyric-derived dialogue in case the stored recipe lacks it (old jobs included).
 	applyLyricsToVideoRecipeCuts(sc.VideoRecipe)
 
 	cuts := sc.VideoRecipe.Cuts
@@ -44,9 +44,9 @@ func (f CutVideoSelectStep) Execute(_ context.Context, sc *Context) error {
 		return fmt.Errorf("cut_index %d not found in recipe (%d cuts)", *sc.Task.CutIndex, len(cuts))
 	}
 
-	// 保存済みメタデータの keyframe_reference は元ジョブ相対パスの場合があるため、
-	// 新ジョブの出力パスで動画化する前に元ジョブのルートで絶対URI化する
-	// （作り直すカットのキーフレームは元ジョブの画像をそのまま使います）。
+	// The stored metadata's keyframe_reference may be relative to the original job, so make it an
+	// absolute URI from the original job's root before turning it into video under the new job's
+	// output path (the cuts being remade use the original job's images as-is).
 	originalBase := originalJobOutputPath(sc.Task.RecipeURL)
 	for i := range cuts {
 		cuts[i].KeyframeReference = resolveRecipeObjectURI(originalBase, cuts[i].KeyframeReference)
@@ -54,9 +54,8 @@ func (f CutVideoSelectStep) Execute(_ context.Context, sc *Context) error {
 
 	end := veo.ChainTailEnd(cuts, target, f.UsePreviousVideo)
 	for i := target; i <= end; i++ {
-		// キーフレームは残す（作り直すのは動画だけ）。IsChainStart は
-		// VideoGenerationStep が尺から組み直すため、ここで消えても問題ない
-		// （SectionSelectStep と同じ理由）。
+		// Keep the keyframe (only the video is remade). IsChainStart is rebuilt from durations by
+		// VideoGenerationStep, so losing it here does no harm (the same reason as SectionSelectStep).
 		cuts[i].ResetGeneration(true)
 	}
 

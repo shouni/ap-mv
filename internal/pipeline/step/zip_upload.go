@@ -13,7 +13,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// ZipUploadStep は、生成済みキーフレームをZIPにまとめてアップロードするパイプラインステップです。
+// ZipUploadStep is the pipeline step that zips the generated keyframes and uploads them.
 type ZipUploadStep struct{}
 
 // Name returns the receiver name.

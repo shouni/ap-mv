@@ -6,55 +6,55 @@ import (
 	"time"
 )
 
-// VeoUsageFileName は、ジョブの出力ディレクトリに置く Veo 生成実績のファイル名です。
-// video_music_meta.json とは別ファイルにしています。メタデータ本体は
-// go-veo-orchestrator の VideoRecipe が構造を決めており、実績を足すにはあちらのリリースが
-// 要るためです。用途も寿命も違う（片方は完成品の記述、片方は課金の記録）ので、
-// 分けておくほうが読み手にも分かりやすくなります。
+// VeoUsageFileName is the name of the Veo generation usage file placed in the job's output directory.
+// It is a separate file from video_music_meta.json: the metadata's structure is decided by
+// go-veo-orchestrator's VideoRecipe, and adding usage there would need a release of that library.
+// Their purposes and lifetimes differ too (one describes the finished piece, the other records
+// billing), so keeping them apart is clearer for readers as well.
 const VeoUsageFileName = "veo_usage.json"
 
-// VeoUsageSchemaVersion は veo_usage.json のスキーマ版です。読み手が将来の形式変更を
-// 判別できるよう、最初から埋めておきます。
+// VeoUsageSchemaVersion is the schema version of veo_usage.json. It is filled from the start so
+// readers can tell future format changes apart.
 const VeoUsageSchemaVersion = 1
 
-// VeoCutUsage は、1カットに対して実際に走った Veo 生成の実績です。
-// Calls が 2 以上なら、そのカットは焼き直されています（Cloud Tasks の再配信、
-// セクション再生成など）。
+// VeoCutUsage is the usage of the Veo generations that actually ran for one cut.
+// Calls of 2 or more means the cut was re-rendered (Cloud Tasks redelivery, section
+// regeneration and so on).
 type VeoCutUsage struct {
 	CutIndex int `json:"cut_index"`
-	// Calls は成功した生成回数です。失敗した呼び出しは（通常課金されないため）数えません。
+	// Calls is the number of successful generations. Failed calls are not counted (they are not normally billed).
 	Calls int `json:"calls"`
-	// SubmittedSeconds は成功した生成の尺の合計です。同じカットを2回焼けば尺は2回分入ります。
+	// SubmittedSeconds is the total duration of successful generations. Rendering the same cut twice adds its duration twice.
 	SubmittedSeconds float64 `json:"submitted_seconds"`
-	// LastGeneratedAt は最後に成功した生成の時刻です。
+	// LastGeneratedAt is the time of the last successful generation.
 	LastGeneratedAt time.Time `json:"last_generated_at,omitzero"`
 }
 
-// VeoUsage は、1ジョブで実際に Veo へ投げた生成の実績です。
+// VeoUsage is the usage of the generations actually sent to Veo for one job.
 //
-// VideoRecipe から算出できる「完成品の尺」と違い、こちらは投げた回数そのものを積み上げます。
-// 2つの差が、再生成で捨てた分になります。
+// Unlike "the finished length" computable from the VideoRecipe, this accumulates the calls
+// themselves. The difference between the two is what regeneration threw away.
 //
-// 正確な会計帳簿ではありません。1カット生成するたびに read-modify-write するので、
-// 同じジョブが同時に2つ走ると更新を取りこぼす可能性があります（その場合は実績を過小に
-// 数えます）。生成そのものを止めないことを優先しており、記録の失敗はログに残して先へ進みます。
+// It is not an exact ledger. It does a read-modify-write after every cut, so if the same job runs
+// twice at once updates can be lost (undercounting the usage in that case). Not stopping the
+// generation itself takes priority, so a failed record is logged and the run moves on.
 type VeoUsage struct {
 	SchemaVersion int    `json:"schema_version"`
 	JobID         string `json:"job_id,omitempty"`
-	// Model は生成に使った Veo モデルです。タスクがモデルを明示しなかった場合は空になり、
-	// 読み手は表示時点の既定モデルで代用します。
+	// Model is the Veo model used for generation. It is empty when the task did not name a model,
+	// and readers substitute the default model at display time.
 	Model string `json:"model,omitempty"`
-	// Calls は成功した生成の総回数です。
+	// Calls is the total number of successful generations.
 	Calls int `json:"calls"`
-	// SubmittedSeconds は成功した生成の尺の総合計（＝実際の課金対象秒数の概算）です。
+	// SubmittedSeconds is the grand total duration of successful generations (= an estimate of the actual billable seconds).
 	SubmittedSeconds float64       `json:"submitted_seconds"`
 	Cuts             []VeoCutUsage `json:"cuts,omitempty"`
 	UpdatedAt        time.Time     `json:"updated_at,omitzero"`
 }
 
-// Record は、成功した1回の生成を実績へ加算します。
-// model が空でないときだけ記録を上書きするので、モデル指定のあるタスクとないタスクが
-// 混ざっても、判明している値が空で潰れることはありません。
+// Record adds one successful generation to the usage.
+// It overwrites the model only when model is non-empty, so even when tasks with and without a
+// model mix, a known value is never wiped out by an empty one.
 func (u *VeoUsage) Record(cutIndex int, durationSec float64, model string, now time.Time) {
 	if u == nil {
 		return
@@ -86,7 +86,7 @@ func (u *VeoUsage) Record(cutIndex int, durationSec float64, model string, now t
 	sort.Slice(u.Cuts, func(i, j int) bool { return u.Cuts[i].CutIndex < u.Cuts[j].CutIndex })
 }
 
-// CutCalls は指定カットの成功生成回数を返します。記録が無ければ 0 を返します。
+// CutCalls returns the number of successful generations for the given cut. It returns 0 when there is no record.
 func (u *VeoUsage) CutCalls(cutIndex int) int {
 	if u == nil {
 		return 0

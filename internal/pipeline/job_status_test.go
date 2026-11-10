@@ -15,7 +15,7 @@ import (
 	"github.com/shouni/ap-mv/internal/pipeline/step"
 )
 
-// fakeJobStatusStore はメモリ上でジョブ状態を保持するテスト用ストアです。
+// fakeJobStatusStore is a test store holding job status in memory.
 type fakeJobStatusStore struct {
 	mu       sync.Mutex
 	statuses map[string]domain.JobStatus
@@ -26,9 +26,9 @@ func newFakeJobStatusStore() *fakeJobStatusStore {
 	return &fakeJobStatusStore{statuses: map[string]domain.JobStatus{}}
 }
 
-// 本物の GCS クライアントと同じく context を尊重します。ここを無視すると、
-// 打ち切られたジョブの終端記録がキャンセル済み context で行われていてもテストが
-// 通ってしまい、状態が running のまま固着するバグを見逃します。
+// It respects the context, as the real GCS client does. Ignoring it would let tests pass even
+// when a cut-off job's terminal record is made on a cancelled context, missing the bug where the
+// state sticks at running.
 func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.JobStatus) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -42,7 +42,7 @@ func (s *fakeJobStatusStore) Save(ctx context.Context, _ string, status domain.J
 	return nil
 }
 
-// List は一覧のためのクエリで、パイプラインは呼びません。ports を満たすためだけの実装です。
+// List is the listing query, which the pipeline never calls. It exists only to satisfy ports.
 func (s *fakeJobStatusStore) List(context.Context, int, int, ...jobstatus.ListOption) ([]domain.JobStatus, domain.PageMeta, error) {
 	return nil, domain.PageMeta{}, nil
 }
@@ -69,9 +69,9 @@ func (s *fakeJobStatusStore) Get(ctx context.Context, jobID string) (domain.JobS
 
 	status, ok := s.statuses[jobID]
 	if !ok {
-		// 未記録は ErrNotFound を包んで返す（Store の契約）。素のエラーを返すと
-		// 「読めなかった」に分類され、再実行ガードがエラーを返します。
-		return domain.JobStatus{}, fmt.Errorf("%w: 未記録", domain.ErrJobStatusNotFound)
+		// Not recorded is returned wrapping ErrNotFound (the Store contract). Returning a bare error
+		// would be classified as "could not read" and the re-run guard would return an error.
+		return domain.JobStatus{}, fmt.Errorf("%w: not recorded", domain.ErrJobStatusNotFound)
 	}
 	return status, nil
 }
@@ -132,7 +132,7 @@ func TestExecuteRecordsRunningThenSucceeded(t *testing.T) {
 		t.Fatalf("Attempts = %d, want 1", final.Attempts)
 	}
 	if final.OutputURI == "" {
-		t.Fatal("成功時は成果物の保存先を記録すること")
+		t.Fatal("on success, where the artifacts are stored must be recorded")
 	}
 }
 
@@ -148,13 +148,13 @@ func TestExecuteRecordsFailureWithReason(t *testing.T) {
 
 	final := store.statuses["mv-20260726-123456-abcdef123456"]
 	if final.Error == "" {
-		t.Fatal("失敗理由が記録されていない")
+		t.Fatal("the failure reason was not recorded")
 	}
 }
 
-// カット分割された動画生成の途中（deferred）を succeeded にしてはいけない。
-// succeeded にすると、同じ job_id を引き継ぐ継続タスクが再実行ガードで
-// 打ち切られ、残りのカットが永久に生成されなくなる。
+// A cut-split video generation in progress (deferred) must not be marked succeeded.
+// If it were, the continuation task inheriting the same job_id would be stopped by the re-run
+// guard and the remaining cuts would never be generated.
 func TestExecuteKeepsRunningWhenDeferred(t *testing.T) {
 	store := newFakeJobStatusStore()
 	runner := statusRunner(store, deferredStep{})
@@ -170,11 +170,11 @@ func TestExecuteKeepsRunningWhenDeferred(t *testing.T) {
 		t.Fatalf("State = %q, want running", final.State)
 	}
 	if final.IsTerminal() {
-		t.Fatal("deferred なジョブが終了扱いになっている")
+		t.Fatal("a deferred job is treated as finished")
 	}
 }
 
-// 継続タスクは同じ job_id で処理を引き継げること（ガードが途中で発動しない）。
+// A continuation task can carry on under the same job_id (the guard does not fire midway).
 func TestExecuteAllowsContinuationOfDeferredJob(t *testing.T) {
 	store := newFakeJobStatusStore()
 	task := videoTask()
@@ -183,12 +183,12 @@ func TestExecuteAllowsContinuationOfDeferredJob(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	// 継続タスクは同じ job_id を引き継ぎ、コマンドと引き継ぎレシピだけが変わる。
+	// A continuation task inherits the same job_id; only the command and the carried recipe change.
 	continuation := task
 	continuation.Command = domain.CommandVideoGenContinuation
 	continuation.RecipeURL = "gs://bucket/ap-mv/veo/jobs/mv-20260726-123456-abcdef123456/video_music_meta.json"
 	if err := statusRunner(store, noopStep{}).Execute(context.Background(), continuation); err != nil {
-		t.Fatalf("継続タスクの Execute() error = %v", err)
+		t.Fatalf("continuation task Execute() error = %v", err)
 	}
 
 	final := store.statuses["mv-20260726-123456-abcdef123456"]
@@ -196,11 +196,11 @@ func TestExecuteAllowsContinuationOfDeferredJob(t *testing.T) {
 		t.Fatalf("State = %q, want succeeded", final.State)
 	}
 	if final.Attempts != 2 {
-		t.Fatalf("Attempts = %d, want 2 (試行回数が引き継がれていない)", final.Attempts)
+		t.Fatalf("Attempts = %d, want 2 (the attempt count was not carried over)", final.Attempts)
 	}
 }
 
-// Cloud Tasks の再配信で、完了済みジョブの生成をやり直さないこと。
+// A Cloud Tasks redelivery does not redo a finished job's generation.
 func TestExecuteSkipsAlreadySucceededJob(t *testing.T) {
 	store := newFakeJobStatusStore()
 	counter := &countingStep{}
@@ -215,11 +215,11 @@ func TestExecuteSkipsAlreadySucceededJob(t *testing.T) {
 	}
 
 	if counter.calls != 1 {
-		t.Fatalf("step calls = %d, want 1 (完了済みジョブが再実行されている)", counter.calls)
+		t.Fatalf("step calls = %d, want 1 (a finished job was re-run)", counter.calls)
 	}
 }
 
-// 失敗したジョブは再配信で作り直せること（ガードが効きすぎないこと）。
+// A failed job can be remade on redelivery (the guard does not overreach).
 func TestExecuteRetriesFailedJob(t *testing.T) {
 	store := newFakeJobStatusStore()
 
@@ -236,7 +236,7 @@ func TestExecuteRetriesFailedJob(t *testing.T) {
 	}
 }
 
-// ストア未設定でもパイプラインは通常どおり動作すること。
+// The pipeline works as usual even with no store configured.
 func TestExecuteWorksWithoutStatusStore(t *testing.T) {
 	counter := &countingStep{}
 	runner := &Runner{deps: Dependencies{
@@ -252,7 +252,7 @@ func TestExecuteWorksWithoutStatusStore(t *testing.T) {
 	}
 }
 
-// 生成が固まってもタスクは打ち切られ、failed として記録されること。
+// Even if generation hangs, the task is cut off and recorded as failed.
 func TestExecuteTimesOutAndRecordsFailure(t *testing.T) {
 	store := newFakeJobStatusStore()
 	runner := &Runner{deps: Dependencies{
@@ -274,19 +274,19 @@ func TestExecuteTimesOutAndRecordsFailure(t *testing.T) {
 	if final.State != domain.JobStateFailed {
 		t.Fatalf("State = %q, want failed", final.State)
 	}
-	// 打ち切られたタスクは Cloud Tasks の再試行で作り直せる必要がある。
+	// A cut-off task must be remakeable by a Cloud Tasks retry.
 	if final.IsTerminal() {
-		t.Fatal("タイムアウトしたジョブが終了扱いになっている")
+		t.Fatal("a timed-out job is treated as finished")
 	}
 }
 
-// 期限（PIPELINE_TIMEOUT）の発火とほぼ同時に生成が完了したジョブも、succeeded として
-// 記録され通知されること。
+// A job whose generation finishes almost exactly when the deadline (PIPELINE_TIMEOUT) fires is
+// still recorded as succeeded and notified.
 //
-// 締切はステップの実行にだけ被せる必要があります。ctx 全体を締切で上書きすると、
-// 期限と前後して完了したジョブの成功記録が DeadlineExceeded で失敗し、動画は GCS に
-// あるのに状態は running のまま固着します。mv-queue は max_attempts = 1 なので
-// 再試行も来ず、手で直すしかありません。
+// The deadline must wrap only the step run. Overriding the whole ctx with the deadline would make
+// the success record of a job finishing around the deadline fail with DeadlineExceeded, and the
+// state would stick at running although the video is in GCS. mv-queue has max_attempts = 1, so no
+// retry comes either and it can only be fixed by hand.
 func TestExecuteRecordsSuccessCompletedAtDeadline(t *testing.T) {
 	store := newFakeJobStatusStore()
 	notifier := &recordingNotifier{}
@@ -305,13 +305,13 @@ func TestExecuteRecordsSuccessCompletedAtDeadline(t *testing.T) {
 
 	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
 	if len(notifier.completed) != 1 {
-		t.Fatalf("completion notifications = %d, want 1 (期限際の完了が通知されていない)", len(notifier.completed))
+		t.Fatalf("completion notifications = %d, want 1 (completion at the deadline was not notified)", len(notifier.completed))
 	}
 }
 
-// 呼び出し元の切断（Cloud Tasks の dispatch deadline 超過）とほぼ同時に生成が完了した
-// ジョブも、succeeded として記録され通知されること。PIPELINE_TIMEOUT と違い、こちらは
-// パイプラインが上限を設けていなくても起きます。
+// A job whose generation finishes almost exactly when the caller disconnects (Cloud Tasks' dispatch
+// deadline exceeded) is still recorded as succeeded and notified. Unlike PIPELINE_TIMEOUT, this
+// happens even when the pipeline sets no limit.
 func TestExecuteRecordsSuccessWhenCallerCancelsAtCompletion(t *testing.T) {
 	store := newFakeJobStatusStore()
 	notifier := &recordingNotifier{}
@@ -331,12 +331,12 @@ func TestExecuteRecordsSuccessWhenCallerCancelsAtCompletion(t *testing.T) {
 
 	equalStates(t, store.states(), domain.JobStateRunning, domain.JobStateSucceeded)
 	if len(notifier.completed) != 1 {
-		t.Fatalf("completion notifications = %d, want 1 (切断と同時の完了が通知されていない)", len(notifier.completed))
+		t.Fatalf("completion notifications = %d, want 1 (completion at the disconnect was not notified)", len(notifier.completed))
 	}
 }
 
-// deadlineStep は context の期限まで待ってから成功します。
-// PIPELINE_TIMEOUT の発火とほぼ同時に生成が完了した状況を再現します。
+// deadlineStep waits until the context's deadline and then succeeds.
+// It reproduces generation finishing almost exactly when PIPELINE_TIMEOUT fires.
 type deadlineStep struct{}
 
 func (deadlineStep) Name() string { return "deadline" }
@@ -346,8 +346,8 @@ func (deadlineStep) Execute(ctx context.Context, _ *step.Context) error {
 	return nil
 }
 
-// cancelStep は成功を返す直前に cancel を呼びます。呼び出し元 context の切断
-// （Cloud Tasks の dispatch deadline 超過）と同時に生成が完了した状況を再現します。
+// cancelStep calls cancel just before returning success. It reproduces generation finishing at
+// the same time as the caller's context is cut (Cloud Tasks' dispatch deadline exceeded).
 type cancelStep struct{ cancel context.CancelFunc }
 
 func (cancelStep) Name() string { return "cancel" }
@@ -357,7 +357,7 @@ func (f cancelStep) Execute(context.Context, *step.Context) error {
 	return nil
 }
 
-// countingStep は実行回数を数えるステップです。
+// countingStep is a step that counts its runs.
 type countingStep struct {
 	calls int
 }
@@ -369,7 +369,7 @@ func (f *countingStep) Execute(context.Context, *step.Context) error {
 	return nil
 }
 
-// blockingStep はコンテキストがキャンセルされるまで応答しないステップです。
+// blockingStep is a step that does not respond until the context is cancelled.
 type blockingStep struct{}
 
 func (blockingStep) Name() string { return "blocking" }

@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="row justify-content-center">
     <div class="col-12 col-lg-8">
-        <!-- ジョブ ID はスクリプトへ data 属性で渡します（/static/js/job_status.js）。 -->
+        <!-- The job ID is passed to the script through a data attribute (/static/js/job_status.js). -->
         <div class="card border-0 shadow-sm" id="job-status-panel" data-job-id="{{.JobID}}">
             <div class="card-body p-4 p-md-5">
                 <div class="d-flex align-items-center gap-3 mb-4">

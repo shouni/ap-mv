@@ -8,24 +8,24 @@ import (
 	"github.com/shouni/go-veo-orchestrator/video"
 )
 
-// このファイルは Google Flow Music の MV 作成へ貼る本文を組み立てます。
+// This file builds the text to paste into Google Flow Music's MV creation.
 //
-// Flow Music は曲の音源とテキスト 1 本（と任意の参照画像）を受け取り、曲全体の MV を
-// 作ります。Veo のように 1 カット 1 リクエストではないので、Veo へ送るカット別本文
-// （step/video_gen_prompt.go）はそのままでは貼れません。前提にしている入力（開始画像・
-// 前の動画）が Flow Music には無く、全カットを並べると同じキャラクター描写がカット数ぶん
-// 繰り返されるためです。ここでは同じレシピを、曲全体の演出メモ 1 本へ並べ直します。
+// Flow Music takes the song's audio and one text (plus optional reference images) and makes an MV
+// of the whole song. It is not one request per cut like Veo, so the per-cut text sent to Veo
+// (step/video_gen_prompt.go) cannot be pasted as-is: Flow Music lacks the inputs it assumes (a start
+// image, the previous video), and listing every cut would repeat the same character description
+// once per cut. Here the same recipe is rearranged into one direction note for the whole song.
 
-// sharedDescriptionMinRunes は、カット間で共通する描写を 1 回にまとめる下限の長さです。
-// これより短い共通部分は「a girl with」のような偶然の一致でありうるので、まとめません。
+// sharedDescriptionMinRunes is the minimum length for gathering a description shared between cuts
+// into one. Shorter shared parts may be coincidences like "a girl with", so they are not gathered.
 const sharedDescriptionMinRunes = 120
 
-// FlowMusicBrief は、レシピを Flow Music へ貼る演出メモにします。
+// FlowMusicBrief turns the recipe into a direction note to paste into Flow Music.
 //
-// visual_anchor は台本生成の時点でキャラクターの外見を毎カット書き込んでいます（Veo は
-// カットごとに独立したリクエストで、前のカットの描写を知らないため）。1 本のメモでは
-// それが丸ごと重複になるので、同じキャラクターのカットに共通する描写を冒頭へ 1 回だけ
-// 出し、各ショットではキャラクター名に置き換えます。
+// visual_anchor writes the character's appearance into every cut at script generation (Veo takes
+// each cut as an independent request and does not know the previous cut's description). In one
+// note that becomes pure duplication, so the description shared by a character's cuts is put once
+// at the top, and each shot replaces it with the character's name.
 func FlowMusicBrief(recipe *video.Recipe, characters *characterkit.Characters) string {
 	if recipe == nil {
 		return ""
@@ -100,7 +100,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// characterIDsInOrder は、カットに現れるキャラクター ID を初出順で返します。
+// characterIDsInOrder returns the character IDs appearing in the cuts, in order of first appearance.
 func characterIDsInOrder(cuts []video.Cut) []string {
 	var ids []string
 	seen := map[string]bool{}
@@ -141,13 +141,14 @@ func lyricLines(dialogue string) []string {
 	return lines
 }
 
-// foldSharedDescription は、id のカットに共通する外見描写を anchors の中で name へ畳み、
-// その描写を返します。まとめるほどの共通部分が無ければ何も変えず空文字を返します。
+// foldSharedDescription folds the appearance description shared by id's cuts into name within
+// anchors and returns that description. When there is no shared part worth gathering it changes
+// nothing and returns an empty string.
 //
-// 描写はカタログの visual_cues とは一致しません（台本生成の LLM が言い換えるうえ、
-// カタログも後から変わる）。そのためカタログとは照合せず、カット同士の共通部分を
-// 取ります。共通部分を持たないカット（キャラクターが映らない情景など）は畳む対象から
-// 外すだけで、全体の畳み込みは止めません。
+// The description does not match the catalogue's visual_cues (the script-generating LLM rephrases
+// it, and the catalogue changes later too). So it is not checked against the catalogue; the shared
+// part between cuts is taken instead. Cuts with no shared part (scenes without the character, for
+// instance) are only left out of the folding, which does not stop for the whole.
 func foldSharedDescription(cuts []video.Cut, anchors []string, id, name string) string {
 	var shared []rune
 	var members []int
@@ -170,13 +171,13 @@ func foldSharedDescription(cuts []video.Cut, anchors []string, id, name string) 
 	}
 
 	block := string(shared)
-	// 名前から始める。共通部分は "close-up of Tsumugi, a girl ..." の " of " のように、
-	// 描写の手前の語まで含みうるので、そこを置き換えると文が壊れます。
+	// Start from the name. The shared part can include the words before the description, like " of "
+	// in "close-up of Tsumugi, a girl ...", and replacing there would break the sentence.
 	if at := strings.Index(block, name); at >= 0 {
 		block = block[at:]
 	}
-	// 描写の終わりで切る。共通部分は次の語の頭文字まで伸びていることがあります
-	// （"..., sprinting" と "..., singing" なら "..., s" まで一致する）。
+	// Cut at the end of the description. The shared part sometimes extends to the first letter of the
+	// next word ("..., sprinting" and "..., singing" match up to "..., s").
 	if end := strings.LastIndexAny(block, ",."); end > 0 {
 		block = block[:end]
 	}
@@ -189,7 +190,7 @@ func foldSharedDescription(cuts []video.Cut, anchors []string, id, name string) 
 	return strings.TrimLeft(strings.TrimPrefix(block, name), ", ")
 }
 
-// longestCommonRunes は a と b に共通する最長の連続部分を返します。
+// longestCommonRunes returns the longest contiguous part shared by a and b.
 func longestCommonRunes(a, b []rune) []rune {
 	best, bestEnd := 0, 0
 	prev := make([]int, len(b)+1)
@@ -208,7 +209,7 @@ func longestCommonRunes(a, b []rune) []rune {
 	return a[bestEnd-best : bestEnd]
 }
 
-// formatTimestamp は秒を m:ss にします（端数は切り捨て）。
+// formatTimestamp turns seconds into m:ss (fractions truncated).
 func formatTimestamp(sec float64) string {
 	total := int(sec)
 	if total < 0 {

@@ -149,7 +149,7 @@ func TestRegenerateSectionKeyframesFormRendersSectionCuts(t *testing.T) {
 		t.Fatalf("RegenerateSectionKeyframesForm status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	// モード切り替えはカット単位のフォームと共通の外部スクリプトが受け持ちます。
+	// Mode switching is handled by the external script shared with the per-cut form.
 	for _, want := range []string{"Verse", "/jobs/job-1/sections/0/regenerate-keyframes", "Cut 1", "Cut 2",
 		`src="/static/js/regenerate_mode.js"`} {
 		if !strings.Contains(body, want) {

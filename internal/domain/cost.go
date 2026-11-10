@@ -2,25 +2,25 @@ package domain
 
 import "strings"
 
-// DefaultVeoPriceUSDPerSecond は、モデル別の単価が設定されていないときに使う Veo 出力単価
-// （USD / 生成1秒）です。
+// DefaultVeoPriceUSDPerSecond is the Veo output price (USD per generated second) used when no
+// per-model price is configured.
 //
-// Veo は生成した動画の秒数で課金されるため、カットの duration_sec を合計するだけで、API を
-// 一切呼ばずに概算が出せます。ただしここの既定値はあくまで目安で、実際の単価はモデル・音声
-// 生成の有無（VEO_GENERATE_AUDIO）・契約によって変わります。運用時は VEO_PRICE_USD_PER_SEC
-// で実際の価格表に合わせてください。
+// Veo bills by the seconds of generated video, so summing the cuts' duration_sec gives an
+// estimate without calling any API. The default here is only a guide, though: the actual price
+// varies with the model, whether audio is generated (VEO_GENERATE_AUDIO) and the contract. In
+// operation, match the actual price list with VEO_PRICE_USD_PER_SEC.
 //
-// この概算が Google の請求額と一致することは保証しません。用途はジョブ間の相対比較と、
-// 再生成による無駄の検出です。
+// This estimate is not guaranteed to match Google's bill. It is for relative comparison between
+// jobs and for spotting waste from regeneration.
 const DefaultVeoPriceUSDPerSecond = 0.40
 
-// VeoPricing は Veo モデル名ごとの出力単価（USD / 生成1秒）です。
-// キー "" は、表に無いモデルへ適用するフォールバック単価として扱います。
+// VeoPricing is the output price per Veo model name (USD per generated second).
+// The key "" is the fallback price applied to models not in the table.
 type VeoPricing map[string]float64
 
-// RateFor はモデル名に対応する単価を返します。モデルが表に無ければ "" キーの
-// フォールバック単価、それも無ければ DefaultVeoPriceUSDPerSecond を返します。
-// 0 以下の単価は「未設定」と同じ扱いにして、次の候補へ進みます。
+// RateFor returns the price for the model name. When the model is not in the table it returns
+// the "" key's fallback price, and failing that DefaultVeoPriceUSDPerSecond.
+// A price of 0 or less is treated as "unset" and moves on to the next candidate.
 func (p VeoPricing) RateFor(model string) float64 {
 	if rate, ok := p[strings.TrimSpace(model)]; ok && rate > 0 {
 		return rate
@@ -31,68 +31,68 @@ func (p VeoPricing) RateFor(model string) float64 {
 	return DefaultVeoPriceUSDPerSecond
 }
 
-// VideoCostEstimate は、1ジョブぶんの Veo 課金量の概算です。
+// VideoCostEstimate is an estimate of one job's Veo billing.
 //
-// 2つの秒数を並べて持ちます。GeneratedSeconds は「完成品の尺」で、レシピだけから算出できる
-// ため常に埋まります。SubmittedSeconds は「実際に Veo へ投げた尺」で、生成時に記録した
-// veo_usage.json がある場合だけ埋まります。Cloud Tasks の再配信などで同じカットを焼き直すと
-// 後者だけが増えるので、差（ExcessSeconds）が再生成で捨てた分になります。
+// It holds two durations side by side. GeneratedSeconds is "the finished length", computable
+// from the recipe alone, so it is always filled. SubmittedSeconds is "the length actually sent to
+// Veo", filled only when the veo_usage.json recorded at generation exists. Re-rendering the same
+// cut (Cloud Tasks redelivery and the like) grows only the latter, so the difference (ExcessSeconds) is what regeneration threw away.
 type VideoCostEstimate struct {
-	// Model は単価の解決に使ったモデル名です。VideoRecipe はジョブに使った Veo モデルを
-	// 保存していないため、表示時点で設定されている既定モデルを当てています。過去ジョブを
-	// 別モデルで生成していた場合、この単価は実際と異なります。
+	// Model is the model name used to resolve the price. VideoRecipe does not store the Veo model
+	// a job used, so the default model configured at display time is assumed. If a past job was
+	// generated with another model, this price differs from the real one.
 	Model string `json:"model,omitempty"`
-	// RateUSDPerSecond は適用した単価です。
+	// RateUSDPerSecond is the price applied.
 	RateUSDPerSecond float64 `json:"rate_usd_per_second,omitempty"`
-	// GeneratedSeconds は生成済みカットの尺の合計です。
+	// GeneratedSeconds is the total duration of generated cuts.
 	GeneratedSeconds float64 `json:"generated_seconds,omitempty"`
-	// EstimatedUSD は GeneratedSeconds × RateUSDPerSecond です。
+	// EstimatedUSD is GeneratedSeconds × RateUSDPerSecond.
 	EstimatedUSD float64 `json:"estimated_usd,omitempty"`
-	// SubmittedSeconds は実際に Veo へ投げた尺の合計です。実績記録（veo_usage.json）が
-	// あるジョブでのみ埋まります。
+	// SubmittedSeconds is the total duration actually sent to Veo. It is filled only for jobs with
+	// a usage record (veo_usage.json).
 	SubmittedSeconds float64 `json:"submitted_seconds,omitempty"`
-	// SubmittedUSD は SubmittedSeconds × RateUSDPerSecond です。
+	// SubmittedUSD is SubmittedSeconds × RateUSDPerSecond.
 	SubmittedUSD float64 `json:"submitted_usd,omitempty"`
-	// SubmittedCalls は成功した Veo 生成の回数です。カット数より多ければ焼き直しがあります。
+	// SubmittedCalls is the number of successful Veo generations. More than the cut count means re-renders.
 	SubmittedCalls int `json:"submitted_calls,omitempty"`
-	// HasUsage は実績記録を読めたかを示します。記録が無い（実績記録の導入前に走った）
-	// ジョブと、実績ゼロのジョブを区別するために持ちます。
+	// HasUsage reports whether the usage record could be read. It distinguishes jobs with no record
+	// (run before usage records existed) from jobs with zero usage.
 	HasUsage bool `json:"has_usage,omitempty"`
 }
 
-// HasCost は、表示に値するコストがあるかを返します。キーフレームのみのジョブは
-// 生成済みカットが無いため false になります。
+// HasCost reports whether there is a cost worth showing. Keyframe-only jobs have no generated
+// cuts, so it is false.
 func (e VideoCostEstimate) HasCost() bool {
 	return e.GeneratedSeconds > 0 || e.SubmittedSeconds > 0
 }
 
-// ExcessSeconds は、実際に投げた尺と完成品の尺の差です。再生成で捨てた分にあたります。
-// 実績記録が無いジョブでは 0 を返します（「無駄が無い」ではなく「分からない」を意味します。
-// HasUsage で区別してください）。
+// ExcessSeconds is the difference between the length actually sent and the finished length,
+// i.e. what regeneration threw away. For jobs without a usage record it returns 0 (meaning
+// "unknown", not "no waste"; tell them apart with HasUsage).
 func (e VideoCostEstimate) ExcessSeconds() float64 {
 	if !e.HasUsage {
 		return 0
 	}
-	// 記録は取りこぼしうる（VeoUsage のコメント参照）ので、実績が完成尺を下回ることがある。
-	// その場合に負の「無駄」を表示しても意味が無いため 0 に丸める。
+	// Records can miss entries (see VeoUsage's comment), so usage can come out below the finished
+	// length. A negative "waste" means nothing in that case, so round it to 0.
 	if excess := e.SubmittedSeconds - e.GeneratedSeconds; excess > 0 {
 		return excess
 	}
 	return 0
 }
 
-// ExcessUSD は ExcessSeconds に単価を掛けた金額です。
+// ExcessUSD is ExcessSeconds multiplied by the price.
 func (e VideoCostEstimate) ExcessUSD() float64 {
 	return e.ExcessSeconds() * e.RateUSDPerSecond
 }
 
-// HasExcess は、表示に値する再生成ロスがあるかを返します。
+// HasExcess reports whether there is a regeneration loss worth showing.
 func (e VideoCostEstimate) HasExcess() bool {
 	return e.ExcessSeconds() > 0
 }
 
-// GeneratedSecondsOfCuts は、生成済みカットの尺の合計を返します。
-// 未生成のカットは Veo を呼んでいないため加算しません。
+// GeneratedSecondsOfCuts returns the total duration of generated cuts.
+// Ungenerated cuts never called Veo, so they are not added.
 func GeneratedSecondsOfCuts(cuts []VideoCut) float64 {
 	total := 0.0
 	for _, cut := range cuts {
@@ -103,7 +103,7 @@ func GeneratedSecondsOfCuts(cuts []VideoCut) float64 {
 	return total
 }
 
-// EstimateVideoCost は、生成済み秒数とモデルから概算コストを組み立てます。
+// EstimateVideoCost builds the estimated cost from the generated seconds and the model.
 func EstimateVideoCost(seconds float64, model string, pricing VeoPricing) VideoCostEstimate {
 	rate := pricing.RateFor(model)
 	return VideoCostEstimate{
@@ -114,9 +114,9 @@ func EstimateVideoCost(seconds float64, model string, pricing VeoPricing) VideoC
 	}
 }
 
-// ApplyVeoCostEstimate は、履歴詳細にカット別とジョブ合計の概算コストを埋めます。
-// 単価はストレージに保存された値ではなく表示時に解決するため、価格表を更新すれば過去ジョブの
-// 表示額もその場で追従します（保存済みメタデータは書き換えません）。
+// ApplyVeoCostEstimate fills the per-cut and job-total estimated costs into the history detail.
+// The price is resolved at display time rather than stored, so updating the price table makes
+// past jobs' amounts follow immediately (stored metadata is not rewritten).
 func ApplyVeoCostEstimate(detail *VideoHistoryDetail, model string, pricing VeoPricing) {
 	if detail == nil {
 		return
@@ -136,10 +136,10 @@ func ApplyVeoCostEstimate(detail *VideoHistoryDetail, model string, pricing VeoP
 	detail.GeneratedSeconds = total
 }
 
-// ApplyVeoUsage は、記録済みの実績を履歴詳細へ重ねます。usage が nil（実績記録の導入前に
-// 走ったジョブ）のときは何もしないので、完成尺ベースの概算だけが残ります。
+// ApplyVeoUsage overlays the recorded usage on the history detail. When usage is nil (a job run
+// before usage records existed) it does nothing, so only the finished-length estimate remains.
 //
-// ApplyVeoCostEstimate の後に呼んでください。単価は前者が解決した値をそのまま使います。
+// Call it after ApplyVeoCostEstimate. It uses the price the former resolved as-is.
 func ApplyVeoUsage(detail *VideoHistoryDetail, usage *VeoUsage) {
 	if detail == nil || usage == nil {
 		return
@@ -153,9 +153,9 @@ func ApplyVeoUsage(detail *VideoHistoryDetail, usage *VeoUsage) {
 	}
 }
 
-// ApplyVeoCostEstimateToHistories は、履歴一覧の各項目に概算コストを埋めます。
-// 一覧は VideoHistory しか持たない（カット配列を読まない）ため、レシピ読み込み時に
-// 算出済みの GeneratedSeconds を単価に掛けるだけです。
+// ApplyVeoCostEstimateToHistories fills the estimated cost into each item of the history listing.
+// The listing holds only VideoHistory (it does not read the cut array), so it just multiplies
+// the GeneratedSeconds computed when the recipe was read by the price.
 func ApplyVeoCostEstimateToHistories(histories []VideoHistory, model string, pricing VeoPricing) {
 	for i := range histories {
 		histories[i].Cost = EstimateVideoCost(histories[i].GeneratedSeconds, model, pricing)

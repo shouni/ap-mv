@@ -24,8 +24,8 @@ func TestHistorySectionsFromRecipeMarksFullyGeneratedSections(t *testing.T) {
 			{CutIndex: 2, StartSec: 5, EndSec: 10, Status: video.CutStatusGenerated},
 			{CutIndex: 3, StartSec: 10, EndSec: 15, Status: video.CutStatusGenerated},
 			{CutIndex: 4, StartSec: 15, EndSec: 20, Status: video.CutStatusPending},
-			// セクション3（Bridge, 20-30s）にはこのレシピ上カットが存在しない
-			// （例: short_video_from_section で作られたジョブの保存済みレシピ）。
+			// Section 3 (Bridge, 20-30s) has no cut in this recipe
+			// (e.g. the stored recipe of a job made by short_video_from_section).
 		},
 	}
 

@@ -13,8 +13,8 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// slackTitles はパイプラインの結果ごとの見出しです。
-// スキップ通知は行わないため Skipped は設定していません。
+// slackTitles are the headings per pipeline result.
+// Skip notices are never sent, so Skipped is not set.
 var slackTitles = notify.Titles{
 	Success: "✅ AP MV 処理が完了しました",
 	Failure: "❌ AP MV 処理中にエラーが発生しました",
@@ -74,16 +74,16 @@ func (s *SlackAdapter) NotifyTaskError(ctx context.Context, errDetail error, req
 	return nil
 }
 
-// buildCompleteContent は完了通知の本文を組み立てます。
+// buildCompleteContent builds the body of the completion notice.
 func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) *notify.Body {
 	body := notify.NewBody()
 
 	writeSlackRequestSummary(body, req)
 
-	// 台本のみのジョブ（video_recipe_draft）も完成ジョブと同じ video_music_meta.json を
-	// 書くので、行き先は同じ履歴詳細です。以前は専用の /drafts 一覧へ送っていましたが、
-	// 下書きが別プレフィックスをやめて普通のジョブになった時点でそのルートは消えており、
-	// 台本のみのジョブの完了通知だけがリンク切れになっていました。
+	// Script-only jobs (video_recipe_draft) write the same video_music_meta.json as finished jobs, so
+	// they go to the same history detail. They used to go to a dedicated /drafts listing, but that
+	// route disappeared when drafts stopped using a separate prefix and became ordinary jobs, and only
+	// script-only jobs' completion notices were left with a broken link.
 	historyJobID := req.HistoryJobID
 	if historyJobID == "" {
 		historyJobID = req.JobID
@@ -95,7 +95,7 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) *not
 	if req.CutCount > 0 {
 		body.Code("Cuts", strconv.Itoa(req.CutCount))
 	}
-	// gs:// は表示のまま Cloud Console へリンクされます（notify.Body.URIField）。
+	// gs:// is linked to the Cloud Console as displayed (notify.Body.URIField).
 	body.URIField("Output", req.OutputURI)
 
 	writeSlackRequestSource(body, req)
@@ -103,14 +103,14 @@ func (s *SlackAdapter) buildCompleteContent(req domain.NotificationRequest) *not
 	return body
 }
 
-// writeSlackRequestSummary はジョブの識別情報を追記します。
+// writeSlackRequestSummary appends the job's identifying information.
 func writeSlackRequestSummary(body *notify.Body, req domain.NotificationRequest) {
 	body.Code("Job ID", req.JobID).
 		Code("Command", req.Command).
 		Field("Title", req.Title)
 }
 
-// writeSlackRequestGenerationMetadata は生成条件を追記します。
+// writeSlackRequestGenerationMetadata appends the generation conditions.
 func writeSlackRequestGenerationMetadata(body *notify.Body, req domain.NotificationRequest) {
 	body.Code("Text Model", req.TextModel).
 		Code("Image Model", req.ImageModel).
@@ -118,15 +118,15 @@ func writeSlackRequestGenerationMetadata(body *notify.Body, req domain.Notificat
 		Code("Character", req.CharacterID)
 }
 
-// writeSlackRequestSource は入力ソースを追記します。
+// writeSlackRequestSource appends the input source.
 func writeSlackRequestSource(body *notify.Body, req domain.NotificationRequest) {
 	body.URIField("Source", req.SourceURL).
 		URIField("Recipe", req.RecipeURL).
 		URIField("Audio", req.AudioURL)
 }
 
-// historyDetailURL は履歴詳細ページのURLを返します。
+// historyDetailURL returns the URL of the history detail page.
 func (s *SlackAdapter) historyDetailURL(jobID string) string {
-	// serviceURL か jobID が空なら空を返し、通知側が行ごと省きます（JoinURL の契約）。
+	// If serviceURL or jobID is empty it returns empty, and the notifier omits the whole line (JoinURL's contract).
 	return notify.JoinURL(s.serviceURL, "/jobs", jobID)
 }

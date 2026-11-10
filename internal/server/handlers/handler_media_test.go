@@ -14,7 +14,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// mediaHandler は、メディア 1 式を持つジョブを返すハンドラーです。
+// mediaHandler is a handler returning a job with one full set of media.
 func mediaHandler(t *testing.T) *Handler {
 	t.Helper()
 
@@ -52,7 +52,7 @@ func mediaRequest(target string, params map[string]string) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, routeContext))
 }
 
-// メディアの入口は 302 で GCS の署名付き URL へ送ること。画面に署名を埋めないための経路です。
+// Media entrances 302 to GCS signed URLs. It is the path that keeps signatures out of the page.
 func TestMediaHandlersRedirectToSignedURL(t *testing.T) {
 	h := mediaHandler(t)
 
@@ -85,7 +85,7 @@ func TestMediaHandlersRedirectToSignedURL(t *testing.T) {
 			if !strings.Contains(location, tt.wantSrc) {
 				t.Errorf("Location = %q, want it to point at %q", location, tt.wantSrc)
 			}
-			// 302 のキャッシュは署名の期限より短くしないと、期限切れの URL を指すものが残ります。
+			// Unless the 302's cache is shorter than the signature's expiry, entries pointing at expired URLs remain.
 			if got := rec.Header().Get("Cache-Control"); got != redirectCacheControl {
 				t.Errorf("Cache-Control = %q, want %q", got, redirectCacheControl)
 			}
@@ -93,8 +93,8 @@ func TestMediaHandlersRedirectToSignedURL(t *testing.T) {
 	}
 }
 
-// 記録に無いカットは 404 にすること。ジョブ ID さえ有効なら任意の対象を署名できる、
-// という形にしないための境界です。
+// A cut not in the record is 404. It is the boundary that keeps "any valid job ID can sign any
+// target" from happening.
 func TestCutMediaRejectsUnknownCut(t *testing.T) {
 	h := mediaHandler(t)
 
@@ -107,8 +107,8 @@ func TestCutMediaRejectsUnknownCut(t *testing.T) {
 	}
 }
 
-// JSON の呼び出し元（MCP ゲートウェイ）は署名付き URL を受け取り続けること。
-// リダイレクトを辿らずに URL 自体を使うため、ここを空にすると成果物へ到達できなくなります。
+// JSON callers (the MCP gateway) keep receiving signed URLs. They use the URLs themselves without
+// following redirects, so emptying them here would leave the artifacts unreachable.
 func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 	h := mediaHandler(t)
 
@@ -122,7 +122,7 @@ func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 
-	// 状態と詳細は 1 つの文書で、詳細は detail の下に入れ子です（jobDocument）。
+	// The status and detail are one document, with the detail nested under detail (jobDocument).
 	var doc struct {
 		State  string `json:"state"`
 		Detail *struct {
@@ -135,21 +135,21 @@ func TestHistoryDetailJSONKeepsSignedURLs(t *testing.T) {
 		} `json:"detail"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
-		t.Fatalf("JSON を読めない: %v", err)
+		t.Fatalf("cannot read the JSON: %v", err)
 	}
 	if doc.State != "succeeded" || doc.Detail == nil {
-		t.Fatalf("状態と詳細が 1 つの文書になっていません: %s", rec.Body.String())
+		t.Fatalf("the status and detail are not one document: %s", rec.Body.String())
 	}
 	payload := *doc.Detail
 
 	if payload.SignedURL == "" || payload.FinalVideoSignedURL == "" {
-		t.Errorf("JSON に署名付き URL がありません: %s", rec.Body.String())
+		t.Errorf("no signed URL in the JSON: %s", rec.Body.String())
 	}
 	if len(payload.Cuts) != 1 || payload.Cuts[0].KeyframeURL == "" || payload.Cuts[0].VideoSignedURL == "" {
-		t.Errorf("カットの署名付き URL がありません: %s", rec.Body.String())
+		t.Errorf("no signed URL for the cut: %s", rec.Body.String())
 	}
-	// 画面用のパスは JSON に出しません（domain 側で json:"-"）。
+	// Page paths are not put in JSON (json:"-" on the domain side).
 	if strings.Contains(rec.Body.String(), "/jobs/job-1/cuts/") {
-		t.Errorf("画面用のパスが JSON に混ざっています: %s", rec.Body.String())
+		t.Errorf("page paths are mixed into the JSON: %s", rec.Body.String())
 	}
 }

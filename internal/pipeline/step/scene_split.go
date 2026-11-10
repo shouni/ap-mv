@@ -79,9 +79,9 @@ func expandCutsForKeyframeScenes(cuts []video.Cut) []video.Cut {
 	for _, cut := range cuts {
 		priorKeyframe := cut.KeyframeReference
 		cut = resetCutForSceneKeyframe(cut)
-		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
-		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。StartSec/EndSec は
-		// 連結後の映像タイムラインで振り直すため、カット間のオーバーラップは発生しない。
+		// Error diffusion: including the rounding error up to the previous cut (the gap between
+		// videoEnd and the song time), aim the cumulative video length at this cut's end in the song.
+		// StartSec/EndSec are reassigned on the joined video timeline, so cuts never overlap.
 		target := cutMusicalEndSec(cut) - videoEnd
 		cut.StartSec = videoEnd
 		cut.DurationSec = target
@@ -106,7 +106,7 @@ func expandCutsForKeyframeScenes(cuts []video.Cut) []video.Cut {
 	return expanded
 }
 
-// cutMusicalEndSec は、このカットが楽曲上で終わるべき時刻（秒）を返します。
+// cutMusicalEndSec returns the time (seconds) at which this cut should end in the song.
 func cutMusicalEndSec(cut video.Cut) float64 {
 	if cut.EndSec > cut.StartSec {
 		return cut.EndSec
@@ -114,23 +114,23 @@ func cutMusicalEndSec(cut video.Cut) float64 {
 	return cut.StartSec + cut.DurationSec
 }
 
-// expandCutsForVideoToVideoScenes は、UsePreviousVideo（継続チェーン）方式のカット列を
-// チェーンブロック列へ再割り当てします。各ブロックは1本の継続チェーン（ベース1カット +
-// video_extension の継続カット列、合計尺は videoToVideoChainDurations の候補値）として
-// まるごと生成され、ブロックごとに専用のキーフレームが作られます。ブロックには
-// IsChainStart を立て、下流の expandCutsToSupportedDurations がこれを見てブロックを
-// [ベース, 7秒, ...] の実生成カット列へ分割し、累積尺の判定でも新規チェーン起点として
-// 扱います（計画した尺が下流で書き換えられない）。
+// expandCutsForVideoToVideoScenes reassigns the cuts of the UsePreviousVideo (continuation chain)
+// approach into a sequence of chain blocks. Each block is generated whole as one continuation
+// chain (one base cut + a run of video_extension continuation cuts, with a total length from the
+// candidates of videoToVideoChainDurations), and each block gets its own keyframe. Blocks are
+// marked IsChainStart, and downstream expandCutsToSupportedDurations sees it, splits the block
+// into the actually generated cuts [base, 7s, ...] and treats it as a new chain start in the
+// cumulative-length check too (so the planned length is not rewritten downstream).
 //
-// 尺の割り当ては楽曲タイムラインを正とし、カットごとの丸め誤差（切り上げ・切り下げ両方向）
-// は次カットの目標尺へ持ち越して相殺します（誤差拡散）。割り当て後の StartSec/EndSec は
-// 連結後の映像タイムラインで振り直すため、カット間のオーバーラップは発生しません。
-// AudioCue のテキストに含まれる時刻表現（例 "0:28 to 0:37"）は歌詞由来の楽曲上の目安時刻
-// としてそのまま残します。
+// Durations are allocated with the song timeline as the truth, and each cut's rounding error (in
+// either direction, up or down) is carried into the next cut's target and cancels out (error
+// diffusion). After allocation StartSec/EndSec are reassigned on the joined video timeline, so
+// cuts never overlap. Time expressions in AudioCue's text (e.g. "0:28 to 0:37") are kept as-is as
+// the lyric-derived approximate times in the song.
 //
-// characters と referenceImagesSupported は、各カットのチェーンベースが reference_to_video
-// （8秒固定）と image_to_video（{4,6,8}秒）のどちらで生成されるかの判定に使います
-// （expandCutsToSupportedDurations と同じ cutUsesReferenceImages の規則）。
+// characters and referenceImagesSupported decide whether each cut's chain base is generated as
+// reference_to_video (fixed at 8 seconds) or image_to_video ({4,6,8} seconds)
+// (the same cutUsesReferenceImages rule as expandCutsToSupportedDurations).
 func expandCutsForVideoToVideoScenes(cuts []video.Cut, characters *characterkit.Characters, referenceImagesSupported bool) []video.Cut {
 	expanded := make([]video.Cut, 0, len(cuts))
 	videoEnd := 0.0
@@ -138,21 +138,20 @@ func expandCutsForVideoToVideoScenes(cuts []video.Cut, characters *characterkit.
 		videoEnd = cuts[0].StartSec
 	}
 	for _, cut := range cuts {
-		// IsChainStart が立っているカットは、前回の SceneSplit が割り当て済みのチェーン
-		// ブロックです（draft から読み直した場合や、保存済みレシピを渡された
-		// mv_from_keyframe_video_recipe）。そのブロックは下の割り当てで自分自身へ
-		// 再割り当てされて必ず単独ブロック（i == 0）になるため、シーンリセットを
-		// 添字（i > 0）からは復元できません。ここで拾って引き継ぎます。
+		// A cut with IsChainStart set is a chain block a previous SceneSplit already allocated (re-read
+		// from a draft, or mv_from_keyframe_video_recipe given a stored recipe). The allocation below
+		// reassigns that block to itself, so it always becomes a single block (i == 0), and the scene
+		// reset cannot be restored from the index (i > 0). Pick it up here and carry it over.
 		sceneReset := cut.IsChainStart && cut.IsSectionStart
-		// 1ブロックへ再割り当てされたカットは、焼いてあるキーフレームがそのカットのまま
-		// 対応し続けるので捨てません（下の len(durations) == 1 の分岐で戻します）。捨てると
-		// 「保存済みキーフレームから動画を作る」操作のたびに画像を全部焼き直すことになります。
-		// 複数ブロックへ割れた場合は、1枚の絵が別々の scene beat を持つ複数カットに
-		// 対応してしまうため戻しません。
+		// A cut reassigned to one block keeps its rendered keyframe, which still corresponds to the same
+		// cut (it is restored in the len(durations) == 1 branch below). Dropping it would mean
+		// re-rendering every image each time "make video from the saved keyframes" runs. When split into
+		// several blocks it is not restored, because one picture would correspond to several cuts with
+		// different scene beats.
 		priorKeyframe := cut.KeyframeReference
 		cut = resetCutForSceneKeyframe(cut)
-		// 誤差拡散: 前カットまでの丸め誤差（videoEnd と楽曲時刻のズレ）を含めて、
-		// このカットの楽曲上の終端に映像の累積尺を合わせにいく。
+		// Error diffusion: including the rounding error up to the previous cut (the gap between
+		// videoEnd and the song time), aim the cumulative video length at this cut's end in the song.
 		target := cutMusicalEndSec(cut) - videoEnd
 		bases := veo.ImageToVideoDurationsSec()
 		if veo.CutUsesReferenceImages(cut, characters, referenceImagesSupported) {
@@ -194,12 +193,13 @@ func expandCutsForVideoToVideoScenes(cuts []video.Cut, characters *characterkit.
 	return expanded
 }
 
-// allocateChainDurations は、目標尺 target（秒）をチェーン尺候補 candidates
-// （videoToVideoChainDurations の返り値、昇順・整数秒前提）の組み合わせへ割り当てます。
-// 優先順位は (1) 合計と目標の差の絶対値が最小（切り上げ・切り下げの両方を許す）、
-// (2) ブロック数が少ない（キーフレーム生成とチェーン数の節約）、(3) 合計が短い、です。
-// 過不足分は呼び出し元が誤差拡散で次カットの目標へ持ち越すため、ここではこのカット単体の
-// 誤差だけを最小化すればよい。返り値は昇順（短いブロックが先）です。
+// allocateChainDurations allocates the target length target (seconds) into a combination of the
+// chain length candidates (the return value of videoToVideoChainDurations, assumed ascending
+// whole seconds). Priority is (1) the smallest absolute difference between total and target
+// (rounding either up or down), (2) fewer blocks (saving keyframe generation and chains),
+// (3) a shorter total. The caller carries any excess or shortfall into the next cut's target by
+// error diffusion, so only this cut's own error needs minimising here. The result is ascending
+// (shorter blocks first).
 func allocateChainDurations(target float64, candidates []float64) []float64 {
 	smallest := candidates[0]
 	if target <= smallest {
@@ -208,7 +208,7 @@ func allocateChainDurations(target float64, candidates []float64) []float64 {
 	largest := candidates[len(candidates)-1]
 	limit := int(math.Ceil(target + largest))
 	const unreachable = math.MaxInt32
-	// blockCounts[s] = 合計 s 秒を作る最小ブロック数、choice[s] = そのとき最後に使う候補。
+	// blockCounts[s] = the fewest blocks totalling s seconds, choice[s] = the candidate used last for it.
 	blockCounts := make([]int, limit+1)
 	choice := make([]int, limit+1)
 	for s := 1; s <= limit; s++ {

@@ -16,26 +16,26 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// satavgPattern は ffmpeg の signalstats フィルタが metadata=print で出力する平均彩度
-// （0-255スケール）を抽出する正規表現です。
+// satavgPattern is the regular expression that extracts the average saturation (0-255 scale)
+// printed by ffmpeg's signalstats filter with metadata=print.
 var satavgPattern = regexp.MustCompile(`lavfi\.signalstats\.SATAVG=([0-9.]+)`)
 
-// defaultFFmpegBinary は PATH 上の ffmpeg 実行ファイル名です（Dockerfile で
-// /usr/local/bin/ffmpeg に静的リンクバイナリを配置しています）。
+// defaultFFmpegBinary is the ffmpeg executable name on PATH (the Dockerfile places a
+// statically linked binary at /usr/local/bin/ffmpeg).
 const defaultFFmpegBinary = "ffmpeg"
 
-// FFmpegVideoProcessor は ports.VideoProcessor をローカルの ffmpeg バイナリで実装します。
-// ap-mv の中で唯一、動画バイナリ処理（フレーム抽出・結合）を担う境界です。
+// FFmpegVideoProcessor implements ports.VideoProcessor with the local ffmpeg binary.
+// It is the one boundary in ap-mv that processes video binaries (frame extraction, joining).
 type FFmpegVideoProcessor struct {
 	Reader orchestrator.ContentReader
 	Writer remoteio.Writer
-	// Binary は ffmpeg 実行ファイルのパスです。空の場合は PATH 上の "ffmpeg" を使います。
+	// Binary is the path to the ffmpeg executable. When empty, "ffmpeg" on PATH is used.
 	Binary string
 }
 
 var _ ports.VideoProcessor = (*FFmpegVideoProcessor)(nil)
 
-// NewFFmpegVideoProcessor は FFmpegVideoProcessor を初期化します。
+// NewFFmpegVideoProcessor initialises an FFmpegVideoProcessor.
 func NewFFmpegVideoProcessor(reader orchestrator.ContentReader, writer remoteio.Writer) *FFmpegVideoProcessor {
 	return &FFmpegVideoProcessor{Reader: reader, Writer: writer}
 }
@@ -47,7 +47,7 @@ func (p *FFmpegVideoProcessor) binary() string {
 	return defaultFFmpegBinary
 }
 
-// ExtractLastFrame は videoURI の最終フレームを画像として抽出し destURI へアップロードします。
+// ExtractLastFrame extracts the last frame of videoURI as an image and uploads it to destURI.
 func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, destURI string) (string, error) {
 	if p == nil || p.Reader == nil || p.Writer == nil {
 		return "", fmt.Errorf("ffmpeg video processor is not configured")
@@ -64,15 +64,15 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 	}
 	defer func() { _ = os.Remove(localFrame) }()
 
-	// -sseof -3: 末尾3秒手前からデコードを開始する（ファイル全体をデコードするより高速）。
-	// -frames:v 1 だとシーク直後に最初にデコードされた1フレーム（末尾から最大3秒手前）を
-	// 書き出してしまい、本当の最終フレームとズレる。実ジョブで検証したところ、この
-	// ズレは末尾1秒手前の設定でもPSNR ~17dB相当の無視できない差になっていた。
-	// -update 1（image2 マルチプレクサの単一ファイル上書きモード）を使い、シーク後に
-	// デコードされる残り数秒分の最後の1フレーム（＝真の最終フレーム）が書き込まれた
-	// 状態で終わるようにする。PNG(可逆)で出力する。動画自体は既にH.264で非可逆圧縮
-	// 済みだが、ここでJPEG等の非可逆フォーマットへさらに変換すると、次チェーンの
-	// 参照画像として二重圧縮による劣化が加わってしまうため避ける。
+	// -sseof -3: start decoding 3 seconds before the end (faster than decoding the whole file).
+	// With -frames:v 1, the first frame decoded right after the seek (up to 3 seconds before the
+	// end) is written, which is not the real last frame. Checked on real jobs, this drift was a
+	// non-negligible difference of about 17 dB PSNR even with the seek at 1 second before the end.
+	// Use -update 1 (the image2 muxer's single-file overwrite mode) so that it finishes with the
+	// last of the frames decoded over the remaining seconds after the seek (= the true last frame)
+	// written. Output PNG (lossless). The video itself is already lossily compressed as H.264, and
+	// converting further to a lossy format such as JPEG here would add double-compression
+	// degradation to the next chain's reference image, so that is avoided.
 	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-sseof", "-3", "-i", localVideo, "-update", "1", localFrame)
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		return "", fmt.Errorf("extract last frame: ffmpeg: %w: %s", runErr, out)
@@ -84,7 +84,7 @@ func (p *FFmpegVideoProcessor) ExtractLastFrame(ctx context.Context, videoURI, d
 	return destURI, nil
 }
 
-// ColorMatchSaturation は videoURI の彩度を referenceImageURI の平均彩度に合わせて補正します。
+// ColorMatchSaturation corrects videoURI's saturation to match the average saturation of referenceImageURI.
 func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoURI, referenceImageURI, destURI string) (string, error) {
 	if p == nil || p.Reader == nil || p.Writer == nil {
 		return "", fmt.Errorf("ffmpeg video processor is not configured")
@@ -105,11 +105,11 @@ func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoUR
 	if err != nil {
 		return "", fmt.Errorf("color match saturation: measure reference: %w", err)
 	}
-	// 動画は末尾付近をサンプリングする。video_extension は累積動画全体を毎回再生成するため、
-	// 先頭フレームは(その回では)まだ新規生成されていない古い区間で、ドリフトが蓄積していない
-	// ことがある。ドリフトは各世代で新しく生成される末尾側に現れるため、そこを測らないと
-	// 実際のドリフト量を過小評価してしまう（実測: 同じ動画で先頭フレームSATAVG=26.7に対し
-	// 末尾1秒手前は35.7、末尾側でしかドリフトを検出できなかった）。
+	// Sample the video near its end. video_extension regenerates the whole cumulative video each
+	// time, so the first frame is an older span not newly generated (on that run) and may not have
+	// accumulated drift. Drift appears on the end side newly generated in each generation, so not
+	// measuring there underestimates the actual drift (measured: on the same video the first frame
+	// had SATAVG=26.7 against 35.7 one second before the end; drift was detectable only at the end).
 	videoSat, err := p.averageSaturationNearEnd(ctx, localVideo)
 	if err != nil {
 		return "", fmt.Errorf("color match saturation: measure video: %w", err)
@@ -118,8 +118,8 @@ func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoUR
 		return "", fmt.Errorf("color match saturation: video has no measurable saturation")
 	}
 
-	// 補正比率。基準画像1枚・動画1フレームだけのサンプルという粗い測定なので、
-	// 誤差や構図差による過補正で不自然な見た目にならないよう [0.7, 1.3] にクランプする。
+	// The correction ratio. Sampling one reference image and one video frame is a rough
+	// measurement, so clamp to [0.7, 1.3] to avoid an unnatural look from overcorrecting on error or composition differences.
 	ratio := refSat / videoSat
 	if ratio < 0.7 {
 		ratio = 0.7
@@ -133,8 +133,8 @@ func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoUR
 	}
 	defer func() { _ = os.Remove(localOut) }()
 
-	// eq=saturation=<ratio> で全フレームの彩度を一律スケーリングする。音声は再エンコードせず
-	// そのままコピーする（映像フィルタのみが対象のため）。
+	// eq=saturation=<ratio> scales every frame's saturation uniformly. Audio is copied as-is
+	// without re-encoding (only the video filter applies).
 	cmd := exec.CommandContext(ctx, p.binary(), "-y", "-i", localVideo,
 		"-vf", fmt.Sprintf("eq=saturation=%.4f", ratio),
 		"-c:v", "libx264", "-preset", "fast", "-crf", "18", "-c:a", "copy", localOut)
@@ -148,13 +148,13 @@ func (p *FFmpegVideoProcessor) ColorMatchSaturation(ctx context.Context, videoUR
 	return destURI, nil
 }
 
-// averageSaturation は ffmpeg の signalstats フィルタで、画像（またはシーク済み動画）の
-// 先頭フレームの平均彩度(SATAVG, 0-255スケール)を測定します。
+// averageSaturation measures the average saturation (SATAVG, 0-255 scale) of the first frame
+// of an image (or a seeked video) with ffmpeg's signalstats filter.
 func (p *FFmpegVideoProcessor) averageSaturation(ctx context.Context, localPath string) (float64, error) {
 	return p.averageSaturationArgs(ctx, "-i", localPath, "-frames:v", "1", "-vf", "signalstats,metadata=print", "-f", "null", "-")
 }
 
-// averageSaturationNearEnd は動画の末尾1秒手前のフレームの平均彩度を測定します。
+// averageSaturationNearEnd measures the average saturation of the frame one second before the video's end.
 func (p *FFmpegVideoProcessor) averageSaturationNearEnd(ctx context.Context, localVideo string) (float64, error) {
 	return p.averageSaturationArgs(ctx, "-sseof", "-1", "-i", localVideo, "-frames:v", "1", "-vf", "signalstats,metadata=print", "-f", "null", "-")
 }
@@ -176,8 +176,8 @@ func (p *FFmpegVideoProcessor) averageSaturationArgs(ctx context.Context, args .
 	return sat, nil
 }
 
-// ConcatHardCut は videoURIs をハードカットで結合し destURI へアップロードします。
-// 入力が1件だけの場合は再エンコードせずそのままコピーします。
+// ConcatHardCut joins videoURIs with hard cuts and uploads the result to destURI.
+// With a single input it is copied as-is without re-encoding.
 func (p *FFmpegVideoProcessor) ConcatHardCut(ctx context.Context, videoURIs []string, destURI string) (string, error) {
 	if p == nil || p.Reader == nil || p.Writer == nil {
 		return "", fmt.Errorf("ffmpeg video processor is not configured")
@@ -218,9 +218,9 @@ func (p *FFmpegVideoProcessor) ConcatHardCut(ctx context.Context, videoURIs []st
 	}
 	defer func() { _ = os.Remove(localOut) }()
 
-	// 各チェーンはVeoの別々の生成呼び出しで作られたクリップなので、コーデック/パラメータの
-	// 一致を前提にできる "-c copy" は使わず、常に再エンコードする(クリップは数十秒程度なので
-	// コストは小さい)。
+	// Each chain is a clip made by a separate Veo generation call, so "-c copy", which assumes
+	// matching codecs/parameters, is not used; it always re-encodes (clips are a few tens of
+	// seconds, so the cost is small).
 	cmd := exec.CommandContext(ctx, p.binary(),
 		"-y", "-f", "concat", "-safe", "0", "-i", listFile,
 		"-c:v", "libx264", "-preset", "veryfast", "-c:a", "aac",
@@ -236,8 +236,8 @@ func (p *FFmpegVideoProcessor) ConcatHardCut(ctx context.Context, videoURIs []st
 	return destURI, nil
 }
 
-// downloadToTemp は srcURI の内容をローカル一時ファイルへストリームし、そのパスを返します。
-// 呼び出し側が os.Remove で削除する責任を持ちます。
+// downloadToTemp streams the contents of srcURI into a local temp file and returns its path.
+// The caller is responsible for removing it with os.Remove.
 func (p *FFmpegVideoProcessor) downloadToTemp(ctx context.Context, srcURI, ext string) (string, error) {
 	rc, err := p.Reader.Open(ctx, srcURI)
 	if err != nil {
@@ -258,7 +258,7 @@ func (p *FFmpegVideoProcessor) downloadToTemp(ctx context.Context, srcURI, ext s
 	return path, nil
 }
 
-// uploadFromTemp はローカルファイル localPath の内容を destURI へアップロードします。
+// uploadFromTemp uploads the contents of the local file localPath to destURI.
 func (p *FFmpegVideoProcessor) uploadFromTemp(ctx context.Context, localPath, destURI, contentType string) error {
 	f, err := os.Open(localPath)
 	if err != nil {
@@ -268,7 +268,7 @@ func (p *FFmpegVideoProcessor) uploadFromTemp(ctx context.Context, localPath, de
 	return p.Writer.Write(ctx, destURI, f, remoteio.WithContentType(contentType))
 }
 
-// streamCopy は srcURI の内容をローカルへ書き出さず直接 destURI へストリームコピーします。
+// streamCopy stream-copies the contents of srcURI straight to destURI without writing them locally.
 func (p *FFmpegVideoProcessor) streamCopy(ctx context.Context, srcURI, destURI, contentType string) error {
 	rc, err := p.Reader.Open(ctx, srcURI)
 	if err != nil {
@@ -278,7 +278,7 @@ func (p *FFmpegVideoProcessor) streamCopy(ctx context.Context, srcURI, destURI, 
 	return p.Writer.Write(ctx, destURI, rc, remoteio.WithContentType(contentType))
 }
 
-// tempFilePath は空の一時ファイルを作成し、そのパスを返します(ファイルハンドルは閉じます)。
+// tempFilePath creates an empty temp file and returns its path (the file handle is closed).
 func tempFilePath(ext string) (string, error) {
 	f, err := os.CreateTemp("", "ap-mv-videoproc-*"+ext)
 	if err != nil {
@@ -292,7 +292,7 @@ func tempFilePath(ext string) (string, error) {
 	return path, nil
 }
 
-// writeConcatList は ffmpeg concat demuxer 用のリストファイルを作成し、そのパスを返します。
+// writeConcatList creates the list file for ffmpeg's concat demuxer and returns its path.
 func writeConcatList(localPaths []string) (string, error) {
 	f, err := os.CreateTemp("", "ap-mv-videoproc-*.txt")
 	if err != nil {
@@ -302,7 +302,7 @@ func writeConcatList(localPaths []string) (string, error) {
 	defer func() { _ = f.Close() }()
 	var sb strings.Builder
 	for _, p := range localPaths {
-		// concat demuxerはシングルクォートを '\'' でエスケープする
+		// The concat demuxer escapes single quotes as '\''
 		escaped := strings.ReplaceAll(p, "'", `'\''`)
 		fmt.Fprintf(&sb, "file '%s'\n", escaped)
 	}
@@ -313,16 +313,16 @@ func writeConcatList(localPaths []string) (string, error) {
 	return listPath, nil
 }
 
-// probeStreamsPattern は ffmpeg のストリーム行から種別を拾います。
+// probeStreamsPattern picks the stream type from ffmpeg's stream lines.
 var probeStreamsPattern = regexp.MustCompile(`Stream #\d+:\d+.*?: (Video|Audio):`)
 
-// probeDurationPattern は ffmpeg のヘッダ出力から総尺（HH:MM:SS.ss）を拾います。
+// probeDurationPattern picks the total duration (HH:MM:SS.ss) from ffmpeg's header output.
 var probeDurationPattern = regexp.MustCompile(`Duration: (\d+):(\d+):(\d+\.\d+)`)
 
-// Probe は動画の実尺と音声トラックの有無を測ります。
+// Probe measures a video's actual duration and whether it has an audio track.
 //
-// ffprobe ではなく ffmpeg を使うのは、このコンテナに置いているのが ffmpeg だけだからです。
-// 出力先を null にして解析だけ行わせ、標準エラーに出るヘッダ情報を読み取ります。
+// ffmpeg is used rather than ffprobe because ffmpeg is the only binary in this container.
+// The output is sent to null so it only analyses, and the header information on stderr is read.
 func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (ports.VideoStats, error) {
 	if p == nil || p.Reader == nil {
 		return ports.VideoStats{}, fmt.Errorf("ffmpeg video processor is not configured")
@@ -334,8 +334,8 @@ func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (port
 	}
 	defer func() { _ = os.Remove(localPath) }()
 
-	// 解析だけを行うため出力は捨てる。-i だけの実行は終了コードが 1 になるので、
-	// エラーではなく出力の中身で判断する。
+	// Only analyse, so discard the output. Running with just -i exits with code 1, so decide
+	// by the content of the output rather than by the error.
 	cmd := exec.CommandContext(ctx, p.binary(), "-i", localPath, "-f", "null", "-")
 	out, _ := cmd.CombinedOutput()
 
@@ -346,9 +346,9 @@ func (p *FFmpegVideoProcessor) Probe(ctx context.Context, videoURI string) (port
 	return stats, nil
 }
 
-// parseProbeOutput は ffmpeg のヘッダ出力から尺と音声トラックの有無を読み取ります。
-// ffmpeg の実行から切り離した純関数にしているのは、バイナリ無しで解析規則を
-// テストできるようにするためです。
+// parseProbeOutput reads the duration and whether there is an audio track from ffmpeg's header output.
+// It is a pure function separated from running ffmpeg so the parsing rules can be tested
+// without the binary.
 func parseProbeOutput(out []byte) (ports.VideoStats, error) {
 	stats := ports.VideoStats{}
 	for _, match := range probeStreamsPattern.FindAllSubmatch(out, -1) {

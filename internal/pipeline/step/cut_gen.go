@@ -8,7 +8,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// CutKeyframeStep は、各カットのキーフレーム画像を生成するパイプラインステップです。
+// CutKeyframeStep is the pipeline step that generates each cut's keyframe image.
 type CutKeyframeStep struct{}
 
 // Name returns the receiver name.
@@ -24,10 +24,10 @@ func (CutKeyframeStep) Execute(ctx context.Context, sc *Context) error {
 	}
 	applyTaskAudioURLToVideoRecipe(sc.Task, sc.VideoRecipe)
 	applyTaskCharacterIDToVideoRecipe(sc.Task, sc.VideoRecipe)
-	// RunAndSave（下）はキーフレーム生成後、自らGCSへvideo_music_meta.jsonを書き込む
-	// （go-veo-orchestrator/runner/keyframe.go）。そのため呼び出し前にAspectRatioを
-	// 確定させておく必要がある。呼び出し後に設定すると、メモリ上のオブジェクトは
-	// 更新されてもGCS上のファイルには反映されない（既に書き込み済みのため）。
+	// RunAndSave (below) writes video_music_meta.json to GCS itself after generating keyframes
+	// (go-veo-orchestrator/runner/keyframe.go). So AspectRatio has to be settled before the call.
+	// Setting it afterwards would update the in-memory object but not the file on GCS (it has
+	// already been written).
 	if strings.TrimSpace(sc.VideoRecipe.AspectRatio) == "" {
 		sc.VideoRecipe.AspectRatio = resolvedAspectRatio(sc.Task)
 	}
@@ -40,9 +40,9 @@ func (CutKeyframeStep) Execute(ctx context.Context, sc *Context) error {
 	if outputPath == "" {
 		return fmt.Errorf("output path is required")
 	}
-	// RunAndSave は keyframe_reference を持つカットを焼き直しません
-	// （go-veo-orchestrator v1.10.0 以降）。SceneSplitStep が 1:1 で再割り当てされた
-	// カットの参照を残すため、保存済みレシピからの動画生成は画像を作り直さずに済みます。
+	// RunAndSave does not re-render cuts that have a keyframe_reference
+	// (go-veo-orchestrator v1.10.0 and later). SceneSplitStep keeps the reference of cuts reassigned
+	// 1:1, so making video from a stored recipe does not have to remake the images.
 	recipe, err := sc.Workflows.CutKeyframe.GenerateAndSave(ctx, sc.VideoRecipe, outputPath)
 	if err != nil {
 		return err

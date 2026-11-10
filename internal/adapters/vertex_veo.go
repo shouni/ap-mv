@@ -13,11 +13,11 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// VertexVeoRunner は Vertex AI Veo の動画生成を呼び出す Runner です。
+// VertexVeoRunner is the Runner that calls Vertex AI Veo's video generation.
 //
-// API 呼び出しとポーリングは genai-kit の veo パッケージが持ち、この型は
-// アプリ固有の関心だけを担当します: ジョブ単位の出力先の決定、生成物のジョブ配下
-// 正規パスへのコピー、タスク単位のモデル・アスペクト比の差し替えです。
+// API calls and polling belong to genai-kit's veo package; this type handles only the app's own
+// concerns: deciding the per-job output location, copying outputs to canonical paths under the
+// job, and replacing the model and aspect ratio per task.
 type VertexVeoRunner struct {
 	videos           *veo.Client
 	videoCopier      videoCopier
@@ -28,10 +28,10 @@ type VertexVeoRunner struct {
 	usePreviousVideo bool
 }
 
-// Close は参照を手放すだけです。
+// Close only lets go of references.
 //
-// 以前はここで専用の GCS クライアントを閉じていました。いまはストアを注入して
-// もらう形なので、その寿命は注入した側（ファクトリ）にあります。
+// It used to close a dedicated GCS client here. Now the store is injected, so its lifetime belongs
+// to whoever injected it (the factory).
 func (r *VertexVeoRunner) Close() error {
 	if r == nil {
 		return nil
@@ -40,17 +40,16 @@ func (r *VertexVeoRunner) Close() error {
 	return nil
 }
 
-// NewVertexVeoRunner はアプリケーション設定から VertexVeoRunner を生成します。
+// NewVertexVeoRunner creates a VertexVeoRunner from the application settings.
 //
-// aiClient は NewVertexAIAdapter が組み立てた Vertex AI クライアントを注入します。
-// 自前で組まないのは、テキスト/画像生成と動画生成が別々のクライアントを持つと、
-// リージョン・リトライ間隔・HTTP タイムアウトが片方だけ変更されて食い違うためです
-// （実際に InitialDelay が 60s と 30s で割れていました）。認証とリトライの設定は
-// これで1箇所に集約されます。
+// aiClient injects the Vertex AI client built by NewVertexAIAdapter. It does not build its own
+// because if text/image generation and video generation each had a client, the region, retry
+// interval and HTTP timeout could change on one side only and disagree (InitialDelay actually split
+// into 60s and 30s). This gathers authentication and retry settings in one place.
 //
-// store は、Veo の一時出力パスからジョブ配下の正規パスへ動画を移すために使います。
-// 以前はここで GCS クライアントをもう 1 つ生成していましたが、
-// remoteio.Store.Copy が同一スキームでサーバーサイドコピーへ落とすため不要になりました。
+// store is used to move videos from Veo's temporary output path to the canonical path under the
+// job. A second GCS client used to be created here, but it became unnecessary once
+// remoteio.Store.Copy fell back to a server-side copy within the same scheme.
 func NewVertexVeoRunner(cfg *config.Config, aiClient gemini.VideoGenerator, store remoteio.Store) (*VertexVeoRunner, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -85,9 +84,9 @@ func NewVertexVeoRunner(cfg *config.Config, aiClient gemini.VideoGenerator, stor
 	}, nil
 }
 
-// WithVideoOptions は、モデルとアスペクト比だけを差し替えた派生 Runner を返します。
-// veo クライアントやストアは共有するため、タスク単位で安全に呼び出せます。
-// 空文字の指定は元の設定値を維持します。
+// WithVideoOptions returns a derived Runner with only the model and aspect ratio replaced.
+// The veo client and the store are shared, so it is safe to call per task.
+// An empty string keeps the original setting.
 func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.VideoRunner {
 	model = strings.TrimSpace(model)
 	aspectRatio = strings.TrimSpace(aspectRatio)
@@ -104,7 +103,7 @@ func (r *VertexVeoRunner) WithVideoOptions(model, aspectRatio string) ports.Vide
 	return &derived
 }
 
-// Run は Veo の動画生成を実行し、完了後に生成動画のメタデータを返します。
+// Run runs Veo's video generation and, when done, returns the generated video's metadata.
 func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequest) (*ports.VideoResponse, error) {
 	if err := validateVertexVeoRequest(req); err != nil {
 		return nil, err
@@ -116,7 +115,7 @@ func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequ
 	}
 	video, ok := result.First()
 	if !ok {
-		return nil, fmt.Errorf("cut %d の生成結果に動画が含まれていません（operation: %s）", req.CutIndex, result.OperationName)
+		return nil, fmt.Errorf("cut %d: the generation result contains no video (operation: %s)", req.CutIndex, result.OperationName)
 	}
 
 	cloudURL, err := r.canonicalizeGeneratedVideo(ctx, req, video.URI)
@@ -124,10 +123,10 @@ func (r *VertexVeoRunner) Run(ctx context.Context, req ports.VideoGenerationRequ
 		return nil, err
 	}
 
-	// VideoID は次カットの PreviousVideoURI として使うため、参照可能な gs:// URI
-	// だけを載せる（VideoResponse.VideoID の契約）。以前は URI が無い場合に
-	// オペレーション名へ退避していたが、その値は video_extension に分類されないのに
-	// チェーン文脈として引き回され、7秒計画のカットが尺検証で誤って拒否されていた。
+	// VideoID is used as the next cut's PreviousVideoURI, so only a referenceable gs:// URI goes in
+	// (VideoResponse.VideoID's contract). It used to fall back to the operation name when there was
+	// no URI, but that value, though not classified as video_extension, was carried around as chain
+	// context, and cuts planned at 7 seconds were wrongly rejected by the duration check.
 	videoID := cloudURL
 	mimeType := video.MIMEType
 	if mimeType == "" {

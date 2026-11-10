@@ -15,22 +15,22 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// fakeHistoryReader は memio を包んだストレージのフェイクです。
+// fakeHistoryReader is a storage fake wrapping memio.
 //
-// 一覧の畳み込み・不在の返し方・削除の単位といったストレージの振る舞いは memio が
-// 受け持ちます（本物のハンドラと同じ適合性スイートを通っています）。ここに残しているのは
-// 呼び出しの記録（何回開いたか・何回走査したか・何を消したか）と、
-// 署名付き URL の組み立てだけです。
+// Storage behaviour such as folding listings, how absence is returned and the unit of deletion
+// belongs to memio (it passes the same conformance suite as the real handlers). What remains
+// here is recording the calls (how many opens, how many scans, what was deleted) and building
+// signed URLs.
 //
-// 読み書き・署名が 1 つの Store に畳まれたので、以前あった fakeHistoryWriter と
-// fakeHistorySigner もこの型が兼ねます。
+// Reads, writes and signing have been folded into one Store, so this type also covers the former
+// fakeHistoryWriter and fakeHistorySigner.
 type fakeHistoryReader struct {
 	remoteio.Store
 	h *memio.Handler
 
-	// paths は一覧にだけ現れるオブジェクトです（内容は要らないもの）。
+	// paths are objects that appear only in listings (whose contents are not needed).
 	paths []string
-	// files は内容を持つオブジェクトです。
+	// files are objects with contents.
 	files map[string]string
 
 	mu        sync.Mutex
@@ -40,8 +40,8 @@ type fakeHistoryReader struct {
 	ready     bool
 }
 
-// ensure は memio を組み立てて paths / files を流し込みます。
-// 各テストが構造体リテラルで前提を書けるよう、生成は最初の呼び出しまで遅らせています。
+// ensure builds the memio and loads paths / files into it.
+// Construction is deferred to the first call so each test can state its preconditions as a struct literal.
 func (r *fakeHistoryReader) ensure() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -99,7 +99,7 @@ func (r *fakeHistoryReader) Delete(ctx context.Context, name string) error {
 	return r.Store.Delete(ctx, name)
 }
 
-// SignURL は署名付き URL を組み立てたことにします。
+// SignURL pretends to have built a signed URL.
 func (r *fakeHistoryReader) SignURL(_ context.Context, uri, _ string, _ time.Duration) (string, error) {
 	return "https://signed.example/" + strings.TrimPrefix(uri, "gs://"), nil
 }
@@ -138,27 +138,27 @@ func TestListHistoryPageBuildsRowsFromJobStatus(t *testing.T) {
 		t.Fatalf("Title = %q", got.Title)
 	}
 	if got.CutCount != 2 {
-		t.Fatalf("CutCount = %d, want 2 (progress.total_cuts が唯一のカット数)", got.CutCount)
+		t.Fatalf("CutCount = %d, want 2 (progress.total_cuts is the only cut count)", got.CutCount)
 	}
 	if !got.Generated {
 		t.Fatal("Generated = false, want true")
 	}
-	// 保存先はドキュメントに写さず、ジョブ ID から導きます。
+	// Storage locations are not copied into the document; they are derived from the job ID.
 	want := "gs://bucket/ap-mv/veo/jobs/" + status.JobID + "/video_music_meta.json"
 	if got.StorageURI != want {
 		t.Fatalf("StorageURI = %q, want %q", got.StorageURI, want)
 	}
 	if got.KeyframeZipURI == "" {
-		t.Fatal("KeyframeZipURI が空です")
+		t.Fatal("KeyframeZipURI is empty")
 	}
-	// 一覧はメタデータを 1 件も開きません（開いていた頃はページ分の並行読みが要りました）。
+	// The listing opens no metadata at all (when it did, a page's worth of parallel reads was needed).
 	if store.listCalls != 1 {
 		t.Fatalf("listCalls = %d, want 1", store.listCalls)
 	}
 }
 
-// 段階での絞り込みはクエリが行います。以前は段階がカット列からしか導けないため、
-// 絞り込むと全ジョブのメタデータを読んでいました。
+// Filtering by stage is done by the query. The stage used to be derivable only from the cut
+// list, so filtering read every job's metadata.
 func TestListHistoryPageAddsStageFilter(t *testing.T) {
 	t.Parallel()
 
@@ -172,9 +172,9 @@ func TestListHistoryPageAddsStageFilter(t *testing.T) {
 	if _, err := repo.ListHistoryPage(context.Background(), 2, 10, ""); err != nil {
 		t.Fatalf("ListHistoryPage() error = %v", err)
 	}
-	// 絞り込み無しでもコマンドの限定は必ず載ります（保守用のジョブを混ぜないため）。
+	// Even without a filter the command restriction is always applied (so maintenance jobs do not mix in).
 	if store.lastOptions != 1 {
-		t.Fatalf("options = %d, want 1 (command のみ)", store.lastOptions)
+		t.Fatalf("options = %d, want 1 (command only)", store.lastOptions)
 	}
 	if store.lastPage != 2 || store.lastPerPage != 10 {
 		t.Fatalf("page/perPage = %d/%d, want 2/10", store.lastPage, store.lastPerPage)
@@ -188,8 +188,8 @@ func TestListHistoryPageAddsStageFilter(t *testing.T) {
 	}
 }
 
-// 記録先が無いときは空を返します。一覧が引けないことと 0 件は区別できませんが、
-// web ロールでも worker ロールでも Firestore は必ず組み立てるため、実運用では起きません。
+// With nowhere to read from, it returns empty. Not being able to list cannot be told from zero
+// rows, but Firestore is always built for both the web and worker roles, so it does not happen in practice.
 func TestListHistoryPageWithoutJobStatusReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
@@ -207,8 +207,8 @@ func TestListHistoryPageWithoutJobStatusReturnsEmpty(t *testing.T) {
 	}
 }
 
-// 一覧は状態ドキュメントから失敗と理由を引き継ぎます。段階はカット列から導くので、
-// 失敗したジョブも「keyframes 3/12」で止まるだけで、成果物からは失敗と分かりません。
+// The listing takes the failure and its reason from the status document. The stage is derived
+// from the cut list, so a failed job just stops at "keyframes 3/12" and the artifacts do not show it failed.
 func TestListHistoryPageCarriesFailureFromJobStatus(t *testing.T) {
 	t.Parallel()
 
@@ -237,8 +237,8 @@ func TestListHistoryPageCarriesFailureFromJobStatus(t *testing.T) {
 	}
 }
 
-// 詳細も同じ状態を出します。成果物は途中まで残るので、ここが空だと「なぜ止まったのか」を
-// Slack かログまで探しに行くことになります。記録が無いジョブ（移行前のもの）では空です。
+// The detail shows the same state. Artifacts remain partway, so if this were empty you would have
+// to go digging in Slack or the logs for "why it stopped". It is empty for jobs without a record (pre-migration).
 func TestGetHistoryFillsStateFromJobStatus(t *testing.T) {
 	t.Parallel()
 
@@ -269,7 +269,7 @@ func TestGetHistoryFillsStateFromJobStatus(t *testing.T) {
 		t.Fatalf("State/Error = %q/%q, want failed/veo operation timed out", detail.State, detail.Error)
 	}
 
-	// 記録の無いジョブでも詳細そのものは返します。
+	// Even a job without a record returns the detail itself.
 	repo = NewVideoHistoryRepository(VideoHistoryRepositoryConfig{
 		BaseURI:   "gs://bucket/ap-mv/veo/jobs",
 		Store:     reader,
@@ -280,13 +280,13 @@ func TestGetHistoryFillsStateFromJobStatus(t *testing.T) {
 		t.Fatalf("GetHistory() without a status record error = %v", err)
 	}
 	if detail.State != "" || detail.Title != "half baked" {
-		t.Fatalf("State = %q, Title = %q; 記録が無くても詳細は返すこと", detail.State, detail.Title)
+		t.Fatalf("State = %q, Title = %q; the detail must be returned even without a record", detail.State, detail.Title)
 	}
 }
 
-// GetHistory はキーフレームの参照（gs:// URI）を絶対化するところまでを担い、**署名はしません**。
-// 画面は同一オリジンのパスを辿り、リダイレクトの時点で 1 本だけ署名します。署名は
-// SignHistoryURLs を明示的に呼んだときだけ入ります（JSON 応答の経路）。
+// GetHistory goes only as far as making keyframe references (gs:// URIs) absolute; **it does not sign**.
+// The page follows same-origin paths, and exactly one URL is signed at redirect time. Signatures
+// are added only when SignHistoryURLs is called explicitly (the JSON response path).
 func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 	t.Parallel()
 
@@ -318,18 +318,18 @@ func TestGetHistoryResolvesKeyframeReferencesWithoutSigning(t *testing.T) {
 		t.Fatalf("first keyframe reference = %q", history.Cuts[0].KeyframeReference)
 	}
 	if history.Cuts[0].KeyframeURL != "" {
-		t.Fatalf("GetHistory が署名しています: %q（画面はリダイレクト経由で署名を受け取ります）", history.Cuts[0].KeyframeURL)
+		t.Fatalf("GetHistory signed: %q (pages receive signatures through the redirect)", history.Cuts[0].KeyframeURL)
 	}
 	if history.Cuts[1].DurationSec != 7.5 {
 		t.Fatalf("second duration = %v", history.Cuts[1].DurationSec)
 	}
 
-	// JSON 応答の経路だけが署名を要求します。
+	// Only the JSON response path asks for signatures.
 	if err := repo.SignHistoryURLs(context.Background(), &history); err != nil {
 		t.Fatalf("SignHistoryURLs() error = %v", err)
 	}
 	if !strings.HasPrefix(history.Cuts[0].KeyframeURL, "https://signed.example/") {
-		t.Fatalf("SignHistoryURLs 後の keyframe URL = %q", history.Cuts[0].KeyframeURL)
+		t.Fatalf("keyframe URL after SignHistoryURLs = %q", history.Cuts[0].KeyframeURL)
 	}
 }
 
@@ -364,9 +364,9 @@ func TestDeleteHistoryDeletesJobObjects(t *testing.T) {
 }
 
 // matching how remoteio's GCS reader signals a missing object.
-// notFoundReader は、指定した内容だけを持つストアです。
-// 「まだ無い」と「読めない」を分けて扱う経路の検証に使います。
-// 未登録のオブジェクトは memio がそのまま ErrNotExist を返します。
+// notFoundReader is a store that holds only the given contents.
+// It is used to verify paths that treat "not there yet" and "unreadable" differently.
+// Unregistered objects make memio return ErrNotExist as-is.
 func notFoundReader(files map[string]string) remoteio.Store {
 	h := memio.New(memio.WithScheme(remoteio.SchemeGCS))
 	for uri, body := range files {

@@ -15,7 +15,7 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// stubPipeline は、役割ごとの組み立てだけを見るための ports.Pipeline スタブです。
+// stubPipeline is a ports.Pipeline stub for looking only at per-role assembly.
 type stubPipeline struct{}
 
 func (stubPipeline) Execute(context.Context, domain.Task) error { return nil }
@@ -24,12 +24,12 @@ func (stubPipeline) Close() error { return nil }
 
 var _ ports.Pipeline = stubPipeline{}
 
-// newRoleTestConfig は、SERVER_ROLE の分岐だけを見るための最小構成を返します。
+// newRoleTestConfig returns the minimal config for looking only at the SERVER_ROLE branch.
 func newRoleTestConfig(role serverrole.Role) *config.Config {
 	cfg := &config.Config{}
 	cfg.Server.Role = role
 	cfg.Server.ServiceURL = "https://web.example.test"
-	// Web 面は M2M 検証器の構成に許可リストを要求します（newM2MVerifier 参照）。
+	// The web face requires an allowlist to configure the M2M verifier (see newM2MVerifier).
 	cfg.Auth.AllowedM2MServiceAccounts = []string{"mcp-gateway@test-project.iam.gserviceaccount.com"}
 	cfg.Tasks.CallerServiceAccountEmail = "caller@test-project.iam.gserviceaccount.com"
 	cfg.Tasks.AllowedServiceAccounts = []string{"web-runner@test-project.iam.gserviceaccount.com"}
@@ -41,11 +41,11 @@ func newRoleTestConfig(role serverrole.Role) *config.Config {
 	return cfg
 }
 
-// BuildHandlers が SERVER_ROLE に応じて、担当しない面のハンドラーを nil のままにすること。
+// BuildHandlers leaves the handlers of faces it does not serve nil, according to SERVER_ROLE.
 //
-// router.go は「nil のハンドラーはルート登録ごと省く」ことで役割を分けているため、
-// ここで nil にし損ねると、web サービス上に /tasks/generate が生えたり、worker が
-// OAuth クライアントを抱えたりします。どちらもルーターのテストからは見えません。
+// router.go splits roles by "omitting route registration for nil handlers", so failing to leave
+// one nil here would grow /tasks/generate on the web service, or have the worker hold an OAuth
+// client. Neither is visible from the router's tests.
 func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 	t.Parallel()
 
@@ -73,8 +73,8 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 			if got := h.Web != nil; got != tt.wantWeb {
 				t.Errorf("Web != nil = %v, want %v", got, tt.wantWeb)
 			}
-			// Auth と M2M は Web 面の入口です。worker で組むと、使わない OAuth
-			// クライアントシークレットへのアクセス権を配ることになります。
+			// Auth and M2M are the web face's entrances. Building them on the worker would hand out access
+			// to an OAuth client secret it never uses.
 			if got := h.Auth != nil; got != tt.wantWeb {
 				t.Errorf("Auth != nil = %v, want %v", got, tt.wantWeb)
 			}
@@ -92,8 +92,8 @@ func TestBuildHandlersWiresOnlyTheRolesPlane(t *testing.T) {
 	}
 }
 
-// Web 面だけを担うプロセスは Pipeline を持たずに組み立てられること。
-// BuildContainer が role=web で生成系（Vertex AI・Veo・Slack）を組まないことの対です。
+// A process serving only the web face can be assembled without a Pipeline.
+// The counterpart of BuildContainer not building the generation side (Vertex AI, Veo, Slack) for role=web.
 func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 	t.Parallel()
 
@@ -103,12 +103,12 @@ func TestBuildHandlersWebRoleNeedsNoPipeline(t *testing.T) {
 		t.Fatalf("BuildHandlers() error = %v", err)
 	}
 	if h.Web == nil {
-		t.Fatal("Pipeline が無いだけで Web ハンドラーが組み立てられていない")
+		t.Fatal("web handlers were not assembled just because there is no Pipeline")
 	}
 }
 
-// Worker 面を担うのに Cloud Tasks の OIDC 検証を構成できない場合は起動を止めること。
-// 検証器は fail-closed なので、そのまま起動すると全タスクが失敗し続けます。
+// Startup stops when a process serving the worker face cannot configure Cloud Tasks OIDC verification.
+// The verifier fails closed, so starting anyway would keep every task failing.
 func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 	t.Parallel()
 
@@ -117,15 +117,15 @@ func TestBuildHandlersFailsWhenWorkerCannotVerifyTasks(t *testing.T) {
 
 	appCtx := &app.Container{SessionStore: session.NewMemoryStore(), Config: cfg, Pipeline: stubPipeline{}}
 	if _, err := BuildHandlers(appCtx); err == nil {
-		t.Fatal("TASK_AUDIENCE_URL が無いのに BuildHandlers() が成功している")
+		t.Fatal("BuildHandlers() succeeded without TASK_AUDIENCE_URL")
 	}
 }
 
-// TaskAuth と Worker の片方だけが構成された形を Validate が弾くこと。
+// Validate rejects a shape where only one of TaskAuth and Worker is configured.
 //
-// router.go は TaskAuth の有無だけを見てルート登録を省くため、この不整合を通すと
-// /tasks/generate が黙って 404 になります。設定漏れなのか実装バグなのかが
-// リクエストからは区別できないので、起動時に落とします。
+// router.go omits route registration by looking only at whether TaskAuth exists, so letting this
+// inconsistency through would silently 404 /tasks/generate. A request cannot tell a missing
+// setting from an implementation bug, so it fails at startup.
 func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	t.Parallel()
 
@@ -134,14 +134,14 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 		h       *AppHandlers
 		wantErr bool
 	}{
-		{name: "どちらも nil (web ロール)", h: &AppHandlers{}},
+		{name: "both nil (web role)", h: &AppHandlers{}},
 		{
-			name:    "TaskAuth だけある",
+			name:    "only TaskAuth",
 			h:       &AppHandlers{TaskAuth: mustOIDC(t, "https://worker.example.test", []string{"runner@example.iam.gserviceaccount.com"})},
 			wantErr: true,
 		},
 		{
-			name:    "Worker だけある",
+			name:    "only Worker",
 			h:       &AppHandlers{Worker: worker.NewHandler[domain.Task](stubPipeline{})},
 			wantErr: true,
 		},
@@ -159,7 +159,7 @@ func TestAppHandlersValidateRejectsHalfConfiguredWorker(t *testing.T) {
 	}
 }
 
-// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+// mustOIDC builds a configured verifier for tests (New returns an error when settings are missing).
 func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	t.Helper()
 	v, err := oidc.New(audience, allowed)

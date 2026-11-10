@@ -17,8 +17,8 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// pipelineExternals は、BuildContainer 側で先に組み立てられ buildPipeline へ渡される
-// パイプライン外部依存です。
+// pipelineExternals are the pipeline's external dependencies, built first on the BuildContainer
+// side and passed to buildPipeline.
 type pipelineExternals struct {
 	notifier          ports.Notifier
 	taskQueue         ports.TaskQueue
@@ -26,8 +26,8 @@ type pipelineExternals struct {
 	jobStatus         ports.JobStatusStore
 }
 
-// buildPipeline は、パイプラインの実行に必要な境界実装を注入して返します。
-// 必須依存の検証は pipeline.New が行うため、後からのフィールド代入はありません。
+// buildPipeline injects and returns the boundary implementations needed to run the pipeline.
+// pipeline.New validates required dependencies, so no fields are assigned afterwards.
 func buildPipeline(
 	ctx context.Context,
 	cfg *config.Config,
@@ -66,8 +66,8 @@ func buildPipeline(
 	return pipeline.New(deps)
 }
 
-// newWorkflowResolver は、共有 Workflows とタスク専用構築処理を束ねた本番用
-// workflowResolver を組み立てます。
+// newWorkflowResolver assembles the production workflowResolver bundling the shared Workflows and
+// the task-specific build.
 func newWorkflowResolver(
 	cfg *config.Config,
 	store remoteio.Store,
@@ -101,20 +101,20 @@ func newWorkflowResolver(
 	}
 }
 
-// workflowResolver は pipeline.WorkflowResolver の本番実装です。タスクが既定モデル・
-// シード・Veo 設定のままなら共有済み Workflows を再利用し、タスク固有オプションが
-// 指定されている場合のみ build でタスク専用の Workflows を構築します。
-// 「タスク専用構築が必要か」の判定と構築処理をこの型に集約しているため、
-// タスク固有オプションを追加するときはここだけを変更すれば済みます。
+// workflowResolver is the production implementation of pipeline.WorkflowResolver. When a task
+// keeps the default model, seed and Veo settings it reuses the shared Workflows, and only when
+// task-specific options are given does build construct task-specific Workflows.
+// Deciding "is a task-specific build needed" and the build itself are gathered in this type, so
+// adding a task-specific option only needs a change here.
 type workflowResolver struct {
 	orchCfg orchestrator.Config
 	shared  *orchestrator.Workflows
 	build   func(context.Context, *domain.Task) (*orchestrator.Workflows, error)
 }
 
-// Resolve はタスクに応じた Workflows を返します。
+// Resolve returns the Workflows for the task.
 func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
-	// 共有インスタンスはプロセス全体で使い回すので閉じない。
+	// The shared instance is reused across the process, so it is not closed.
 	if r.build == nil || (!r.usesCustomModels(task) && !usesSeedOverride(task) && !usesVeoOptions(task)) {
 		return r.shared, nil
 	}
@@ -125,7 +125,7 @@ func (r *workflowResolver) Resolve(ctx context.Context, task *domain.Task) (*orc
 	return workflows, nil
 }
 
-// usesCustomModels はタスクが既定モデル以外を指定しているかを判定します。
+// usesCustomModels reports whether the task names a model other than the default.
 func (r *workflowResolver) usesCustomModels(task *domain.Task) bool {
 	if task == nil {
 		return false
@@ -133,14 +133,14 @@ func (r *workflowResolver) usesCustomModels(task *domain.Task) bool {
 	return !r.orchCfg.UsesModels(task.TextModel, task.ImageModel)
 }
 
-// usesSeedOverride はタスクがキャラクターシードの一時的な上書きを指定しているかを判定します。
+// usesSeedOverride reports whether the task asks for a temporary character seed override.
 func usesSeedOverride(task *domain.Task) bool {
 	return task != nil && task.SeedOverride != nil && task.SeedOverrideCharacterID != ""
 }
 
-// usesVeoOptions はタスクが Veo モデルまたはアスペクト比の差し替えを指定しているかを判定します。
-// 指定がある場合は、共有 Workflows ではなく差し替え済み VideoRunner を持つ
-// タスク専用 Workflows を構築する必要があります。
+// usesVeoOptions reports whether the task asks to replace the Veo model or the aspect ratio.
+// When it does, task-specific Workflows with the replaced VideoRunner must be built instead of the
+// shared Workflows.
 func usesVeoOptions(task *domain.Task) bool {
 	if task == nil {
 		return false
@@ -155,8 +155,8 @@ func taskVisualMode(task *domain.Task) string {
 	return task.VisualMode
 }
 
-// taskSeedOverride は、タスクに指定されたキャラクターシード上書きを characterSeedOverride に変換します。
-// 指定がなければ nil を返し、buildWorkflowWithConfig は既定のキャラクター定義をそのまま使います。
+// taskSeedOverride converts the task's character seed override into a characterSeedOverride.
+// With none it returns nil, and buildWorkflowWithConfig uses the default character definitions as-is.
 func taskSeedOverride(task *domain.Task) *characterSeedOverride {
 	if task == nil || task.SeedOverride == nil || task.SeedOverrideCharacterID == "" {
 		return nil

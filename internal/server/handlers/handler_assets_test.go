@@ -12,44 +12,44 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// スクリプトはテンプレートの外に置き、必要なページだけが読み込みます。
-// インラインのままだと画面の構造と振る舞いが同じファイルに混ざり、
-// テンプレート値を JS の文字列リテラルへ埋め込む書き方にもなっていました。
+// Scripts live outside the templates and only the pages that need them load them.
+// Left inline, the page's structure and behaviour were mixed in one file, and template values
+// were embedded into JS string literals.
 func TestPagesLoadTheirScripts(t *testing.T) {
 	t.Parallel()
 
 	body := renderHistoryDetailPage(t)
 	if strings.Contains(body, "<script>") {
-		t.Error("インラインスクリプトが残っています")
+		t.Error("an inline script remains")
 	}
 	for _, attribute := range []string{"onclick=", "onsubmit=", "onchange="} {
 		if strings.Contains(body, attribute) {
-			t.Errorf("%s 属性が残っています", attribute)
+			t.Errorf("a %s attribute remains", attribute)
 		}
 	}
-	// 削除は fetch で送るため、フォームの外から読める CSRF トークンが要ります。
+	// Delete is sent via fetch, so it needs a CSRF token readable from outside the form.
 	if !strings.Contains(body, `id="csrf_token"`) {
-		t.Error("CSRF トークンの hidden input がありません")
+		t.Error("no hidden input for the CSRF token")
 	}
 	if !strings.Contains(body, `data-delete-url="/jobs/`) {
-		t.Error("削除ボタンに data-delete-url がありません")
+		t.Error("the delete button has no data-delete-url")
 	}
 }
 
-// ナビのモデル名は設定から出します。固定文言だった頃は、モデルを入れ替えても
-// 表示だけが古いモデルを指し続けました。
+// The nav's model names come from the configuration. When they were fixed text, swapping models
+// left the display pointing at the old model.
 func TestNavShowsConfiguredGeminiModel(t *testing.T) {
 	t.Parallel()
 
 	if body := renderHistoryPage(t); !strings.Contains(body, "gemini-test-model") {
-		t.Error("ナビに設定した Gemini モデルが出ていません")
+		t.Error("the configured Gemini model is not in the nav")
 	} else if strings.Contains(body, "Gemini 3 Flash") {
-		t.Error("固定のモデル名が残っています")
+		t.Error("a fixed model name remains")
 	}
 }
 
-// renderHistoryPage は、フォームを持たないページの代表として履歴一覧を描きます。
-// モデル選択肢を組み立てないページでも、ナビにはモデル名が出る必要があります。
+// renderHistoryPage renders the history listing as the representative page without a form.
+// Even pages that do not build model options need the model names in the nav.
 func renderHistoryPage(t *testing.T) string {
 	t.Helper()
 
@@ -78,9 +78,9 @@ func renderHistoryPage(t *testing.T) string {
 	return rec.Body.String()
 }
 
-// renderHistoryDetailPage は、削除ボタンと CSRF トークンを持つページの代表として
-// 履歴詳細を描きます。一覧からの削除は下書き専用の導線だったため、統合後は
-// 詳細画面がこの検証の対象です。
+// renderHistoryDetailPage renders the history detail as the representative page with a delete
+// button and a CSRF token. Deleting from the listing was a drafts-only path, so after the merge the
+// detail page is what this checks.
 func renderHistoryDetailPage(t *testing.T) string {
 	t.Helper()
 
@@ -108,9 +108,9 @@ func renderHistoryDetailPage(t *testing.T) string {
 	return rec.Body.String()
 }
 
-// TestNavMarksCurrentPage は、ナビが現在地を active + aria-current で示すことを確認します。
-// 兄弟アプリ（楽曲生成サービス / ap-story / ap-voice）はいずれも持っていて ap-mv だけ無く、
-// どの画面にいるかがナビから読めませんでした。
+// TestNavMarksCurrentPage checks that the nav marks the current place with active + aria-current.
+// The sibling apps (the music-generation service / ap-story / ap-voice) all have it and only ap-mv
+// lacked it, so the nav did not tell which page you were on.
 func TestNavMarksCurrentPage(t *testing.T) {
 	t.Parallel()
 
@@ -118,8 +118,8 @@ func TestNavMarksCurrentPage(t *testing.T) {
 		target   string
 		wantHref string
 	}{
-		"履歴":     {target: "/jobs", wantHref: `href="/jobs"`},
-		"台本のみ一覧": {target: "/jobs?stage=script", wantHref: `href="/jobs?stage=script"`},
+		"history":             {target: "/jobs", wantHref: `href="/jobs"`},
+		"script-only listing": {target: "/jobs?stage=script", wantHref: `href="/jobs?stage=script"`},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -136,7 +136,7 @@ func TestNavMarksCurrentPage(t *testing.T) {
 			if !strings.Contains(body, `aria-current="page" `+tt.wantHref) {
 				t.Errorf("%s should be marked as the current page; body=%s", tt.wantHref, body)
 			}
-			// active は 1 つだけ。両方が現在地になると、どこにいるか読めません。
+			// Only one active. If both were current, you could not tell where you are.
 			if got := strings.Count(body, `aria-current="page"`); got != 1 {
 				t.Errorf("aria-current count = %d, want exactly 1", got)
 			}

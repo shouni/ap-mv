@@ -10,8 +10,8 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// sectionScopedRecipe は 2 セクション・各 2 カットのレシピを組み立てます。
-// cut.SectionIndex は1始まりです（Normalize / SectionSelectStep と同じ規則）。
+// sectionScopedRecipe builds a recipe of 2 sections with 2 cuts each.
+// cut.SectionIndex is 1-based (the same rule as Normalize / SectionSelectStep).
 func sectionScopedRecipe() *video.Recipe {
 	return &video.Recipe{
 		MusicRecipe: video.MusicRecipe{
@@ -43,16 +43,16 @@ func sectionScopedContext(recipe *video.Recipe, sectionIndex int, queue *capture
 	}
 }
 
-// TestSectionScopedGenerationKeepsOtherSectionsInTheRecipe は、この機能の一番壊れては
-// いけない性質を留めます。対象外セクションのカットは「飛ばす」だけで、レシピからは
-// 取り除かれてはいけません。継続タスクはレシピをペイロードで持ち回り、最後の Publishing が
-// それをそのまま元ジョブへ保存するため、ここで削れば他セクションのカットは復元不能に消えます。
+// TestSectionScopedGenerationKeepsOtherSectionsInTheRecipe pins the property of this feature that
+// most must not break. Cuts of sections outside the target are only "skipped" and must not be
+// removed from the recipe. Continuation tasks carry the recipe in the payload and the final
+// Publishing saves it as-is to the original job, so trimming here would delete the other sections' cuts beyond recovery.
 func TestSectionScopedGenerationKeepsOtherSectionsInTheRecipe(t *testing.T) {
 	recipe := sectionScopedRecipe()
 	queue := &captureQueue{}
 	st := VideoGenerationStep{Runner: sequenceRunner{}, SectionScoped: true}
 
-	// セクション 2（0始まり index 1）だけを生成する。
+	// Generate only section 2 (0-based index 1).
 	err := st.Execute(context.Background(), sectionScopedContext(recipe, 1, queue))
 	if err != nil && !errors.Is(err, ErrPipelineDeferred) {
 		t.Fatalf("Execute() error = %v", err)
@@ -69,18 +69,18 @@ func TestSectionScopedGenerationKeepsOtherSectionsInTheRecipe(t *testing.T) {
 	if recipe.Cuts[2].Status != video.CutStatusGenerated {
 		t.Errorf("first cut of the target section was not generated (status %q)", recipe.Cuts[2].Status)
 	}
-	// 継続タスクへ渡されるレシピも削れていないこと。
+	// The recipe passed to the continuation task is not trimmed either.
 	if len(queue.tasks) > 0 && len(queue.tasks[0].VideoRecipe.Cuts) != 4 {
 		t.Errorf("continuation carried %d cuts, want 4", len(queue.tasks[0].VideoRecipe.Cuts))
 	}
 }
 
-// TestSectionScopedGenerationStopsWhenTheSectionIsDone は、担当セクションを焼き終えたら
-// 継続タスクを撒かないことを留めます。範囲を見ずに「未生成カットが残っているか」だけで
-// 判断すると、他セクションのぶんを数えて何も生成しない継続を毎回1本余計に投げます。
+// TestSectionScopedGenerationStopsWhenTheSectionIsDone pins that no continuation task is
+// dispatched once the section in scope is rendered. Deciding only by "are ungenerated cuts left"
+// without looking at the scope would count the other sections' and throw one useless continuation every time.
 func TestSectionScopedGenerationStopsWhenTheSectionIsDone(t *testing.T) {
 	recipe := sectionScopedRecipe()
-	// 対象セクションのカットを1つ残して生成済みにしておく。
+	// Mark the target section's cuts as generated, leaving one.
 	recipe.Cuts[2].Status = video.CutStatusGenerated
 	recipe.Cuts[2].VideoID = "vid-3"
 	recipe.Cuts[2].VideoURL = "gs://bucket/jobs/job-1/videos/cut_3.mp4"
@@ -102,10 +102,10 @@ func TestSectionScopedGenerationStopsWhenTheSectionIsDone(t *testing.T) {
 	}
 }
 
-// TestSectionScopedGenerationMarksChainStartAfterASkippedGap は、飛ばした穴の直後のカットが
-// チェーンの起点として印付けされることを留めます。ここが抜けると chain_finalize が境界を
-// 見落とし、直前のチェーンの最終動画を結合対象から落とすため、完成動画からそのセクションが
-// 丸ごと消えます（生成もコストも済んだあとで、静かに）。
+// TestSectionScopedGenerationMarksChainStartAfterASkippedGap pins that the cut right after a
+// skipped gap is marked as a chain start. Without it, chain_finalize misses the boundary and drops
+// the previous chain's last video from the join, so that section vanishes entirely from the
+// finished video (quietly, after the generation and its cost are done).
 func TestSectionScopedGenerationMarksChainStartAfterASkippedGap(t *testing.T) {
 	recipe := sectionScopedRecipe()
 	queue := &captureQueue{}
@@ -120,12 +120,12 @@ func TestSectionScopedGenerationMarksChainStartAfterASkippedGap(t *testing.T) {
 	}
 }
 
-// TestSectionScopedGenerationRejectsAnEmptySection は、対象セクションにカットが1つも無い
-// ときにエラーになることを留めます。黙って正常終了すると、押した本人には「動いたのに何も
-// 起きない」としか見えません。
+// TestSectionScopedGenerationRejectsAnEmptySection pins that it errors when the target section
+// has no cut at all. Finishing normally in silence would look to the person who pressed the
+// button like "it ran and nothing happened".
 func TestSectionScopedGenerationRejectsAnEmptySection(t *testing.T) {
 	recipe := sectionScopedRecipe()
-	recipe.Cuts = recipe.Cuts[:2] // セクション2のカットを取り除く
+	recipe.Cuts = recipe.Cuts[:2] // remove section 2's cuts
 	st := VideoGenerationStep{Runner: sequenceRunner{}, SectionScoped: true}
 
 	if err := st.Execute(context.Background(), sectionScopedContext(recipe, 1, &captureQueue{})); err == nil {
@@ -142,9 +142,9 @@ func TestSectionScopedGenerationRejectsAnOutOfRangeSection(t *testing.T) {
 	}
 }
 
-// TestContinuationRemembersTheOriginCommand は、継続タスクが元のコマンドを保持することを
-// 留めます。Command は video_gen_continuation で上書きされるため、これが失われると
-// 実行計画が「結合するか否か」を復元できず、section_video の続きが結合まで走ります。
+// TestContinuationRemembersTheOriginCommand pins that a continuation task keeps the original
+// command. Command is overwritten with video_gen_continuation, so losing it would leave the plan
+// unable to restore "whether to join" and a section_video continuation would run through the join.
 func TestContinuationRemembersTheOriginCommand(t *testing.T) {
 	recipe := sectionScopedRecipe()
 	queue := &captureQueue{}
@@ -160,7 +160,7 @@ func TestContinuationRemembersTheOriginCommand(t *testing.T) {
 		t.Errorf("continuation OriginCommand = %q, want %q", got, domain.CommandSectionVideo)
 	}
 
-	// 継続の継続でも元コマンドが残ること（Command は既に continuation なので上書きしない）。
+	// Even a continuation of a continuation keeps the original command (Command is already continuation, so it is not overwritten).
 	next := queue.tasks[0]
 	nextRecipe := next.VideoRecipe
 	nextQueue := &captureQueue{}
@@ -178,8 +178,8 @@ func TestContinuationRemembersTheOriginCommand(t *testing.T) {
 	}
 }
 
-// TestUnscopedGenerationStillCoversEveryCut は、SectionScoped でない従来の実行が全カットを
-// 対象にし続けることを留めます（絞り込みの導入で既定の挙動を変えていないこと）。
+// TestUnscopedGenerationStillCoversEveryCut pins that a conventional run that is not SectionScoped
+// keeps covering every cut (introducing the narrowing did not change the default behaviour).
 func TestUnscopedGenerationStillCoversEveryCut(t *testing.T) {
 	recipe := sectionScopedRecipe()
 	st := VideoGenerationStep{Runner: sequenceRunner{}}
@@ -187,7 +187,7 @@ func TestUnscopedGenerationStillCoversEveryCut(t *testing.T) {
 		Task:        &domain.Task{JobID: "job-1", Command: domain.CommandMVFromKeyframeVideoRecipe, VideoRecipe: recipe},
 		VideoRecipe: recipe,
 	}
-	// TaskQueue 無しなら継続へ逃げず、その場で全カットを生成する。
+	// Without a TaskQueue it does not escape into a continuation and generates every cut on the spot.
 	if err := st.Execute(context.Background(), ctx); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

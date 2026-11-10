@@ -1,5 +1,5 @@
-// Package adapters は、Vertex AI クライアントの初期化と、Veo動画生成APIの
-// リクエスト/レスポンス変換を行うアダプター実装を提供します。
+// Package adapters provides the adapter implementations that initialise the Vertex AI client and
+// convert requests/responses for the Veo video-generation API.
 package adapters
 
 import (
@@ -14,16 +14,16 @@ import (
 )
 
 const (
-	// defaultVertexLocationID はVertex AI のデフォルトロケーション
+	// defaultVertexLocationID is Vertex AI's default location
 	defaultVertexLocationID = "global"
-	// defaultVertexInitialDelay はリトライ遅延
+	// defaultVertexInitialDelay is the retry delay
 	defaultVertexInitialDelay = 60 * time.Second
 )
 
-// NewVertexAIAdapter は GCP Vertex AI クライアントを初期化します。
+// NewVertexAIAdapter initialises the GCP Vertex AI client.
 func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client, error) {
 	if ai.GCP.ProjectID == "" {
-		return nil, fmt.Errorf("GCP_PROJECT_ID が設定されていません")
+		return nil, fmt.Errorf("GCP_PROJECT_ID is not set")
 	}
 
 	clientConfig := gemini.Config{
@@ -34,16 +34,16 @@ func NewVertexAIAdapter(ctx context.Context, ai *config.Config) (*gemini.Client,
 
 	aiClient, err := gemini.New(ctx, clientConfig)
 	if err != nil {
-		return nil, fmt.Errorf("vertex AI クライアントの初期化に失敗しました: %w", err)
+		return nil, fmt.Errorf("failed to initialise the Vertex AI client: %w", err)
 	}
 
 	return aiClient, nil
 }
 
-// vertexLocationID は、動画生成機能のロケーション解決ロジックと同じ優先順位で
-// ロケーションを解決します（VEO_LOCATION_ID → GCP_LOCATION_ID）。どちらも未設定の
-// 場合のみ defaultVertexLocationID にフォールバックします。テキスト/画像生成用の
-// Vertex AI クライアントを、実際に動画生成で使うリージョンとなるべく揃えるためです。
+// vertexLocationID resolves the location with the same priority as the video-generation location
+// logic (VEO_LOCATION_ID → GCP_LOCATION_ID). Only when neither is set does it fall back to
+// defaultVertexLocationID. This keeps the Vertex AI client for text/image generation in the same
+// region as video generation actually uses, as far as possible.
 func vertexLocationID(ai *config.Config) string {
 	if locationID := strings.TrimSpace(ai.AI.VeoLocationID); locationID != "" {
 		return locationID

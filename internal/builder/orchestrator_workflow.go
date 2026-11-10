@@ -37,9 +37,9 @@ func buildWorkflow(
 	})
 }
 
-// characterSeedOverride は、1回のワークフロー構築だけ特定キャラクターのシードを差し替える指定です。
-// カット単位のキーフレーム再生成で一時的に別シードを試す用途のみに使い、
-// 埋め込みキャラクター定義（go-character-kit）自体は変更しません。
+// characterSeedOverride replaces a specific character's seed for a single workflow build only.
+// It is used only to try a different seed temporarily in per-cut keyframe regeneration, and the
+// embedded character definitions (go-character-kit) themselves are not changed.
 type characterSeedOverride struct {
 	characterID string
 	seed        int64
@@ -54,20 +54,19 @@ type workflowBuildParams struct {
 	store       remoteio.Store
 	httpClient  httpkit.HTTPClient
 	videoRunner ports.VideoRunner
-	// aiClient は BuildContainer が組んだ Vertex AI クライアントです。ワークフローは
-	// タスクごとに組み直される（シード上書き・ビジュアルモード）ため、ここで都度
-	// 生成すると 1 タスクにつき 1 クライアント、つまり ADC のトークンソース解決まで
-	// やり直すことになります。
+	// aiClient is the Vertex AI client BuildContainer built. Workflows are rebuilt per task (seed
+	// overrides, visual modes), so creating it here every time would mean one client per task, down
+	// to resolving ADC's token source all over again.
 	aiClient     gemini.Generator
 	visualMode   string
 	seedOverride *characterSeedOverride
 }
 
 // buildWorkflowWithConfig builds orchestrator workflows from an explicit orchestrator config.
-// p.seedOverride が非nilの場合、対象キャラクターのシードのみをこの構築分に限って差し替えます。
-// ctx は現在使っていません。Vertex AI クライアントの生成が呼び出し側へ移り、この関数に
-// 残った処理がいずれも I/O を伴わなくなったためです。引数は残してあります（ワークフロー
-// 構築に I/O が戻ったときに、呼び出し側の連鎖を作り直さずに済むように）。
+// When p.seedOverride is non-nil, only the target character's seed is replaced, for this build only.
+// ctx is currently unused: creating the Vertex AI client moved to the caller, and nothing left in
+// this function does I/O. The parameter is kept (so the caller chain need not be rebuilt if I/O
+// returns to building workflows).
 func buildWorkflowWithConfig(_ context.Context, p workflowBuildParams) (*orchestrator.Workflows, error) {
 	if p.cfg == nil || p.store == nil || p.httpClient == nil {
 		return nil, nil

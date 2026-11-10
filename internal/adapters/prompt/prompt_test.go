@@ -359,19 +359,18 @@ func scriptPromptTestData(title string) *orchestrator.TemplateData {
 	}
 }
 
-// TestKeyframePromptContainsNoTemplateDirectives は、キーフレーム経路のプロンプトに
-// Go テンプレート構文（{{...}}）と台本生成専用の節が混入しないことを、同梱の全
-// visual mode について検証します。キーフレーム経路はテンプレートをレンダリング
-// しないため、以前は {{template "recipe_output" .}} と script 向け演出指示が
-// そのまま画像モデルへ送られていました。
+// TestKeyframePromptContainsNoTemplateDirectives checks, for every bundled visual mode, that the
+// keyframe path's prompt carries no Go template syntax ({{...}}) and no script-generation-only
+// section. The keyframe path does not render templates, so {{template "recipe_output" .}} and the
+// script-oriented direction used to be sent to the image model as-is.
 func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
 	modes, err := assets.LoadVisualModeFiles()
 	if err != nil {
 		t.Fatalf("LoadVisualModeFiles() error = %v", err)
 	}
 	for mode := range modes {
-		// パーシャルは他テンプレートから参照される部品で、
-		// visual mode として選択される名前ではない。
+		// Partials are pieces referenced from other templates, not names selected as a
+		// visual mode.
 		if promptkit.IsPartial(mode, promptkit.DefaultPartialPrefix) {
 			continue
 		}
@@ -393,7 +392,7 @@ func TestKeyframePromptContainsNoTemplateDirectives(t *testing.T) {
 					t.Fatalf("mode %q leaks the script-only section into the image prompt:\n%s", mode, prompt)
 				}
 			}
-			// 節の除去がスタイル指示ごと消していないこと（Core Direction は残る）。
+			// Removing the section did not take the style direction with it (Core Direction remains).
 			if !strings.Contains(userPrompt, "Core Direction") {
 				t.Fatalf("mode %q lost its style guidance:\n%s", mode, userPrompt)
 			}

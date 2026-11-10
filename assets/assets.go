@@ -1,5 +1,5 @@
-// Package assets は、HTMLテンプレート・静的ファイル・プロンプトテンプレートを
-// 埋め込みリソースとして提供します。
+// Package assets provides the HTML templates, static files and prompt templates as embedded
+// resources.
 package assets
 
 import (
@@ -9,32 +9,32 @@ import (
 )
 
 const (
-	// VideoRecipePromptDir は、VideoRecipe作成用プロンプトテンプレートの埋め込みパスです。
+	// VideoRecipePromptDir is the embedded path of the prompt templates for creating a VideoRecipe.
 	VideoRecipePromptDir = "prompts/video_recipe"
 	visualModePromptDir  = "prompts/visual_modes"
 	videoGenPromptDir    = "prompts/video_gen"
 )
 
 var (
-	// Templates は、すべてのHTMLテンプレートを保持します。
+	// Templates holds every HTML template.
 	//go:embed templates/*.html
 	Templates embed.FS
 
-	// StaticFiles は、ブラウザへ配信するCSS/JavaScriptなどの静的ファイルを保持します。
+	// StaticFiles holds the static files served to the browser, such as CSS and JavaScript.
 	//go:embed static
 	StaticFiles embed.FS
 
-	// VideoRecipePrompts は、VideoRecipe 作成用のプロンプトテンプレートを保持します。
+	// VideoRecipePrompts holds the prompt templates for creating a VideoRecipe.
 	//go:embed prompts/video_recipe/*.md
 	VideoRecipePrompts embed.FS
 
-	// visualModeFiles は映像スタイル用プロンプトテンプレートです。
+	// visualModeFiles are the prompt templates for visual styles.
 	//go:embed prompts/visual_modes/*.md
 	visualModeFiles embed.FS
 
-	// videoGenPromptFiles は Veo 動画生成モード別のプロンプトガイダンスです。
-	// ファイル名（拡張子なし）が Veo の生成モード（image_to_video / frames_to_video /
-	// reference_to_video / video_extension）に対応します。
+	// videoGenPromptFiles are the prompt guidance per Veo video-generation mode.
+	// The file names (without extension) correspond to Veo's generation modes (image_to_video /
+	// frames_to_video / reference_to_video / video_extension).
 	//go:embed prompts/video_gen/*.md
 	videoGenPromptFiles embed.FS
 
@@ -42,14 +42,14 @@ var (
 	DefaultVisualMode = "default"
 )
 
-// LoadVisualModeFiles は埋め込まれた映像スタイル用プロンプトファイルを読み込みます。
+// LoadVisualModeFiles loads the embedded visual-style prompt files.
 func LoadVisualModeFiles() (map[string]string, error) {
 	return resource.Load(visualModeFiles, visualModePromptDir)
 }
 
-// LoadVideoGenPrompts は埋め込まれた Veo 動画生成モード別プロンプトを読み込みます。
-// キーはファイル名（拡張子なし）: image_to_video / frames_to_video / reference_to_video /
-// video_extension。
+// LoadVideoGenPrompts loads the embedded prompts per Veo video-generation mode.
+// The keys are the file names (without extension): image_to_video / frames_to_video /
+// reference_to_video / video_extension.
 func LoadVideoGenPrompts() (map[string]string, error) {
 	return resource.Load(videoGenPromptFiles, videoGenPromptDir)
 }

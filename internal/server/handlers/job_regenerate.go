@@ -150,7 +150,7 @@ func (h *Handler) RegenerateCutKeyframeForm(w http.ResponseWriter, r *http.Reque
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	// 画面が指すのは同一オリジンのパスです（署名は 302 の時点で 1 本だけ）。
+	// The page points at same-origin paths (exactly one URL is signed, at the 302).
 	applyWebMediaURLs(&history)
 	cut, ok := findHistoryCutByIndex(history.Cuts, cutIndex)
 	if !ok {
@@ -195,7 +195,7 @@ func (h *Handler) RegenerateCutKeyframe(w http.ResponseWriter, r *http.Request) 
 		Command:   domain.CommandRegenerateCutKeyframe,
 		RecipeURL: history.StorageURI,
 		CutIndex:  &cutIndex,
-		// 同一ジョブ内の他カットとアスペクト比がズレないよう、既存レシピの値を引き継ぐ。
+		// Carry over the existing recipe's value so the aspect ratio does not drift from the job's other cuts.
 		VeoAspectRatio:       history.AspectRatio,
 		OverwriteKeyframe:    r.FormValue("overwrite") == "on",
 		OriginalJobID:        jobID,
@@ -230,7 +230,7 @@ func (h *Handler) RegenerateSectionKeyframesForm(w http.ResponseWriter, r *http.
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	// 画面が指すのは同一オリジンのパスです（署名は 302 の時点で 1 本だけ）。
+	// The page points at same-origin paths (exactly one URL is signed, at the 302).
 	applyWebMediaURLs(&history)
 	group, ok := findHistorySectionGroup(history, sectionIndex)
 	if !ok {
@@ -279,12 +279,12 @@ func (h *Handler) RegenerateSectionKeyframes(w http.ResponseWriter, r *http.Requ
 		Command:      domain.CommandRegenerateSectionKeyframes,
 		RecipeURL:    history.StorageURI,
 		SectionIndex: &sectionIndex,
-		// 同一ジョブ内の他カットとアスペクト比がズレないよう、既存レシピの値を引き継ぐ。
+		// Carry over the existing recipe's value so the aspect ratio does not drift from the job's other cuts.
 		VeoAspectRatio:    history.AspectRatio,
 		OverwriteKeyframe: r.FormValue("overwrite") == "on",
 		OriginalJobID:     jobID,
-		// ビジュアルアンカーはカットごとに異なる文言のため、セクション一括では受け付けない
-		// （フル再生成は各カットの保存済みアンカーをそのまま使う）。
+		// The visual anchor's wording differs per cut, so it is not accepted section-wide
+		// (a full regeneration uses each cut's stored anchor as-is).
 		EditPrompt: strings.TrimSpace(r.FormValue("edit_prompt")),
 		CreatedAt:  time.Now().UTC(),
 	}
@@ -334,12 +334,12 @@ func (h *Handler) RegenerateZip(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// RegenerateCutVideo は、既存ジョブのうち指定カットの動画だけを作り直すタスクを投入します。
+// RegenerateCutVideo enqueues a task that remakes only the given cut's video of an existing job.
 //
-// キーフレームは元ジョブのものをそのまま使い、作り直さないカットは生成済みのままスキップ
-// されます。継続チェーン方式では同じチェーンの後続カットもまとめて作り直されます
-// （CutVideoSelectFilter）。結果は新しいジョブとして保存され、元ジョブは変更しません
-// （履歴詳細の「動画生成」と同じ扱い。既に完成しているMVを途中まで壊した状態にしないため）。
+// The keyframes are the original job's as-is, and cuts not being remade are skipped as generated.
+// In the continuation-chain approach, later cuts of the same chain are remade too
+// (CutVideoSelectFilter). The result is saved as a new job and the original job is not changed
+// (the same as the history detail's video generation, so a finished MV is never left half broken).
 func (h *Handler) RegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
 	jobID, cutIndex, err := parseJobIDAndCutIndex(r)
 	if err != nil {
@@ -350,7 +350,7 @@ func (h *Handler) RegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// 投入前に存在確認しておく。ここで弾かないと、失敗したジョブとしてしか現れない。
+	// Check existence before enqueueing. Without rejecting here, it would only show up as a failed job.
 	if _, found := findHistoryCutByIndex(history.Cuts, cutIndex); !found {
 		respond.Error(w, r, http.StatusBadRequest, "cut not found in this job")
 		return
@@ -365,18 +365,18 @@ func (h *Handler) RegenerateCutVideo(w http.ResponseWriter, r *http.Request) {
 		RecipeURL: history.StorageURI,
 		CutIndex:  &cutIndex,
 		VeoModel:  h.veoModelFromForm(r),
-		// アスペクト比はキーフレーム作成時に決まった値を必ず引き継ぐ
-		// （GenerateVideo と同じ理由）。
+		// The aspect ratio always carries over the value decided when the keyframes were made
+		// (the same reason as GenerateVideo).
 		VeoAspectRatio: history.AspectRatio,
 		CreatedAt:      time.Now().UTC(),
 	}
 	h.enqueue(w, r, task)
 }
 
-// GenerateVideo は、既存ジョブの保存済みレシピから動画生成タスクを投入します。
-// target=full で全カットのフルMV生成、target=<セクションインデックス> でそのセクションだけの
-// ショート動画生成になります。キーフレーム・歌詞・時間割はジョブの保存済みレシピから
-// サーバー側で解決するため、フォーム入力は対象と Veo モデル・アスペクト比だけです。
+// GenerateVideo enqueues a video-generation task from an existing job's stored recipe.
+// target=full makes a full MV of every cut; target=<section index> makes a short of that section
+// only. Keyframes, lyrics and timing are resolved on the server from the job's stored recipe, so
+// the form only gives the target, the Veo model and the aspect ratio.
 func (h *Handler) GenerateVideo(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -396,9 +396,9 @@ func (h *Handler) GenerateVideo(w http.ResponseWriter, r *http.Request) {
 	task := &domain.Task{
 		RecipeURL: history.StorageURI,
 		VeoModel:  h.veoModelFromForm(r),
-		// アスペクト比はキーフレーム作成時に1回だけ選ばれ、既存レシピに記録済みの値
-		// (history.AspectRatio) を必ず引き継ぐ。動画生成フォームでの選択肢は無い
-		// （キーフレームと異なるアスペクト比の動画は生成できないため）。
+		// The aspect ratio is chosen once when the keyframes are made, and the value recorded in the
+		// existing recipe (history.AspectRatio) is always carried over. The video-generation form has no
+		// choice for it (a video with a different aspect ratio from its keyframes cannot be generated).
 		VeoAspectRatio: history.AspectRatio,
 		Command:        command,
 		SectionIndex:   sectionIndex,

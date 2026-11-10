@@ -64,28 +64,28 @@ func TestStaticRoutesServeOnlyStaticSubtree(t *testing.T) {
 	}
 }
 
-// TestNewRouterOmitsWorkerRouteForWebRole は、SERVER_ROLE=web のプロセスで
-// /tasks/generate が登録されないことを確認します。
+// TestNewRouterOmitsWorkerRouteForWebRole checks that /tasks/generate is not registered in
+// a SERVER_ROLE=web process.
 //
-// 見るのは「401 で拒否される」ではなく「404 でルートが無い」ことです。役割を分けた
-// 目的は公開サービス上からタスク受付口を消すことなので、アプリのコードが応答する
-// 余地を残していない状態まで確かめる必要があります。
+// What it looks at is not "rejected with 401" but "404, no route". The point of splitting roles
+// is to remove the task intake from the public service, so it has to confirm that no room is
+// left for the app's code to answer at all.
 func TestNewRouterOmitsWorkerRouteForWebRole(t *testing.T) {
-	// BuildHandlers が role=web で組む形: TaskAuth も Worker も nil。
+	// The shape BuildHandlers builds for role=web: TaskAuth and Worker are both nil.
 	router := newWebRoleTestRouter(t)
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks/generate", nil))
 
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("POST /tasks/generate status = %d, want %d (worker ルートは web ロールで登録されてはならない)", rec.Code, http.StatusNotFound)
+		t.Fatalf("POST /tasks/generate status = %d, want %d (the worker route must not be registered for the web role)", rec.Code, http.StatusNotFound)
 	}
 }
 
-// TestNewRouterOmitsWebRoutesForWorkerRole は、SERVER_ROLE=worker のプロセスで
-// Web 面と OAuth のルートが登録されないことを確認します。
+// TestNewRouterOmitsWebRoutesForWorkerRole checks that the web face and OAuth routes are not
+// registered in a SERVER_ROLE=worker process.
 func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
-	// BuildHandlers が role=worker で組む形: Auth も Web も M2M も nil。
+	// The shape BuildHandlers builds for role=worker: Auth, Web and M2M are all nil.
 	router := newWorkerRoleTestRouter(t)
 
 	for _, path := range []string{"/", "/jobs", "/auth/login"} {
@@ -93,13 +93,13 @@ func TestNewRouterOmitsWebRoutesForWorkerRole(t *testing.T) {
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
 		if rec.Code != http.StatusNotFound {
-			t.Errorf("GET %s status = %d, want %d (web ルートは worker ロールで登録されてはならない)", path, rec.Code, http.StatusNotFound)
+			t.Errorf("GET %s status = %d, want %d (web routes must not be registered for the worker role)", path, rec.Code, http.StatusNotFound)
 		}
 	}
 }
 
-// TestNewRouterKeepsHealthForWorkerRole は、Worker 面だけの構成でもヘルスチェックが
-// 残ることを確認します。Cloud Run の起動判定に使われます。
+// TestNewRouterKeepsHealthForWorkerRole checks that the health check remains even with only
+// the worker face. Cloud Run uses it to decide the instance has started.
 func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 	router := newWorkerRoleTestRouter(t)
 
@@ -111,7 +111,7 @@ func TestNewRouterKeepsHealthForWorkerRole(t *testing.T) {
 	}
 }
 
-// newWorkerRoleTestRouter は SERVER_ROLE=worker 相当のルーターを返します。
+// newWorkerRoleTestRouter returns a router equivalent to SERVER_ROLE=worker.
 func newWorkerRoleTestRouter(t *testing.T) http.Handler {
 	t.Helper()
 	return NewRouter(&builder.AppHandlers{
@@ -119,7 +119,7 @@ func newWorkerRoleTestRouter(t *testing.T) http.Handler {
 	}, "")
 }
 
-// newWebRoleTestRouter は SERVER_ROLE=web 相当のルーターを返します。
+// newWebRoleTestRouter returns a router equivalent to SERVER_ROLE=web.
 func newWebRoleTestRouter(t *testing.T) http.Handler {
 	t.Helper()
 
@@ -150,18 +150,18 @@ func newWebRoleTestRouter(t *testing.T) http.Handler {
 	return NewRouter(&builder.AppHandlers{Auth: authHandler, Web: webHandler}, "")
 }
 
-// 画面が指す /static/... が実際に配信できること。テンプレートの参照とディレクトリ名は
-// vendor のバージョン更新のたびに両方を直す必要があり、片方だけ直すと 404 になります。
-// ブラウザで開くまで気付けない種類の欠落なので、参照を実際に引いて確かめます。
+// The /static/... the pages point at can actually be served. The template references and the
+// directory name both have to be fixed on every vendor version bump, and fixing only one gives
+// 404. It is the kind of gap nobody notices until it is opened in a browser, so follow the references for real.
 func TestLayoutLocalAssetsAreServable(t *testing.T) {
 	layout, err := assets.Templates.ReadFile("templates/layout.html")
 	if err != nil {
-		t.Fatalf("layout.html を読めない: %v", err)
+		t.Fatalf("cannot read layout.html: %v", err)
 	}
 
 	refs := regexp.MustCompile(`(?:href|src)="(/static/[^"]+)"`).FindAllStringSubmatch(string(layout), -1)
 	if len(refs) == 0 {
-		t.Fatal("layout.html に /static/ の参照が 1 つも無い（正規表現かテンプレートの変更を疑う）")
+		t.Fatal("layout.html has no /static/ reference at all (suspect a change to the regexp or the template)")
 	}
 
 	router := newWebRoleTestRouter(t)
@@ -177,20 +177,20 @@ func TestLayoutLocalAssetsAreServable(t *testing.T) {
 	}
 }
 
-// 外部 CDN をやめて自前配信にした以上、layout.html から外部オリジンへの参照が
-// 復活していないこと。復活すると CSP がそれを実行時に落とすので、CI で気付けるようにします。
+// Having dropped external CDNs for self-hosting, layout.html must not regain references to
+// external origins. If one came back, the CSP would block it at run time, so catch it in CI.
 func TestLayoutReferencesNoExternalOrigins(t *testing.T) {
 	layout, err := assets.Templates.ReadFile("templates/layout.html")
 	if err != nil {
-		t.Fatalf("layout.html を読めない: %v", err)
+		t.Fatalf("cannot read layout.html: %v", err)
 	}
 
 	for _, ref := range regexp.MustCompile(`(?:href|src)="(https?://[^"]+)"`).FindAllStringSubmatch(string(layout), -1) {
-		t.Errorf("外部オリジンへの参照が復活しています: %s", ref[1])
+		t.Errorf("a reference to an external origin is back: %s", ref[1])
 	}
 }
 
-// CSP が全レスポンスに付き、script-src が緩められていないこと。
+// The CSP is on every response and script-src has not been loosened.
 func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 
@@ -199,26 +199,26 @@ func TestResponsesCarryContentSecurityPolicy(t *testing.T) {
 
 	policy := rec.Header().Get("Content-Security-Policy")
 	if policy == "" {
-		t.Fatal("Content-Security-Policy が付いていない")
+		t.Fatal("Content-Security-Policy is missing")
 	}
 	for _, want := range []string{"default-src 'self'", "script-src 'self'", "object-src 'none'", "frame-ancestors 'none'"} {
 		if !strings.Contains(policy, want) {
-			t.Errorf("CSP に %q が無い: %s", want, policy)
+			t.Errorf("CSP lacks %q: %s", want, policy)
 		}
 	}
-	// script-src の 'unsafe-inline' はインラインスクリプト禁止（TestPagesLoadTheirScripts）
-	// を無意味にします。style-src 側の 'unsafe-inline' は許容しているので、区間を限って見ます。
+	// 'unsafe-inline' in script-src would make the inline-script ban (TestPagesLoadTheirScripts)
+	// meaningless. 'unsafe-inline' on the style-src side is tolerated, so look only within the directive.
 	scriptSrc := cspDirective(policy, "script-src")
 	if scriptSrc == "" {
-		t.Fatalf("script-src が無い: %s", policy)
+		t.Fatalf("script-src is missing: %s", policy)
 	}
 	if strings.Contains(scriptSrc, "unsafe-inline") || strings.Contains(scriptSrc, "unsafe-eval") {
-		t.Errorf("script-src が緩められています: %s", scriptSrc)
+		t.Errorf("script-src has been loosened: %s", scriptSrc)
 	}
 }
 
-// キーフレームと動画は GCS の署名付き URL としてテンプレートへ直接埋まるため、
-// img-src / media-src がそのホストを許していないと画面上で読み込みが落ちます。
+// Keyframes and videos are embedded in templates directly as GCS signed URLs, so unless
+// img-src / media-src allow that host, loading fails on the page.
 func TestContentSecurityPolicyAllowsSignedMediaHost(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 
@@ -228,12 +228,12 @@ func TestContentSecurityPolicyAllowsSignedMediaHost(t *testing.T) {
 
 	for _, directive := range []string{"img-src", "media-src"} {
 		if !strings.Contains(cspDirective(policy, directive), "https://storage.googleapis.com") {
-			t.Errorf("%s が署名付き URL のホストを許していない: %s", directive, policy)
+			t.Errorf("%s does not allow the signed URL host: %s", directive, policy)
 		}
 	}
 }
 
-// cspDirective は CSP から 1 ディレクティブ分を取り出します。無ければ空文字を返します。
+// cspDirective takes one directive out of the CSP. It returns an empty string when there is none.
 func cspDirective(policy, name string) string {
 	for directive := range strings.SplitSeq(policy, ";") {
 		directive = strings.TrimSpace(directive)
@@ -244,8 +244,8 @@ func cspDirective(policy, name string) string {
 	return ""
 }
 
-// 圧縮が効いていること。画面は日本語 UTF-8（1 文字 3 バイト）でよく縮むのに、
-// これまで無圧縮で配信していました。
+// Compression works. The pages are Japanese UTF-8 (3 bytes per character) and shrink well,
+// yet they used to be served uncompressed.
 func TestCompressibleResponsesAreCompressed(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 
@@ -267,18 +267,18 @@ func TestCompressibleResponsesAreCompressed(t *testing.T) {
 
 	body, err := io.ReadAll(reader)
 	if err != nil {
-		t.Fatalf("解凍できない: %v", err)
+		t.Fatalf("cannot decompress: %v", err)
 	}
 	if !strings.Contains(string(body), "Bootstrap") {
-		t.Error("解凍した中身が Bootstrap の CSS でない")
+		t.Error("the decompressed body is not Bootstrap's CSS")
 	}
 	if len(body) <= rec.Body.Len() {
-		t.Errorf("圧縮後 %d バイトが元の %d バイトを下回っていない", rec.Body.Len(), len(body))
+		t.Errorf("compressed %d bytes is not below the original %d bytes", rec.Body.Len(), len(body))
 	}
 }
 
-// CSP 以外の防御ヘッダーも全レスポンスに付くこと。どれも 1 行で入る割に、
-// 抜けても画面は正常に見えるため気付けません。
+// The defensive headers other than CSP are on every response too. Each is a single line, yet
+// the pages look fine without them, so a missing one goes unnoticed.
 func TestResponsesCarrySecurityHeaders(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 	rec := httptest.NewRecorder()
@@ -294,17 +294,17 @@ func TestResponsesCarrySecurityHeaders(t *testing.T) {
 			t.Errorf("%s = %q, want %q", name, got, value)
 		}
 	}
-	// autoplay は塞ぎません（メディア再生が壊れます）。
+	// autoplay is not blocked (it would break media playback).
 	policy := rec.Header().Get("Permissions-Policy")
 	if policy == "" {
-		t.Error("Permissions-Policy が付いていない")
+		t.Error("Permissions-Policy is missing")
 	}
 	if strings.Contains(policy, "autoplay") {
-		t.Errorf("Permissions-Policy が autoplay を塞いでいます: %s", policy)
+		t.Errorf("Permissions-Policy blocks autoplay: %s", policy)
 	}
 }
 
-// mustOIDC は、テスト用に構成済みの検証器を作ります（New は設定が欠けるとエラーを返します）。
+// mustOIDC builds a configured verifier for tests (New returns an error when settings are missing).
 func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	t.Helper()
 	v, err := oidc.New(audience, allowed)
@@ -314,16 +314,16 @@ func mustOIDC(t *testing.T, audience string, allowed []string) *oidc.Verifier {
 	return v
 }
 
-// TestTemplateFormActionsHaveAPostRoute は、テンプレートのフォームが送信する先に POST の
-// ルートがあることを確かめます。
+// TestTemplateFormActionsHaveAPostRoute checks that there is a POST route where each template
+// form submits.
 //
-// URL を /jobs 配下へ寄せたとき、作成フォームだけ action="/compose" のまま残りました。
-// /compose には GET しか無いので送信は 405 になり、ブラウザには「このページは動作して
-// いません」としか出ません。ハンドラのテストはハンドラを直接呼ぶので、この食い違いは
-// どこにも引っかかりませんでした。
+// When URLs were moved under /jobs, only the compose form was left with action="/compose".
+// /compose has only GET, so submitting gave 405 and the browser showed nothing but "This page
+// isn't working". The handler tests call handlers directly, so this mismatch was caught
+// nowhere.
 //
-// 未認証の POST はログインへのリダイレクト（または CSRF の 403）で返るので、見るのは
-// 「ルートが無い」ことを表す 404 と 405 だけです。
+// An unauthenticated POST comes back as a redirect to login (or a CSRF 403), so only 404 and
+// 405, which mean "no route", are looked at.
 func TestTemplateFormActionsHaveAPostRoute(t *testing.T) {
 	router := newWebRoleTestRouter(t)
 	formAction := regexp.MustCompile(`<form[^>]*\baction="([^"]*)"`)
@@ -340,7 +340,7 @@ func TestTemplateFormActionsHaveAPostRoute(t *testing.T) {
 			t.Fatalf("ReadFile(%s) error = %v", entry.Name(), err)
 		}
 		for _, match := range formAction.FindAllStringSubmatch(string(raw), -1) {
-			// {{.JobID}} などの埋め込みは、どんな値でもルートの形は同じなので 1 に置きます。
+			// Embedded values such as {{.JobID}} give the same route shape whatever the value, so put 1.
 			target := templateValue.ReplaceAllString(match[1], "1")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, target, nil))

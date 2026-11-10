@@ -15,24 +15,25 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// このファイルは履歴の公開エントリポイント（一覧・詳細）を集めています。
-// ストレージ読み込みと署名 URL は history_storage.go、状態・レシピから表示モデルへの
-// 変換は history_mapping.go を参照してください。
+// This file gathers the public entry points of history (listing, detail).
+// For storage reads and signed URLs see history_storage.go; for converting status and recipes
+// into display models see history_mapping.go.
 
 const videoMetadataFile = "video_music_meta.json"
 
-// listedCommands は、履歴一覧に出すコマンドです。
+// listedCommands are the commands shown in the history listing.
 //
-// 以前は「ジョブのディレクトリが baseURI 直下にあり、regen-keyframe- で始まらないこと」で
-// 選んでいました。状態が 1 つのコレクションに集まった今は、絞り込みがその役目を持ちます。
+// They used to be chosen by "the job's directory sits directly under baseURI and does not start
+// with regen-keyframe-". Now that status lives in one collection, the filter does that job.
 //
-// ここに無いコマンド（regenerate_cut_keyframe / regenerate_section_keyframes /
-// regenerate_zip / section_video / finalize_video）は、成果物を**元のジョブへ**書き戻す
-// 保守操作です。自分のディレクトリを持たないので以前も一覧に現れず、出すと成果物の無い
-// 行が並ぶことになります。進行状況は /jobs/{jobID} で追えます。
+// The commands missing here (regenerate_cut_keyframe / regenerate_section_keyframes /
+// regenerate_zip / section_video / finalize_video) are maintenance operations that write their
+// artifacts back **to the original job**. They have no directory of their own, so they did not
+// appear in the listing before either, and showing them would list rows with no artifacts.
+// Their progress can be followed at /jobs/{jobID}.
 //
-// video_gen_continuation はここにありません。継続タスクは Command を上書きしますが、
-// 記録されるのは domain.Task.ListedCommand が返す元のコマンドです。
+// video_gen_continuation is not here. A continuation task overwrites Command, but what is recorded
+// is the original command returned by domain.Task.ListedCommand.
 var listedCommands = []string{
 	string(domain.CommandVideoRecipeCreate),
 	string(domain.CommandVideoRecipeDraft),
@@ -41,29 +42,29 @@ var listedCommands = []string{
 	string(domain.CommandRegenerateCutVideo),
 }
 
-// VideoHistoryRepository は、生成済み MV の一覧と詳細を返します。
+// VideoHistoryRepository returns the listing and details of generated MVs.
 //
-// 一覧はジョブ状態のコレクションへのクエリ、詳細は成果物と同じ場所に置かれた
-// video_music_meta.json の読み込みです。
+// The listing is a query on the job status collection; the detail is a read of the
+// video_music_meta.json stored alongside the artifacts.
 type VideoHistoryRepository struct {
 	baseURI string
-	// store は読み書き・一覧・署名の窓口です。
+	// store is the window for reads, writes, listing and signing.
 	store remoteio.Store
-	// jobStatus は一覧の引き先です。見出しは状態ドキュメントに写してあります。
+	// jobStatus is where the listing reads from. The headline has been copied into the status documents.
 	jobStatus ports.JobStatusStore
 }
 
-// VideoHistoryRepositoryConfig は VideoHistoryRepository の依存関係です。
+// VideoHistoryRepositoryConfig is VideoHistoryRepository's dependencies.
 //
-// 依存を名前で受けるのは、位置引数だと取り違えても型が同じ方向へ通ってしまう
-// 箇所があるためです。
+// Dependencies are taken by name because with positional arguments there are places where a
+// mix-up would still type-check the same way.
 type VideoHistoryRepositoryConfig struct {
-	// BaseURI は成果物を置く起点です（末尾のスラッシュは正規化します）。
+	// BaseURI is the root where artifacts go (a trailing slash is normalised).
 	BaseURI string
-	// Store は読み書き・一覧・署名の窓口です。
-	// 読み取り専用の用途でも 1 つで足ります。
+	// Store is the window for reads, writes, listing and signing.
+	// One is enough even for read-only uses.
 	Store remoteio.Store
-	// JobStatus は履歴一覧の引き先です。nil なら一覧は空を返します。
+	// JobStatus is where the history listing reads from. When nil, the listing returns empty.
 	JobStatus ports.JobStatusStore
 }
 
@@ -78,13 +79,13 @@ func NewVideoHistoryRepository(cfg VideoHistoryRepositoryConfig) *VideoHistoryRe
 
 // ListHistoryPage lists MV jobs with paging, optionally narrowed to one progress stage.
 //
-// 走査もメモリ上の並べ替えも短期キャッシュも要りません。クエリがその役目を果たします。
-// 総件数は集計クエリで求めるため、ページの外にあるジョブのドキュメントは読みません。
-// 以前は baseURI 配下のジョブ ID を全件集めて ID 内の時刻で並べ替え、表示するページ分の
-// video_music_meta.json を並行に開いていました。段階での絞り込みに至っては、段階が
-// カット列からしか導けないため全ジョブのメタデータを読んでいました。
+// No scan, no in-memory sort and no short-lived cache are needed; the query does that job.
+// The total count comes from an aggregation query, so documents of jobs outside the page are not read.
+// It used to collect every job ID under baseURI, sort them by the time in the ID, and open the
+// video_music_meta.json of the displayed page in parallel. Filtering by stage went further and
+// read every job's metadata, because the stage could only be derived from the cut list.
 //
-// stage が空なら全ジョブを返します。
+// An empty stage returns every job.
 func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error) {
 	if r == nil || r.jobStatus == nil {
 		return domain.VideoHistoryPage{}, nil
@@ -92,7 +93,7 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 
 	opts := []jobstatus.ListOption{jobstatus.WithCommand(listedCommands...)}
 	if stage != "" {
-		// パスは firestore タグの名前です（domain.JobStatus.Progress → domain.JobProgress.Stage）。
+		// The path is the firestore tag names (domain.JobStatus.Progress → domain.JobProgress.Stage).
 		opts = append(opts, jobstatus.WithField("progress.stage", string(stage)))
 	}
 
@@ -108,13 +109,14 @@ func (r *VideoHistoryRepository) ListHistoryPage(ctx context.Context, page int, 
 	return domain.VideoHistoryPage{Items: items, PageMeta: meta}, nil
 }
 
-// applyJobState は、成果物からは分からないジョブの状態を状態ドキュメントから補います。
+// applyJobState fills in, from the status document, the job state the artifacts cannot tell.
 //
-// 失敗したジョブは成果物が途中まで残るだけで、レシピを見ても「keyframes 3/12 で止まって
-// いる」としか分かりません。失敗したのか、いま焼いている最中なのかは、ここでしか付きません。
+// A failed job only leaves its artifacts partway, and the recipe says no more than "stopped at
+// keyframes 3/12". Whether it failed or is rendering right now can only be told here.
 //
-// 記録が無いのは正常です（この機能より前のジョブ、投入直後の一瞬）。読めなかった場合も
-// 詳細そのものは返します。状態が付かないだけで、成果物の表示は成立するためです。
+// No record is normal (jobs from before this feature, the moment right after submission). Even
+// when it cannot be read the detail itself is returned: only the state is missing, and showing
+// the artifacts still works.
 func (r *VideoHistoryRepository) applyJobState(ctx context.Context, jobID string, history *domain.VideoHistory) {
 	if r.jobStatus == nil || history == nil {
 		return
@@ -132,9 +134,9 @@ func (r *VideoHistoryRepository) applyJobState(ctx context.Context, jobID string
 
 // GetHistory loads generated MV job metadata and cut keyframe references.
 //
-// 一覧と違って成果物そのもの（video_music_meta.json）を読みます。一覧が持つのは状態
-// ドキュメントへ写した見出しだけで、カット 1 本ずつのキーフレームや動画の所在は入って
-// いないためです。ジョブ状態からは失敗と理由だけを補います（applyJobState）。
+// Unlike the listing, it reads the artifact itself (video_music_meta.json). The listing holds
+// only the headline copied into the status document, without where each cut's keyframe or video
+// is. From the job status it fills in only the failure and its reason (applyJobState).
 func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error) {
 	if r == nil || r.store == nil || r.baseURI == "" {
 		return domain.VideoHistoryDetail{}, errors.New("history repository is not properly configured")
@@ -169,10 +171,9 @@ func (r *VideoHistoryRepository) GetHistory(ctx context.Context, jobID string) (
 		})
 	}
 	detail.Sections = historySectionsFromRecipe(recipe)
-	// 署名はここでは行いません。画面は同一オリジンのパスを辿り、リダイレクトの時点で
-	// 1 本だけ署名します。カット 1 本ごとに署名すると、詳細 1 画面で数十回の
-	// IAM SignBlob 往復を前払いすることになります（Cloud Run は秘密鍵を持たないため、
-	// 署名はローカル計算ではなくネットワーク呼び出しです）。
-	// JSON の呼び出し元だけが SignHistoryURLs を明示的に呼びます。
+	// Nothing is signed here. The page follows same-origin paths, and exactly one URL is signed at
+	// redirect time. Signing every cut would prepay dozens of IAM SignBlob round trips for one
+	// detail page (Cloud Run has no private key, so signing is a network call, not a local computation).
+	// Only JSON callers call SignHistoryURLs explicitly.
 	return detail, nil
 }

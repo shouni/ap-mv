@@ -1,6 +1,6 @@
-// 全ページ共通のユーティリティ。layout.html が defer で最初に読み込むため
-// （defer は記述順を保つ）、ここで定義したものはページ個別のスクリプトから
-// 同期的に使えます。
+// Utilities shared by every page. layout.html loads this first with defer
+// (defer keeps document order), so what is defined here can be used synchronously
+// from the page-specific scripts.
 window.App = window.App || {};
 
 (() => {
@@ -10,10 +10,10 @@ window.App = window.App || {};
 
     App.csrfToken = () => document.getElementById('csrf_token')?.value || '';
 
-    // --- 削除 ---------------------------------------------------------------
+    // --- Delete ---------------------------------------------------------------
 
-    // 同じ URL への DELETE が飛んでいる間は次を投げません。確認ダイアログを
-    // 閉じた直後の連打で、同じジョブに DELETE が二重に届くのを防ぎます。
+    // While a DELETE to the same URL is in flight, do not send another. This keeps rapid clicks
+    // right after closing the confirm dialog from delivering DELETE twice to the same job.
     const inFlightDeletes = new Set();
 
     App.deleteResource = async ({url, confirmMessage, redirectTo}) => {
@@ -31,8 +31,8 @@ window.App = window.App || {};
                 alert(`Delete failed: ${resp.statusText}`);
                 return false;
             }
-            // 一覧から消えた行を残さないため、成功時は必ず読み直します。
-            // 詳細ページのように対象そのものが無くなる画面では一覧へ戻します。
+            // Always reload on success so no row removed from the listing is left showing.
+            // On pages whose target itself is gone, such as the detail page, go back to the listing.
             if (redirectTo) {
                 window.location.href = redirectTo;
             } else {
@@ -48,9 +48,9 @@ window.App = window.App || {};
         }
     };
 
-    // 削除ボタンは data 属性だけで宣言します。以前は onclick に
-    // deleteDraft('{{.JobID}}', '{{.CSRFToken}}') と書いており、
-    // テンプレートの値が JS の引数として埋め込まれていました。
+    // Delete buttons are declared with data attributes only. They used to have
+    // onclick="deleteDraft('{{.JobID}}', '{{.CSRFToken}}')", embedding
+    // template values as JS arguments.
     document.addEventListener('click', (event) => {
         const button = event.target.closest('[data-delete-url]');
         if (!button) return;
@@ -63,11 +63,11 @@ window.App = window.App || {};
         });
     });
 
-    // --- 送信前の確認 -------------------------------------------------------
+    // --- Confirm before submitting -------------------------------------------
 
-    // 取り消せない送信（Veo の焼き直しなど）は data-confirm で宣言します。
-    // onsubmit="return confirm('...')" と違い、文言に含まれるテンプレート値が
-    // JS の文字列リテラルへ入らずに済みます。
+    // Irreversible submissions (Veo re-renders and the like) are declared with data-confirm.
+    // Unlike onsubmit="return confirm('...')", template values in the message never end up
+    // inside a JS string literal.
     document.addEventListener('submit', (event) => {
         const message = event.target.dataset?.confirm;
         if (message && !confirm(message)) {
@@ -75,7 +75,7 @@ window.App = window.App || {};
         }
     });
 
-    // --- クリップボード -----------------------------------------------------
+    // --- Clipboard ------------------------------------------------------------
 
     const COPY_RESET_MS = 1500;
 
@@ -104,7 +104,7 @@ window.App = window.App || {};
         App.copyToClipboard(button.dataset.copyText, button);
     });
 
-    // --- ナビゲーション -----------------------------------------------------
+    // --- Navigation -----------------------------------------------------------
 
     document.addEventListener('DOMContentLoaded', () => {
         const currentPath = window.location.pathname;

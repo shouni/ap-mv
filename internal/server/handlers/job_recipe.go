@@ -24,8 +24,8 @@ const maxRecipeJSONSize = 5 * 1024 * 1024
 
 // JobRecipe returns a job's stored VideoRecipe as {"job_id": ..., "recipe": {...}}.
 //
-// 表示用に整形する履歴詳細とは別経路です。読んだものをそのまま直して JobRecipeUpdate へ
-// 返せる形にしてあり、署名 URL や概算コストのような表示専用の値は混ざりません。
+// It is a separate path from the history detail formatted for display. What it returns can be
+// edited and sent straight back to JobRecipeUpdate, with no display-only values such as signed URLs or estimated costs mixed in.
 func (h *Handler) JobRecipe(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -50,15 +50,15 @@ func (h *Handler) JobRecipe(w http.ResponseWriter, r *http.Request) {
 
 // JobRecipeUpdate overwrites a job's VideoRecipe.
 //
-// 本文は JobRecipe の応答と同じ形（{"recipe": {...}}）を受け取ります。VideoRecipe を
-// そのまま本文にした形も受け付けます（"cuts" を持つ物体はレシピ本体としか解釈しようが
-// ないため、取り違えは起きません）。
+// The body takes the same shape as JobRecipe's response ({"recipe": {...}}). A bare VideoRecipe as
+// the body is accepted too (an object with "cuts" can only be read as the recipe itself, so there
+// is no mix-up).
 //
-// **台本のみのジョブ（StageScript）でしか許しません。** キーフレームを焼いた後に
-// カット割りを差し替えると、保存済みの keyframe_reference が別のカットを指すことに
-// なり、絵と台本の対応が静かに壊れます。焼き直したいカットは再生成の導線を使います。
+// **It is allowed only for script-only jobs (StageScript).** Replacing the cut list after
+// keyframes are rendered would make a stored keyframe_reference point at a different cut, quietly
+// breaking the correspondence between pictures and script. To re-render a cut, use the regeneration path.
 //
-// 注意: ここで保存した尺は、生成時に SceneSplitFilter が Veo のサポート尺へ丸め直します。
+// Note: the durations saved here are re-rounded to Veo's supported durations by SceneSplitFilter at generation time.
 func (h *Handler) JobRecipeUpdate(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -99,9 +99,9 @@ func (h *Handler) JobRecipeUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.HistoryRepository.SaveRecipe(r.Context(), jobID, recipe); err != nil {
 		slog.ErrorContext(r.Context(), "failed to save job recipe", "job_id", jobID, "error", err)
-		// SaveRecipe はレシピの検証と GCS への書き込みの両方で失敗しうる。検証失敗
-		// （ErrRecipeInvalid）だけが呼び出し側の誤りで、ストレージ障害を 400 で返すと
-		// 「あなたのレシピが悪い」という嘘になる。
+		// SaveRecipe can fail both validating the recipe and writing to GCS. Only a validation failure
+		// (ErrRecipeInvalid) is the caller's mistake; returning 400 for a storage failure would be the lie
+		// "your recipe is bad".
 		status := http.StatusInternalServerError
 		if errors.Is(err, video.ErrRecipeInvalid) {
 			status = http.StatusBadRequest
@@ -110,8 +110,8 @@ func (h *Handler) JobRecipeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 保存後のカット数と尺を返す。直す目的はカット割りの確認なので、反映結果を
-	// もう一度読みに行かせる必要はない。
+	// Return the cut count and durations after saving. The point of editing is checking the cut list,
+	// so there is no need to make the caller read the result back again.
 	respond.JSON(w, r, http.StatusOK, map[string]any{
 		"job_id":             jobID,
 		"status":             "updated",

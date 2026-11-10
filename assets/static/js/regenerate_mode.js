@@ -1,8 +1,8 @@
-// 再生成フォーム（カット単位・セクション単位）のモード切り替え。
+// Mode switching for the regeneration forms (per cut and per section).
 //
-// カット側だけが「フル再生成の入力欄」を持つ以外は同じ挙動なので、要素の有無で分岐して
-// 1 ファイルを両方のページで使います。以前は 2 つのテンプレートがほぼ同じ 20 行を
-// それぞれ抱えていました。
+// They behave the same except that only the cut form has "the full-regeneration input field", so
+// one file serves both pages, branching on whether the element exists. The two templates used to
+// each carry nearly the same 20 lines.
 (() => {
     'use strict';
 
@@ -13,7 +13,7 @@
     const editPrompt = document.getElementById('edit_prompt');
     if (!editFields || !editPrompt) return;
 
-    // セクション単位の再生成にはこの欄がありません。
+    // The per-section regeneration has no such field.
     const regenerateFields = document.getElementById('regenerate-fields');
 
     function applyMode(radio) {

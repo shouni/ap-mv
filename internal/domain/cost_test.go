@@ -20,15 +20,15 @@ func TestVeoPricingRateForFallsBackThroughTable(t *testing.T) {
 	if got := pricing.RateFor("veo-unknown"); got != 0.25 {
 		t.Errorf("RateFor(unknown) = %v, want the \"\" fallback 0.25", got)
 	}
-	// 0 は「設定されていない」と同じ扱いにする。0円のモデルは存在しないので、書き間違いを
-	// 単価0として通すより、次の候補へ進むほうが安全。
+	// 0 is treated the same as "not set". No model costs 0, so moving on to the next candidate is
+	// safer than accepting a typo as a price of 0.
 	if got := pricing.RateFor("veo-zero"); got != 0.25 {
 		t.Errorf("RateFor(zero rate) = %v, want the \"\" fallback 0.25", got)
 	}
 	if got := (VeoPricing{}).RateFor("veo-a"); got != DefaultVeoPriceUSDPerSecond {
 		t.Errorf("RateFor on empty table = %v, want %v", got, DefaultVeoPriceUSDPerSecond)
 	}
-	// nil マップでもパニックせず既定値へ落ちること（VeoPricing 未設定のハンドラー経路）。
+	// A nil map does not panic and falls back to the default (the handler path with no VeoPricing).
 	if got := VeoPricing(nil).RateFor("veo-a"); got != DefaultVeoPriceUSDPerSecond {
 		t.Errorf("RateFor on nil table = %v, want %v", got, DefaultVeoPriceUSDPerSecond)
 	}
@@ -49,7 +49,7 @@ func TestGeneratedSecondsOfCutsCountsOnlyGeneratedCuts(t *testing.T) {
 			Status:      video.CutStatusFailed,
 		},
 		{
-			// status 未設定でも video_id + video_url が揃っていれば生成済み扱い。
+			// Even with no status, a cut with both video_id and video_url counts as generated.
 			DurationSec: 7,
 			VideoID:     "v1", VideoURL: "gs://b/v1.mp4",
 		},
@@ -136,8 +136,8 @@ func TestApplyVeoCostEstimateClearsStaleCutCost(t *testing.T) {
 }
 
 func TestApplyVeoCostEstimateIgnoresNilDetail(_ *testing.T) {
-	// キーフレームのみのジョブや未設定リポジトリで nil が渡っても落ちないこと。
-	// パニックしなければ成功なので、アサーションは無い。
+	// Must not fail when nil is passed for a keyframe-only job or an unconfigured repository.
+	// Not panicking is success, so there is no assertion.
 	ApplyVeoCostEstimate(nil, "veo-a", VeoPricing{"veo-a": 0.5})
 }
 
@@ -166,7 +166,7 @@ func TestVeoUsageRecordAccumulatesPerCut(t *testing.T) {
 
 	usage.Record(2, 8, "veo-a", now)
 	usage.Record(1, 6, "", now.Add(time.Minute))
-	// 同じカットの2回目 = 焼き直し。完成品の尺は変わらないが、課金は2回分発生している。
+	// The same cut a second time = a re-render. The finished length does not change, but it was billed twice.
 	usage.Record(2, 8, "veo-a", now.Add(2*time.Minute))
 
 	if usage.Calls != 3 {
@@ -178,7 +178,7 @@ func TestVeoUsageRecordAccumulatesPerCut(t *testing.T) {
 	if usage.SchemaVersion != VeoUsageSchemaVersion {
 		t.Errorf("SchemaVersion = %d, want %d", usage.SchemaVersion, VeoUsageSchemaVersion)
 	}
-	// モデル未指定の記録で、判明済みのモデル名が空へ潰されないこと。
+	// A record without a model must not wipe out a known model name.
 	if usage.Model != "veo-a" {
 		t.Errorf("Model = %q, want it preserved across a record with no model", usage.Model)
 	}
@@ -191,7 +191,7 @@ func TestVeoUsageRecordAccumulatesPerCut(t *testing.T) {
 	if got := usage.CutCalls(99); got != 0 {
 		t.Errorf("CutCalls(unknown) = %d, want 0", got)
 	}
-	// カットは番号順に並べて保存する（人が veo_usage.json を直接読むため）。
+	// Cuts are saved in number order (people read veo_usage.json directly).
 	if len(usage.Cuts) != 2 || usage.Cuts[0].CutIndex != 1 || usage.Cuts[1].CutIndex != 2 {
 		t.Fatalf("Cuts = %+v, want two entries sorted by cut index", usage.Cuts)
 	}

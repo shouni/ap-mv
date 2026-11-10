@@ -53,9 +53,9 @@ func TestPostVideoRecipeCreateQueuesVideoRecipeCreate(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "Queued") {
 		t.Fatalf("JobCreate body missing queued page: %s", rec.Body.String())
 	}
-	// 投入後の画面はジョブ状態をポーリングして queued → running → succeeded/failed を
-	// 表示する（サーバー側の /web/jobs/{jobID} は以前から存在し、UI 側が未接続だった）。
-	// スクリプトは外部ファイルなので、読み込みとジョブ ID の受け渡しの両方を確認する。
+	// The page after submission polls the job status and shows queued → running → succeeded/failed
+	// (the server-side /web/jobs/{jobID} existed before; the UI side was not wired up). The script is
+	// an external file, so check both that it is loaded and that the job ID is handed over.
 	for _, want := range []string{`src="/static/js/job_status.js"`, `data-job-id="`} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Fatalf("queued page is missing %s: %s", want, rec.Body.String())
@@ -294,9 +294,9 @@ func TestPostRecipeAcceptsKeyframeVideoRecipeJSON(t *testing.T) {
 	}
 }
 
-// TestComposeTemplateOffersAllAspectRatios は、compose.html の選択肢が
-// domain.AllowedAspectRatios（唯一の定義）と同期していることを検証します。
-// テンプレートは Go の定数を参照できないため、このテストが同期の担保です。
+// TestComposeTemplateOffersAllAspectRatios checks that compose.html's options are in sync with
+// domain.AllowedAspectRatios (the single definition). Templates cannot reference Go constants, so
+// this test is what guarantees the sync.
 func TestComposeTemplateOffersAllAspectRatios(t *testing.T) {
 	h, err := NewHandler(assets.Templates, nil)
 	if err != nil {

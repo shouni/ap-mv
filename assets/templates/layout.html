@@ -42,8 +42,8 @@
                     </a>
                 </li>
             </ul>
-            <!-- モデル名は設定（GEMINI_MODELS）から出します。文言で書くと、モデルを
-                 入れ替えても表示だけが古いモデルを指し続けます。 -->
+            <!-- Model names come from the configuration (GEMINI_MODELS). Written as text, the display would
+                 keep pointing at the old model after the models were swapped. -->
             {{if .SelectedGeminiModel}}
             <span class="navbar-text text-white-50 small text-truncate">
                 2026 Edition | <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i> {{.SelectedGeminiModel}}
@@ -78,9 +78,9 @@
 
 {{/* jobStageBadge renders a job's progress as one badge. Takes a domain.JobProgress.
 
-     以前は Generated の真偽値だけで generated / keyframes の 2 値を出していたため、
-     「まだ 1 枚も焼いていない」と「動画があと 1 本」が同じ表示でした。段階と分数を
-     出すことで、残作業と課金の進み具合が一覧から読めます。 */}}
+     It used to show two values, generated / keyframes, from the Generated boolean alone, so
+     "not a single one rendered yet" and "one video left" looked the same. Showing the stage and a
+     fraction makes the remaining work and how far the billing has gone readable from the listing. */}}
 {{define "jobStageBadge"}}
 {{if eq .Stage "completed"}}
 <span class="badge text-bg-success">{{.Label}}</span>
@@ -95,10 +95,10 @@
 {{end}}
 {{end}}
 
-{{/* ジョブそのものの状態バッジ。段階（jobStageBadge）はカットがどこまで焼けたかで、
-     こちらは処理が生きているかです。失敗したジョブは段階が途中で止まるだけなので、
-     これが無いと生成中のジョブと見分けが付きません。成功したジョブでは段階のバッジが
-     結果を語るため、何も出しません。引数は VideoHistory です。 */}}
+{{/* The badge for the job's own state. The stage (jobStageBadge) is how far the cuts have been
+     rendered; this is whether processing is alive. A failed job only stops partway through its
+     stages, so without this it cannot be told from a job in progress. For succeeded jobs the
+     stage badge tells the result, so nothing is shown. The argument is a VideoHistory. */}}
 {{define "jobStateBadge"}}
 {{if eq .State "failed"}}
 <span class="badge text-bg-danger">failed</span>

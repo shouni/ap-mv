@@ -1,5 +1,5 @@
-// Package domain は、動画生成ワークフローが扱う中心的なドメインモデル
-// （音楽レシピ、タスク、履歴、字幕、通知）を定義します。
+// Package domain defines the core domain models the video-generation workflow handles
+// (music recipes, tasks, history, subtitles, notifications).
 package domain
 
 import (
@@ -114,7 +114,7 @@ func BuildKaraokeLine(dialogue string, durationSec float64, bpm int) string {
 	totalCs := max(int(math.Round(durationSec*100)), len(runes))
 	csPerChar := totalCs / len(runes)
 
-	// BPM スナップ: ハーフビート単位（3000/bpm cs）に丸める
+	// BPM snap: round to half-beat units (3000/bpm cs)
 	if bpm > 0 {
 		halfBeatCs := math.Round(3000.0 / float64(bpm))
 		if halfBeatCs >= 1 {
@@ -130,7 +130,7 @@ func BuildKaraokeLine(dialogue string, durationSec float64, bpm int) string {
 	for i, r := range runes {
 		cs := csPerChar
 		if i == len(runes)-1 {
-			// 最後の文字に残り時間を全て割り当てて合計を合わせる
+			// Assign all the remaining time to the last character so the total matches
 			cs = remaining
 		}
 		if cs < 1 {

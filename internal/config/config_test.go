@@ -57,9 +57,9 @@ func clearConfigEnv(t *testing.T) {
 		}
 	}
 
-	// SERVER_ROLE は明示が必須。役割に関心のないテストはローカル開発と同じ both で読む。
-	// t.Setenv ではなく os.Setenv を使うのは、下の Cleanup が configEnvKeys 全体を
-	// 元の値へ戻すため。t.Setenv を混ぜると復元が二重になり、順序に依存する。
+	// SERVER_ROLE must be set explicitly. Tests that do not care about the role read it as both, like local development.
+	// os.Setenv is used rather than t.Setenv because the Cleanup below restores all of
+	// configEnvKeys to their original values. Mixing in t.Setenv would restore twice, depending on order.
 	if err := os.Setenv("SERVER_ROLE", string(serverrole.Both)); err != nil {
 		t.Fatalf("set SERVER_ROLE: %v", err)
 	}
@@ -112,18 +112,18 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.AI.KeyframeRateInterval != 60*time.Second {
 		t.Fatalf("KeyframeRateInterval = %s, want 60s", cfg.AI.KeyframeRateInterval)
 	}
-	// モデル名に組み込みの既定値はありません。既定値へ黙って落ちると、
-	// 古いモデルを使い続けたまま気付けません。
+	// Model names have no built-in defaults. Silently falling back to a default would keep
+	// an old model in use unnoticed.
 	if cfg.AI.GeminiModel != "" || cfg.AI.ImageModel != "" || cfg.AI.VeoModel != "" {
-		t.Fatalf("既定のモデル名が入っています: gemini=%q image=%q veo=%q",
+		t.Fatalf("a default model name is set: gemini=%q image=%q veo=%q",
 			cfg.AI.GeminiModel, cfg.AI.ImageModel, cfg.AI.VeoModel)
 	}
 	if len(cfg.AI.GeminiModels) != 0 || len(cfg.AI.ImageModels) != 0 || len(cfg.AI.VeoModels) != 0 {
-		t.Fatalf("既定のモデル一覧が入っています: gemini=%#v image=%#v veo=%#v",
+		t.Fatalf("a default model list is set: gemini=%#v image=%#v veo=%#v",
 			cfg.AI.GeminiModels, cfg.AI.ImageModels, cfg.AI.VeoModels)
 	}
 	if err := cfg.ValidateEssentialConfig(); err == nil {
-		t.Fatal("モデル未設定が起動時検証を通ってしまいました")
+		t.Fatal("unset models passed startup validation")
 	}
 }
 
@@ -161,7 +161,7 @@ func TestLoadConfigFromEnvOverrides(t *testing.T) {
 	if !cfg.AI.VeoGenerateAudio {
 		t.Fatal("VeoGenerateAudio = false, want true")
 	}
-	// 単数形は一覧の先頭から埋まります（環境変数からは読みません）。
+	// The singular fields are filled from the head of each list (they are not read from env).
 	if cfg.AI.ImageModel != "image-a" {
 		t.Fatalf("ImageModel = %q", cfg.AI.ImageModel)
 	}
@@ -214,9 +214,9 @@ func TestLoadConfigFromEnvVeoModelsAndLocation(t *testing.T) {
 	}
 }
 
-// TestLoadConfigFromEnvVeoPricingUnset は、単価表に組み込みの既定値が無いことを確認します。
-// モデル名も価格も Google 側の都合で変わるため、表そのものはデプロイ設定に置きます。
-// 空表が既定単価へ落ちることは domain.VeoPricing 側のテストが見ています。
+// TestLoadConfigFromEnvVeoPricingUnset checks that the price table has no built-in default.
+// Model names and prices both change on Google's schedule, so the table lives in the deployment config.
+// That an empty table falls back to the default price is covered by domain.VeoPricing's tests.
 func TestLoadConfigFromEnvVeoPricingUnset(t *testing.T) {
 	clearConfigEnv(t)
 
@@ -293,8 +293,8 @@ func TestLoadConfigFromEnvRejectsInvalidServiceURLForWorkerDefault(t *testing.T)
 
 // TestNormalizeWorkerURL verifies worker service URL normalization.
 //
-// 返るのは worker サービスの URL までで、タスクのパスは付きません。継ぎ足しは
-// 投入側の tasks.Config.WorkerPath が受け持ちます。
+// It returns only the worker service URL, without the task path. Appending it is the job of
+// the enqueuer's tasks.Config.WorkerPath.
 func TestNormalizeWorkerURL(t *testing.T) {
 	tests := []struct {
 		name    string

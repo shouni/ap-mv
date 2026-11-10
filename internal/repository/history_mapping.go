@@ -6,9 +6,9 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは、ジョブ状態と VideoRecipe から履歴表示用モデルへの変換を集めています。
-// ストレージと署名 URL へのアクセスは history_storage.go、公開エントリポイントは
-// history_listing.go を参照してください。
+// This file gathers the conversion from job status and VideoRecipe into history display models.
+// For storage and signed-URL access see history_storage.go; for the public entry points see
+// history_listing.go.
 
 // historySectionsFromRecipe converts recipe sections into display-ready entries with
 // normalized time ranges, so the short-video form can label each section option.
@@ -54,11 +54,11 @@ func sectionCutsAllGenerated(cuts []domain.VideoCut, start, end float64) bool {
 	return found
 }
 
-// videoHistoryFromStatus は、ジョブ状態のドキュメントから一覧 1 行分を組み立てます。
+// videoHistoryFromStatus builds one listing row from a job status document.
 //
-// 保存先（メタデータ・ZIP）と作成日時はジョブ ID から導けるので、ドキュメントには
-// 写していません。導ける値を写すと、置き場を変えたときに古い行だけが古いパスを
-// 指したまま残ります。
+// Storage locations (metadata, ZIP) and the creation time can be derived from the job ID, so they
+// are not copied into the document. Copying derivable values would leave old rows pointing at old
+// paths when the location changes.
 func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus) domain.VideoHistory {
 	jobID := strings.TrimSpace(status.JobID)
 	title := strings.TrimSpace(status.Title)
@@ -85,15 +85,16 @@ func (r *VideoHistoryRepository) videoHistoryFromStatus(status domain.JobStatus)
 	}
 }
 
-// videoHistoryFromRecipe は、保存済みレシピから詳細 1 件分の見出しを組み立てます。
+// videoHistoryFromRecipe builds one detail's headline from a stored recipe.
 //
-// レシピから見出しへの写しは domain.JobStatus.ApplyVideoRecipe が唯一の定義元で、ここは
-// それを通してから一覧と同じ変換にかけます。以前は一覧と詳細がそれぞれレシピを読み替えて
-// おり、片方に項目を足してもコンパイルは通るため、詳細にだけ出る項目が生まれていました。
-// 一覧の見出しが状態ドキュメントの写しになった今は、その食い違いが画面に出ます。
+// domain.JobStatus.ApplyVideoRecipe is the single definition of copying a recipe into the
+// headline; this goes through it and then through the same conversion as the listing. The
+// listing and detail used to each map the recipe themselves, and since adding a field to one side
+// still compiles, fields appeared only on the detail. Now that the listing headline is a copy in
+// the status document, such a mismatch would show on the page.
 //
-// State と Error は成果物からは分からないので、ここでは空のままです（GetHistory が
-// 状態ドキュメントから補います）。
+// State and Error cannot be told from the artifacts, so they stay empty here (GetHistory fills
+// them in from the status document).
 func (r *VideoHistoryRepository) videoHistoryFromRecipe(jobID string, recipe domain.VideoRecipe) domain.VideoHistory {
 	var status domain.JobStatus
 	status.JobID = jobID

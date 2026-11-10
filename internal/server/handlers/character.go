@@ -1,5 +1,5 @@
-// Package handlers は、Web UI（フォーム表示・履歴閲覧・キーフレーム再生成等）の
-// HTTPハンドラーを提供します。
+// Package handlers provides the HTTP handlers of the web UI (forms, history browsing,
+// keyframe regeneration and so on).
 package handlers
 
 import (
@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-// CharacterOption は、フォームで選択可能なキャラクター1件分の情報です。
+// CharacterOption is the information for one character selectable in the form.
 type CharacterOption struct {
 	ID        string
 	Name      string
 	IsDefault bool
-	// Seed はキャラクターに紐づく生成シードです（未設定の場合は nil）。
+	// Seed is the generation seed tied to the character (nil when unset).
 	Seed *int64
 }
 
-// CharacterOptions は、フォームで選択可能なキャラクター一覧とデフォルト選択を保持します。
+// CharacterOptions holds the characters selectable in the form and the default selection.
 type CharacterOptions struct {
 	Characters         []CharacterOption
 	DefaultCharacterID string

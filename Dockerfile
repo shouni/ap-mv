@@ -3,11 +3,11 @@ FROM golang:1.27-alpine AS builder
 RUN apk add --no-cache tzdata ca-certificates
 WORKDIR /app
 
-# scratchには/tmpが存在しない。動画処理(ffmpeg)の一時ファイル置き場として、
-# ここで作った空ディレクトリを最終ステージへそのままコピーする。
-# 最終イメージは非 root (65532) で動くため、パーミッションは 1777（sticky 付き全書き込み可）に
-# しておく。既定の 0755 のままだと os.CreateTemp が permission denied で失敗し、
-# 動画の結合・変換が一切できなくなる。
+# scratch has no /tmp. The empty directory made here is copied as-is into the
+# final stage as the scratch space for video processing (ffmpeg) temp files.
+# The final image runs as non-root (65532), so the permissions are 1777
+# (world-writable with the sticky bit). Left at the default 0755,
+# os.CreateTemp fails with permission denied and no video can be joined or converted.
 RUN mkdir -p /tmp && chmod 1777 /tmp
 
 COPY go.mod go.sum ./
@@ -16,8 +16,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/main ./main.go
 
-# 静的リンクされたffmpegバイナリ(シェル・共有ライブラリ依存なし)。
-# scratchベースの最終イメージにこの1バイナリだけをコピーする。
+# A statically linked ffmpeg binary (no shell or shared-library dependencies).
+# Only this one binary is copied into the scratch-based final image.
 FROM mwader/static-ffmpeg:9.0 AS ffmpeg
 
 FROM scratch
@@ -34,10 +34,10 @@ ENV TZ=Asia/Tokyo
 ENV PATH=/usr/local/bin
 EXPOSE 8080
 
-# 非 root で実行する。scratch にシェルもパッケージマネージャも無いとはいえ、
-# 侵入されたときに root のままだとコンテナ内で出来ることが増える。
-# ローカルへの書き込みは os.CreateTemp 経由の /tmp だけで、成果物は GCS へ送るため、
-# 権限を落としても動作に必要なものは失われない。
+# Run as non-root. Even though scratch has no shell or package manager, staying
+# root would widen what an intruder could do inside the container.
+# The only local writes are to /tmp via os.CreateTemp and artifacts go to GCS,
+# so dropping privileges loses nothing the service needs.
 USER 65532:65532
 
 CMD ["/app/main"]

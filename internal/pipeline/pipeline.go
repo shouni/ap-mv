@@ -1,4 +1,4 @@
-// Package pipeline は、Step 群を順に実行する動画生成ワーカーのパイプライン実行器を提供します。
+// Package pipeline provides the video-generation worker's pipeline runner, which runs Steps in order.
 package pipeline
 
 import (
@@ -22,12 +22,12 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// notificationTimeout は通知 1 回に与える上限です。結末の記録と通知の全体には
-// Lifecycle が別に上限を持ちます（DefaultFinishTimeout）。
+// notificationTimeout bounds one notification. Lifecycle has its own limit for recording
+// the outcome and notifying as a whole (DefaultFinishTimeout).
 const notificationTimeout = 10 * time.Second
 
-// Dependencies は Runner の実行に必要な依存の束です。New が必須依存の欠落を
-// 生成時に検証するため、実行時まで依存不足が分からない状態を防ぎます。
+// Dependencies bundles what Runner needs to run. New validates that required dependencies
+// are present at construction, so a missing one is not discovered only at run time.
 type Dependencies struct {
 	VideoRunner       ports.VideoRunner
 	TaskQueue         ports.TaskQueue
@@ -35,32 +35,32 @@ type Dependencies struct {
 	Writer            remoteio.Writer
 	Characters        *characterkit.Characters
 	HistoryRepository ports.HistoryRepository
-	// WorkflowResolver はタスクに応じた orchestrator Workflows を解決します。
+	// WorkflowResolver resolves the orchestrator Workflows for the task.
 	WorkflowResolver WorkflowResolver
-	// Planner はタスクごとの実行計画（ステップ列）を決定します。
-	// 未設定の場合はゼロ値の DefaultPlanner を使います（任意）。
+	// Planner decides the execution plan (step sequence) per task.
+	// When unset, the zero-value DefaultPlanner is used (optional).
 	Planner Planner
-	// Notifier は完了・エラー通知を送ります。未設定の場合は通知しません（任意）。
+	// Notifier sends completion and error notices. When unset, nothing is notified (optional).
 	Notifier ports.Notifier
-	// OutputBaseURI はタスク成果物のベース URI です。空の場合はステップ側で
-	// 保存先を指定しません（任意）。
+	// OutputBaseURI is the base URI for task artifacts. When empty, the steps do not
+	// specify where to save (optional).
 	OutputBaseURI string
-	// Timeout はタスク 1 件の実行時間の上限です。0 以下は無制限を意味します（任意）。
-	// カット分割された継続タスクにはそれぞれ個別に適用されます。
+	// Timeout is the run-time limit of one task. 0 or less means unlimited (optional).
+	// It applies separately to each continuation task of a cut-split job.
 	Timeout time.Duration
-	// JobStatus はジョブ進行状況の記録先です。未設定の場合は状態記録と
-	// 再実行ガードが無効になります（任意）。
+	// JobStatus is where job progress is recorded. When unset, status recording and the
+	// re-run guard are disabled (optional).
 	JobStatus ports.JobStatusStore
 }
 
-// Runner は domain.Task を MusicRecipe 生成、キーフレーム生成、動画生成、公開の
-// 各ステップへ順番に流す worker パイプラインです。
+// Runner is the worker pipeline that passes a domain.Task through MusicRecipe generation,
+// keyframe generation, video generation and publishing in order.
 type Runner struct {
 	deps Dependencies
 }
 
-// New は依存を検証して Runner を生成します。必須依存が欠けている場合はエラーを返し、
-// 実行時ではなく起動時に構成ミスを検出します。
+// New validates the dependencies and builds a Runner. It returns an error when a required
+// dependency is missing, catching misconfiguration at startup rather than at run time.
 func New(deps Dependencies) (*Runner, error) {
 	var missing []string
 	for _, dep := range []struct {
@@ -88,26 +88,27 @@ func New(deps Dependencies) (*Runner, error) {
 	return &Runner{deps: deps}, nil
 }
 
-// Execute は worker.TaskExecutor を満たします。
+// Execute satisfies worker.TaskExecutor.
 //
-// ジョブの一生（再配信ガード → 検証 → 実行 → 結末の記録）は gcp-kit/worker.Lifecycle が
-// 持ち、ここはそれぞれの中身だけを渡します（public-docs のワーカー規約）。panic の回復、
-// 実行時間の上限、結末の記録の ctx の切り離しはライブラリ側の仕事で、ここには書きません。
-// task は TaskExecutor のシグネチャに合わせて値で受け取り、run へ渡す時点でポインタ化します。
+// The job's lifecycle (redelivery guard → validation → run → recording the outcome) belongs to
+// gcp-kit/worker.Lifecycle; this only supplies what goes in each stage (the worker conventions
+// in public-docs). Recovering panics, the run-time limit and detaching the ctx for recording the
+// outcome are the library's job and are not written here.
+// task is taken by value to match the TaskExecutor signature and turned into a pointer when passed to run.
 func (r *Runner) Execute(ctx context.Context, task domain.Task) error {
 	return r.lifecycle().Execute(ctx, task)
 }
 
-// lifecycle は、ジョブの一生の各段にこのアプリの中身を当てはめます。
+// lifecycle fills each stage of the job's lifecycle with this app's contents.
 func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, *runResult] {
-	// 記録先は Dependencies から毎回引きます。テストが Runner をリテラルで組み立てても
-	// 記録が効くようにするためで、Recorder の生成は軽い。
+	// The recorder is taken from Dependencies every time, so recording works even when a test
+	// builds Runner as a literal; constructing a Recorder is cheap.
 	status := newStatusRecorder(r.deps.JobStatus)
 	return worker.Lifecycle[domain.Task, *runResult]{
-		// 以降このジョブから出るログすべてに job_id / command を載せ、
-		// 各ステップのログを 1 ジョブ単位で追えるようにする。
-		// 継続タスク（video_gen_continuation）は同じ job_id を引き継ぐため、
-		// カット分割されたチェーン全体が 1 本の job_id でまとまる。
+		// Put job_id / command on every log line this job emits from here on, so each
+		// step's logs can be followed per job.
+		// A continuation task (video_gen_continuation) inherits the same job_id, so the
+		// whole cut-split chain is grouped under one job_id.
 		Prepare: func(ctx context.Context, task domain.Task) context.Context {
 			return slogctx.With(ctx,
 				slog.String("job_id", task.JobID),
@@ -117,14 +118,14 @@ func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, *runResult] {
 		Labels: func(task domain.Task) map[string]string {
 			return map[string]string{"job_id": task.JobID, "command": string(task.Command)}
 		},
-		// 再配信ガード。通知の失敗などで一度エラーを返しただけでも再配信されるため、ここで
-		// 打ち切らないと Veo の生成コストがそのまま二重に発生します。未完了ならここで
-		// running を記録します（入力検証より前。全試行が Attempts に載ります）。状態を
-		// 読めなければ判断できないので、実行せずにエラーを返します。
+		// Redelivery guard. Returning an error even once (a failed notification, say) causes a
+		// redelivery, so without stopping here the Veo generation cost is paid twice. If the job is
+		// unfinished, running is recorded here (before input validation, so every attempt shows up in
+		// Attempts). Without being able to read the status nothing can be decided, so return an error without running.
 		Begin: func(ctx context.Context, task domain.Task) (bool, error) {
 			return status.begin(ctx, &task)
 		},
-		// 依頼そのものが不正なら、配り直しても同じ行で落ちます（Lifecycle が Permanent に包みます）。
+		// If the request itself is invalid, redelivering fails on the same line (Lifecycle wraps it as Permanent).
 		Validate: func(task domain.Task) error { return task.Validate() },
 		Run: func(ctx context.Context, task domain.Task) (*runResult, error) {
 			return r.run(ctx, &task)
@@ -132,19 +133,19 @@ func (r *Runner) lifecycle() worker.Lifecycle[domain.Task, *runResult] {
 		Finish: func(ctx context.Context, task domain.Task, result *runResult, cause error) error {
 			return r.recordOutcome(ctx, &task, status, result, cause)
 		},
-		// Cloud Tasks の dispatch deadline より短く保つこと。長いと先に Cloud Tasks が
-		// リクエストを打ち切り、アプリが自分の失敗を書く機会を失う。
+		// Keep it shorter than Cloud Tasks' dispatch deadline. If longer, Cloud Tasks cuts the
+		// request first and the app loses its chance to write its own failure.
 		Timeout: r.deps.Timeout,
 	}
 }
 
-// recordOutcome は終端状態の記録と通知を、成功・失敗の別なく同じ経路で行います
-// （Lifecycle の Finish）。
+// recordOutcome records the terminal state and notifies along the same path whether the run
+// succeeded or failed (Lifecycle's Finish).
 //
-// 打ち切りこそが終端の理由である場面（Timeout の発火、Cloud Tasks の dispatch deadline
-// 超過によるリクエストのキャンセル）では呼び出し元の ctx は既に Done です。切り離しは
-// Lifecycle が行い、成功と失敗のどちらもここを通るので、片方だけ切り離し忘れる書き方が
-// 表現できません。
+// When the cut-off itself is the reason for the end (Timeout firing, or the request being
+// cancelled for exceeding Cloud Tasks' dispatch deadline), the caller's ctx is already Done.
+// Lifecycle does the detaching and both success and failure go through here, so forgetting to
+// detach on only one side cannot be expressed.
 func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status statusRecorder, result *runResult, cause error) error {
 	req := notificationRequest(task, result)
 
@@ -155,21 +156,21 @@ func (r *Runner) recordOutcome(ctx context.Context, task *domain.Task, status st
 		return cause
 
 	case result != nil && result.deferred:
-		// 継続タスクが同じ job_id で処理を引き継ぐため、ここで succeeded にすると
-		// 再配信ガードが途中で発動して残りのカットが生成されなくなる。
-		// 完了通知を送らない条件とまったく同じ判定を使う。
+		// A continuation task carries the work on under the same job_id, so marking succeeded here
+		// would trigger the redelivery guard midway and the remaining cuts would never be generated.
+		// Use exactly the same check as the one that suppresses the completion notice.
 		return nil
 
 	default:
-		// 記録 → 通知の順。記録できていないジョブの成功を人に知らせない。
+		// Record, then notify. Never tell a person a job succeeded when it could not be recorded.
 		status.markSucceeded(ctx, task, req, resultVideoRecipe(result))
 		r.notifyComplete(ctx, req)
 		return nil
 	}
 }
 
-// resultVideoRecipe は、実行後のレシピを取り出します。ステップ列が途中で落ちた場合は
-// nil になり、見出しは前回の記録のままになります。
+// resultVideoRecipe takes out the recipe after the run. When the step sequence failed midway
+// it is nil, and the headline stays as previously recorded.
 func resultVideoRecipe(result *runResult) *domain.VideoRecipe {
 	if result == nil {
 		return nil
@@ -177,10 +178,10 @@ func resultVideoRecipe(result *runResult) *domain.VideoRecipe {
 	return result.videoRecipe
 }
 
-// Close は Runner が保持する実行時リソースを解放します。
+// Close releases the run-time resources Runner holds.
 //
-// 構築成功後の VideoRunner のライフサイクルは Runner が所有します（app.Container.Close →
-// Pipeline.Close 経由で解放される。構築途中の失敗時のみ builder.BuildContainer が解放する）。
+// Once construction succeeds, Runner owns the VideoRunner's lifecycle (it is released via
+// app.Container.Close → Pipeline.Close; builder.BuildContainer releases it only when construction fails midway).
 func (r *Runner) Close() error {
 	if r == nil || r.deps.VideoRunner == nil {
 		return nil
@@ -191,10 +192,10 @@ func (r *Runner) Close() error {
 	return nil
 }
 
-// Run はタスク内容に応じたステップ列を実行し、処理後の MusicRecipe を返します。
+// Run runs the step sequence for the task and returns the processed MusicRecipe.
 //
-// Cloud Tasks worker からは Execute 経由で呼ばれますが、Run はテストや同期実行で
-// パイプライン結果を確認したい場合の本体メソッドとして残しています。
+// The Cloud Tasks worker calls it through Execute, but Run is kept as the core method for
+// tests and synchronous runs that want to inspect the pipeline result.
 func (r *Runner) Run(ctx context.Context, task *domain.Task) (*domain.MusicRecipe, error) {
 	if err := task.Validate(); err != nil {
 		return nil, err
@@ -232,7 +233,7 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 		Characters:        r.deps.Characters,
 		HistoryRepository: r.deps.HistoryRepository,
 	}
-	// deps.Planner は New が DefaultPlanner{} で補完済みのため、ここでは nil になりません。
+	// New has already filled deps.Planner with DefaultPlanner{}, so it is never nil here.
 	steps, err := r.deps.Planner.Plan(task, videoRunner)
 	if err != nil {
 		return nil, err
@@ -248,9 +249,9 @@ func (r *Runner) run(ctx context.Context, task *domain.Task) (*runResult, error)
 	return newRunResult(sc, false), nil
 }
 
-// newRunResult はステップ実行後の Context から結果を組み立てます。
-// VideoRecipe の正規化はここ（パイプライン実行の一部）で済ませ、通知データ作成
-// （notificationRequest）が実行結果を変更する副作用を持たないようにします。
+// newRunResult builds the result from the Context after the steps ran.
+// The VideoRecipe is normalised here (as part of the pipeline run) so that building the
+// notification data (notificationRequest) has no side effect on the run result.
 func newRunResult(sc *step.Context, deferred bool) *runResult {
 	if sc.VideoRecipe != nil {
 		sc.VideoRecipe.Normalize()
@@ -285,8 +286,8 @@ func (r *Runner) notifyError(ctx context.Context, errDetail error, req domain.No
 	}
 }
 
-// notificationContext は通知 1 回に上限を与えます。ctx は Lifecycle が呼び出し元から
-// 切り離して渡してくるので、ここでは切り離しません。
+// notificationContext bounds one notification. Lifecycle hands in a ctx already detached
+// from the caller, so it is not detached here.
 func notificationContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, notificationTimeout)
 }
@@ -313,9 +314,9 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 		CreatedAt:    task.CreatedAt,
 	}
 	if result != nil {
-		// 台本のみのジョブも完成ジョブと同じ jobs 配下へ保存するので、案内先は共通です。
+		// Script-only jobs are saved under the same jobs prefix as finished ones, so the link target is shared.
 		req.OutputURI = result.outputPath
-		// videoRecipe は newRunResult で正規化済み。ここでは読み取りのみ行います。
+		// videoRecipe was normalised in newRunResult. Only read it here.
 		if result.videoRecipe != nil {
 			req.Title = result.videoRecipe.MusicRecipe.Title
 			req.CutCount = len(result.videoRecipe.Cuts)
@@ -327,8 +328,8 @@ func notificationRequest(task *domain.Task, result *runResult) domain.Notificati
 	return req
 }
 
-// resolveWorkflows は WorkflowResolver へタスクに応じた Workflows の解決を委譲します。
-// Resolver が未設定の場合は Workflows なし（VideoRunner 直接実行のみ）で実行します。
+// resolveWorkflows delegates resolving the task's Workflows to WorkflowResolver.
+// When no Resolver is set, it runs without Workflows (VideoRunner directly only).
 func (r *Runner) resolveWorkflows(ctx context.Context, task *domain.Task) (*orchestrator.Workflows, error) {
 	if r == nil || r.deps.WorkflowResolver == nil {
 		return nil, nil
@@ -336,9 +337,9 @@ func (r *Runner) resolveWorkflows(ctx context.Context, task *domain.Task) (*orch
 	return r.deps.WorkflowResolver.Resolve(ctx, task)
 }
 
-// outputPath はタスク成果物を配置するベースパスを返します。
+// outputPath returns the base path where task artifacts go.
 //
-// OutputBaseURI が未設定の場合は、ステップ側で保存先を指定しないため空文字を返します。
+// When OutputBaseURI is unset, the steps do not specify where to save, so it returns an empty string.
 func (r *Runner) outputPath(task *domain.Task) string {
 	if task == nil || strings.TrimSpace(r.deps.OutputBaseURI) == "" {
 		return ""

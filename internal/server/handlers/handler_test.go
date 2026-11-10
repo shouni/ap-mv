@@ -32,10 +32,10 @@ func (q *recordingQueue) EnqueueWithName(_ context.Context, _ string, task *doma
 type fakeHistoryRepository struct {
 	detail domain.VideoHistoryDetail
 	page   domain.VideoHistoryPage
-	// usage は nil のままなら「実績記録なし」を表します（実績記録の導入前に走ったジョブ）。
+	// usage left nil means "no usage record" (a job run before usage records existed).
 	usage    *domain.VeoUsage
 	usageErr error
-	// recipe は nil のままなら空のレシピを返します。
+	// recipe left nil returns an empty recipe.
 	recipe *domain.VideoRecipe
 }
 
@@ -74,8 +74,8 @@ func (r fakeHistoryRepository) KeyframeZipSignedURL(context.Context, string) (st
 	return "", nil
 }
 
-// SignHistoryURLs は JSON 応答のためだけの経路です。署名の中身はここでは問わず、
-// 「画面は署名を要求しない」ことを確かめられれば足りるので、目印だけ入れます。
+// SignHistoryURLs is a path for JSON responses only. What the signature contains does not matter
+// here; it is enough to confirm "pages do not ask for signatures", so it only puts in a marker.
 func (r fakeHistoryRepository) SignHistoryURLs(_ context.Context, detail *domain.VideoHistoryDetail) error {
 	if detail == nil {
 		return nil
@@ -107,7 +107,7 @@ func (r fakeHistoryRepository) SignedObjectURL(_ context.Context, uri string) (s
 // last cut alone would show only the last chain's fragment for jobs with more than one
 // continuation chain (see chain_finalize.go).
 //
-// 出るのは同一オリジンのパスです。署名付き URL は画面に埋めません。
+// What appears is a same-origin path. Signed URLs are not embedded in the page.
 func TestLatestVideoForHomePrefersFinalVideo(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, &recordingQueue{}, ModelOptions{}, CharacterOptions{})
 	if err != nil {
@@ -201,8 +201,8 @@ func TestVideoRecipeCreateFormRendersModelSelects(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		// CSRF トークンはテンプレートが出す側の責務。検証は gcp-kit の
-		// セッションミドルウェアが持つので、ここは埋め込み漏れだけを見ます。
+		// Emitting the CSRF token is the template's responsibility. Verification belongs to gcp-kit's
+		// session middleware, so this only looks for a missing embed.
 		`name="csrf_token" value="token"`,
 		`name="music_job_id"`,
 		`name="text_model"`,

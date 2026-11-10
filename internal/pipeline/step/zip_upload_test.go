@@ -14,7 +14,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// zipTestReader は KeyframeReference の URI からバイト列を返すフェイクです。
+// zipTestReader is a fake that returns bytes for a KeyframeReference URI.
 type zipTestReader struct {
 	files map[string]string
 	err   error
@@ -54,7 +54,7 @@ func zipTestContext(writer *memoryWriter, reader *zipTestReader) *Context {
 					KeyframeReference: "gs://bucket/images/keyframe_1.png",
 				},
 				{
-					// キーフレームを持たないカットは ZIP に含まれない。
+					// A cut without a keyframe is not included in the ZIP.
 					CutIndex:    2,
 					DurationSec: 8, StartSec: 8, EndSec: 16,
 				},
@@ -63,9 +63,9 @@ func zipTestContext(writer *memoryWriter, reader *zipTestReader) *Context {
 	}
 }
 
-// TestZipUploadBuildsArchive は、ZIP に「キーフレーム画像 + inputs.txt + subtitles.ass」が
-// 揃うことを検証します。io.Pipe + goroutine の構造（writeErr の受け渡し含む）を通しで
-// 通すテストで、以前はこのフィルタ全体が 0% カバレッジでした。
+// TestZipUploadBuildsArchive checks that the ZIP holds "keyframe images + inputs.txt +
+// subtitles.ass". It runs the io.Pipe + goroutine structure (including handing over writeErr)
+// end to end; this whole filter used to have 0% coverage.
 func TestZipUploadBuildsArchive(t *testing.T) {
 	writer := newMemoryWriter()
 	reader := &zipTestReader{files: map[string]string{
@@ -112,9 +112,9 @@ func TestZipUploadBuildsArchive(t *testing.T) {
 	}
 }
 
-// TestZipUploadPropagatesReadFailure は、キーフレームの読み取り失敗が Writer 経由で
-// エラーとして返ることを検証します（goroutine 内の writeErr が pipe の CloseWithError を
-// 通じて伝播する構造の回帰テスト）。
+// TestZipUploadPropagatesReadFailure checks that a keyframe read failure comes back as an error
+// through the Writer (a regression test for the structure where writeErr in the goroutine
+// propagates through the pipe's CloseWithError).
 func TestZipUploadPropagatesReadFailure(t *testing.T) {
 	writer := newMemoryWriter()
 	reader := &zipTestReader{err: errors.New("gcs unavailable")}
@@ -129,9 +129,9 @@ func TestZipUploadPropagatesReadFailure(t *testing.T) {
 	}
 }
 
-// TestZipUploadSkipsRegenWithoutOverwrite は、キーフレーム再生成コマンドで
-// OverwriteKeyframe が無効な場合に ZIP を作らないことを検証します（元ジョブの
-// keyframes.zip を意図せず上書きしないためのガード）。
+// TestZipUploadSkipsRegenWithoutOverwrite checks that the keyframe regeneration command does not
+// build a ZIP when OverwriteKeyframe is off (a guard against unintentionally overwriting the
+// original job's keyframes.zip).
 func TestZipUploadSkipsRegenWithoutOverwrite(t *testing.T) {
 	writer := newMemoryWriter()
 	sc := zipTestContext(writer, &zipTestReader{})

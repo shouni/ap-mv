@@ -6,19 +6,19 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// TestDefaultPlannerCoversAllCommands は、全 TaskCommand のステップ列を固定するテーブル
-// テストです。コマンドを追加したのに DefaultPlanner.Plan へ実行計画を登録し忘れた場合、
-// このテストの網羅リスト更新時に露見します。
+// TestDefaultPlannerCoversAllCommands is a table test pinning the step sequence of every
+// TaskCommand. If a command is added but its plan is not registered in DefaultPlanner.Plan, it
+// shows up when this test's exhaustive list is updated.
 func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 	tests := []struct {
 		command domain.TaskCommand
-		// origin は継続タスクが引き継ぐ元コマンドです（継続以外では空）。
+		// origin is the original command a continuation task inherits (empty otherwise).
 		origin domain.TaskCommand
 		want   []string
 	}{
 		{
-			// 下書きはキーフレームを1枚も焼かずに終わる唯一の生成系コマンド。cut_keyframe_gen が
-			// 紛れ込むと「確認してから焼く」という下書きの存在理由が消えるため、ここで固定する。
+			// The draft is the only generating command that ends without rendering a single keyframe. If
+			// cut_keyframe_gen crept in, the draft's reason to exist, "check, then render", would vanish, so pin it here.
 			command: domain.CommandVideoRecipeDraft,
 			want:    []string{"scripting", "scene_split", "recipe_save"},
 		},
@@ -35,8 +35,8 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			want:    []string{"recipe_load", "regen_cut_keyframe", "zip_upload"},
 		},
 		{
-			// セクション一括再生成はカット1枚の再生成と同じ実行計画で、対象の解決だけが
-			// regen_cut_keyframe ステップ内で分岐します。
+			// Section-wide regeneration has the same plan as regenerating one cut; only resolving the target
+			// branches inside the regen_cut_keyframe step.
 			command: domain.CommandRegenerateSectionKeyframes,
 			want:    []string{"recipe_load", "regen_cut_keyframe", "zip_upload"},
 		},
@@ -45,8 +45,8 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			want:    []string{"recipe_load", "zip_upload"},
 		},
 		{
-			// カット単位の動画作り直しは scene_split を通さない。保存済みのカット割りを
-			// 再計画すると、作り直さないカットの動画（既存の VideoURL）と対応が崩れる。
+			// Remaking a cut's video does not go through scene_split. Re-planning the saved cut list would
+			// break the correspondence with the videos of cuts not being remade (their existing VideoURL).
 			command: domain.CommandRegenerateCutVideo,
 			want:    []string{"recipe_load", "cut_video_select", "video_gen", "chain_finalize", "publishing"},
 		},
@@ -55,29 +55,29 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 			want:    []string{"recipe_load", "section_select", "video_gen", "chain_finalize", "publishing"},
 		},
 		{
-			// video_gen_continuation は VideoGenerationStep が内部的に enqueue する再開用
-			// コマンドで、引き継いだ VideoRecipe に scripting/keyframe/zip の結果が反映済みの
-			// ため動画生成から再開します。
+			// video_gen_continuation is the resume command VideoGenerationStep enqueues internally; the
+			// carried VideoRecipe already reflects the scripting/keyframe/zip results, so it resumes from
+			// video generation.
 			command: domain.CommandVideoGenContinuation,
 			want:    []string{"video_gen", "chain_finalize", "publishing"},
 		},
 		{
-			// セクション単位の積み上げ。scene_split を通さないのは cut_video と同じ理由で、
-			// 保存済みのカット割りを再計画すると既存カットの動画と対応が崩れるため。
-			// chain_finalize が**入っていない**ことがこの計画の要点で、通してしまうと
-			// セクションを1つ焼くたびに中途半端な final_video_url が生まれる。
+			// Building up per section. It skips scene_split for the same reason as cut_video: re-planning the
+			// saved cut list would break the correspondence with existing cuts' videos.
+			// The point of this plan is that chain_finalize is **not in it**; going through it would produce
+			// a half-finished final_video_url every time a section is rendered.
 			command: domain.CommandSectionVideo,
 			want:    []string{"recipe_load", "original_job_output", "section_keyframe", "zip_upload", "video_gen", "publishing"},
 		},
 		{
-			// section_video の続きも結合しない。ここが素の継続計画へ落ちると、
-			// セクションを焼き終えた瞬間に結合まで走ってしまう。
+			// A section_video continuation does not join either. If this fell to the plain continuation plan,
+			// it would run through the join the moment a section finished rendering.
 			command: domain.CommandVideoGenContinuation,
 			origin:  domain.CommandSectionVideo,
 			want:    []string{"original_job_output", "video_gen", "publishing"},
 		},
 		{
-			// 仕上げ専用。video_gen を通さないので、未生成カットが残っていても課金されない。
+			// Finishing only. It skips video_gen, so nothing is charged even if ungenerated cuts remain.
 			command: domain.CommandFinalizeVideo,
 			want:    []string{"recipe_load", "original_job_output", "chain_finalize", "publishing"},
 		},
@@ -108,8 +108,8 @@ func TestDefaultPlannerCoversAllCommands(t *testing.T) {
 	}
 }
 
-// TestDefaultPlannerRejectsUnknownCommand は、実行計画が未登録のコマンドが既定のチェーンへ
-// 黙って流れず、明示的にエラーになることを検証します。
+// TestDefaultPlannerRejectsUnknownCommand checks that a command with no registered plan does not
+// silently flow into the default chain but fails with an explicit error.
 func TestDefaultPlannerRejectsUnknownCommand(t *testing.T) {
 	if _, err := (DefaultPlanner{}).Plan(&domain.Task{Command: "no_such_command"}, nil); err == nil {
 		t.Fatal("Plan() error = nil, want error for unknown command")

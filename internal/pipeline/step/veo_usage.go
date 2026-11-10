@@ -18,15 +18,17 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// recordVeoUsage は、成功した1カットぶんの生成実績を veo_usage.json へ加算します。
+// recordVeoUsage adds the usage of one successfully generated cut to veo_usage.json.
 //
-// 完成品の尺（VideoRecipe から算出できる）と違い、実際に Veo へ投げた回数は生成した瞬間に
-// しか分かりません。Cloud Tasks の再配信で同じカットを焼き直すと、完成品は変わらないまま
-// 課金だけが増えるため、その差を見えるようにするのがこの記録の目的です。
+// Unlike the finished length (computable from the VideoRecipe), how many times Veo was actually
+// called is known only at the moment of generation. Re-rendering the same cut on a Cloud Tasks
+// redelivery leaves the finished piece unchanged while only the billing grows; making that gap
+// visible is the purpose of this record.
 //
-// 記録の失敗は返しません。会計のために生成を止めるのは本末転倒だからです（呼び出し側は
-// 既に Veo へ課金済みで、ここで失敗を返すと Cloud Tasks が同じカットを焼き直しにきます）。
-// 失敗はログに残し、実績が過小になることを受け入れます。
+// A failed record is not returned. Stopping generation for the sake of accounting would put the
+// cart before the horse (the caller has already been billed by Veo, and returning a failure here
+// would make Cloud Tasks come back to re-render the same cut). Failures are logged, accepting
+// that usage is undercounted.
 func recordVeoUsage(ctx context.Context, sc *Context, cut *video.Cut) {
 	if sc == nil || cut == nil || sc.Writer == nil {
 		return

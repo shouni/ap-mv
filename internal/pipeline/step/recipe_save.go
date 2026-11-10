@@ -7,21 +7,22 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// RecipeSaveStep は、台本生成とカット割りを終えた VideoRecipe を保存し、キーフレーム
-// 生成の手前でパイプラインを終わらせるステップです。以前の「下書き」がこれにあたります。
+// RecipeSaveStep saves the VideoRecipe once script generation and cut splitting are done, and
+// ends the pipeline before keyframe generation. It is what used to be called the "draft".
 //
-// 保存先は完成ジョブと同じ {OutputPath}/video_music_meta.json です。下書き専用の場所と
-// ファイル名を分けていたのをやめたのは、中身が同じ VideoRecipe で、一覧の走査規則も
-// 同じだったためです。分けている限り一覧・取得・削除を 2 系統維持することになり、
-// 「まだ焼いていないジョブ」を履歴として扱えませんでした。段階は JobProgress が
-// keyframe / 動画のカット数から導くので、保存場所で区別する必要がありません。
+// It is saved to the same {OutputPath}/video_music_meta.json as a finished job. A separate
+// location and file name for drafts were dropped because the contents are the same VideoRecipe
+// and the listing's scan rule was the same too. As long as they were separate, listing, fetching
+// and deleting had to be maintained twice, and "jobs not rendered yet" could not be treated as
+// history. JobProgress derives the stage from the keyframe / video cut counts, so the storage
+// location does not need to tell them apart.
 //
-// 保存するのは SceneSplitStep を通した後のレシピです。台本直後のカット列は尺が
-// 確定しておらず（SceneSplit が達成可能なチェーン長へ割り付け、丸め誤差を次カットへ
-// 送り、StartSec/EndSec を連結後の映像タイムラインへ振り直す）、それを見せても
-// 実際に焼かれるカット割りとは別物になります。SceneSplitStep は同じレシピを
-// 二度通しても結果が変わらないため（TestSceneSplitStepIsIdempotent）、この保存を
-// mv_from_keyframe_video_recipe へそのまま渡してもカット割りは保たれます。
+// What is saved is the recipe after SceneSplitStep. Right after the script the cuts' durations are
+// not settled (SceneSplit allocates them to achievable chain lengths, carries rounding errors into
+// the next cut and reassigns StartSec/EndSec on the joined video timeline), so showing that would
+// differ from the cut list actually rendered. SceneSplitStep gives the same result when the same
+// recipe passes through it twice (TestSceneSplitStepIsIdempotent), so passing this save straight
+// to mv_from_keyframe_video_recipe keeps the cut list.
 type RecipeSaveStep struct{}
 
 // Name returns the receiver name.
@@ -32,8 +33,8 @@ func (RecipeSaveStep) Execute(ctx context.Context, sc *Context) error {
 	if sc == nil || sc.VideoRecipe == nil {
 		return fmt.Errorf("recipe_save requires a video recipe")
 	}
-	// 保存前に検証しておく。ここを通さないと、一覧には載るがキーフレーム生成で落ちる
-	// レシピが残り、失敗の原因が台本作成時まで遡らないと分からなくなる。
+	// Validate before saving. Without this, a recipe that is listed but fails in keyframe generation
+	// would remain, and the cause could only be found by going back to when the script was made.
 	if err := domain.ValidateVideoRecipe(sc.VideoRecipe); err != nil {
 		return fmt.Errorf("recipe_save: %w", err)
 	}

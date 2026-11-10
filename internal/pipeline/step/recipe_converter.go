@@ -13,9 +13,9 @@ import (
 
 // toVideoRecipe converts a domain music recipe to an orchestrator video recipe.
 //
-// 実体の組み立て（タイトルの相互補完・セクション→カット展開・深いコピー）は
-// video.NewRecipeFromMusic が持ちます。以前はここで手書きの浅いコピーを
-// していましたが、音楽側にフィールドが増えるたびに取りこぼしの余地がありました。
+// The actual construction (filling titles from each other, expanding sections into cuts, deep
+// copying) belongs to video.NewRecipeFromMusic. A hand-written shallow copy used to live here,
+// leaving room to drop fields whenever the music side gained one.
 func toVideoRecipe(recipe *domain.MusicRecipe) (*video.Recipe, error) {
 	if recipe == nil {
 		return nil, nil
@@ -27,8 +27,8 @@ func toVideoRecipe(recipe *domain.MusicRecipe) (*video.Recipe, error) {
 }
 
 // applyTaskAudioURLToVideoRecipe applies a task audio URL to an orchestrator recipe.
-// コマンド判定（video_recipe_create は音源を紐づけない）だけがアプリの方針で、
-// 充填そのものは video.Cuts.FillAudioReference が持ちます。
+// Only the command check (video_recipe_create does not attach audio) is the app's policy;
+// the filling itself belongs to video.Cuts.FillAudioReference.
 func applyTaskAudioURLToVideoRecipe(task *domain.Task, recipe *video.Recipe) {
 	if task == nil || recipe == nil {
 		return
@@ -55,9 +55,9 @@ func applyTaskCharacterIDToVideoRecipe(task *domain.Task, recipe *video.Recipe) 
 	}
 }
 
-// originalJobOutputPath は RecipeURL（例: gs://bucket/jobs/{jobID}/video_music_meta.json）から
-// ジョブルートパス（例: gs://bucket/jobs/{jobID}/）を導出します。
-// path.Dir は gs:// の // を潰すため remoteio でスキームを分解してから操作します。
+// originalJobOutputPath derives the job root path (e.g. gs://bucket/jobs/{jobID}/) from RecipeURL
+// (e.g. gs://bucket/jobs/{jobID}/video_music_meta.json).
+// path.Dir collapses the // of gs://, so the scheme is split off with remoteio before operating.
 func originalJobOutputPath(recipeURL string) string {
 	recipeURL = strings.TrimSpace(recipeURL)
 	if recipeURL == "" {
@@ -74,25 +74,25 @@ func originalJobOutputPath(recipeURL string) string {
 	return remoteio.BuildURI(remoteio.SchemeGCS, bucket, dir) + "/"
 }
 
-// applyLyricsToVideoRecipeCuts は domain.ApplyLyricsToVideoRecipeCuts の step 内ラッパーです。
+// applyLyricsToVideoRecipeCuts is the step-local wrapper of domain.ApplyLyricsToVideoRecipeCuts.
 func applyLyricsToVideoRecipeCuts(recipe *video.Recipe) {
 	domain.ApplyLyricsToVideoRecipeCuts(recipe)
 }
 
 // buildInputsTxt builds an ffmpeg concat demuxer inputs.txt from recipe cuts.
-// 実体は domain.BuildFFmpegInputsTxt で、repository のキーフレーム ZIP と同じ規則です。
+// The implementation is domain.BuildFFmpegInputsTxt, the same rule as repository's keyframe ZIP.
 func buildInputsTxt(cuts []video.Cut) string {
 	return domain.BuildFFmpegInputsTxt(cuts)
 }
 
 // orchestratorCutsToHistoryCuts converts orchestrator cuts to domain history cuts for ASS generation.
-// 実体は domain.VideoCutsToHistoryCuts です（domain.VideoCut = video.Cut）。
+// The implementation is domain.VideoCutsToHistoryCuts (domain.VideoCut = video.Cut).
 func orchestratorCutsToHistoryCuts(cuts []video.Cut) []domain.VideoHistoryCut {
 	return domain.VideoCutsToHistoryCuts(cuts)
 }
 
-// findCutByIndex はレシピ内の指定 cutIndex に対応するスライスインデックスを返します。
-// 探索は video.Cuts.IndexOf が持ち、ここではエラー文脈だけを付けます。
+// findCutByIndex returns the slice index matching the given cutIndex in the recipe.
+// The search belongs to video.Cuts.IndexOf; this only adds error context.
 func findCutByIndex(cuts []video.Cut, cutIndex int) (int, error) {
 	if i := video.Cuts(cuts).IndexOf(cutIndex); i >= 0 {
 		return i, nil
@@ -102,9 +102,9 @@ func findCutByIndex(cuts []video.Cut, cutIndex int) (int, error) {
 
 // toDomainRecipe converts an orchestrator video recipe to a domain music recipe.
 //
-// domain.MusicRecipe は VideoRecipe.MusicRecipe と同じ型（music.Recipe の別名）なので、
-// 変換の実体は深いコピー（Clone）だけです。以前はフィールドを1つずつ写し取っており、
-// Key / VocalProfile など列挙から漏れたフィールドを silently drop していました。
+// domain.MusicRecipe is the same type as VideoRecipe.MusicRecipe (an alias of music.Recipe), so
+// the conversion is just a deep copy (Clone). It used to copy fields one by one and silently
+// dropped fields missing from the list, such as Key / VocalProfile.
 func toDomainRecipe(recipe *video.Recipe) (*domain.MusicRecipe, error) {
 	if recipe == nil {
 		return nil, nil
