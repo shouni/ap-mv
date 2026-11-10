@@ -117,11 +117,11 @@ func TestBuildCharactersUsesBundledCharactersByDefault(t *testing.T) {
 	}
 }
 
-// requireCharacter は指定 ID のキャラクターを取り出し、無ければテストを打ち切ります。
-// 呼び出し側で「nil チェック → デリファレンス」を書かずに済ませるための小さなヘルパーです。
-// staticcheck の SA5011 は t.Fatal が戻らないことを解析結果（facts）から判断しますが、
-// golangci-lint の増分キャッシュ経由ではこれを取りこぼして偽陽性を出すことがあるため、
-// パターン自体を呼び出し側に残さないようにしています。
+// requireCharacter takes out the character with the given ID and stops the test if there is none.
+// It is a small helper that spares callers from writing "nil check → dereference".
+// staticcheck's SA5011 decides that t.Fatal does not return from analysis results (facts), but
+// through golangci-lint's incremental cache it sometimes misses them and reports a false positive,
+// so the pattern itself is kept out of callers.
 func requireCharacter(t *testing.T, chars *character.Characters, id string) *character.Character {
 	t.Helper()
 	c := chars.GetCharacter(id)
@@ -131,9 +131,8 @@ func requireCharacter(t *testing.T, chars *character.Characters, id string) *cha
 	return c
 }
 
-// requireDefaultCharacter は既定キャラクターを取り出し、無ければテストを打ち切ります。
-// requireCharacter と同じく、呼び出し側に「nil チェック → デリファレンス」を残さないための
-// ヘルパーです。
+// requireDefaultCharacter takes out the default character and stops the test if there is none.
+// Like requireCharacter, it is a helper that keeps "nil check → dereference" out of callers.
 func requireDefaultCharacter(t *testing.T, chars *character.Characters) *character.Character {
 	t.Helper()
 	c := chars.GetDefault()

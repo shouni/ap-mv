@@ -1,4 +1,4 @@
-// Package ports は、ap-mv の各コンポーネントが依存するインターフェース（ポート）を定義します。
+// Package ports defines the interfaces (ports) ap-mv's components depend on.
 package ports
 
 import (
@@ -8,32 +8,32 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// KeyframeSink はキーフレームダウンロード時に各ファイルごとに呼ばれるコールバックです。
-// name はダウンロード時のファイル名、r はファイルの内容を読み取るストリームです。
+// KeyframeSink is the callback invoked for each file when keyframes are downloaded.
+// name is the file name in the download, and r is a stream reading the file's contents.
 type KeyframeSink func(name string, r io.Reader) error
 
 // HistoryRepository loads and mutates generated MV history.
 type HistoryRepository interface {
-	// ListHistoryPage は MV ジョブを一覧します。stage が空なら全段階、指定すれば
-	// その段階のジョブだけを返します（台本のみのジョブは domain.StageScript）。
+	// ListHistoryPage lists MV jobs. An empty stage means every stage; when given, only jobs at
+	// that stage are returned (script-only jobs are domain.StageScript).
 	ListHistoryPage(ctx context.Context, page int, perPage int, stage domain.JobStage) (domain.VideoHistoryPage, error)
-	// GetHistory は表示用に整形した履歴を返します。**署名付き URL は空のままです。**
-	// 画面は同一オリジンのパスを辿り、ハンドラーがリダイレクトの時点で 1 本だけ署名します。
-	// カット 1 本ずつ前払いすると、詳細 1 画面で数十回の IAM SignBlob 往復になります。
+	// GetHistory returns history formatted for display. **Signed URLs are left empty.**
+	// The page follows same-origin paths and the handler signs exactly one at redirect time.
+	// Prepaying one per cut would mean dozens of IAM SignBlob round trips for one detail page.
 	GetHistory(ctx context.Context, jobID string) (domain.VideoHistoryDetail, error)
-	// SignHistoryURLs は GetHistory が空のままにした署名付き URL を埋めます。
-	// JSON の呼び出し元（MCP ゲートウェイ）はリダイレクトを辿らずに URL 自体を受け取るため、
-	// この経路だけが署名を必要とします。
+	// SignHistoryURLs fills in the signed URLs GetHistory left empty.
+	// JSON callers (the MCP gateway) receive the URLs themselves without following redirects, so
+	// only this path needs signing.
 	SignHistoryURLs(ctx context.Context, detail *domain.VideoHistoryDetail) error
-	// SignedObjectURL は、読み込み済みの履歴から取り出した gs:// URI を署名します。
-	// リダイレクトハンドラー専用で、呼び出し元の入力をそのまま署名させないために、
-	// 渡すのは必ず履歴に記録されていた URI に限ります。
+	// SignedObjectURL signs a gs:// URI taken from history already loaded.
+	// It is for redirect handlers only, and what is passed is always a URI recorded in history,
+	// so the caller's input is never signed as-is.
 	SignedObjectURL(ctx context.Context, uri string) (string, error)
-	// GetRecipe は保存済みの VideoRecipe をそのまま返します。編集して SaveRecipe で
-	// 書き戻す往復のための読み出しで、表示用に整形した GetHistory とは別経路です。
+	// GetRecipe returns the stored VideoRecipe as-is. It is the read for the round trip of editing
+	// and writing back with SaveRecipe, a separate path from GetHistory, which formats for display.
 	GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error)
-	// SaveRecipe はジョブの VideoRecipe を上書き保存します。生成前（台本のみ）の
-	// カット割りを画像コスト 0 で直せるようにするための経路です。
+	// SaveRecipe overwrites the job's VideoRecipe. It is the path that lets the cut list be fixed
+	// before generation (script only) at zero image cost.
 	SaveRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error
 	DeleteHistory(ctx context.Context, jobID string) error
 	DownloadKeyframes(ctx context.Context, jobID string, sink KeyframeSink) error

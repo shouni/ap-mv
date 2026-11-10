@@ -8,28 +8,28 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// JobStatusStore は、ジョブの進行状況（queued/running/succeeded/failed）を永続化し、
-// 履歴一覧のクエリを担います。
-// Web プロセスが投入時の状態を、Worker プロセスが実行結果を書き込みます。
+// JobStatusStore persists job progress (queued/running/succeeded/failed) and serves the history
+// listing's queries.
+// The web process writes the state at submission and the worker process writes the run's result.
 //
-// 一覧がここにあるのは、履歴の見出しを状態ドキュメントへ写したからです。以前は成果物の
-// 置き場を走査して 1 件ずつメタデータを開いていたので、一覧は成果物側の関心でした。
+// The listing lives here because the history headline was copied into the status documents. It
+// used to scan where artifacts are stored and open metadata one by one, so the listing was the
+// artifacts' concern.
 //
-// Save / Get / Delete のシグネチャは gcp-kit の Store に揃えてあります。
-// これにより *jobstatus.Store[domain.JobStatus] がそのまま実装となり、Recorder へ
-// 渡すためのアダプタが要りません（以前はジョブ ID を状態に含める形だったため、
-// 形を合わせるだけのアダプタを 3 サービスがそれぞれ持っていました）。
+// The Save / Get / Delete signatures match gcp-kit's Store. So *jobstatus.Store[domain.JobStatus]
+// is the implementation as-is and no adapter is needed to pass it to Recorder (the job ID used to
+// be part of the state, and three services each kept an adapter just to make the shapes match).
 type JobStatusStore interface {
-	// Save はジョブ状態を保存します。
+	// Save stores the job status.
 	Save(ctx context.Context, jobID string, status domain.JobStatus) error
-	// Get はジョブ状態を取得します。未記録の場合はエラーを返します。
+	// Get fetches the job status. It returns an error when nothing is recorded.
 	Get(ctx context.Context, jobID string) (domain.JobStatus, error)
-	// Delete はジョブ状態を削除します。
+	// Delete removes the job status.
 	//
-	// 状態は成果物と別の場所（Firestore）にあるため、履歴のプレフィックス一括削除では
-	// 消えません。呼ばないと、成果物の無いジョブの状態だけが残り続けます。
+	// The status lives apart from the artifacts (in Firestore), so the bulk prefix delete of history
+	// does not remove it. Without calling this, only the status of a job with no artifacts would remain.
 	Delete(ctx context.Context, jobID string) error
-	// List はジョブ状態を新しい順に 1 ページ分返します。
-	// 総件数は集計クエリで求めるため、ページの外にあるドキュメントは読みません。
+	// List returns one page of job statuses, newest first.
+	// The total count comes from an aggregation query, so documents outside the page are not read.
 	List(ctx context.Context, page, perPage int, opts ...jobstatus.ListOption) ([]domain.JobStatus, domain.PageMeta, error)
 }

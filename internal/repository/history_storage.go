@@ -18,12 +18,12 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// このファイルは履歴のストレージ読み込みと署名 URL 生成を集めています。
-// 表示モデルへの変換は history_mapping.go、公開エントリポイントは
-// history_listing.go を参照してください。
+// This file gathers history storage reads and signed-URL generation.
+// For conversion into display models see history_mapping.go; for the public entry points see
+// history_listing.go.
 
 // historyFetchConcurrency caps parallel signed-URL requests when signing a job's cuts in bulk.
-// 署名は Cloud Run に秘密鍵が無いためネットワーク呼び出し（IAM SignBlob）です。
+// Cloud Run has no private key, so signing is a network call (IAM SignBlob).
 const historyFetchConcurrency = 10
 
 // buildHistoryFromFreshRecipe builds VideoHistory directly from the stored recipe, so
@@ -34,9 +34,8 @@ func (r *VideoHistoryRepository) buildHistoryFromFreshRecipe(ctx context.Context
 
 // finalizeHistory fills in the fields derived from the job ID rather than stored.
 //
-// 署名付き URL はここでは作りません。画面は同一オリジンのパスを辿り、ハンドラーが
-// リダイレクトの時点で 1 本だけ署名します。JSON の呼び出し元だけが SignHistoryURLs を
-// 明示的に呼びます。
+// No signed URL is made here. The page follows same-origin paths, and the handler signs exactly
+// one at redirect time. Only JSON callers call SignHistoryURLs explicitly.
 func (r *VideoHistoryRepository) finalizeHistory(_ context.Context, jobID string, history domain.VideoHistory) domain.VideoHistory {
 	history.SignedURL = ""
 	history.FinalVideoSignedURL = ""
@@ -44,8 +43,8 @@ func (r *VideoHistoryRepository) finalizeHistory(_ context.Context, jobID string
 	return history
 }
 
-// SignHistoryURLs は、GetHistory が空のままにした署名付き URL を埋めます。
-// JSON 応答のためだけの経路で、画面は呼びません（リダイレクトで 1 本ずつ署名するため）。
+// SignHistoryURLs fills in the signed URLs GetHistory left empty.
+// It is a path for JSON responses only; pages do not call it (they sign one at a time via redirects).
 func (r *VideoHistoryRepository) SignHistoryURLs(ctx context.Context, detail *domain.VideoHistoryDetail) error {
 	if detail == nil {
 		return nil
@@ -69,9 +68,9 @@ func (r *VideoHistoryRepository) SignHistoryURLs(ctx context.Context, detail *do
 	return nil
 }
 
-// SignedObjectURL は、ジョブのメタデータに記録された gs:// URI を署名します。
-// リダイレクトハンドラーが、読み込み済みの履歴から取り出した URI に対してだけ呼びます
-// （呼び出し元の入力をそのまま署名させないため）。
+// SignedObjectURL signs a gs:// URI recorded in a job's metadata.
+// Redirect handlers call it only on URIs taken from history already loaded
+// (so the caller's input is never signed as-is).
 func (r *VideoHistoryRepository) SignedObjectURL(ctx context.Context, uri string) (string, error) {
 	return r.signedURL(ctx, uri)
 }
@@ -87,8 +86,8 @@ func (r *VideoHistoryRepository) KeyframeZipSignedURL(ctx context.Context, jobID
 	if r == nil || r.store == nil {
 		return "", nil
 	}
-	// jobID はそのままオブジェクトパスへ埋め込まれるため、他の公開メソッドと同様に検証する。
-	// 呼び出し元のハンドラーでも検証しているが、リポジトリ単体で成立させておく。
+	// jobID is embedded straight into the object path, so validate it like the other public methods.
+	// The calling handler validates it too, but the repository should stand on its own.
 	if err := jobid.Validate(jobID); err != nil {
 		return "", err
 	}
@@ -147,8 +146,8 @@ func (r *VideoHistoryRepository) GetVeoUsage(ctx context.Context, jobID string) 
 	if err != nil {
 		return nil, err
 	}
-	// 空オブジェクトは「記録なし」と同じ扱いにする。書き込み途中の中断などで 0 バイトの
-	// オブジェクトが残っても、履歴画面をエラーにする理由にはならない。
+	// An empty object is treated the same as "no record". A 0-byte object left behind by an
+	// interrupted write is no reason to make the history page an error.
 	if len(bytes.TrimSpace(raw)) == 0 {
 		return nil, nil
 	}

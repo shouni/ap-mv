@@ -10,14 +10,14 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// このファイルは動画生成プロンプトの組み立てと、frames_to_video 補間に使う lastFrame
-// （次カットのキーフレーム）の選択を集めています。生成ループ本体は video_gen.go を
-// 参照してください。
+// This file gathers building the video-generation prompt and choosing the lastFrame (the next
+// cut's keyframe) used for frames_to_video interpolation. For the generation loop itself see
+// video_gen.go.
 
-// videoGenGuidance は Veo 生成モード別のプロンプトガイダンスを保持します。
-// 埋め込みアセット（コンパイル時に存在が保証される）のため実行時の読み込み失敗は
-// 事実上起こらないが、万一欠けてもガイダンス無しで生成を続行する（テストで全モードの
-// 存在を検証しているため、欠落はCIで検出される）。
+// videoGenGuidance holds the prompt guidance per Veo generation mode.
+// They are embedded assets (guaranteed to exist at compile time), so a load failure at run time
+// practically cannot happen, but if one were missing generation would continue without guidance
+// (a test checks every mode exists, so a gap is caught in CI).
 var videoGenGuidance = sync.OnceValue(func() map[string]string {
 	prompts, err := assets.LoadVideoGenPrompts()
 	if err != nil {
@@ -27,11 +27,11 @@ var videoGenGuidance = sync.OnceValue(func() map[string]string {
 })
 
 // videoPrompt builds the prompt used for video generation, appending the guidance that matches
-// how Veo will actually interpret the request (ports.ClassifyVeoRequest の判定結果)。
-// 生成モードごとに正しい前提（開始フレームあり・参照画像あり・前クリップ継続）を伝える
-// ことで、存在しない入力への言及（例: video_extension で「参照画像に合わせろ」）を
-// 避けます。VisualAnchor と AudioCue が両方空の場合は従来通り空文字を返し、
-// validateVertexVeoRequest の「prompt is required」検証で壊れたレシピを検出できるままにします。
+// how Veo will actually interpret the request (the result of ports.ClassifyVeoRequest).
+// Telling each generation mode its correct premise (a start frame, reference images, or continuing
+// the previous clip) avoids mentioning inputs that do not exist (e.g. "match the reference image"
+// under video_extension). When VisualAnchor and AudioCue are both empty it returns an empty string
+// as before, so validateVertexVeoRequest's "prompt is required" check still catches broken recipes.
 func videoPrompt(cut video.Cut, mode ports.VeoGenerationMode) string {
 	anchor := strings.TrimSpace(cut.VisualAnchor)
 	cue := strings.TrimSpace(cut.AudioCue)

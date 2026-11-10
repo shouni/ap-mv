@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// VideoCutsToHistoryCuts は、レシピのカット列を ASS 字幕生成が受け取る
-// VideoHistoryCut 列へ写します。ASS 生成（GenerateASS）が使うフィールドだけを
-// 持ち回るための変換で、repository（キーフレーム ZIP）と worker/filter
-// （成果物 ZIP）の両方がこれを通ることで、字幕のタイミング規則が 1 実装に揃います。
+// VideoCutsToHistoryCuts maps the recipe's cuts onto the VideoHistoryCut list that ASS subtitle
+// generation takes. It is a conversion that carries only the fields ASS generation (GenerateASS)
+// uses, and since both repository (the keyframe ZIP) and worker/filter (the artifact ZIP) go
+// through it, the subtitle timing rules come down to one implementation.
 func VideoCutsToHistoryCuts(cuts []VideoCut) []VideoHistoryCut {
 	result := make([]VideoHistoryCut, 0, len(cuts))
 	for _, c := range cuts {
@@ -24,11 +24,11 @@ func VideoCutsToHistoryCuts(cuts []VideoCut) []VideoHistoryCut {
 	return result
 }
 
-// BuildFFmpegInputsTxt は、キーフレームを持つカットから ffmpeg concat demuxer 用の
-// inputs.txt を組み立てます。ファイル名はカット番号 + 参照の拡張子（無ければ .png）で、
-// ZIP 内に保存されるキーフレームのファイル名と一致させる必要があります。
-// 同じ形式を repository と worker/filter の 2 箇所で別々に書いていたため、
-// 定義をここに 1 つにしています。
+// BuildFFmpegInputsTxt builds inputs.txt for ffmpeg's concat demuxer from the cuts that have a
+// keyframe. File names are the cut number + the reference's extension (.png when none), and must
+// match the keyframe file names stored in the ZIP.
+// The same format used to be written separately in two places, repository and worker/filter,
+// so the definition is kept here, once.
 func BuildFFmpegInputsTxt(cuts []VideoCut) string {
 	var sb strings.Builder
 	for _, cut := range cuts {

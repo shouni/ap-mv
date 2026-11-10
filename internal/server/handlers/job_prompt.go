@@ -14,29 +14,30 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// jobPromptResponse は GET /jobs/{jobID}/prompt の JSON 表現です。
+// jobPromptResponse is the JSON representation of GET /jobs/{jobID}/prompt.
 type jobPromptResponse struct {
 	JobID string `json:"job_id"`
-	// Prompt は Google Flow Music の MV 作成へ貼る本文です（text/plain の応答と同じ）。
-	// 曲の音源と一緒に渡す、曲全体の演出メモ 1 本です。
+	// Prompt is the text to paste into Google Flow Music's MV creation (the same as the text/plain response).
+	// It is one direction note for the whole song, passed together with the song's audio.
 	Prompt string `json:"prompt"`
-	// ReferenceImages は、本文と一緒に添えるとキャラクターの見た目が揃う立ち絵です。
+	// ReferenceImages is the character art that keeps the characters' look consistent when attached with the text.
 	ReferenceImages []promptReferenceImage `json:"reference_images,omitempty"`
 }
 
-// promptReferenceImage はキャラクター 1 人ぶんの立ち絵の在り処です。
+// promptReferenceImage is where one character's art lives.
 type promptReferenceImage struct {
 	CharacterID string `json:"character_id"`
 	Name        string `json:"name"`
 	URI         string `json:"uri"`
 }
 
-// JobPrompt は、ジョブのレシピを Google Flow Music の MV 作成へ貼る本文にして返します。
+// JobPrompt returns the job's recipe as text to paste into Google Flow Music's MV creation.
 //
-// 同じ MV を別の入口で作りたいときに、レシピの JSON ではなく貼れる本文を渡すための経路です
-// （楽曲生成サービスの GET /jobs/{jobID}/prompt と同じ位置づけ）。Flow Music は曲の音源と本文 1 本を
-// 受け取るので、返すのは Veo のカット別本文ではなく、曲全体の演出メモです
-// （prompt.FlowMusicBrief）。本文は保存しておらず、保存済みレシピから毎回組み直します。
+// It is the path for handing over pasteable text rather than recipe JSON when the same MV is to be
+// made through another entrance (the same role as the music-generation service's
+// GET /jobs/{jobID}/prompt). Flow Music takes the song's audio and one text, so what is returned is
+// a direction note for the whole song, not Veo's per-cut text (prompt.FlowMusicBrief). The text is
+// not stored and is rebuilt from the stored recipe every time.
 func (h *Handler) JobPrompt(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -70,7 +71,7 @@ func (h *Handler) JobPrompt(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// promptReferenceImages は、レシピに登場するキャラクターの立ち絵を初出順で返します。
+// promptReferenceImages returns the art of the characters appearing in the recipe, in order of first appearance.
 func (h *Handler) promptReferenceImages(recipe *domain.VideoRecipe) []promptReferenceImage {
 	if h.Characters == nil {
 		return nil

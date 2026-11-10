@@ -110,7 +110,7 @@ func TestRecordVeoUsageAccumulatesAcrossCuts(t *testing.T) {
 
 	recordVeoUsage(context.Background(), sc, &video.Cut{CutIndex: 1, DurationSec: 8})
 	recordVeoUsage(context.Background(), sc, &video.Cut{CutIndex: 2, DurationSec: 6})
-	// 再配信でカット1が焼き直された、という状況。
+	// The situation: cut 1 was re-rendered by a redelivery.
 	recordVeoUsage(context.Background(), sc, &video.Cut{CutIndex: 1, DurationSec: 8})
 
 	usage := writer.usage(t, testUsageURI)

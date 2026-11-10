@@ -54,7 +54,7 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"軌跡のアーキテクト",
-		// 画面が指すのは同一オリジンのパスです。実体へはハンドラーが 302 で送ります。
+		// The page points at same-origin paths. The handler 302s to the real object.
 		`src="/jobs/video-recipe-20260618-081931-abc/cuts/1/keyframe"`,
 		"blue stage",
 		"Cut 1",
@@ -63,13 +63,13 @@ func TestHistoryDetailRendersKeyframeImage(t *testing.T) {
 			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
 		}
 	}
-	// 署名付き URL が HTML に出ないこと。出ると期限内は認証の外側で使え、
-	// 期限が切れた後は画面を開き直すまで再生できません。
+	// Signed URLs must not appear in HTML. If they did, they could be used outside authentication
+	// until they expire, and after expiry nothing plays until the page is reopened.
 	if strings.Contains(body, "storage.googleapis.com") || strings.Contains(body, "X-Goog-Signature") {
-		t.Fatalf("署名付き URL が HTML に漏れています: %s", body)
+		t.Fatalf("a signed URL leaked into the HTML: %s", body)
 	}
-	// 見出し文言ではなくプレイヤーそのもので判定する。「完成動画」という語は結合フォームの
-	// 説明文にも出るため、文言で見るとプレイヤーと無関係な文章の追加だけで落ちる。
+	// Judge by the player itself, not the heading text. The word 「完成動画」 also appears in the
+	// join form's description, so checking the text would fail on any unrelated added sentence.
 	if strings.Contains(body, "<video") {
 		t.Fatalf("HistoryDetail body unexpectedly rendered the final-video player without FinalVideoSignedURL: %s", body)
 	}
@@ -159,8 +159,8 @@ func TestHistoryDetailRendersFinalVideo(t *testing.T) {
 		"完成動画",
 		`src="/jobs/job-1/video"`,
 		"Copy MV Job ID",
-		// コピー対象は data 属性で渡す。JS の引数にテンプレート値を埋めていた頃は、
-		// JS 文字列リテラル文脈のエスケープ（"/" → "\/" など）が絡んでいた。
+		// The copy target is passed in a data attribute. When template values were embedded in JS
+		// arguments, escaping for the JS string literal context ("/" → "\/" and so on) got involved.
 		`data-copy-text="job-1"`,
 		"カット別詳細",
 	} {
@@ -207,16 +207,16 @@ func TestHistoryDetailRendersVeoCostEstimate(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Veo 概算コスト",
-		"$4.00",     // 8sec × $0.50 — 生成済みカットのみ
-		"8.0 sec",   // ジョブ合計の内訳
-		"$0.50/sec", // 適用単価
-		"veo-test",  // 単価の解決に使ったモデル
+		"$4.00",     // 8sec × $0.50 — generated cuts only
+		"8.0 sec",   // breakdown of the job total
+		"$0.50/sec", // price applied
+		"veo-test",  // model used to resolve the price
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("HistoryDetail body missing %q: %s", want, body)
 		}
 	}
-	// 未生成カットは Veo を呼んでいないので、6sec × $0.50 = $3.00 は出てはいけない。
+	// Ungenerated cuts never called Veo, so 6sec × $0.50 = $3.00 must not appear.
 	if strings.Contains(body, "$3.00") {
 		t.Fatalf("HistoryDetail priced a pending cut: %s", body)
 	}
@@ -288,9 +288,9 @@ func TestHistoryListRendersVeoCostColumn(t *testing.T) {
 	}
 }
 
-// 失敗したジョブは成果物が途中まで残るだけなので、段階のバッジは「keyframes 3/12」で
-// 止まります。それだけでは生成中のジョブと区別が付かないため、状態と理由を一覧に出します。
-// ジョブ状態が Firestore へ移るまで、失敗したジョブは一覧に現れませんでした。
+// A failed job only leaves its artifacts partway, so its stage badge stops at "keyframes 3/12".
+// That alone cannot be told from a job in progress, so the listing shows the state and reason.
+// Until job status moved to Firestore, failed jobs did not appear in the listing at all.
 func TestHistoryListMarksFailedJobs(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
 	if err != nil {
@@ -322,8 +322,8 @@ func TestHistoryListMarksFailedJobs(t *testing.T) {
 	}
 }
 
-// 成果物が 1 つも無いジョブは詳細を開けません（video_music_meta.json が無く、GetHistory が
-// 落ちます）。一覧に削除の口が無いと、そういう行は画面から二度と消せなくなります。
+// A job with no artifact at all cannot open its detail (there is no video_music_meta.json and
+// GetHistory fails). Without a delete control in the listing, such rows could never be removed from the page.
 func TestHistoryListOffersDeleteForJobsWithoutArtifacts(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
 	if err != nil {
@@ -345,24 +345,24 @@ func TestHistoryListOffersDeleteForJobsWithoutArtifacts(t *testing.T) {
 	h.JobList(rec, req)
 
 	body := rec.Body.String()
-	// 削除は fetch の DELETE なので、フォームの外から読めるトークンが要ります。
+	// Delete is a fetch DELETE, so it needs a token readable from outside the form.
 	if !strings.Contains(body, `id="csrf_token" value="token"`) {
-		t.Fatalf("CSRF トークンがありません: %s", body)
+		t.Fatalf("no CSRF token: %s", body)
 	}
 	if !strings.Contains(body, `data-delete-url="/jobs/empty-job"`) {
-		t.Errorf("成果物の無いジョブに削除ボタンがありません: %s", body)
+		t.Errorf("a job without artifacts has no delete button: %s", body)
 	}
-	// 成果物のあるジョブは今までどおり詳細へ送ります（削除はその画面にあります）。
+	// A job with artifacts is sent to its detail as before (delete lives on that page).
 	if strings.Contains(body, `data-delete-url="/jobs/real-job"`) {
-		t.Errorf("成果物のあるジョブにまで削除ボタンが出ています: %s", body)
+		t.Errorf("a job with artifacts shows a delete button too: %s", body)
 	}
 	if !strings.Contains(body, `href="/jobs/real-job"`) {
-		t.Errorf("成果物のあるジョブの Detail リンクがありません: %s", body)
+		t.Errorf("a job with artifacts has no Detail link: %s", body)
 	}
 }
 
-// 投入直後のジョブはレシピがまだ無いので段階が空です。空のバッジを出さず、queued と
-// 分かるようにします（以前は中身の無い灰色のバッジが 1 つ並ぶだけでした）。
+// A job just submitted has no recipe yet, so its stage is empty. Show it as queued rather than
+// as an empty badge (it used to show a single grey badge with nothing in it).
 func TestHistoryListShowsQueuedWithoutAnEmptyStageBadge(t *testing.T) {
 	h, err := NewHandlerWithOptions(assets.Templates, nil, ModelOptions{}, CharacterOptions{})
 	if err != nil {
@@ -382,7 +382,7 @@ func TestHistoryListShowsQueuedWithoutAnEmptyStageBadge(t *testing.T) {
 		t.Fatalf("History body missing the queued badge: %s", body)
 	}
 	if strings.Contains(body, `<span class="badge text-bg-secondary"></span>`) {
-		t.Fatalf("空の段階バッジが出ています: %s", body)
+		t.Fatalf("an empty stage badge is shown: %s", body)
 	}
 }
 
@@ -431,12 +431,12 @@ func TestHistoryDetailRendersRecordedUsage(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"完成品",
-		"$8.00", // 16sec 完成
+		"$8.00", // 16sec finished
 		"実投入",
-		"$12.00", // 24sec 投入
+		"$12.00", // 24sec submitted
 		"3 回",
 		"再生成ロス",
-		"$4.00", // 差の 8sec
+		"$4.00", // the 8sec difference
 		"×2 生成",
 	} {
 		if !strings.Contains(body, want) {
@@ -518,10 +518,10 @@ func TestHistoryDetailSurvivesUsageReadFailure(t *testing.T) {
 	}
 }
 
-// TestHistoryDetailCutCardCarriesCSRFToken は、カットカード内の「動画を作り直す」フォームに
-// CSRF トークンが埋まることを検証します。historyCutCard は dict 引数で $ が再束縛される
-// サブテンプレートのため、$.CSRFToken と書くと常に空になり、ブラウザからの送信が
-// 403 Invalid CSRF token で落ちていました（dict 経由で渡すのが正解）。
+// TestHistoryDetailCutCardCarriesCSRFToken checks that the CSRF token is embedded in the
+// 「動画を作り直す」 (remake video) form inside a cut card. historyCutCard is a sub-template
+// whose $ is rebound by its dict argument, so writing $.CSRFToken was always empty and
+// submissions from the browser failed with 403 Invalid CSRF token (passing it via dict is right).
 func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 	h, err := NewHandler(assets.Templates, nil)
 	if err != nil {
@@ -566,16 +566,16 @@ func TestHistoryDetailCutCardCarriesCSRFToken(t *testing.T) {
 	}
 }
 
-// TestHistoryDetailRendersProgressBadge は、進捗バッジが段階と分数で描画されることを
-// 確認します。以前は Generated の真偽値だけだったため、動画をあと1本残すジョブと
-// 何も焼いていないジョブが同じ "keyframes" と表示され、残作業が読めませんでした。
+// TestHistoryDetailRendersProgressBadge checks that the progress badge renders with the stage
+// and a fraction. It used to be just the Generated boolean, so a job with one video left and a
+// job that had rendered nothing both showed "keyframes", and the remaining work could not be read.
 func TestHistoryDetailRendersProgressBadge(t *testing.T) {
 	h, err := NewHandler(assets.Templates, nil)
 	if err != nil {
 		t.Fatalf("NewHandler() error = %v", err)
 	}
 
-	// 3カット中2カットが動画生成済み = videos 2/3
+	// 2 of 3 cuts have generated videos = videos 2/3
 	cuts := []domain.VideoCut{}
 	for i := range 3 {
 		cut := domain.VideoCut{

@@ -1,13 +1,13 @@
-// Package prompt は、Gemini へ送るプロンプト文字列の組み立てを担います。
+// Package prompt builds the prompt strings sent to Gemini.
 //
-// ここには I/O がありません（埋め込みアセットの読み出しを除く）。台本生成用の Script と
-// キーフレーム生成用の Keyframe の 2 つがあり、どちらも go-veo-orchestrator の
-// ports.ScriptPrompt / ports.KeyframePrompt を満たします。このほか flow_music.go が、
-// 保存済みレシピを Google Flow Music へ貼る本文にします（送信はせず、人が貼る文面です）。
+// There is no I/O here (apart from reading embedded assets). There are two builders, Script for
+// script generation and Keyframe for keyframe generation, both satisfying go-veo-orchestrator's
+// ports.ScriptPrompt / ports.KeyframePrompt. In addition, flow_music.go turns a stored recipe into
+// text to paste into Google Flow Music (it is not sent; a person pastes it).
 //
-// DI を担う internal/builder ではなくここに置いているのは、これがプロンプトという
-// 出力そのものを作る処理であって、依存の配線ではないためです（楽曲生成サービスの
-// internal/adapters/prompt と同じ位置づけ）。
+// It lives here rather than in internal/builder, which does DI, because it produces the prompt as
+// output, not wiring of dependencies (the same role as the music-generation service's
+// internal/adapters/prompt).
 package prompt
 
 import (
@@ -28,9 +28,9 @@ import (
 
 const defaultPromptMode = "default"
 
-// Script は台本生成 LLM へ送るプロンプトを組み立てます。
-// 映像スタイル（visual mode）のテンプレートを本文へ差し込むため、
-// 台本用と映像スタイル用の 2 つの Builder を持ちます。
+// Script builds the prompt sent to the script-generating LLM.
+// It inserts the visual mode's template into the body, so it holds two Builders, one for the
+// script and one for visual styles.
 type Script struct {
 	builder       *promptkit.Builder
 	visualBuilder *promptkit.Builder
@@ -95,7 +95,7 @@ func recipeOutputSchema() (string, error) {
 	return string(schemaBytes), nil
 }
 
-// visualModeData はビジュアルモードテンプレートに渡すレシピ情報のフラット表現です。
+// visualModeData is the flat representation of the recipe information passed to visual mode templates.
 type visualModeData struct {
 	Title               string
 	Theme               string
@@ -150,10 +150,10 @@ func (p *Script) defaultCharacter() *characterkit.Character {
 	return p.characters.GetDefault()
 }
 
-// NewScript は埋め込みアセットから台本プロンプトを組み立てます。
+// NewScript builds the script prompt from the embedded assets.
 //
-// visualMode と characters を引数で受け取るのは、以前のように生成後にフィールドを
-// 代入する形だと、設定し忘れた Script が存在し得るためです。
+// visualMode and characters are taken as arguments because the former shape, assigning fields after
+// construction, allowed a Script whose settings were forgotten to exist.
 func NewScript(visualMode string, characters *characterkit.Characters) (*Script, error) {
 	templates, err := loadPromptTemplates(assets.VideoRecipePrompts, assets.VideoRecipePromptDir)
 	if err != nil {
@@ -174,7 +174,7 @@ func NewScript(visualMode string, characters *characterkit.Characters) (*Script,
 
 // newScriptFromTemplates creates a script prompt from parsed templates.
 func newScriptFromTemplates(templates map[string]string, visualTemplates ...map[string]string) (*Script, error) {
-	// 未知のモードは既定モードへ委ねる。既定モードの存在は NewBuilder が検証する。
+	// Unknown modes are delegated to the default mode. NewBuilder verifies the default mode exists.
 	builder, err := promptkit.NewBuilder(templates, promptkit.WithDefaultMode(defaultPromptMode))
 	if err != nil {
 		return nil, fmt.Errorf("default script prompt is required: %w", err)
@@ -198,10 +198,10 @@ func newScriptFromTemplates(templates map[string]string, visualTemplates ...map[
 	}, nil
 }
 
-// newVisualBuilder は映像スタイル用テンプレートの Builder を作ります。
-// "_" 始まりのファイルは partial として登録され、モード本文から
-// {{template "recipe_output" .}} で参照されます。
-// テンプレートが無い場合は nil を返し、呼び出し側は映像プロンプトなしとして扱います。
+// newVisualBuilder creates the Builder for visual-style templates.
+// Files starting with "_" are registered as partials and referenced from a mode's body with
+// {{template "recipe_output" .}}.
+// With no templates it returns nil, and the caller treats it as having no visual prompt.
 func newVisualBuilder(visualTemplates map[string]string) (*promptkit.Builder, error) {
 	if len(visualTemplates) == 0 {
 		return nil, nil
@@ -284,12 +284,12 @@ func (p *Script) visualPrompt(mode string, data *orchestrator.TemplateData) (str
 	if data == nil || data.SourceRecipe == nil {
 		return "", nil
 	}
-	// 未知のモードや partial 名を渡した場合は Builder が既定モードへ委ねます。
+	// Given an unknown mode or a partial name, the Builder delegates to the default mode.
 	rendered, err := p.visualBuilder.Build(mode, newVisualModeData(data.SourceRecipe, p.defaultCharacter()))
 	if err != nil {
 		return "", fmt.Errorf("render visual mode template %q: %w", mode, err)
 	}
-	// テンプレート末尾の改行がスクリプト本文へ持ち込まれないよう、前後の空白を落とします。
+	// Trim surrounding whitespace so the template's trailing newline is not carried into the script body.
 	return strings.TrimSpace(rendered), nil
 }
 
@@ -303,30 +303,29 @@ func loadPromptTemplates(fileSystem fs.FS, rootDir string) (map[string]string, e
 	return templates, nil
 }
 
-// Keyframe はキーフレーム画像生成へ送るプロンプトを組み立てます。
+// Keyframe builds the prompt sent to keyframe image generation.
 type Keyframe struct {
 	styleSuffix     string
 	visualMode      string
 	visualTemplates map[string]string
 }
 
-// DefaultStyleSuffix は、キーフレーム画像プロンプトへ付与する既定の画風指定です。
-// 以前は go-veo-orchestrator の Config が持っていましたが、ライブラリは一度も
-// 読んでおらず、実際に使うのはこのパッケージ（NewKeyframe）だけだったため、
-// プロンプト文言の所有者であるここへ移しました。
+// DefaultStyleSuffix is the default art-style instruction appended to keyframe image prompts.
+// It used to be held by go-veo-orchestrator's Config, but the library never read it and only this
+// package (NewKeyframe) actually used it, so it moved here, to the owner of the prompt wording.
 const DefaultStyleSuffix = "Japanese anime style, official art, cel-shaded, clean line art, expressive eyes, cinematic lighting, consistent character design, high resolution"
 
-// DefaultKeyframeNegativePrompt は、キーフレーム画像で排除する要素の既定指定です。
+// DefaultKeyframeNegativePrompt is the default for what to exclude from keyframe images.
 //
-// go-veo-orchestrator が持っていた文言をそのまま移してきました。キット側から外したのは、
-// 前半（フキダシ・文字の排除）が動画のキーフレームとして普遍的なのに対し、後半の
-// monochrome / black and white / greyscale が**画風の指定そのもの**だからです。
-// キットに置いたままだと、モノクロの MV を作りたいときにキットのリリースを待つことに
-// なります。DefaultStyleSuffix と対になる値なので、画風を差し替えるときは両方を
-// 一緒に見直してください（片方だけ変えると指示が矛盾します）。
+// The wording was moved over as-is from go-veo-orchestrator. It was taken out of the kit because
+// the first half (excluding speech bubbles and text) is universal for video keyframes, while the
+// latter half — monochrome / black and white / greyscale — **is itself an art-style choice**. Left
+// in the kit, making a monochrome MV would mean waiting for a kit release. It pairs with
+// DefaultStyleSuffix, so when swapping the art style review both together (changing only one makes
+// the instructions contradict each other).
 const DefaultKeyframeNegativePrompt = "speech bubble, dialogue balloon, text, alphabet, letters, words, signatures, watermark, username, low quality, distorted, bad anatomy, monochrome, black and white, greyscale"
 
-// NewKeyframe は埋め込みアセットからキーフレームプロンプトを組み立てます。
+// NewKeyframe builds the keyframe prompt from the embedded assets.
 func NewKeyframe(styleSuffix, visualMode string) (Keyframe, error) {
 	visualTemplates, err := assets.LoadVisualModeFiles()
 	if err != nil {
@@ -401,18 +400,18 @@ func (p Keyframe) visualPrompt() string {
 	return stripScriptOnlySection(strings.TrimSpace(p.visualTemplates[defaultPromptMode]))
 }
 
-// scriptOnlyHeading は、visual mode ファイル内で「台本生成（Script）専用」の節が始まる
-// 見出しです。この節はセクション別の物語演出指示と {{template "recipe_output" .}} という
-// Go テンプレート参照を含み、Script 経路（newVisualBuilder）だけがレンダリングします。
+// scriptOnlyHeading is the heading that starts the "script generation (Script) only" section in a
+// visual mode file. The section holds per-section narrative direction and the Go template reference
+// {{template "recipe_output" .}}, and only the Script path (newVisualBuilder) renders it.
 const scriptOnlyHeading = "#### For Script Generation"
 
-// stripScriptOnlySection は、visual mode テンプレートから台本生成専用の節
-// （scriptOnlyHeading から次の #### 見出しの手前まで）を取り除きます。
+// stripScriptOnlySection removes the script-generation-only section from a visual mode template
+// (from scriptOnlyHeading up to just before the next #### heading).
 //
-// キーフレーム経路はテンプレートをレンダリングせず生のまま使うため、以前は
-// {{template "recipe_output" .}} という文字列と script 向けの演出指示がそのまま
-// 画像モデルへ送られていました。節の切り出しに（レンダリングではなく）文字列操作を
-// 使うのは、キーフレーム経路には流し込むテンプレートデータが存在しないためです。
+// The keyframe path uses templates raw without rendering, so the string
+// {{template "recipe_output" .}} and the script-oriented direction used to be sent to the image
+// model as-is. The section is cut out with string operations (rather than rendering) because the
+// keyframe path has no template data to feed in.
 func stripScriptOnlySection(prompt string) string {
 	before, after, ok := strings.Cut(prompt, scriptOnlyHeading)
 	if !ok {

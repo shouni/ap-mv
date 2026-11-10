@@ -10,7 +10,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// buildTaskEnqueuer は、Cloud Tasks エンキューアを初期化します。
+// buildTaskEnqueuer initialises the Cloud Tasks enqueuer.
 func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer[domain.Task], error) {
 
 	taskCfg := tasks.Config{
@@ -19,15 +19,15 @@ func buildTaskEnqueuer(ctx context.Context, cfg *config.Config) (*tasks.Enqueuer
 		QueueID:    cfg.Tasks.QueueID,
 		WorkerURL:  cfg.Tasks.WorkerURL,
 		WorkerPath: domain.WorkerTaskPath,
-		// タスクに指定する caller SA。トークンを生成して付与するのは Cloud Tasks で、
-		// このプロセスが署名するわけではありません。受信側の許可リスト
-		// （Tasks.AllowedServiceAccounts）とは別物なので取り違えないこと。
+		// The caller SA set on tasks. Cloud Tasks generates and attaches the token; this process does
+		// not sign anything. It is distinct from the receiver's allowlist
+		// (Tasks.AllowedServiceAccounts), so do not mix them up.
 		ServiceAccountEmail: cfg.TaskCallerServiceAccount(),
 		Audience:            cfg.Tasks.TaskAudienceURL,
-		// ワーカーの実行時間の実効上限です。未指定だと Cloud Tasks の既定 10 分が効き、
-		// worker 側の Cloud Run timeout をいくら長くしてもそこで打ち切られます。
-		// 継続カットの自己投入もこのエンキューアを通るので、カット 1 本ぶんに同じ上限がかかります。
-		// PIPELINE_TIMEOUT をこれより短く保つ検査は config.ValidateEssentialConfig にあります。
+		// The effective limit on the worker's run time. Unset, Cloud Tasks' default of 10 minutes applies,
+		// and the request is cut there however long the worker's Cloud Run timeout is.
+		// Self-enqueued continuation cuts go through this enqueuer too, so each cut gets the same limit.
+		// The check keeping PIPELINE_TIMEOUT shorter than this is in config.ValidateEssentialConfig.
 		DispatchDeadline: cfg.Tasks.DispatchDeadline,
 	}
 	return tasks.NewEnqueuer[domain.Task](ctx, taskCfg)

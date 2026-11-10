@@ -10,9 +10,9 @@
                 <input class="form-control" name="music_job_id" placeholder="20260711132823-256e9128">
                 <div class="form-text">楽曲生成サービスで作成した楽曲のジョブ ID。レシピ JSON を自動で解決します。</div>
             </div>
-            {{/* 生の url 欄は出しません。Music Job ID から組み立てる先と同じ場所を手で書く欄で、
-                 綴りを1文字間違えれば「解決できない GCS URI」として失敗するだけでした。
-                 ハンドラーは url を受け付け続けます（MCP ゲートウェイの compose_video が使う M2M 経路）。 */}}
+            {{/* No raw url field. It was a field for hand-writing the same location the Music Job ID builds,
+                 and a one-character typo just failed as "an unresolvable GCS URI".
+                 The handler keeps accepting url (the M2M path used by the MCP gateway's compose_video). */}}
             <div class="mb-3">
                 <label class="form-label fw-semibold">Free Text <span class="text-muted fw-normal">(実験用)</span></label>
                 <textarea class="form-control" name="text" rows="3" placeholder="曲のテーマや構成の説明から台本を起こします"></textarea>
@@ -65,8 +65,8 @@
                 </div>
             </div>
 
-            <!-- 下書きを先に置きます。カット割りを確かめてからキーフレームを焼く流れが
-                 通常運用で、本生成はカット数ぶんの画像生成コストがかかるためです。 -->
+            <!-- The draft goes first. Checking the cut list before rendering keyframes is the usual flow,
+                 and full generation costs image generation for every cut. -->
             <div class="d-grid gap-2 mt-4">
                 <button class="btn btn-primary btn-lg" type="submit" name="command" value="video_recipe_draft">Queue Draft Job</button>
                 <button class="btn btn-outline-primary" type="submit">Queue Video Recipe Job</button>

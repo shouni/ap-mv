@@ -7,81 +7,80 @@ import (
 	"github.com/shouni/gcp-kit/jobstatus"
 )
 
-// JobState はジョブのライフサイクル上の状態です。
-// 実体は gcp-kit の jobstatus.State です。
+// JobState is the job's state in its lifecycle.
+// It is gcp-kit's jobstatus.State.
 type JobState = jobstatus.State
 
 const (
-	// JobStateQueued は Cloud Tasks へ投入済みで、まだワーカーが処理を始めていない状態です。
+	// JobStateQueued means enqueued to Cloud Tasks, with no worker processing it yet.
 	JobStateQueued = jobstatus.StateQueued
-	// JobStateRunning はワーカーが処理中の状態です。
-	// カット単位で分割実行される動画生成では、継続タスクへ引き継がれている間もこの状態です。
+	// JobStateRunning means a worker is processing it.
+	// For video generation split per cut, the job stays in this state while handed over to continuation tasks.
 	JobStateRunning = jobstatus.StateRunning
-	// JobStateSucceeded は成果物の公開まで完了した状態です。
+	// JobStateSucceeded means everything through publishing the artifacts has finished.
 	JobStateSucceeded = jobstatus.StateSucceeded
-	// JobStateFailed は処理が失敗した状態です。Cloud Tasks による再試行の対象になり得ます。
+	// JobStateFailed means processing failed. It may be subject to retry by Cloud Tasks.
 	JobStateFailed = jobstatus.StateFailed
 )
 
-// ErrJobStatusNotFound は、ジョブ状態がまだ記録されていないことを表します。
-// 「状態が無い」は異常ではなく正常な状態（記録前の投入や、この機能より前に作られた
-// ジョブ）なので、呼び出し側がストレージ障害と区別できるよう独立したエラーにしています。
+// ErrJobStatusNotFound means no job status has been recorded yet.
+// "No status" is a normal state, not an anomaly (a submission before recording, or a job made
+// before this feature), so it is a separate error the caller can tell from a storage failure.
 //
-// JobState と同じく gcp-kit の値をそのまま指しています。状態の定数だけを domain で
-// 別名にしてエラーを repository に置いていたため、同じジョブ状態の面を扱うのに
-// 「状態は domain 経由・エラーは具象パッケージ経由」と参照先が割れていました。
+// Like JobState, it points straight at gcp-kit's value. Aliasing only the state constants in
+// domain while keeping the error in repository had split the references for the same job-status
+// surface into "states via domain, errors via the concrete package".
 var ErrJobStatusNotFound = jobstatus.ErrNotFound
 
-// ErrJobStatusUnavailable は、ジョブ状態が「あるはずなのに読めなかった」ことを表します。
-// 未記録と混ぜると、完了済みのジョブを未完了と誤認して生成をまるごとやり直します。
+// ErrJobStatusUnavailable means the job status "should exist but could not be read".
+// Mixing it with not-recorded would mistake a finished job for an unfinished one and redo the whole generation.
 var ErrJobStatusUnavailable = jobstatus.ErrUnavailable
 
-// JobStatus はジョブの進行状況です。
+// JobStatus is the job's progress.
 //
-// 生成の成否はこれまで Slack 通知にしか残らず、失敗したジョブは UI から完全に消えていました。
-// この記録があることで、UI・M2M クライアントの双方が投入後の状態を追跡できます。
-// あわせて、Cloud Tasks の at-least-once 配信に対する再実行ガードの根拠にもなります。
+// Whether generation succeeded used to be left only in Slack notices, and failed jobs vanished
+// from the UI entirely. With this record, both the UI and M2M clients can follow a job's state
+// after submission. It is also the basis of the re-run guard against Cloud Tasks' at-least-once delivery.
 //
-// 共通フィールド（JobID・State・Attempts 等）と IsTerminal は jobstatus.Status が
-// 持ちます。埋め込みなので Firestore のドキュメントもレスポンス JSON もフラットなままです。
+// The common fields (JobID, State, Attempts, etc.) and IsTerminal belong to jobstatus.Status.
+// It is embedded, so both the Firestore document and the response JSON stay flat.
 //
-// firestore タグを省略しないでください。省略すると保存されるフィールド名が Go の識別子
-// （OriginalJobID）になり、json タグで組み立てた既存のレスポンスと食い違います。
+// Do not omit the firestore tags. Without them the stored field names become the Go identifiers
+// (OriginalJobID) and disagree with the existing responses built from the json tags.
 type JobStatus struct {
 	jobstatus.Status
-	// OriginalJobID は、成果物の書き込み先が別ジョブのときのその ID です
-	// （キーフレーム再生成・ZIP 再生成）。UI が参照先の履歴へ案内するために使います。
+	// OriginalJobID is the ID of another job when the artifacts are written there
+	// (keyframe regeneration, ZIP regeneration). The UI uses it to point at that job's history.
 	OriginalJobID string `json:"original_job_id,omitempty" firestore:"original_job_id,omitempty"`
-	// OutputURI は成功時の主成果物の保存先です。
-	// 署名付き URL は有効期限が切れるため保存しません。
+	// OutputURI is where the main artifact is stored on success.
+	// Signed URLs expire, so they are not stored.
 	OutputURI string `json:"output_uri,omitempty" firestore:"output_uri,omitempty"`
 
-	// ここから下は履歴一覧の見出しです。以前は一覧の 1 件ごとに GCS の
-	// video_music_meta.json を開いて組み立てていました。写しを置くことで、一覧は
-	// クエリ 1 回で済み、進行段階での絞り込みも Firestore 側で効きます。写した値が
-	// 古くなる代償は、状態を記録するたびに ApplyVideoRecipe で塗り直すことで払います。
+	// What follows is the history listing's headline. The listing used to open GCS's
+	// video_music_meta.json for every row to build it. Keeping a copy makes the listing one query,
+	// and filtering by progress stage works on the Firestore side. The cost of the copied values
+	// going stale is paid by repainting them with ApplyVideoRecipe at every status record.
 	Mood        string `json:"mood,omitempty" firestore:"mood,omitempty"`
 	Tempo       int    `json:"tempo,omitzero" firestore:"tempo,omitempty"`
 	VisualMode  string `json:"visual_mode,omitempty" firestore:"visual_mode,omitempty"`
 	AspectRatio string `json:"aspect_ratio,omitempty" firestore:"aspect_ratio,omitempty"`
-	// FinalVideoURL は継続チェーンを 1 本に結合した完成動画の gs:// URI です。
+	// FinalVideoURL is the gs:// URI of the finished video joining the continuation chain into one.
 	FinalVideoURL string `json:"final_video_url,omitempty" firestore:"final_video_url,omitempty"`
-	// GeneratedSeconds は生成済みカットの尺の合計（Veo の課金対象秒数の概算）です。
-	// 単価を掛けるのは表示側なので、ここには秒数だけを残します。
+	// GeneratedSeconds is the total duration of generated cuts (an estimate of Veo's billable seconds).
+	// Multiplying by the price is the display side's job, so only the seconds are kept here.
 	GeneratedSeconds float64 `json:"generated_seconds,omitzero" firestore:"generated_seconds,omitempty"`
-	// Progress は進行段階と、その根拠になる数え上げです。
+	// Progress is the progress stage and the counts it is based on.
 	//
-	// firestore タグに omitempty を付けてはいけません。付けるとカットが 1 つも無い
-	// ジョブでフィールドごと書かれず、progress.stage での絞り込みがそのドキュメントを
-	// 拾えなくなります。
+	// Do not put omitempty on the firestore tag. With it, a job with no cuts at all would not have
+	// the field written, and filtering on progress.stage could not pick up that document.
 	Progress JobProgress `json:"progress" firestore:"progress"`
 }
 
-// ApplyVideoRecipe は、レシピの内容を一覧の見出しへ写します。レシピが無ければ何もしません。
+// ApplyVideoRecipe copies the recipe's contents into the listing headline. With no recipe it does nothing.
 //
-// 投入時・処理開始時・終端の記録のすべてで呼びます。呼ばない経路があると、その記録が
-// 状態を丸ごと上書きした瞬間に見出しだけが消えます（記録は前回の共通フィールドしか
-// 引き継ぎません）。
+// It is called at submission, at the start of processing and at the terminal record. If any path
+// skips it, the moment that record overwrites the whole state the headline alone disappears (a
+// record carries over only the previous common fields).
 func (s *JobStatus) ApplyVideoRecipe(recipe *VideoRecipe) {
 	if recipe == nil {
 		return
@@ -100,7 +99,7 @@ func (s *JobStatus) ApplyVideoRecipe(recipe *VideoRecipe) {
 	s.Progress = NewJobProgress(recipe.Cuts)
 }
 
-// firstNonEmptyString は、最初の空でない値を返します。
+// firstNonEmptyString returns the first non-empty value.
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -110,12 +109,12 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-// NewJobStatus は、タスクから状態 1 件分の見出しを組み立てます。
+// NewJobStatus builds one status's headline from the task.
 //
-// 投入時（web）と各遷移の記録（worker）で同じ組み立てを使います。別々に書くと、worker の
-// 記録が状態を丸ごと上書きする一方で写す項目が web 側より少なく、投入時にだけ埋めた
-// 見出しが running を記録した瞬間に消えます。片方に項目を足してもコンパイルは通るので、
-// 気付けるのは一覧が空欄になったときだけです。
+// Submission (web) and each transition record (worker) use the same construction. Written
+// separately, the worker's record overwrites the whole state while copying fewer fields than
+// the web side, so a headline filled only at submission disappears the moment running is
+// recorded. Adding a field to one side still compiles, so it is noticed only when the listing goes blank.
 func NewJobStatus(task *Task, state JobState) JobStatus {
 	if task == nil {
 		return JobStatus{}
@@ -135,13 +134,13 @@ func NewJobStatus(task *Task, state JobState) JobStatus {
 	return status
 }
 
-// NewQueuedJobStatus は、キュー投入直後のジョブ状態を組み立てます。
+// NewQueuedJobStatus builds the job status right after enqueueing.
 //
-// 一覧の見出しもここで埋めます。投入時点のレシピから写せる分を入れておかないと、
-// 生成が終わるまで一覧に題名すら出ません。
+// The listing headline is filled here too. Without what can be copied from the recipe at
+// submission, not even the title shows in the listing until generation finishes.
 func NewQueuedJobStatus(task *Task, now time.Time) JobStatus {
 	status := NewJobStatus(task, JobStateQueued)
-	// QueuedAt は Store が保存時に打刻します（未設定なら now）。
+	// QueuedAt is stamped by Store on save (now when unset).
 	status.UpdatedAt = now
 	return status
 }

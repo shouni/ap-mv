@@ -7,28 +7,28 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// statusCollection は、ジョブ状態を置く Firestore のコレクションです。
+// statusCollection is the Firestore collection for job status.
 //
-// 成果物のバケットと同じ語彙にしてあります。コレクションはサービスごとに 1 本で、
-// 共有 1 本に判別フィールドを持たせる形は採りません（絞り忘れが落ちずに他サービスの
-// ジョブを履歴へ混ぜるためです）。設定にせず定数なのは、これがサービスの身元であって
-// デプロイごとに変わる値ではないからです。
+// It uses the same vocabulary as the artifact bucket. There is one collection per service; the
+// shape of one shared collection with a discriminator field is not used (forgetting to filter
+// would not fail and would mix other services' jobs into history). It is a constant rather than a
+// setting because it is the service's identity, not a per-deployment value.
 const statusCollection = "ap-mv"
 
-// NewJobStatusRepository は、Firestore を裏付けとしたジョブ進行状況の読み書きを構築します。
+// NewJobStatusRepository builds the Firestore-backed reads and writes of job progress.
 //
-// 保存形式・ジョブ ID の正規化・エラーの仕分けは gcp-kit の jobstatus が担います。
-// ports.JobStatusStore は jobstatus.Store と同じシグネチャなので、包む型は要りません。
-// ドキュメントは常に最新の 1 世代だけを保持し、上書きで更新します。
+// The storage format, job ID normalisation and error classification belong to gcp-kit's jobstatus.
+// ports.JobStatusStore has the same signature as jobstatus.Store, so no wrapper type is needed.
+// A document always holds only the latest generation and is updated by overwriting.
 //
-// 状態は成果物と別の場所にあるため、履歴削除（プレフィックス一括削除）では消えません。
-// ドキュメントを消すのはハンドラー側の仕事です（handlers.deleteJobStatus）。
+// The status lives apart from the artifacts, so deleting history (bulk prefix delete) does not
+// remove it. Removing the document is the handler's job (handlers.deleteJobStatus).
 func NewJobStatusRepository(client *firestore.Client) *jobstatus.Store[domain.JobStatus] {
 	return jobstatus.NewStore[domain.JobStatus](client, statusCollection)
 }
 
-// Recorder.Begin は、Store が Modifier を満たすことを型で見つけ、再実行ガードと
-// running の記録を 1 つの Firestore トランザクションで行います。Store を包んだり
-// gcp-kit を v1.21.0 より前へ下げたりすると、ここでコンパイルが止まります。満たさない
-// まま動くと、ガードは黙って Get と Save が別々の（割り込みうる）経路へ戻ります。
+// Recorder.Begin finds by type that Store satisfies Modifier and does the re-run guard and the
+// running record in one Firestore transaction. Wrapping Store or downgrading gcp-kit below
+// v1.21.0 stops compilation here. Running without satisfying it, the guard would silently fall
+// back to a path where Get and Save are separate (and can interleave).
 var _ jobstatus.Modifier[domain.JobStatus] = (*jobstatus.Store[domain.JobStatus])(nil)

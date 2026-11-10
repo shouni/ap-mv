@@ -7,7 +7,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// PublishingStep は、生成済み動画を公開先へアップロードするパイプラインステップです。
+// PublishingStep is the pipeline step that uploads the generated video to where it is published.
 type PublishingStep struct{}
 
 // Name returns the receiver name.

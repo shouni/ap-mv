@@ -13,11 +13,10 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// buildRequest は内部の動画生成リクエストを veo パッケージのリクエストへ変換します。
-// どの生成機能（video / referenceImages / image+lastFrame / image）で組むかは
-// ports.ClassifyVeoRequest に一本化されており、filter 側のプロンプト・尺選択と
-// 構造的に一致します（Veo は video / referenceImages / image を同一リクエストで
-// 併用できません）。
+// buildRequest converts the internal video-generation request into the veo package's request.
+// Which generation feature it is built with (video / referenceImages / image+lastFrame / image) is
+// unified in ports.ClassifyVeoRequest, so it structurally matches the filter side's prompt and
+// duration choice (Veo cannot combine video / referenceImages / image in one request).
 func (r *VertexVeoRunner) buildRequest(ctx context.Context, req ports.VideoGenerationRequest) veo.Request {
 	out := veo.Request{
 		Prompt:        strings.TrimSpace(req.Prompt),
@@ -40,8 +39,8 @@ func (r *VertexVeoRunner) buildRequest(ctx context.Context, req ports.VideoGener
 		out.Image = imageMedia(req)
 		out.LastFrame = lastFrameMedia(req)
 	case ports.VeoModeImageToVideo:
-		// 画像参照が一切ないリクエスト（テキストのみ）も image_to_video に分類される
-		// ため、image は存在するときだけ設定する。
+		// A request with no image reference at all (text only) is also classified as image_to_video,
+		// so image is set only when it exists.
 		out.Image = imageMedia(req)
 	}
 
@@ -51,16 +50,16 @@ func (r *VertexVeoRunner) buildRequest(ctx context.Context, req ports.VideoGener
 	return out
 }
 
-// injectAudioInstance は、組み立て済みリクエストボディの instances[0] へ音声入力を
-// 差し込むフックを返します。
+// injectAudioInstance returns a hook that inserts the audio input into instances[0] of the
+// assembled request body.
 //
-// SDK は動画生成の音声入力を型として持っていないため、ボディを直接書き換えます。
-// ExtraBody ではこの位置へ届きません（マージがマップ同士でしか再帰せず、instances は
-// 配列なので丸ごと置き換わり、prompt や画像入力が消えます）。
+// The SDK has no type for video generation's audio input, so the body is rewritten directly.
+// ExtraBody cannot reach this position (merging recurses only between maps, and instances is an
+// array, so it would be replaced wholesale and the prompt and image inputs would vanish).
 //
-// なお、この audio 入力を Veo が実際に解釈しているかは未検証です。公式の SDK にも
-// 対応するフィールドが無いため、無視されている可能性があります。1カットで有無を
-// 比較して確かめた上で、効果が無ければこの経路ごと削除してください。
+// Whether Veo actually interprets this audio input is unverified. The official SDK has no matching
+// field either, so it may be ignored. Compare one cut with and without it, and if it has no
+// effect, remove this whole path.
 func injectAudioInstance(audio map[string]any) func(map[string]any) map[string]any {
 	return func(body map[string]any) map[string]any {
 		instances, ok := body["instances"].([]any)
@@ -76,30 +75,30 @@ func injectAudioInstance(audio map[string]any) func(map[string]any) map[string]a
 	}
 }
 
-// capabilities は使用モデルの Veo オプション機能対応状況を ports.VeoCapabilities として
-// 返します（ports.ClassifyVeoRequest の入力）。モデル名→対応機能の規則は
-// ports.VeoModelCapabilities が唯一の定義元です（以前はここで文字列前方一致を
-// 再導出しており、「ルールはライブラリが持つ」という原則が破れていました）。
+// capabilities returns the model's support for Veo's optional features as ports.VeoCapabilities
+// (the input to ports.ClassifyVeoRequest). ports.VeoModelCapabilities is the single definition of
+// the model name → feature rule (prefix matching on strings used to be re-derived here, breaking
+// the principle that "the library owns the rule").
 func (r *VertexVeoRunner) capabilities() ports.VeoCapabilities {
 	return ports.VeoModelCapabilities(r.model)
 }
 
-// SupportsLastFrame は ports.LastFrameSupporter を満たします。
-// video_gen フィルタが、次カットのキーフレームを lastFrame（frames_to_video 補間）として
-// 渡すかを、モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
+// SupportsLastFrame satisfies ports.LastFrameSupporter.
+// It is the entrance through which the video_gen filter asks whether to pass the next cut's keyframe
+// as lastFrame (frames_to_video interpolation) without duplicating the model-detection logic.
 func (r *VertexVeoRunner) SupportsLastFrame() bool {
 	return r.capabilities().LastFrame
 }
 
-// SupportsReferenceImages は ports.ReferenceImagesSupporter を満たします。呼び出し元
-// （カットの尺をVeoのサポート値へ正規化する処理）が、このRunnerが reference_to_video
-// （referenceImages、8秒固定）を使うか image_to_video（{4,6,8}秒）を使うかを、
-// モデル判定ロジックを重複実装せずに問い合わせるための入り口です。
+// SupportsReferenceImages satisfies ports.ReferenceImagesSupporter. It is the entrance through
+// which the caller (normalising cut durations to Veo's supported values) asks whether this Runner
+// uses reference_to_video (referenceImages, fixed at 8 seconds) or image_to_video ({4,6,8}
+// seconds) without duplicating the model-detection logic.
 func (r *VertexVeoRunner) SupportsReferenceImages() bool {
 	return r.capabilities().ReferenceImages
 }
 
-// validateVertexVeoRequest は Veo API アダプターに必要なリクエスト項目を検証します。
+// validateVertexVeoRequest validates the request fields the Veo API adapter needs.
 func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 	if strings.TrimSpace(req.Prompt) == "" {
 		return fmt.Errorf("prompt is required")
@@ -116,8 +115,8 @@ func validateVertexVeoRequest(req ports.VideoGenerationRequest) error {
 	return nil
 }
 
-// referenceImagesMedia は ReferenceImages から Veo の参照画像リストを組み立てます。
-// URI が空のものは除外し、結果が0件の場合は nil を返します。
+// referenceImagesMedia builds Veo's reference image list from ReferenceImages.
+// Entries with an empty URI are excluded, and it returns nil when nothing remains.
 func referenceImagesMedia(req ports.VideoGenerationRequest) []veo.Reference {
 	var result []veo.Reference
 	for _, uri := range req.ReferenceImages {
@@ -132,7 +131,7 @@ func referenceImagesMedia(req ports.VideoGenerationRequest) []veo.Reference {
 	return result
 }
 
-// imageMedia は GCS 画像参照またはインライン画像バイト列から Veo の画像入力を組み立てます。
+// imageMedia builds Veo's image input from a GCS image reference or inline image bytes.
 func imageMedia(req ports.VideoGenerationRequest) *veo.Media {
 	if ref := strings.TrimSpace(req.ImageReference); ref != "" {
 		return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "image/png")}
@@ -143,7 +142,7 @@ func imageMedia(req ports.VideoGenerationRequest) *veo.Media {
 	return &veo.Media{Data: req.InputImage, MIMEType: detectedImageMimeType(req.InputImage)}
 }
 
-// lastFrameMedia は LastFrameReference から Veo の終了フレーム入力を組み立てます。
+// lastFrameMedia builds Veo's end-frame input from LastFrameReference.
 func lastFrameMedia(req ports.VideoGenerationRequest) *veo.Media {
 	ref := strings.TrimSpace(req.LastFrameReference)
 	if ref == "" {
@@ -152,7 +151,7 @@ func lastFrameMedia(req ports.VideoGenerationRequest) *veo.Media {
 	return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "image/png")}
 }
 
-// previousVideoMedia は前回生成動画の GCS URI から Veo の動画継続入力を組み立てます。
+// previousVideoMedia builds Veo's video-continuation input from the GCS URI of the previously generated video.
 func previousVideoMedia(previousVideoID string) *veo.Media {
 	ref := strings.TrimSpace(previousVideoID)
 	if !strings.HasPrefix(ref, "gs://") {
@@ -161,8 +160,8 @@ func previousVideoMedia(previousVideoID string) *veo.Media {
 	return &veo.Media{URI: ref, MIMEType: mimeTypeFromURI(ref, "video/mp4")}
 }
 
-// audioMedia は GCS 音声参照またはインライン音声バイト列から Veo の音声入力 payload を
-// 組み立てます。SDK が型を持たないため、生のマップのまま扱います。
+// audioMedia builds Veo's audio input payload from a GCS audio reference or inline audio bytes.
+// The SDK has no type for it, so it is handled as a raw map.
 func audioMedia(req ports.VideoGenerationRequest) *map[string]any {
 	if ref := strings.TrimSpace(req.AudioReference); ref != "" {
 		return &map[string]any{
@@ -179,7 +178,7 @@ func audioMedia(req ports.VideoGenerationRequest) *map[string]any {
 	}
 }
 
-// detectedAudioMimeType は対応するインライン音声 MIME type を検出し、不明な場合は audio/mpeg を返します。
+// detectedAudioMimeType detects a supported inline audio MIME type and returns audio/mpeg when unknown.
 func detectedAudioMimeType(data []byte) string {
 	if len(data) == 0 {
 		return "audio/mpeg"
@@ -194,7 +193,7 @@ func detectedAudioMimeType(data []byte) string {
 	}
 }
 
-// detectedImageMimeType は対応するインライン画像 MIME type を検出し、不明な場合は image/png を返します。
+// detectedImageMimeType detects a supported inline image MIME type and returns image/png when unknown.
 func detectedImageMimeType(data []byte) string {
 	mimeType := http.DetectContentType(data)
 	switch mimeType {
@@ -205,7 +204,7 @@ func detectedImageMimeType(data []byte) string {
 	}
 }
 
-// mimeTypeFromURI は URI の拡張子から media MIME type を推定し、不明な場合は fallback を返します。
+// mimeTypeFromURI guesses the media MIME type from the URI's extension and returns fallback when unknown.
 func mimeTypeFromURI(uri, fallback string) string {
 	lower := strings.ToLower(uri)
 	switch {

@@ -8,40 +8,40 @@ import (
 	"github.com/shouni/go-veo-orchestrator/video"
 )
 
-// VideoRunner は go-veo-orchestrator が定義する Veo adapter 境界です。
+// VideoRunner is the Veo adapter boundary defined by go-veo-orchestrator.
 type VideoRunner = veoports.VideoRunner
 
-// VideoGenerationRequest は go-veo-orchestrator の動画生成リクエスト型です。
+// VideoGenerationRequest is go-veo-orchestrator's video-generation request type.
 type VideoGenerationRequest = video.GenerationRequest
 
-// VideoResponse は go-veo-orchestrator の動画生成レスポンス型です。
+// VideoResponse is go-veo-orchestrator's video-generation response type.
 type VideoResponse = video.Response
 
-// VideoRunnerConfigurator は、タスク単位で Veo モデルやアスペクト比を差し替えた
-// 派生 Runner を返せる VideoRunner のオプションインターフェースです。
+// VideoRunnerConfigurator is an optional VideoRunner interface that can return a derived Runner
+// with the Veo model or aspect ratio replaced per task.
 type VideoRunnerConfigurator interface {
 	WithVideoOptions(model, aspectRatio string) VideoRunner
 }
 
-// ReferenceImagesSupporter は、reference_to_video（referenceImages、Veo 3系の非Fastモデルのみ
-// 対応で8秒固定）を使えるかを問い合わせられる VideoRunner のオプションインターフェースです。
-// カットの尺をVeoのサポート値へ正規化する処理が、モデル判定ロジックを重複実装せずに
-// 「このカットは8秒固定になるか」を判断するために使います。
+// ReferenceImagesSupporter is an optional VideoRunner interface that can be asked whether
+// reference_to_video (referenceImages; Veo 3 non-Fast models only, fixed at 8 seconds) is usable.
+// Normalising cut durations to Veo's supported values uses it to decide "will this cut be fixed at
+// 8 seconds" without duplicating the model-detection logic.
 type ReferenceImagesSupporter interface {
 	SupportsReferenceImages() bool
 }
 
-// LastFrameSupporter は、frames_to_video（image + lastFrame の first/last frame 補間、
-// Veo 2 / Veo 3.1 系のみ対応）を使えるかを問い合わせられる VideoRunner のオプション
-// インターフェースです。video_gen フィルタが、次カットのキーフレームを lastFrame として
-// 渡すかを、モデル判定ロジックを重複実装せずに判断するために使います。
+// LastFrameSupporter is an optional VideoRunner interface that can be asked whether
+// frames_to_video (first/last frame interpolation with image + lastFrame; Veo 2 / Veo 3.1 only)
+// is usable. The video_gen filter uses it to decide whether to pass the next cut's keyframe as
+// lastFrame without duplicating the model-detection logic.
 type LastFrameSupporter interface {
 	SupportsLastFrame() bool
 }
 
-// DeriveVideoRunner は、runner が VideoRunnerConfigurator を実装していれば
-// モデル・アスペクト比を差し替えた派生 Runner を返します。指定が両方空、
-// または runner が差し替えに対応しない場合は runner をそのまま返します。
+// DeriveVideoRunner returns a derived Runner with the model and aspect ratio replaced when runner
+// implements VideoRunnerConfigurator. When both are empty, or runner does not support replacing,
+// it returns runner as-is.
 func DeriveVideoRunner(runner VideoRunner, model, aspectRatio string) VideoRunner {
 	if runner == nil {
 		return nil

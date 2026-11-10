@@ -16,21 +16,21 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// VideoGenerationStep は、VideoRecipeから実際の動画を生成するパイプラインステップです。
+// VideoGenerationStep is the pipeline step that generates the actual videos from a VideoRecipe.
 type VideoGenerationStep struct {
 	Runner ports.VideoRunner
-	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
-	// true の場合、先頭カット以降は video_extension 用の尺（7秒固定）へ正規化します。
+	// UsePreviousVideo reflects the VEO_USE_PREVIOUS_VIDEO setting.
+	// When true, every cut after the first is normalised to the video_extension duration (fixed at 7 seconds).
 	UsePreviousVideo bool
-	// VideoProcessor は、チェーンリセット時に直前チェーンの最終フレームを抽出するために
-	// 使います。nilの場合はフレーム抽出をスキップし、静的な立ち絵参照画像のまま生成します。
+	// VideoProcessor is used to extract the previous chain's last frame on a chain reset.
+	// When nil, frame extraction is skipped and generation uses the static character reference image.
 	VideoProcessor ports.VideoProcessor
-	// SectionScoped が true のとき、生成対象を sc.Task.SectionIndex のセクションに属する
-	// カットだけに絞ります（section_video コマンド）。**レシピからは何も取り除きません**。
-	// 対象外のカットを削るのではなく飛ばすだけなのは、後続の Publishing が保存するのが
-	// この同じレシピで、削った状態を保存すれば他セクションのカットがそのまま消えるためです。
-	// 継続タスクはレシピをペイロードで持ち回る（enqueueContinuation 参照）ので、一度削れた
-	// レシピは最後まで削れたまま運ばれます。
+	// SectionScoped, when true, narrows generation to the cuts belonging to the section at
+	// sc.Task.SectionIndex (the section_video command). **Nothing is removed from the recipe.**
+	// Cuts outside the target are skipped rather than trimmed because the later Publishing step
+	// saves this same recipe, and saving it trimmed would simply delete the other sections' cuts.
+	// Continuation tasks carry the recipe in the payload (see enqueueContinuation), so a recipe
+	// trimmed once would stay trimmed to the end.
 	SectionScoped bool
 }
 
@@ -47,24 +47,25 @@ func (f VideoGenerationStep) Execute(ctx context.Context, sc *Context) error {
 		return err
 	}
 	applyTaskAudioURLToVideoRecipe(sc.Task, sc.VideoRecipe)
-	// ExpandCutsToSupportedDurations はカットの所属セクションを cut.SectionIndex から直接
-	// 判定するため、（呼び出し元がまだ Normalize していない可能性に備えて）ここで確実に
-	// 補完しておく。Normalize は冪等なので、既に呼ばれていても無害。
+	// ExpandCutsToSupportedDurations decides a cut's section directly from cut.SectionIndex, so
+	// make sure it is filled in here (in case the caller has not normalised yet). Normalize is
+	// idempotent, so calling it again is harmless.
 	sc.VideoRecipe.Normalize()
-	// Veo がサポートしない尺（reference_to_videoなら8秒以外、image_to_videoなら4/6/8秒以外）の
-	// カットは生成前に分割・丸めする。生成済みカットは実動画の尺と metadata がずれないよう変更
-	// しない。usePreviousVideo が true の場合、video_extension の累積尺がVeoの上限
-	// (veo.ContinuationMaxDurationSec) に達する手前で自動的にチェーンをリセットする
-	// （詳細は veo.ExpandCutsToSupportedDurations のコメント参照）。
+	// Cuts with a duration Veo does not support (anything but 8 seconds for reference_to_video,
+	// anything but 4/6/8 seconds for image_to_video) are split or rounded before generation. Generated
+	// cuts are left unchanged so their metadata does not drift from the actual video length. When
+	// usePreviousVideo is true, the chain is reset automatically just before the cumulative
+	// video_extension duration reaches Veo's limit (veo.ContinuationMaxDurationSec)
+	// (see the comment on veo.ExpandCutsToSupportedDurations for details).
 	sc.VideoRecipe.Cuts = veo.ExpandCutsToSupportedDurations(sc.VideoRecipe.Cuts, f.UsePreviousVideo, sc.Characters, referenceImagesSupported(f.resolvedVideoRunner(sc)))
-	// 実行方式の優先順位: (1) VideoRunner が設定されていれば直接実行（1カットずつ生成し、
-	// 残りがあれば継続タスクをenqueueして中断する resumable な方式）を最優先する。
-	// (2) VideoRunner がなく orchestrator workflow があれば、そちらに全カットの生成を委譲する
-	// （resumable ではなく、内部で全カットをまとめて処理する）。Workflows.Video は
-	// go-veo-orchestrator v1.7.0 以降、VideoRunner 未設定でも nil にならず常に非nilの
-	// runner（未設定時は ErrVideoRunnerNotConfigured を返すダミー実装）が入るため、
-	// nilチェックでは判定できない。実際に呼び出してエラーを見る。
-	// (3) orchestrator workflow 自体がなければ runDirect を呼び、runner未設定のエラーを返す。
+	// Order of execution strategies: (1) when a VideoRunner is set, run it directly first (the
+	// resumable approach that generates one cut at a time and, when cuts remain, enqueues a
+	// continuation task and stops). (2) Without a VideoRunner but with an orchestrator workflow,
+	// delegate generating every cut to it (not resumable; it processes every cut internally in one
+	// go). Since go-veo-orchestrator v1.7.0, Workflows.Video is never nil even when no VideoRunner is
+	// set — it always holds a non-nil runner (a dummy that returns ErrVideoRunnerNotConfigured when
+	// unset) — so a nil check cannot tell. Call it and look at the error.
+	// (3) When there is no orchestrator workflow at all, call runDirect, which returns the runner-not-set error.
 	if f.hasVideoRunner(sc) {
 		return f.runDirect(ctx, sc)
 	}
@@ -83,10 +84,10 @@ func (f VideoGenerationStep) resolvedVideoRunner(sc *Context) ports.VideoRunner 
 	return sc.VideoRunner
 }
 
-// referenceImagesSupported は、実際に使われる VideoRunner が Veo の referenceImages
-// （reference_to_video、8秒固定）に対応しているかを返します。Runner が
-// ports.ReferenceImagesSupporter を実装していない場合（テストダブル等）は false を返し、
-// image_to_video 用の {4,6,8} 秒での丸めにフォールバックします。
+// referenceImagesSupported reports whether the VideoRunner actually used supports Veo's
+// referenceImages (reference_to_video, fixed at 8 seconds). When the Runner does not implement
+// ports.ReferenceImagesSupporter (test doubles and the like) it returns false and falls back to
+// rounding to {4,6,8} seconds for image_to_video.
 func referenceImagesSupported(runner ports.VideoRunner) bool {
 	return ports.RunnerCapabilities(runner).ReferenceImages
 }
@@ -134,9 +135,9 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 		WithCutObserver(f.afterCut(sc, inScope))
 
 	if _, err := timeline.Run(ctx, sc.VideoRecipe); err != nil {
-		// 継続タスクを撒いた後の中断は失敗ではない。Run は observer のエラーを
-		// 「cut N の後処理で停止しました」で包むので、そのまま返すと失敗として記録され、
-		// 再開を担う継続タスクがあるのにジョブが failed になる。印だけ取り出して返す。
+		// Stopping after dispatching a continuation task is not a failure. Run wraps the observer's
+		// error as "cut N: stopped in post-processing", so returning it as-is would record a failure
+		// and mark the job failed even though a continuation task will resume it. Return only the marker.
 		if errors.Is(err, ErrPipelineDeferred) {
 			return ErrPipelineDeferred
 		}
@@ -151,24 +152,24 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 	return nil
 }
 
-// beforeCut は、1カットの生成に入る直前の判断をまとめた runner.CutGate を返します。
+// beforeCut returns a runner.CutGate gathering the decisions made just before generating one cut.
 //
-// 担当外セクションのカットを飛ばすのと、チェーン起点の参照画像を直前チェーンの最終フレームへ
-// 差し替えるのが仕事です。飛ばしたカットの向こう側をチェーンの起点として扱う（引き継ぎ元を
-// 切り、印を付ける）のはライブラリ側の役目なので、ここではしません。
+// Its job is to skip cuts of sections outside its scope and to replace the reference image at a
+// chain's start with the previous chain's last frame. Treating what lies beyond a skipped cut as
+// a chain start (cutting the hand-over source and marking it) is the library's job, not done here.
 func (f VideoGenerationStep) beforeCut(sc *Context, inScope func(int) bool) veorunner.CutGate {
 	return func(ctx context.Context, recipe *video.Recipe, i int) (bool, error) {
 		cut := &recipe.Cuts[i]
 		if !inScope(cut.SectionIndex) {
 			return false, nil
 		}
-		// i > 0 は「ジョブ内で最初のチェーンではない」= 直前に実際に生成されたチェーンが
-		// 存在することを意味する。その最終フレームを次チェーンの参照画像として引き継ぎ、
-		// 静的な立ち絵からの独立生成による見た目のブレ（衣装ズレ等）を抑える。ただし
-		// IsSectionStart は「意図的な場面転換」（実際の曲のセクション境界、または
-		// scene_split.go によるシーン内リセットのどちらか。詳細は
-		// veo.ExpandCutsToSupportedDurations のコメント参照）なので、どちらの理由でも
-		// 直前の絵を引き継がず、そのカット自身に割り当てられたキーフレーム参照のまま生成する。
+		// i > 0 means "not the first chain in the job" = a chain was actually generated just before.
+		// Its last frame is handed over as the next chain's reference image, which curbs the visual
+		// wobble (costume drift and the like) of generating independently from static character art.
+		// However, IsSectionStart marks an "intentional scene change" (either an actual section
+		// boundary of the song or a reset within a scene by scene_split.go; see the comment on
+		// veo.ExpandCutsToSupportedDurations for details), so for either reason the previous picture
+		// is not handed over and the cut is generated from its own assigned keyframe reference.
 		if f.UsePreviousVideo && cut.IsChainStart && !cut.IsSectionStart && i > 0 {
 			if err := f.applyChainResetKeyframe(ctx, sc, cut, recipe.Cuts[i-1].VideoURL); err != nil {
 				return false, err
@@ -178,10 +179,10 @@ func (f VideoGenerationStep) beforeCut(sc *Context, inScope func(int) bool) veor
 	}
 }
 
-// afterCut は、1カットの生成が終わるたびの後処理をまとめた runner.CutObserver を返します。
+// afterCut returns a runner.CutObserver gathering the post-processing after each cut is generated.
 //
-// 生成済みカットには呼ばれないので、再開のたびに過去のカットぶんの課金記録や色補正が
-// 走り直すことはありません。
+// It is not called for generated cuts, so the billing records and colour correction of past
+// cuts are not re-run on every resume.
 func (f VideoGenerationStep) afterCut(sc *Context, inScope func(int) bool) veorunner.CutObserver {
 	return func(ctx context.Context, cut *video.Cut, _ *video.Response) error {
 		recordVeoUsage(ctx, sc, cut)
@@ -190,16 +191,16 @@ func (f VideoGenerationStep) afterCut(sc *Context, inScope func(int) bool) veoru
 				return err
 			}
 		}
-		// 継続タスクのエンキューに失敗した場合、このジョブはここで止まる。キューは
-		// max-attempts=1 で運用しており、失敗したタスクは再配信されないため、残りの
-		// カットを生成する担い手がいなくなる（成果物が出てこないことで気付く）。
-		// 生成済みカットの状態は保存済みなので、同じレシピを投げ直せば
-		// Cut.IsGenerated() のカットはスキップされ、途中から再開できる。
+		// If enqueueing the continuation task fails, this job stops here. The queue runs with
+		// max-attempts=1 and a failed task is not redelivered, so nothing is left to generate the
+		// remaining cuts (noticed by the artifact never appearing).
+		// The state of generated cuts has been saved, so resubmitting the same recipe skips cuts
+		// where Cut.IsGenerated() is true and resumes from the middle.
 		//
-		// 検証中は、一時的な失敗が再試行に隠れて systematic なバグを見落とすことと、
-		// 失敗したカットの再生成が Veo の課金をそのまま倍にすることを避けるため、
-		// この「止まる」挙動を選んでいる。定常運用へ移すときに max-attempts を
-		// 増やせば、ここは自動で再開されるようになる。
+		// While this is being validated, this "stop" behaviour is chosen to avoid transient failures
+		// hiding systematic bugs behind retries, and to avoid regenerating a failed cut doubling the
+		// Veo charge. When moving to steady-state operation, raising max-attempts will make this
+		// resume automatically.
 		if hasPendingCuts(sc.VideoRecipe, inScope) && sc.TaskQueue != nil {
 			return enqueueContinuation(ctx, sc, cut.CutIndex)
 		}
@@ -225,9 +226,9 @@ func enqueueContinuation(ctx context.Context, sc *Context, cutIndex int) error {
 	}
 	sc.Recipe = domainRecipe
 	nextTask := *sc.Task
-	// Command を上書きする前に元のコマンドを控える。継続側の実行計画は「結合するか否か」を
-	// これで決めるため、失うと section_video の続きが結合まで走ってしまう。
-	// 既に継続タスクなら、その継続が持っている OriginCommand をそのまま引き継ぐ。
+	// Note the original command before overwriting Command. The continuation's plan uses it to
+	// decide "whether to join", so losing it would make a section_video continuation run through the join.
+	// If this is already a continuation task, carry on the OriginCommand it holds as-is.
 	if sc.Task.Command != domain.CommandVideoGenContinuation {
 		nextTask.OriginCommand = sc.Task.Command
 	}
@@ -282,9 +283,9 @@ func videoOutputContext(ctx context.Context, sc *Context) context.Context {
 
 // hasPendingCuts reports whether a recipe has cuts awaiting video generation.
 //
-// inScope は今回の実行が担当するカットの判定です（nil は全カット担当）。ここで範囲を見ないと、
-// セクション実行が担当外の未生成カットを「残っている」と数えて継続タスクを撒き、その継続が
-// 何も生成せず終わる、という空振りが毎回1本ぶん増えます。
+// inScope decides which cuts this run is responsible for (nil means every cut). Without
+// checking the scope here, a section run would count ungenerated cuts outside its scope as
+// "remaining" and dispatch a continuation task that generates nothing, one wasted run each time.
 func hasPendingCuts(recipe *video.Recipe, inScope func(sectionIndex int) bool) bool {
 	if recipe == nil {
 		return false
@@ -300,8 +301,8 @@ func hasPendingCuts(recipe *video.Recipe, inScope func(sectionIndex int) bool) b
 	return false
 }
 
-// cutScope は、この実行が動画を生成すべきカットの判定関数を返します。
-// SectionScoped でないときは常に true を返す関数（＝全カット担当）です。
+// cutScope returns the predicate for the cuts this run should generate video for.
+// When not SectionScoped it is a function that always returns true (= every cut).
 func (f VideoGenerationStep) cutScope(sc *Context) (func(sectionIndex int) bool, error) {
 	if !f.SectionScoped {
 		return func(int) bool { return true }, nil
@@ -314,8 +315,8 @@ func (f VideoGenerationStep) cutScope(sc *Context) (func(sectionIndex int) bool,
 	if sectionIndex < 0 || sectionIndex >= len(sections) {
 		return nil, fmt.Errorf("section_index %d is out of range (recipe has %d sections)", sectionIndex, len(sections))
 	}
-	// cut.SectionIndex は1始まりなので、0始まりの sectionIndex と比較する際は +1 する
-	// （SectionSelectStep / resolveRegenTargets と同じ規則）。
+	// cut.SectionIndex is 1-based, so add 1 when comparing with the 0-based sectionIndex
+	// (the same rule as SectionSelectStep / resolveRegenTargets).
 	wantSectionIndex := sectionIndex + 1
 
 	found := false
@@ -325,8 +326,8 @@ func (f VideoGenerationStep) cutScope(sc *Context) (func(sectionIndex int) bool,
 			break
 		}
 	}
-	// 該当カットが1つも無ければ、生成も保存もせずに正常終了してしまう。押した本人には
-	// 「動いたのに何も起きない」としか見えないので、ここで落とす。
+	// With no matching cut, it would finish normally without generating or saving anything. To the
+	// person who pressed the button that looks like "it ran and nothing happened", so fail here.
 	if !found {
 		return nil, fmt.Errorf("no cuts found in section %d (%s)", sectionIndex, sections[sectionIndex].Name)
 	}

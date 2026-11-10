@@ -142,7 +142,7 @@ func TestCutVideoSelectKeepsAllCutsAndKeyframes(t *testing.T) {
 			t.Errorf("cut[%d] lost its keyframe reference; only the video should be regenerated", i)
 		}
 	}
-	// 作り直さないカットは動画をそのまま保持し、videoGen にスキップさせる。
+	// Cuts not being remade keep their video as-is, and videoGen skips them.
 	if recipe.Cuts[0].VideoID == "" || !recipe.Cuts[0].IsGenerated() {
 		t.Error("cut 1 was reset; untouched cuts must keep their generated video")
 	}

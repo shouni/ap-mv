@@ -116,10 +116,10 @@ func (p *fakePublishRunner) BuildMetadata(_ *video.Recipe) ([]byte, error) {
 	return nil, nil
 }
 
-// 上書きは**元ジョブの**ディレクトリへ書きます。sc.OutputPath は再生成用に採番した新しい
-// ジョブを指しているので、そちらへ書くと元ジョブのレシピは古いキーフレームを指したままに
-// なり、画面には何も変化が出ません（生成そのものは成功して見えます）。書き先は
-// Task.RecipeURL から導きます。
+// The overwrite goes to the **original job's** directory. sc.OutputPath points at the new job
+// minted for the regeneration, so writing there would leave the original job's recipe pointing at
+// the old keyframe and nothing would change on the page (while the generation itself looks
+// successful). The destination is derived from Task.RecipeURL.
 func TestRegenerateCutKeyframeStepOverwritesTheOriginalJob(t *testing.T) {
 	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/cut-1/images/keyframe_1.png"}
 	task := &domain.Task{
@@ -141,8 +141,8 @@ func TestRegenerateCutKeyframeStepOverwritesTheOriginalJob(t *testing.T) {
 	}
 }
 
-// 上書きを指定しなければ元ジョブには一切書きません。再生成した画像を見てから
-// 採用するかを決められるのがこの操作の要点です。
+// Without overwrite, nothing at all is written to the original job. Being able to look at the
+// regenerated image before deciding to adopt it is the point of this operation.
 func TestRegenerateCutKeyframeStepKeepsTheOriginalJobWithoutOverwrite(t *testing.T) {
 	runner := &fakeCutKeyframeRunner{resultKeyframeRef: "gs://bucket/jobs/regen-1/regens/cut-1/images/keyframe_1.png"}
 	task := &domain.Task{
@@ -245,7 +245,7 @@ func TestRegenerateCutKeyframeStepRegeneratesWholeSection(t *testing.T) {
 			t.Errorf("cut %d KeyframeReference = %q, want %q", i+1, sc.VideoRecipe.Cuts[i].KeyframeReference, runner.resultKeyframeRef)
 		}
 	}
-	// 別セクションのカットは対象外なので元のキーフレームのまま。
+	// Cuts of another section are out of scope, so they keep their original keyframe.
 	if got, want := sc.VideoRecipe.Cuts[2].KeyframeReference, "gs://bucket/jobs/orig/images/keyframe_3.png"; got != want {
 		t.Errorf("cut 3 KeyframeReference = %q, want unchanged %q", got, want)
 	}

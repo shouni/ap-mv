@@ -360,7 +360,7 @@ func TestSceneSplitStepKeepsKeyframesOnOneToOneReallocation(t *testing.T) {
 			if got := recipe.Cuts[0].KeyframeReference; got != "gs://bucket/jobs/job-1/images/keyframe_001.png" {
 				t.Errorf("KeyframeReference = %q, want the existing image to be kept", got)
 			}
-			// 生成状態は落とす（動画は作り直す）が、絵は使い回す、が意図。
+			// The intent: drop the generation state (the video is remade) but reuse the picture.
 			if recipe.Cuts[0].Status != video.CutStatusPending || recipe.Cuts[0].VideoID != "" {
 				t.Errorf("video generation state was not reset: status=%q videoID=%q", recipe.Cuts[0].Status, recipe.Cuts[0].VideoID)
 			}

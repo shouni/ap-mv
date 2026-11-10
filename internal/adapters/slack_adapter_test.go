@@ -42,9 +42,9 @@ func newTestSlackAdapter(serviceURL string) (*SlackAdapter, *recordingNotifier) 
 	}, rec
 }
 
-// 台本のみのジョブ（video_recipe_draft）も履歴詳細へ送ります。以前は専用の /drafts 一覧へ
-// 送っていましたが、下書きが別プレフィックスをやめて普通のジョブになった時点でそのルートは
-// 消えており、このコマンドの完了通知だけがリンク切れになっていました。
+// Script-only jobs (video_recipe_draft) are sent to the history detail too. They used to go to a
+// dedicated /drafts listing, but that route disappeared when drafts stopped using a separate prefix
+// and became ordinary jobs, and only this command's completion notice was left with a broken link.
 func TestBuildCompleteContentLinksHistoryForDraftJobs(t *testing.T) {
 	adapter, _ := newTestSlackAdapter("https://ap-mv.example.com")
 
@@ -58,7 +58,7 @@ func TestBuildCompleteContentLinksHistoryForDraftJobs(t *testing.T) {
 		t.Errorf("content = %q, want a History Detail link", got)
 	}
 	if strings.Contains(got, "/drafts") {
-		t.Errorf("content = %q, want no /drafts link (そのルートは存在しません)", got)
+		t.Errorf("content = %q, want no /drafts link (that route does not exist)", got)
 	}
 }
 

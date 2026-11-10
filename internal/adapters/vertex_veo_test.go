@@ -45,7 +45,7 @@ func TestBuildRequestIncludesAudioReference(t *testing.T) {
 	if got := audio["mimeType"]; got != "audio/mpeg" {
 		t.Fatalf("audio.mimeType = %v", got)
 	}
-	// 元のフィールドを壊していないこと（ExtraBody を使うと instances ごと消える）。
+	// The original fields are not broken (using ExtraBody would wipe out instances).
 	if got := instance["prompt"]; got != "scene" {
 		t.Fatalf("instances[0].prompt = %v, want the SDK-built value preserved", got)
 	}
@@ -69,7 +69,7 @@ func TestBuildRequestReferenceImages(t *testing.T) {
 	req.ReferenceImages = []string{"gs://bucket/characters/zundamon.png", "gs://bucket/kf.png"}
 	req.PreviousVideoURI = "gs://bucket/prev.mp4"
 
-	// 対応モデル: referenceImages を送り、image は送らない。
+	// Supported model: send referenceImages, not image.
 	runner := &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/"}
 	built := runner.buildRequest(context.Background(), req)
 	if len(built.References) != 2 {
@@ -85,7 +85,7 @@ func TestBuildRequestReferenceImages(t *testing.T) {
 		t.Fatalf("Image = %+v, must not be sent together with References", built.Image)
 	}
 
-	// 非対応モデル (Fast): image 入力へフォールバック。
+	// Unsupported model (Fast): fall back to the image input.
 	runner = &VertexVeoRunner{model: "veo-3.1-fast-generate-001", outputStorageURI: "gs://bucket/out/"}
 	built = runner.buildRequest(context.Background(), req)
 	if len(built.References) != 0 {
@@ -95,7 +95,7 @@ func TestBuildRequestReferenceImages(t *testing.T) {
 		t.Fatalf("Image = %+v, want the keyframe", built.Image)
 	}
 
-	// video-to-video 文脈: 画像入力は一切送らない。
+	// video-to-video context: send no image input at all.
 	runner = &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/", usePreviousVideo: true}
 	built = runner.buildRequest(context.Background(), req)
 	if built.Video == nil || built.Video.URI != "gs://bucket/prev.mp4" {
@@ -113,7 +113,7 @@ func TestBuildRequestLastFrame(t *testing.T) {
 	req.ImageReference = "gs://bucket/cut_01.png"
 	req.LastFrameReference = "gs://bucket/cut_02.png"
 
-	// 対応モデル: image と lastFrame を両方送る。
+	// Supported model: send both image and lastFrame.
 	runner := &VertexVeoRunner{model: "veo-3.1-generate-001", outputStorageURI: "gs://bucket/out/"}
 	built := runner.buildRequest(context.Background(), req)
 	if built.Image == nil || built.Image.URI != "gs://bucket/cut_01.png" {
@@ -123,7 +123,7 @@ func TestBuildRequestLastFrame(t *testing.T) {
 		t.Fatalf("LastFrame = %+v", built.LastFrame)
 	}
 
-	// 非対応モデル (Veo 3.0): lastFrame は送らない。
+	// Unsupported model (Veo 3.0): do not send lastFrame.
 	runner = &VertexVeoRunner{model: "veo-3.0-generate-001", outputStorageURI: "gs://bucket/out/"}
 	built = runner.buildRequest(context.Background(), req)
 	if built.LastFrame != nil {
@@ -157,7 +157,7 @@ func TestBuildRequestGenerationParameters(t *testing.T) {
 		t.Errorf("GenerateAudio = %v, want true", built.GenerateAudio)
 	}
 
-	// シード未指定は「省略」であって 0 ではない。
+	// An unspecified seed means "omitted", not 0.
 	req.Seed = 0
 	if built := runner.buildRequest(context.Background(), req); built.Seed != nil {
 		t.Errorf("Seed = %v, want nil when unset", built.Seed)
@@ -207,7 +207,7 @@ func TestVertexVeoRunnerWithVideoOptionsDerivesRunner(t *testing.T) {
 		t.Fatalf("base runner was mutated: %q/%q", base.model, base.aspectRatio)
 	}
 
-	// 片方だけの指定は、もう片方の元設定を維持する。
+	// Giving only one keeps the other's original setting.
 	partial, _ := base.WithVideoOptions("", "9:16").(*VertexVeoRunner)
 	if partial.model != "veo-3.1-generate-001" || partial.aspectRatio != "9:16" {
 		t.Fatalf("partial = %q/%q, want model kept and aspect overridden", partial.model, partial.aspectRatio)
@@ -252,7 +252,7 @@ func TestValidateVertexVeoRequest(t *testing.T) {
 		{"negative cut index", func(r *ports.VideoGenerationRequest) { r.CutIndex = -1 }, true},
 		{"zero duration", func(r *ports.VideoGenerationRequest) { r.DurationSec = 0 }, true},
 		{"negative seed", func(r *ports.VideoGenerationRequest) { r.Seed = -1 }, true},
-		// SDK のシードは int32 なので、それを超える値は送信前に弾く。
+		// The SDK's seed is int32, so values beyond it are rejected before sending.
 		{"seed beyond int32", func(r *ports.VideoGenerationRequest) { r.Seed = 1 << 40 }, true},
 	}
 	for _, tt := range tests {

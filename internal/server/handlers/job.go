@@ -13,10 +13,10 @@ import (
 	"github.com/shouni/go-utils/jobid"
 )
 
-// recordQueuedStatus は queued のジョブ状態を記録します。呼ぶのは投入より前です
-// （順序の理由は Handler.enqueue を参照）。これがあることで、ワーカーが動き出す前でも
-// 投入済みジョブを追跡できます。
-// 記録に失敗しても投入は続けます。状態は進行を知るためのもので、成果物より重くはありません。
+// recordQueuedStatus records the queued job status. It is called before enqueueing
+// (see Handler.enqueue for why that order). With it, a submitted job can be followed even before
+// the worker starts.
+// Enqueueing continues even if recording fails. Status is for knowing progress and weighs less than the artifacts.
 func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	if h.JobStatus == nil || task == nil {
 		return
@@ -31,11 +31,11 @@ func (h *Handler) recordQueuedStatus(r *http.Request, task *domain.Task) {
 	}
 }
 
-// deleteJobStatus はジョブ状態のドキュメントを消します。
+// deleteJobStatus removes the job status document.
 //
-// 状態は成果物と別の場所（Firestore）にあるため、履歴のプレフィックス一括削除では
-// 消えません。呼ばないと、成果物の無いジョブの状態だけが孤児として残り続けます。
-// 消せなくても履歴の削除そのものは成功しているので、警告ログに留めます。
+// The status lives apart from the artifacts (in Firestore), so the bulk prefix delete of history
+// does not remove it. Without calling this, only the status of a job with no artifacts would be
+// left behind as an orphan. Even if it cannot be removed, deleting the history itself succeeded, so it only logs a warning.
 func (h *Handler) deleteJobStatus(r *http.Request, jobID string) {
 	if h.JobStatus == nil {
 		return
@@ -45,21 +45,21 @@ func (h *Handler) deleteJobStatus(r *http.Request, jobID string) {
 	}
 }
 
-// jobDocument は GET /jobs/{jobID} の JSON 応答です。
+// jobDocument is the JSON response of GET /jobs/{jobID}.
 //
-// 進行状況（JobStatus）を土台に、完成したジョブでは詳細を同じ文書に載せます。投入直後から
-// 削除するまで同じ URL を同じ形で読めるので、呼び出し側は URL を切り替えずに済みます。
-// 詳細を埋め込まずに入れ子にするのは、VideoHistoryDetail が job_id や title を自分でも持ち、
-// 平らに並べると encoding/json が両方のキーを落とすためです。
+// It is built on the progress (JobStatus), and for finished jobs the detail goes in the same
+// document. The same URL can be read in the same shape from just after submission until deletion,
+// so callers never switch URLs. The detail is nested rather than embedded because
+// VideoHistoryDetail has its own job_id and title, and laid flat encoding/json would drop both keys.
 type jobDocument struct {
 	domain.JobStatus
 	Detail *domain.VideoHistoryDetail `json:"detail,omitempty"`
 }
 
-// Job はジョブ 1 件を返します（GET /jobs/{jobID}）。
+// Job returns one job (GET /jobs/{jobID}).
 //
-// まだ終わっていない・失敗したジョブは進行状況（画面は自動更新、JSON は状態）。完成した
-// ジョブ（と、状態機能より前に作られた記録の無いジョブ）は詳細です。
+// Unfinished or failed jobs get their progress (the page refreshes itself; JSON is the status).
+// Finished jobs (and jobs without a record made before the status feature) get the detail.
 func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -75,8 +75,8 @@ func (h *Handler) Job(w http.ResponseWriter, r *http.Request) {
 	h.serveDetail(w, r, jobID, status)
 }
 
-// loadJobStatus は記録された進行状況を返します。無い（状態機能より前のジョブ）か
-// 読めなければ nil です。読めなかった場合をエラーにしないのは、詳細は成果物から描けるからです。
+// loadJobStatus returns the recorded progress. It is nil when there is none (jobs from before the
+// status feature) or it cannot be read. Unreadable is not an error because the detail can be drawn from the artifacts.
 func (h *Handler) loadJobStatus(r *http.Request, jobID string) *domain.JobStatus {
 	if h.JobStatus == nil {
 		return nil
@@ -91,8 +91,8 @@ func (h *Handler) loadJobStatus(r *http.Request, jobID string) *domain.JobStatus
 	return &status
 }
 
-// serveStatus は、成果物がまだ無い（または出来なかった）ジョブの進行状況を返します。
-// ブラウザからのポーリングと M2M クライアントの完了検知の両方が同じものを読みます。
+// serveStatus returns the progress of a job that has no artifacts yet (or could not make them).
+// Browser polling and M2M clients detecting completion both read the same thing.
 func (h *Handler) serveStatus(w http.ResponseWriter, r *http.Request, status domain.JobStatus) {
 	if respond.WantsJSON(w, r) {
 		respond.JSON(w, r, http.StatusOK, status)
@@ -101,8 +101,8 @@ func (h *Handler) serveStatus(w http.ResponseWriter, r *http.Request, status dom
 	h.renderPage(w, r, PageData{Title: "Job", JobID: status.JobID, Status: string(status.State)}, "queued.html")
 }
 
-// completedStatus は、詳細が読めたジョブの状態を返します。記録が無いジョブでも、
-// 成果物が読めた時点で完了しています。
+// completedStatus returns the status of a job whose detail could be read. Even a job without a
+// record is complete once its artifacts can be read.
 func completedStatus(jobID string, status *domain.JobStatus) domain.JobStatus {
 	if status != nil {
 		return *status
@@ -113,7 +113,7 @@ func completedStatus(jobID string, status *domain.JobStatus) domain.JobStatus {
 	return completed
 }
 
-// serveDetail は完成したジョブの詳細を返します。JSON は状態と詳細を 1 つの文書にまとめます（jobDocument）。
+// serveDetail returns a finished job's detail. JSON puts the status and the detail in one document (jobDocument).
 func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID string, status *domain.JobStatus) {
 	if h.HistoryRepository == nil {
 		h.renderPage(w, r, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history_detail.html")
@@ -126,8 +126,8 @@ func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 	h.applyCostEstimate(r.Context(), jobID, &history)
 	if respond.WantsJSON(w, r) {
-		// JSON の呼び出し元（MCP ゲートウェイ）はリダイレクトを辿らず URL 自体を受け取るため、
-		// ここでだけ署名します。画面はこの下で同一オリジンのパスを埋めます。
+		// JSON callers (the MCP gateway) receive the URLs themselves without following redirects, so
+		// only here are they signed. Below, the page fills in same-origin paths.
 		if err := h.HistoryRepository.SignHistoryURLs(r.Context(), &history); err != nil {
 			respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to sign history URLs", "job_id", jobID)
 			return
@@ -143,7 +143,7 @@ func (h *Handler) serveDetail(w http.ResponseWriter, r *http.Request, jobID stri
 	}), "history_detail.html")
 }
 
-// JobDelete はジョブの成果物と記録を削除します（DELETE /jobs/{jobID}）。
+// JobDelete deletes a job's artifacts and records (DELETE /jobs/{jobID}).
 func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {
@@ -151,8 +151,8 @@ func (h *Handler) JobDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.HistoryRepository == nil {
-		// 何も消していないのに 202 を返すと呼び出し側は成功と誤認する。
-		// 読み取り系（Draft 等）が 500/503 を返すのと同じ扱いに揃える。
+		// Returning 202 when nothing was deleted would make the caller mistake it for success.
+		// Align with the read paths (Draft and the like) returning 500/503.
 		respond.Error(w, r, http.StatusServiceUnavailable, "history storage adapter is not configured")
 		return
 	}

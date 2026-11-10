@@ -18,22 +18,22 @@ linters:
         - (io.ReadCloser).Close
   exclusions:
     rules:
-      # staticcheck の SA5011 を _test.go で無効化する。
+      # Disable staticcheck's SA5011 in _test.go.
       #
-      # `if x == nil { t.Fatal(...) }` の後で x を参照するのは Go のテストでは
-      # 一般的な書き方で、nil 参照にはならない。t.Fatal が戻らないことは
-      # testing パッケージの仕様である（Fatal は FailNow を呼び、FailNow は
-      # runtime.Goexit を呼んで実行を打ち切る）。つまりコードは正しい。
+      # Dereferencing x after `if x == nil { t.Fatal(...) }` is a common idiom in Go
+      # tests and is not a nil dereference. That t.Fatal does not return is part of
+      # the testing package's contract (Fatal calls FailNow, and FailNow calls
+      # runtime.Goexit to stop execution). In other words, the code is correct.
       #
-      # ところが CI 上の staticcheck は「Fatal は戻らない」という解析結果（facts）を
-      # 取りこぼすことがあり、そのとき偽陽性を出す。facts の有無が問われるのは
-      # *再解析されたパッケージ* だけなので、症状は「変更したパッケージに現れ、
-      # 直すと次に変更した別のパッケージへ移る」という形になる。
-      # 2026-08-05 にキャッシュ削除・該当箇所の書き換え・testify 導入を順に試したが、
-      # いずれも移動するだけで収束しなかった。
+      # But staticcheck on CI sometimes misses the analysis result (facts) that
+      # "Fatal does not return", and then reports a false positive. Facts only
+      # matter for *re-analysed packages*, so the symptom "appears in the package
+      # you changed, and moves to the next package you change once fixed".
+      # On 2026-08-05 we tried clearing the cache, rewriting the affected code and
+      # adopting testify in turn; each only moved the warning and none settled it.
       #
-      # 本番コードでは有効なままにしている。テストでの nil 参照は実行時に panic として
-      # 即座に現れるため、ここを除外して失うものは小さい。
+      # It stays enabled for production code. A nil dereference in a test shows up
+      # immediately as a panic at run time, so little is lost by excluding it here.
       - path: _test\.go
         linters:
           - staticcheck

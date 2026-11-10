@@ -11,51 +11,51 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// IsSecureServiceURL は、設定されたServiceURLが安全なスキーム (HTTPS など) を使用しているかどうかを確認します。
+// IsSecureServiceURL checks whether the configured ServiceURL uses a secure scheme (such as HTTPS).
 func (c *Config) IsSecureServiceURL() bool {
 	return securenet.IsSecureServiceURL(c.Server.ServiceURL)
 }
 
-// IsSecureWorkerURL は、Cloud Tasks の配送先URLが安全なスキームを使用しているか確認します。
+// IsSecureWorkerURL checks whether the Cloud Tasks delivery URL uses a secure scheme.
 func (c *Config) IsSecureWorkerURL() bool {
 	return securenet.IsSecureServiceURL(c.Tasks.WorkerURL)
 }
 
-// ValidateEssentialConfig はアプリケーション実行に不可欠な設定を検証します。
+// ValidateEssentialConfig validates the settings essential for running the application.
 func (c *Config) ValidateEssentialConfig() error {
 	if !c.IsSecureServiceURL() {
-		return fmt.Errorf("本番環境では SERVICE_URL ('%s') は HTTPS である必要があります", c.Server.ServiceURL)
+		return fmt.Errorf("SERVICE_URL ('%s') must be HTTPS in production", c.Server.ServiceURL)
 	}
 	if c.GCP.ProjectID == "" {
-		return fmt.Errorf("GCP_PROJECT_ID が設定されていません (Vertex AI 運用に必須)")
+		return fmt.Errorf("GCP_PROJECT_ID is not set (required for running on Vertex AI)")
 	}
 	if c.GCP.LocationID == "" {
-		return fmt.Errorf("GCP_LOCATION_ID が設定されていません (デフォルト: asia-northeast1)")
+		return fmt.Errorf("GCP_LOCATION_ID is not set (default: asia-northeast1)")
 	}
 	if c.TaskCallerServiceAccount() == "" {
-		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL が設定されていません")
+		return fmt.Errorf("TASK_CALLER_SERVICE_ACCOUNT_EMAIL is not set")
 	}
-	// 楽曲生成サービスと違い、ap-mv は Worker 側もタスクを投入する。動画をカット単位で
-	// 分割生成し、残りがあれば次のカットを自分で積み直すため
-	// （internal/pipeline/step/video_gen.go）。したがってキューと WORKER_URL は
-	// どちらの役割でも必須になる。
+	// Unlike the music-generation service, ap-mv's worker also enqueues tasks: it generates
+	// video split into cuts and, when cuts remain, re-enqueues the next one itself
+	// (internal/pipeline/step/video_gen.go). So the queue and WORKER_URL are required for
+	// both roles.
 	if c.Tasks.QueueID == "" {
-		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID が設定されていません")
+		return fmt.Errorf("CLOUD_TASKS_QUEUE_ID is not set")
 	}
-	// 未設定を SERVICE_URL から導出するのは worker 面を担うプロセスだけなので、web 専用
-	// プロセスではここが空のまま残る。通すと配送先なしでタスクを投入しようとする。
+	// Only processes serving the worker face derive an unset value from SERVICE_URL, so in a
+	// web-only process this stays empty. Letting it through would enqueue tasks with no destination.
 	if c.Tasks.WorkerURL == "" {
-		return fmt.Errorf("WORKER_URL が設定されていません（worker サービスの URL を渡します）")
+		return fmt.Errorf("WORKER_URL is not set (pass the worker service's URL)")
 	}
 	if !c.IsSecureWorkerURL() {
-		return fmt.Errorf("本番環境では WORKER_URL ('%s') は HTTPS である必要があります", c.Tasks.WorkerURL)
+		return fmt.Errorf("WORKER_URL ('%s') must be HTTPS in production", c.Tasks.WorkerURL)
 	}
-	// 正規化は normalize() が済ませています（検証は設定を書き換えません）。
+	// normalize() has already normalised the values (validation does not rewrite the config).
 	if c.Storage.GCSBucket == "" {
-		return fmt.Errorf("AP_MV_BUCKET が設定されていません")
+		return fmt.Errorf("AP_MV_BUCKET is not set")
 	}
-	// モデル一覧は役割を問わず必須です。worker は生成に、web は投稿フォームの選択肢に
-	// 使うためで、片方だけを検証するともう一方が空のまま起動してしまいます。
+	// Model lists are required regardless of role: the worker uses them to generate and web for
+	// the submission form's options, so validating only one would let the other start up empty.
 	for _, m := range []struct {
 		envKey string
 		models []string
@@ -65,25 +65,25 @@ func (c *Config) ValidateEssentialConfig() error {
 		{"VEO_MODELS", c.AI.VeoModels},
 	} {
 		if len(m.models) == 0 {
-			return fmt.Errorf("%s が設定されていません（カンマ区切りで複数指定すると、先頭が既定でフォームの選択肢になります）", m.envKey)
+			return fmt.Errorf("%s is not set (give several comma-separated; the first is the default and they become the form's options)", m.envKey)
 		}
 	}
 	if c.AI.VeoOutputPrefix == "" {
-		return fmt.Errorf("VEO_OUTPUT_PREFIX が設定されていません")
+		return fmt.Errorf("VEO_OUTPUT_PREFIX is not set")
 	}
 	if !domain.IsAllowedAspectRatio(c.AI.VeoAspectRatio) {
-		return fmt.Errorf("VEO_ASPECT_RATIO は %s のいずれかである必要があります", strings.Join(domain.AllowedAspectRatios, " / "))
+		return fmt.Errorf("VEO_ASPECT_RATIO must be one of %s", strings.Join(domain.AllowedAspectRatios, " / "))
 	}
 	if c.AI.VeoPollInterval <= 0 {
-		return fmt.Errorf("VEO_POLL_INTERVAL は正の duration である必要があります")
+		return fmt.Errorf("VEO_POLL_INTERVAL must be a positive duration")
 	}
 	if c.AI.VeoOperationTimeout <= 0 {
-		return fmt.Errorf("VEO_OPERATION_TIMEOUT は正の duration である必要があります")
+		return fmt.Errorf("VEO_OPERATION_TIMEOUT must be a positive duration")
 	}
-	// go-veo-orchestrator は画作りの既定値を持たないため、ここが唯一の出所です。
-	// 不正値を黙って通すと、モデルが選んだ解像度で焼かれて誰も気付きません。
+	// go-veo-orchestrator has no visual defaults, so this is the only source.
+	// Silently passing an invalid value would render at a resolution the model chose, unnoticed.
 	if !domain.IsAllowedImageSize(c.AI.KeyframeImageSize) {
-		return fmt.Errorf("KEYFRAME_IMAGE_SIZE は %s のいずれかである必要があります", strings.Join(domain.AllowedImageSizes, " / "))
+		return fmt.Errorf("KEYFRAME_IMAGE_SIZE must be one of %s", strings.Join(domain.AllowedImageSizes, " / "))
 	}
 	c.warnContradictoryKeyframeThroughput()
 
@@ -95,11 +95,11 @@ func (c *Config) ValidateEssentialConfig() error {
 
 	if c.Server.Role.ServesWorker() {
 		if c.Tasks.TaskAudienceURL == "" {
-			return fmt.Errorf("TASK_AUDIENCE_URL が設定されていません。Cloud Tasks の OIDC 検証に必須です")
+			return fmt.Errorf("TASK_AUDIENCE_URL is not set; it is required for Cloud Tasks OIDC verification")
 		}
-		// 空だと検証器が fail-closed になり、全タスクが 500 で失敗し続けます。
+		// Empty makes the verifier fail closed, and every task keeps failing with 500.
 		if len(c.Tasks.AllowedServiceAccounts) == 0 {
-			return fmt.Errorf("許可する caller SA が 1 件も指定されていません。ALLOWED_TASK_SERVICE_ACCOUNTS を設定してください")
+			return fmt.Errorf("no caller SA is allowed; set ALLOWED_TASK_SERVICE_ACCOUNTS")
 		}
 		if err := c.validatePipelineTimeout(); err != nil {
 			return err
@@ -109,52 +109,53 @@ func (c *Config) ValidateEssentialConfig() error {
 	return nil
 }
 
-// validatePipelineTimeout は、パイプラインを走らせる役割で PIPELINE_TIMEOUT が
-// TASK_DISPATCH_DEADLINE より確実に短いことを検査します。
+// validatePipelineTimeout checks, for roles that run the pipeline, that PIPELINE_TIMEOUT is
+// strictly shorter than TASK_DISPATCH_DEADLINE.
 //
-// アプリが自分で先に諦めることが要点です。逆順（等号を含む）だと Cloud Tasks が先に
-// リクエストを打ち切り、失敗の記録も Slack 通知も走らないまま、キューは max_attempts = 1 で
-// 再試行しないため、タスクが running のまま残ります。無制限（0 以下）も同じ理由で拒みます。
-// 打ち切りの実効上限は 3 つのうち最小値なので、この 1 本だけは起動時に強制します。
+// The point is that the app gives up first. In the reverse order (equality included) Cloud
+// Tasks cuts the request first, neither the failure record nor the Slack notice runs, and the
+// queue does not retry with max_attempts = 1, so the task is left at running. Unlimited (0 or
+// less) is rejected for the same reason. The effective cut-off is the smallest of the three,
+// so this one relation is enforced at startup.
 func (c *Config) validatePipelineTimeout() error {
 	if c.Tasks.DispatchDeadline <= 0 {
-		return fmt.Errorf("TASK_DISPATCH_DEADLINE が設定されていません（三段のタイムアウトはデプロイ設定が決めます。例: 30m）")
+		return fmt.Errorf("TASK_DISPATCH_DEADLINE is not set (the deployment config decides the three-tier timeouts, e.g. 30m)")
 	}
 	if c.Tasks.PipelineTimeout <= 0 {
-		return fmt.Errorf("PIPELINE_TIMEOUT は worker では無制限にできません。Cloud Tasks の打ち切り（%s）より短い値を設定してください", c.Tasks.DispatchDeadline)
+		return fmt.Errorf("PIPELINE_TIMEOUT cannot be unlimited on the worker; set it shorter than the Cloud Tasks cut-off (%s)", c.Tasks.DispatchDeadline)
 	}
 	if c.Tasks.PipelineTimeout >= c.Tasks.DispatchDeadline {
-		return fmt.Errorf("PIPELINE_TIMEOUT (%s) は Cloud Tasks の打ち切り (%s) より短くしてください。等号でもアプリが失敗を記録する前に打ち切られます", c.Tasks.PipelineTimeout, c.Tasks.DispatchDeadline)
+		return fmt.Errorf("PIPELINE_TIMEOUT (%s) must be shorter than the Cloud Tasks cut-off (%s); even when equal, the request is cut before the app records the failure", c.Tasks.PipelineTimeout, c.Tasks.DispatchDeadline)
 	}
 	return nil
 }
 
-// warnContradictoryKeyframeThroughput は、並列度と発射間隔を両方上げた設定を警告します。
+// warnContradictoryKeyframeThroughput warns about a setting that raises both concurrency and the interval.
 //
-// go-veo-orchestrator は 1 つのリミッターで AI 呼び出しの間隔を空けるため、スループットは
-// 並列度によらず 1/KEYFRAME_RATE_INTERVAL で頭打ちになります。並列度だけ上げても速く
-// ならず、しかもエラーにはならないので、設定した側は効いているつもりのまま待ち続けます。
-// 起動時に実効レートを出して、その取り違えに気付けるようにします。
+// go-veo-orchestrator spaces AI calls with one limiter, so throughput caps at
+// 1/KEYFRAME_RATE_INTERVAL regardless of concurrency. Raising only the concurrency does not
+// speed anything up, and since it is not an error, whoever set it keeps waiting believing it
+// works. Logging the effective rate at startup makes that mistake visible.
 func (c *Config) warnContradictoryKeyframeThroughput() {
 	if c.AI.KeyframeMaxConcurrency <= 1 || c.AI.KeyframeRateInterval <= 0 {
 		return
 	}
-	slog.Warn("KEYFRAME_MAX_CONCURRENCY は KEYFRAME_RATE_INTERVAL に頭打ちにされます",
+	slog.Warn("KEYFRAME_MAX_CONCURRENCY is capped by KEYFRAME_RATE_INTERVAL",
 		"keyframe_max_concurrency", c.AI.KeyframeMaxConcurrency,
 		"keyframe_rate_interval", c.AI.KeyframeRateInterval,
 		"effective_images_per_minute", int(time.Minute/c.AI.KeyframeRateInterval))
 }
 
-// validateWebConfig は Web 面（OAuth ログインとセッション）に必要な設定を検証します。
-// Worker 面だけを提供するプロセスに OAuth 関連の設定を要求すると、
-// 使わない認証情報へのアクセス権を配ることになるため役割で分けています。
+// validateWebConfig validates the settings the web face (OAuth login and sessions) needs.
+// Requiring OAuth settings from a process that serves only the worker face would hand out
+// access to credentials it never uses, so the check is split by role.
 func (c *Config) validateWebConfig() error {
 	if c.Auth.GoogleClientID == "" || c.Auth.GoogleClientSecret == "" {
-		return fmt.Errorf("google OAuth 関連の設定（ClientID, ClientSecret）が不足しています")
+		return fmt.Errorf("google OAuth settings (ClientID, ClientSecret) are missing")
 	}
 
 	if len(c.Auth.AllowedEmails) == 0 && len(c.Auth.AllowedDomains) == 0 {
-		return fmt.Errorf("許可されたメールアドレスまたはドメインが一つも設定されていません（認可リストが空です）")
+		return fmt.Errorf("no allowed email address or domain is set (the authorisation list is empty)")
 	}
 
 	return nil

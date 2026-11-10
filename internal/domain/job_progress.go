@@ -5,52 +5,52 @@ import (
 	"strings"
 )
 
-// JobStage は、ジョブが生成のどの段階まで進んだかを表します。
+// JobStage is how far a job has progressed through generation.
 //
-// 以前は「全カットが動画生成済みか」という真偽値ひとつしか無く、表示は generated か
-// keyframes の 2 値でした。そのため「キーフレームを 1 枚も焼いていないジョブ」と
-// 「動画をあと 1 本残すだけのジョブ」が同じ表示になり、進捗も残作業も読めませんでした。
-// カット単位で少しずつ進める運用では、そこが見えないまま課金だけが進みます。
+// There used to be only one boolean, "has every cut's video been generated", and the display had
+// two values, generated or keyframes. So "a job that has not rendered a single keyframe" and "a
+// job with just one video left" looked the same, and neither progress nor remaining work could be
+// read. When advancing a little at a time per cut, the billing went on while that stayed invisible.
 type JobStage string
 
 const (
-	// StageScript はカット割りまで決まり、キーフレームをまだ 1 枚も焼いていない状態です。
+	// StageScript means the cut list is settled and not a single keyframe has been rendered yet.
 	StageScript JobStage = "script"
-	// StageKeyframes はキーフレームを焼いている途中（1 枚以上、全部ではない）です。
+	// StageKeyframes means keyframes are being rendered (one or more, not all).
 	StageKeyframes JobStage = "keyframes"
-	// StageKeyframesDone は全カットのキーフレームが揃い、動画をまだ 1 本も作っていない状態です。
+	// StageKeyframesDone means every cut has its keyframe and not a single video has been made yet.
 	StageKeyframesDone JobStage = "keyframes_done"
-	// StageVideos は動画を生成している途中（1 本以上、全部ではない）です。
+	// StageVideos means videos are being generated (one or more, not all).
 	StageVideos JobStage = "videos"
-	// StageCompleted は全カットの動画生成が終わった状態です。
+	// StageCompleted means video generation has finished for every cut.
 	StageCompleted JobStage = "completed"
 )
 
-// JobProgress は、ジョブの進行段階と、その根拠になる数え上げです。
+// JobProgress is a job's progress stage and the counts it is based on.
 //
-// 画面は Stage でバッジの色を決め、分数（3/12 など）で残りを示します。合計が 0 の
-// ジョブ（カットが 1 つも無いレシピ）は Stage が StageScript になります。
-// firestore タグは省略できません。JobStatus に埋めてドキュメントへ保存するため、
-// 省くと保存されるフィールド名が Go の識別子（TotalCuts）になり、一覧の絞り込みが
-// 見に行く progress.stage と食い違います。
+// The page picks the badge colour from Stage and shows what remains as a fraction (3/12 and so
+// on). A job whose total is 0 (a recipe with no cuts) has Stage StageScript.
+// The firestore tags cannot be omitted. It is embedded in JobStatus and saved to the document, so
+// without them the stored field names become the Go identifiers (TotalCuts) and disagree with the
+// progress.stage the listing filter looks at.
 type JobProgress struct {
 	Stage JobStage `json:"stage" firestore:"stage"`
-	// TotalCuts はレシピのカット総数です。
+	// TotalCuts is the recipe's total number of cuts.
 	TotalCuts int `json:"total_cuts" firestore:"total_cuts"`
-	// KeyframeCuts はキーフレーム画像を持つカット数です。
+	// KeyframeCuts is the number of cuts with a keyframe image.
 	KeyframeCuts int `json:"keyframe_cuts" firestore:"keyframe_cuts"`
-	// VideoCuts は動画生成が終わったカット数です。
+	// VideoCuts is the number of cuts whose video generation has finished.
 	VideoCuts int `json:"video_cuts" firestore:"video_cuts"`
 }
 
-// IsCompleted は全カットの動画生成が終わっているかを返します。
-// 旧 VideoHistory.Generated と同じ意味で、既存の分岐はこれに置き換えられます。
+// IsCompleted reports whether video generation has finished for every cut.
+// It means the same as the old VideoHistory.Generated, and existing branches can be replaced with it.
 func (p JobProgress) IsCompleted() bool {
 	return p.Stage == StageCompleted
 }
 
-// Label は画面に出す短い進捗表記を返します（例: "keyframes 3/12", "completed"）。
-// 段階が分かるだけでなく残りが読めるよう、途中の段階では分数を添えます。
+// Label returns the short progress text shown on the page (e.g. "keyframes 3/12", "completed").
+// Intermediate stages get a fraction so the remainder can be read, not just the stage.
 func (p JobProgress) Label() string {
 	switch p.Stage {
 	case StageKeyframes:
@@ -64,10 +64,10 @@ func (p JobProgress) Label() string {
 	}
 }
 
-// NewJobProgress は、レシピのカット列から進行段階を数え上げます。
+// NewJobProgress counts the progress stage from the recipe's cuts.
 //
-// キーフレームの有無は KeyframeReference、動画の完了は Cut.IsGenerated() で見ます。
-// 動画が 1 本でもあればキーフレームは必ず存在するため、段階は上から順に判定します。
+// Keyframe presence is KeyframeReference, video completion is Cut.IsGenerated().
+// If there is even one video a keyframe always exists, so the stages are judged from the top down.
 func NewJobProgress(cuts []VideoCut) JobProgress {
 	progress := JobProgress{Stage: StageScript, TotalCuts: len(cuts)}
 	for _, cut := range cuts {
@@ -81,7 +81,7 @@ func NewJobProgress(cuts []VideoCut) JobProgress {
 
 	switch {
 	case progress.TotalCuts == 0:
-		// カットが無いレシピは台本だけの状態として扱う（0/0 を「完了」と読ませない）。
+		// A recipe with no cuts is treated as script only (so 0/0 does not read as "completed").
 		progress.Stage = StageScript
 	case progress.VideoCuts == progress.TotalCuts:
 		progress.Stage = StageCompleted
@@ -97,8 +97,8 @@ func NewJobProgress(cuts []VideoCut) JobProgress {
 	return progress
 }
 
-// TotalDurationSecOfCuts は全カットの尺の合計を返します。GeneratedSecondsOfCuts と違い
-// 生成済みかどうかを問わないため、まだ 1 カットも生成していないジョブでも使えます。
+// TotalDurationSecOfCuts returns the total duration of every cut. Unlike GeneratedSecondsOfCuts
+// it does not care whether they are generated, so it works even for a job that has not generated a single cut.
 func TotalDurationSecOfCuts(cuts []VideoCut) float64 {
 	total := 0.0
 	for _, cut := range cuts {

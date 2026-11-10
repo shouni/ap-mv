@@ -13,10 +13,10 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// GetRecipe はジョブの VideoRecipe をそのまま返します。
+// GetRecipe returns the job's VideoRecipe as-is.
 //
-// 表示用に整形する GetHistory とは別経路です。読んで直して書き戻す往復では、署名 URL や
-// 概算コストのような表示専用の値が混ざると、そのまま保存したときに元へ戻せなくなります。
+// It is a separate path from GetHistory, which formats for display. In a read-edit-write round
+// trip, display-only values such as signed URLs or estimated costs mixed in could not be undone once saved.
 func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*domain.VideoRecipe, error) {
 	if r == nil || r.store == nil || r.baseURI == "" {
 		return nil, errors.New("history repository is not properly configured")
@@ -31,14 +31,14 @@ func (r *VideoHistoryRepository) GetRecipe(ctx context.Context, jobID string) (*
 	return &recipe, nil
 }
 
-// SaveRecipe はジョブの VideoRecipe を上書き保存します。
+// SaveRecipe overwrites the job's VideoRecipe.
 //
-// 台本だけのジョブのカット割りを画像コスト 0 で直せるようにするための経路です。直した
-// 内容を反映する手段が生成時の recipe_json しか無いと、レビューは 1 周で終わってしまい、
-// 「確認してから焼く」ための保存が読み取り専用になります。
+// It is the path that lets the cut list of a script-only job be fixed at zero image cost. If the
+// only way to apply edits were recipe_json at generation time, a review would end after one round,
+// and a save meant for "check, then render" would be read-only.
 //
-// 保存前に Normalize と検証を通すのは RecipeSaveFilter と同じ理由です（一覧には載るが
-// キーフレーム生成で落ちるレシピを残さない）。
+// It runs Normalize and validation before saving for the same reason as RecipeSaveFilter (not
+// to leave a recipe that is listed but fails in keyframe generation).
 func (r *VideoHistoryRepository) SaveRecipe(ctx context.Context, jobID string, recipe *domain.VideoRecipe) error {
 	if r == nil || r.store == nil || r.baseURI == "" {
 		return errors.New("history repository is not properly configured")

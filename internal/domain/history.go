@@ -16,47 +16,47 @@ type VideoHistory struct {
 	VisualMode string `json:"visual_mode,omitempty"`
 	CutCount   int    `json:"cut_count,omitempty"`
 	StorageURI string `json:"storage_uri,omitempty"`
-	// SignedURL は StorageURI の署名付き URL です。**JSON 応答にだけ入ります。**
-	// 画面は同一オリジンのパス（MetadataWebURL）を辿り、ハンドラーが 302 で GCS へ送ります。
-	// 署名を画面に埋めると、その URL が期限内は認証の外側で使えてしまい、
-	// 期限が切れた後は画面を開き直すまで復旧しません。
+	// SignedURL is the signed URL for StorageURI. **It goes into JSON responses only.**
+	// The page follows a same-origin path (MetadataWebURL) and the handler 302s to GCS.
+	// Embedding the signature in the page would let that URL be used outside authentication until
+	// it expires, and after expiry nothing recovers until the page is reopened.
 	SignedURL string `json:"signed_url,omitempty"`
-	// MetadataWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	// MetadataWebURL is the same-origin path the page follows. It is not put in JSON.
 	MetadataWebURL string `json:"-"`
-	// Generated は全カットの動画生成が終わったかです。Progress.IsCompleted() と同じ意味で、
-	// 既存の API 応答との互換のために残しています。画面は Progress を使ってください。
+	// Generated is whether video generation has finished for every cut. It means the same as
+	// Progress.IsCompleted() and is kept for compatibility with existing API responses. Pages should use Progress.
 	Generated bool `json:"generated,omitempty"`
-	// Progress は、台本のみ・キーフレーム途中・動画途中・完了という進行段階と、
-	// その根拠になるカット数です。Generated だけでは「まだ 1 枚も焼いていない」と
-	// 「あと 1 本で終わる」が区別できませんでした。
+	// Progress is the progress stage (script only, keyframes partway, videos partway, complete)
+	// and the cut counts it is based on. Generated alone could not tell "not a single one rendered
+	// yet" from "one more to go".
 	Progress JobProgress `json:"progress"`
-	// State はジョブそのものの状態（queued/running/succeeded/failed）です。
+	// State is the job's own state (queued/running/succeeded/failed).
 	//
-	// Progress と両方あるのは、両者が別のことを言っているからです。Progress は
-	// カットがどこまで焼けたか、State は処理が生きているかです。失敗したジョブは
-	// 「keyframes 3/12」で止まるので、State が無いと生成中のジョブと見分けが付きません。
-	// 記録の無いジョブ（一覧が成果物の走査だった頃のもの）では空になります。
+	// Both this and Progress exist because they say different things. Progress is how far the cuts
+	// have been rendered; State is whether processing is alive. A failed job stops at
+	// "keyframes 3/12", so without State it cannot be told from a job in progress.
+	// It is empty for jobs without a record (from when the listing scanned artifacts).
 	State JobState `json:"state,omitempty"`
-	// Error は State が failed のときの理由です。
+	// Error is the reason when State is failed.
 	Error          string `json:"error,omitempty"`
 	KeyframeZipURI string `json:"keyframe_zip_uri,omitempty"`
-	// FinalVideoURL は、継続チェーンをハードカットで1本に結合した完成動画のGCS URIです
-	// (video.Recipe.FinalVideoURL、chain_finalize.goが設定)。
+	// FinalVideoURL is the GCS URI of the finished video joining the continuation chain into one
+	// with hard cuts (video.Recipe.FinalVideoURL, set by chain_finalize.go).
 	FinalVideoURL string `json:"final_video_url,omitempty"`
-	// FinalVideoSignedURL は FinalVideoURL の署名付き URL です。SignedURL と同じく
-	// **JSON 応答にだけ入ります**（画面は FinalVideoWebURL 経由の 302）。
+	// FinalVideoSignedURL is the signed URL for FinalVideoURL. Like SignedURL, **it goes into JSON
+	// responses only** (the page uses a 302 via FinalVideoWebURL).
 	FinalVideoSignedURL string `json:"final_video_signed_url,omitempty"`
-	// FinalVideoWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	// FinalVideoWebURL is the same-origin path the page follows. It is not put in JSON.
 	FinalVideoWebURL string `json:"-"`
-	// AspectRatio は、このジョブのキーフレーム・動画生成に使われたアスペクト比です
-	// （例: "16:9", "9:16"）。キーフレーム作成時に一度だけ決まり、既存ジョブに対する
-	// 動画生成・カット再生成はこの値をそのまま引き継ぎます（アスペクト比を都度選び直すことはない）。
+	// AspectRatio is the aspect ratio used for this job's keyframe and video generation
+	// (e.g. "16:9", "9:16"). It is decided once when keyframes are made, and video generation and
+	// cut regeneration on an existing job inherit it as-is (the aspect ratio is never chosen again).
 	AspectRatio string `json:"aspect_ratio,omitempty"`
-	// GeneratedSeconds は生成済みカットの尺の合計（＝Veo の課金対象秒数の概算）です。
-	// レシピ読み込み時に確定するのでキャッシュしても陳腐化しません。
+	// GeneratedSeconds is the total duration of generated cuts (= an estimate of Veo's billable seconds).
+	// It is settled when the recipe is read, so caching it does not go stale.
 	GeneratedSeconds float64 `json:"generated_seconds,omitempty"`
-	// Cost は GeneratedSeconds に単価を掛けた概算コストです。単価は設定から表示時に
-	// 解決するため、リポジトリではなくハンドラーが埋めます（domain.ApplyVeoCostEstimate）。
+	// Cost is the estimated cost, GeneratedSeconds times the price. The price is resolved from the
+	// config at display time, so the handler fills it rather than the repository (domain.ApplyVeoCostEstimate).
 	Cost VideoCostEstimate `json:"cost,omitzero"`
 }
 
@@ -69,32 +69,32 @@ type VideoHistoryCut struct {
 	CharacterID       string  `json:"character_id,omitempty"`
 	Dialogue          string  `json:"dialogue,omitempty"`
 	KeyframeReference string  `json:"keyframe_reference,omitempty"`
-	// KeyframeURL は KeyframeReference の署名付き URL です。**JSON 応答にだけ入ります。**
+	// KeyframeURL is the signed URL for KeyframeReference. **It goes into JSON responses only.**
 	KeyframeURL string `json:"keyframe_url,omitempty"`
-	// KeyframeWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	// KeyframeWebURL is the same-origin path the page follows. It is not put in JSON.
 	KeyframeWebURL string `json:"-"`
 	VideoURL       string `json:"video_url,omitempty"`
-	// VideoSignedURL は VideoURL（gs:// URI）の署名付き URL です。**JSON 応答にだけ入ります。**
+	// VideoSignedURL is the signed URL for VideoURL (a gs:// URI). **It goes into JSON responses only.**
 	VideoSignedURL string `json:"video_signed_url,omitempty"`
-	// VideoWebURL は画面が辿る同一オリジンのパスです。JSON には出しません。
+	// VideoWebURL is the same-origin path the page follows. It is not put in JSON.
 	VideoWebURL string  `json:"-"`
 	Status      string  `json:"status,omitempty"`
 	StartSec    float64 `json:"start_sec,omitempty"`
 	EndSec      float64 `json:"end_sec,omitempty"`
-	// EstimatedCostUSD は DurationSec × Veo 単価の概算です。未生成のカットは 0 です。
-	// 単価は設定から表示時に解決するため、リポジトリではなくハンドラーが埋めます
-	// （domain.ApplyVeoCostEstimate）。
+	// EstimatedCostUSD is the estimate DurationSec × the Veo price. It is 0 for ungenerated cuts.
+	// The price is resolved from the config at display time, so the handler fills it rather than
+	// the repository (domain.ApplyVeoCostEstimate).
 	EstimatedCostUSD float64 `json:"estimated_cost_usd,omitempty"`
-	// GenerationCount は、このカットに対して実際に成功した Veo 生成の回数です。
-	// 2 以上なら焼き直されています。実績記録（veo_usage.json）がある場合のみ埋まります。
+	// GenerationCount is the number of Veo generations that actually succeeded for this cut.
+	// 2 or more means it was re-rendered. It is filled only when there is a usage record (veo_usage.json).
 	GenerationCount int `json:"generation_count,omitempty"`
 }
 
-// IsGenerated は、このカットが動画生成済みとして扱えるかを返します。
+// IsGenerated reports whether this cut can be treated as having its video generated.
 //
-// 生成結果そのものを持つ orchestrator の VideoResult.IsGenerated とは判定材料が異なります:
-// 表示用のカットは video_id を持たないため、status と video_url だけで判定します。
-// video_music_meta.json では両者は同時に埋まるので、実際の結果は一致します。
+// It judges on different inputs from the orchestrator's VideoResult.IsGenerated, which holds the
+// generation result itself: display cuts have no video_id, so only status and video_url decide.
+// In video_music_meta.json both are filled together, so the results agree in practice.
 func (c VideoHistoryCut) IsGenerated() bool {
 	return c.Status == CutStatusGenerated || strings.TrimSpace(c.VideoURL) != ""
 }

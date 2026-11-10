@@ -2,38 +2,38 @@ package ports
 
 import "context"
 
-// VideoProcessor は、生成済み動画に対するローカル動画処理（フレーム抽出・結合）の境界です。
-// ap-mv は本来「Veo APIを叩いて動画を生成するサービス」であり、この境界だけが例外的に
-// 動画バイナリ処理を持ちます（継続チェーンのリセット時の視覚的連続性確保と、
-// 複数チェーンの最終的な1本化のため）。
+// VideoProcessor is the boundary for local video processing (frame extraction, joining) of generated videos.
+// ap-mv is at heart "a service that calls the Veo API to generate video", and only this boundary
+// exceptionally handles video binaries (to keep visual continuity on continuation-chain resets and
+// to make several chains into one at the end).
 type VideoProcessor interface {
-	// ExtractLastFrame は videoURI の最終フレームを画像として抽出し destURI へアップロードします。
-	// 成功時、実際にアップロードされた URI（通常は destURI と同じ）を返します。
+	// ExtractLastFrame extracts the last frame of videoURI as an image and uploads it to destURI.
+	// On success it returns the URI actually uploaded (usually the same as destURI).
 	ExtractLastFrame(ctx context.Context, videoURI, destURI string) (string, error)
-	// ConcatHardCut は videoURIs を渡された順にトランジション無し（ハードカット）で結合し、
-	// destURI へアップロードします。videoURIs が1件の場合は結合処理を行わずそのまま
-	// destURI へコピーします。成功時、実際にアップロードされた URI を返します。
+	// ConcatHardCut joins videoURIs in the order given with no transitions (hard cuts) and uploads
+	// the result to destURI. With a single videoURI it copies it to destURI as-is without joining.
+	// On success it returns the URI actually uploaded.
 	ConcatHardCut(ctx context.Context, videoURIs []string, destURI string) (string, error)
-	// ColorMatchSaturation は videoURI 全体の彩度を referenceImageURI（キャラクター参照アート）の
-	// 平均彩度に合わせて補正し、destURI へアップロードします。Veo の video_extension は
-	// 直前の生成結果を条件入力として再利用するため、継続を重ねるたびに彩度がドリフトして
-	// 蓄積します（実運用で確認済み）。各世代の出力を都度キャラクター基準へ引き戻すことで、
-	// ドリフトが次世代へ複利的に蓄積するのを防ぎます。成功時、実際にアップロードされた
-	// URI を返します。
+	// ColorMatchSaturation corrects the saturation of the whole videoURI to match the average
+	// saturation of referenceImageURI (the character reference art) and uploads it to destURI. Veo's
+	// video_extension reuses the previous output as conditioning input, so saturation drifts and
+	// accumulates with every continuation (confirmed in operation). Pulling each generation's output
+	// back to the character reference every time keeps the drift from compounding into the next
+	// generation. On success it returns the URI actually uploaded.
 	ColorMatchSaturation(ctx context.Context, videoURI, referenceImageURI, destURI string) (string, error)
-	// Probe は videoURI を解析し、実尺と音声トラックの有無を返します。
-	// 結合結果が台本どおりに仕上がったかを、生成物を再生せずに確かめるために使います。
+	// Probe analyses videoURI and returns its actual duration and whether it has an audio track.
+	// It is used to check that the join came out as the script says without playing the output.
 	Probe(ctx context.Context, videoURI string) (VideoStats, error)
 }
 
-// VideoStats は、生成された動画から実測した値です。
+// VideoStats are values measured from a generated video.
 //
-// 台本には各カットの尺が入っていますが、Veo が返すクリップの実尺がそれと一致する保証は
-// なく、結合結果を測るまで誰も確かめていませんでした。
+// The script holds each cut's duration, but nothing guarantees the actual length of the clips Veo
+// returns matches it, and nobody checked until the join was measured.
 type VideoStats struct {
-	// DurationSeconds は動画全体の実尺です。
+	// DurationSeconds is the actual length of the whole video.
 	DurationSeconds float64
-	// HasAudio は音声トラックを持つかどうかです。ffmpeg に -c:a を指定しても、
-	// 入力に音声が無ければ出力は無音のまま成功します。
+	// HasAudio is whether it has an audio track. Even with -c:a given to ffmpeg, an input without
+	// audio produces silent output and succeeds.
 	HasAudio bool
 }

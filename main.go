@@ -1,4 +1,4 @@
-// ap-mv は、音楽レシピからミュージックビデオを生成するWebアプリケーションです。
+// ap-mv is a web application that generates music videos from music recipes.
 package main
 
 import (
@@ -15,14 +15,14 @@ import (
 	"github.com/shouni/ap-mv/internal/server"
 )
 
-// logLevelEnvKey はログ出力レベルを指定する環境変数名です。
+// logLevelEnvKey is the environment variable that sets the log level.
 const logLevelEnvKey = "LOG_LEVEL"
 
 // main starts the application.
 func main() {
-	// ロガーの設定（LOG_LEVEL 対応・Cloud Logging 互換の構造化ログ）。
-	// 出力フォーマットは cloudlog、context 属性の付与は slogctx が担い、
-	// 両者の組み立てだけをアプリ側で行う。
+	// Logger setup (LOG_LEVEL support, structured logs compatible with Cloud Logging).
+	// cloudlog owns the output format and slogctx attaches context attributes;
+	// the app only assembles the two.
 	level := slogctx.ParseLevel(os.Getenv(logLevelEnvKey))
 	slog.SetDefault(slog.New(cloudlog.NewHandler(os.Stdout, level)))
 
@@ -31,8 +31,8 @@ func main() {
 	}
 }
 
-// run はアプリケーションの初期化とサーバー起動を行います。defer によるクリーンアップが
-// os.Exit で無視されないよう、終了コードの決定は main 側に委ねます。
+// run initialises the application and starts the server. The exit code is left to main
+// so that deferred cleanups are not skipped by os.Exit.
 func run() error {
 	cfg, err := config.LoadConfigFromEnv()
 	if err != nil {

@@ -10,9 +10,9 @@ import (
 
 // buildOrchestratorConfig builds orchestrator config.
 //
-// アスペクト比・解像度・ネガティブプロンプトは go-veo-orchestrator が既定値を持たないため、
-// このアプリが唯一の出所です（キットが既定を併せ持つと VEO_ASPECT_RATIO と二重の出所になり、
-// 片方だけ変えたときにキーフレームだけ別の比率で焼かれます）。
+// go-veo-orchestrator has no defaults for aspect ratio, resolution or the negative prompt, so this
+// app is their only source (if the kit also had defaults it and VEO_ASPECT_RATIO would be two
+// sources, and changing only one would render just the keyframes at a different ratio).
 func buildOrchestratorConfig(cfg *config.Config) orchestrator.Config {
 	orchCfg := orchestrator.Config{
 		KeyframeAspectRatio:    domain.DefaultAspectRatio,

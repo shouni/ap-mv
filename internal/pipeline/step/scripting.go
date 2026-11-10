@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// ScriptingStep は、歌詞・レシピから台本（VideoRecipe）を生成するパイプラインステップです。
+// ScriptingStep is the pipeline step that generates the script (VideoRecipe) from the lyrics and recipe.
 type ScriptingStep struct{}
 
 // Name returns the receiver name.

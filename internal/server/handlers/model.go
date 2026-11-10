@@ -7,7 +7,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// ModelOptions は、フォームで選択可能なGemini/画像/Veo動画生成モデルの一覧とデフォルト値を保持します。
+// ModelOptions holds the Gemini / image / Veo video models selectable in the form and their defaults.
 type ModelOptions struct {
 	GeminiModels       []string
 	ImageModels        []string
@@ -17,8 +17,8 @@ type ModelOptions struct {
 	DefaultVeoModel    string
 }
 
-// normalize normalizes the provided values. 既定値で埋めることはしません
-// （埋めると、設定漏れなのにフォームは正常に見えてしまいます）。
+// normalize normalizes the provided values. It does not fill in defaults
+// (filling them would make the form look fine despite a missing setting).
 func (o *ModelOptions) normalize() {
 	o.GeminiModels = domain.NormalizeModelList(o.GeminiModels, o.DefaultGeminiModel)
 	o.ImageModels = domain.NormalizeModelList(o.ImageModels, o.DefaultImageModel)

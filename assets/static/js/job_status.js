@@ -1,7 +1,7 @@
-// 受付画面（queued.html）。/jobs/{jobID} をポーリングして
-// queued → running → succeeded/failed を反映します。
+// The accepted page (queued.html). Polls /jobs/{jobID} and reflects
+// queued → running → succeeded/failed.
 //
-// サーバー側の記録（statusRecorder）は以前から動いており、この画面が唯一の未接続点でした。
+// The server-side record (statusRecorder) had been working all along; this page was the only unconnected piece.
 (() => {
     'use strict';
 
@@ -43,7 +43,7 @@
         if (state === 'succeeded') {
             iconEl.className = 'bi bi-check-circle-fill text-success fs-2';
             spinnerEl.classList.add('d-none');
-            // 再生成系は成果物が元ジョブ側に書かれるため、そちらの履歴へ案内する。
+            // Regeneration commands write their artifacts on the original job's side, so point to that job's history.
             const jobForHistory = status.original_job_id || jobID;
             historyLink.href = `/jobs/${encodeURIComponent(jobForHistory)}`;
             historyLink.classList.remove('d-none');
@@ -67,11 +67,11 @@
             const resp = await fetch(`/jobs/${encodeURIComponent(jobID)}`, {
                 headers: {Accept: 'application/json'}
             });
-            // 404 は「この機能より前のジョブ」や記録前の一瞬でも起こるため、静かに続行。
+            // 404 also happens for "jobs from before this feature" and the moment before recording, so carry on quietly.
             if (!resp.ok) return;
             render(await resp.json());
         } catch (error) {
-            // 一時的な失敗は次のポーリングに任せる
+            // Leave transient failures to the next poll
         }
     }
 

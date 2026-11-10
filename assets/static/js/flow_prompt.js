@@ -1,7 +1,7 @@
-// Flow Music へ貼る本文の表示とコピー（履歴詳細）。
+// Showing and copying the text to paste into Flow Music (history detail).
 //
-// 本文はページ描画時には埋め込まず、枠を初めて開いたときに GET /jobs/{jobID}/prompt から
-// 取ります。詳細画面はカットを見比べるために開くことが多く、本文が要るのはその一部です。
+// The text is not embedded at page render; it is fetched from GET /jobs/{jobID}/prompt the first
+// time the panel opens. The detail page is mostly opened to compare cuts, and only some visits need the text.
 (() => {
     'use strict';
 
@@ -22,14 +22,14 @@
             }
             const text = (await response.json()).prompt || '';
             output.textContent = text;
-            // 貼る先の上限は公開されていないので、長さだけ見えるようにしておきます。
+            // The paste target's limit is not published, so at least make the length visible.
             length.textContent = `${text.length.toLocaleString()} 文字`;
             copyButton.disabled = !text;
         } catch (error) {
             console.error('Flow prompt error:', error);
             errorBox.textContent = '本文を取得できませんでした。開き直すと再試行します。';
             errorBox.classList.remove('d-none');
-            // 失敗したときだけ、次に開いたときにもう一度取りに行きます。
+            // Only on failure, fetch again the next time it opens.
             panel.addEventListener('toggle', onToggle);
         }
     }

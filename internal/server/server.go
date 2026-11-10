@@ -12,7 +12,7 @@ import (
 	"github.com/shouni/ap-mv/internal/config"
 )
 
-// Run はサーバーの構築、起動、およびライフサイクル管理を行います。
+// Run builds, starts and manages the lifecycle of the server.
 func Run(ctx context.Context, cfg *config.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("config is required")
@@ -37,8 +37,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	slog.InfoContext(ctx, "HTTP server started", "port", cfg.Server.Port, "service_url", cfg.Server.ServiceURL)
 
-	// 起動・シグナル待ち・正常停止は cloudrun が持ちます。WriteTimeout だけは
-	// Veo の実行時間に合わせて明示します（既定では縛られません）。
+	// cloudrun owns startup, waiting for signals and graceful shutdown. Only WriteTimeout is set
+	// explicitly, to fit Veo's run time (it is not bounded by default).
 	return cloudrun.Serve(ctx, cloudrun.Config{
 		Port:         cfg.Server.Port,
 		Handler:      NewRouter(h, cfg.GCP.ProjectID),

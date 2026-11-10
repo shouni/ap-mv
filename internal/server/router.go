@@ -1,4 +1,4 @@
-// Package server は、HTTPルーティングとミドルウェア（認証・CSRF・M2M検証）を構成します。
+// Package server configures HTTP routing and middleware (authentication, CSRF, M2M verification).
 package server
 
 import (
@@ -20,8 +20,8 @@ import (
 	"github.com/shouni/ap-mv/internal/server/handlers"
 )
 
-// NewRouter は、公開ルート、OAuth、認証済みWeb UI、Cloud Tasks workerルートを統合します。
-// projectID は Cloud Logging のトレース相関にのみ使用し、空なら相関を行いません。
+// NewRouter combines the public routes, OAuth, the authenticated web UI and the Cloud Tasks worker route.
+// projectID is used only for Cloud Logging trace correlation; empty disables correlation.
 func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 	r := chi.NewRouter()
 	setupCommonMiddleware(r, projectID)
@@ -31,38 +31,38 @@ func NewRouter(h *builder.AppHandlers, projectID string) http.Handler {
 
 // setupCommonMiddleware configures common middleware.
 func setupCommonMiddleware(r *chi.Mux, projectID string) {
-	// トレース相関はログ出力より先に効かせる必要があるため最初に登録する。
+	// Trace correlation has to take effect before logging, so it is registered first.
 	r.Use(cloudlog.TraceMiddleware(projectID))
 	r.Use(middleware.RequestID)
-	// middleware.RealIP は X-Forwarded-For を無条件に信頼するためIPスプーフィングの脆弱性がある
-	// (GHSA-3fxj-6jh8-hvhx 等）。RemoteAddr はログ出力にのみ使用しており、
-	// セキュリティ判断（認証・レート制限等）には使っていないため、あえて使用しない。
+	// middleware.RealIP trusts X-Forwarded-For unconditionally, which is an IP spoofing vulnerability
+	// (GHSA-3fxj-6jh8-hvhx and others). RemoteAddr is used only for logging, not for any
+	// security decision (authentication, rate limiting, etc.), so it is deliberately not used.
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.CleanPath)
-	// 画面は日本語 UTF-8（1 文字 3 バイト）なので圧縮がよく効きます。静的ファイルも
-	// 同じ経路に乗ります（vendor は immutable なので再圧縮は稀です）。
+	// The pages are Japanese UTF-8 (3 bytes per character), so compression works well. Static
+	// files go through the same path (vendor is immutable, so recompression is rare).
 	r.Use(middleware.Compress(compressionLevel))
 	r.Use(secureheaders.Middleware(secureheaders.Config{
 		ImageSources: []string{gcsOrigin},
 		MediaSources: []string{gcsOrigin},
-		// Bootstrap の JS が遷移中にインラインスタイルを当てるため。
+		// Because Bootstrap's JS applies inline styles during transitions.
 		AllowInlineStyle: true,
 	}))
 }
 
-// compressionLevel は gzip の圧縮レベルです。
+// compressionLevel is the gzip compression level.
 const compressionLevel = 5
 
-// gcsOrigin は、画像と動画の実体である GCS のオリジンです。画面は同一オリジンの
-// エンドポイントを指しますが、そこから署名付き URL へ 302 するため、送り先を明示します。
+// gcsOrigin is the GCS origin that holds the actual images and videos. The pages point at
+// same-origin endpoints, but those 302 to signed URLs, so the destination is named explicitly.
 const gcsOrigin = "https://storage.googleapis.com"
 
 // setupRoutes configures routes.
 func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	// "/healthz" is intercepted by Cloud Run's default domain (*.run.app) at the GFE layer
 	// before reaching the container (replaced with a generic 404), so avoid it.
-	// パスの選択理由（"/healthz" を使わない）は cloudrun.HealthPath を参照。
+	// For why this path (not "/healthz") was chosen, see cloudrun.HealthPath.
 	r.Get(cloudrun.HealthPath, cloudrun.Health)
 	setupStaticRoutes(r)
 
@@ -85,10 +85,10 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 		}
 	})
 
-	// SERVER_ROLE=web のプロセスでは TaskAuth も Worker も nil になるため、
-	// このグループごと登録されず /tasks/generate は公開されません。
-	// 片方だけが nil になる形は builder.AppHandlers.Validate が起動時に弾くので、
-	// ここでは TaskAuth の有無だけを見れば足ります。
+	// In a SERVER_ROLE=web process TaskAuth and Worker are both nil, so this whole group is not
+	// registered and /tasks/generate is not exposed.
+	// A shape where only one of them is nil is rejected at startup by builder.AppHandlers.Validate,
+	// so checking TaskAuth alone is enough here.
 	r.Group(func(r chi.Router) {
 		if h == nil || h.TaskAuth == nil {
 			return
@@ -99,29 +99,29 @@ func setupRoutes(r chi.Router, h *builder.AppHandlers) {
 	})
 }
 
-// setupStaticRoutes は、埋め込み済みの静的ファイルを /static/* で配信します。
-// Cache-Control の判断（自前は短命、vendor は不変）とディレクトリ一覧の抑止は
-// go-serve-kit の staticfiles が持ちます。
+// setupStaticRoutes serves the embedded static files at /static/*.
+// The Cache-Control decision (short-lived for our own, immutable for vendor) and suppressing
+// directory listings belong to go-serve-kit's staticfiles.
 //
-// 認証の外側に置きます。スタイルシートにログインを求める理由が無く、
-// 未認証で表示されるログイン画面からも参照されるためです。
+// It sits outside authentication. There is no reason to demand a login for a stylesheet, and
+// the login page, shown unauthenticated, refers to them too.
 func setupStaticRoutes(r chi.Router) {
 	files, err := staticfiles.New(staticfiles.Config{FS: assets.StaticFiles, Dir: "static"})
 	if err != nil {
-		// 埋め込んだ定数の取り違えなので、リクエストを受ける前に止めます。
+		// This would be a mix-up of embedded constants, so stop before accepting any request.
 		panic(fmt.Sprintf("static assets: %v", err))
 	}
 	r.Handle("/static/*", files)
 }
 
-// registerWebRoutes は Web 面のルートを登録します。
+// registerWebRoutes registers the web face's routes.
 //
-// ジョブが唯一の主リソースです。投入から削除まで同じ /jobs/{jobID} で指し、成果物と
-// アクションはその配下に置きます（public-docs の URL 命名規約）。台本のみのジョブは
-// 別の資源ではなく、同じ一覧の ?stage=script です。
+// The job is the only primary resource. It is named by the same /jobs/{jobID} from submission
+// to deletion, with artifacts and actions under it (public-docs' URL naming conventions).
+// Script-only jobs are not a separate resource but ?stage=script on the same listing.
 func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 	r.Get("/", h.Home)
-	// 入力フォームは JSON の対応物を持たない画面なので、資源とは別に置きます。
+	// Input forms are pages with no JSON counterpart, so they sit apart from the resources.
 	r.Get("/compose", h.ComposeForm)
 
 	r.Route("/jobs", func(r chi.Router) {
@@ -129,26 +129,26 @@ func registerWebRoutes(r chi.Router, h *handlers.Handler) {
 		r.Get("/", h.JobList)
 		r.Get("/{jobID}", h.Job)
 		r.Delete("/{jobID}", h.JobDelete)
-		// 成果物。GCS の署名付き URL は HTML に出さず、ここで 302 します（job_media.go に理由）。
-		// 認証グループの中にあるので、アセット 1 本ごとにセッション検証が効きます。
+		// Artifacts. GCS signed URLs are not put in HTML; these 302 instead (reasons in job_media.go).
+		// They are inside the authenticated group, so the session is checked for every asset.
 		r.Get("/{jobID}/keyframes", h.JobKeyframes)
 		r.Get("/{jobID}/metadata", h.JobMetadata)
 		r.Get("/{jobID}/video", h.JobVideo)
 		r.Get("/{jobID}/cuts/{cutIndex}/video", h.CutVideo)
 		r.Get("/{jobID}/cuts/{cutIndex}/keyframe", h.CutKeyframe)
-		// レシピの読み出しと編集。表示用に整形した詳細とは別経路で、読んだものを
-		// そのまま直して返せます。編集は台本のみの段階に限られます（JobRecipeUpdate 参照）。
+		// Reading and editing the recipe. A separate path from the detail formatted for display, so
+		// what is read can be edited and sent straight back. Editing is limited to the script-only stage (see JobRecipeUpdate).
 		r.Get("/{jobID}/recipe", h.JobRecipe)
 		r.Put("/{jobID}/recipe", h.JobRecipeUpdate)
 		r.Get("/{jobID}/prompt", h.JobPrompt)
-		// アクション。作り直し系は成果物を元ジョブへ書き戻し、動画生成は新しいジョブになります。
+		// Actions. Remakes write their artifacts back to the original job; video generation makes a new job.
 		r.Get("/{jobID}/cuts/{cutIndex}/regenerate", h.RegenerateCutKeyframeForm)
 		r.Post("/{jobID}/cuts/{cutIndex}/regenerate-keyframe", h.RegenerateCutKeyframe)
 		r.Post("/{jobID}/cuts/{cutIndex}/regenerate-video", h.RegenerateCutVideo)
 		r.Get("/{jobID}/sections/{sectionIndex}/regenerate", h.RegenerateSectionKeyframesForm)
 		r.Post("/{jobID}/sections/{sectionIndex}/regenerate-keyframes", h.RegenerateSectionKeyframes)
-		// セクション単位で「キーフレーム → 動画」を進め、結果を元ジョブへ書き戻します。
-		// 仕上げの結合は finalize が別途担当します（GenerateSectionVideo 参照）。
+		// Advances "keyframes → video" per section and writes the result back to the original job.
+		// The final join is done separately by finalize (see GenerateSectionVideo).
 		r.Post("/{jobID}/sections/{sectionIndex}/generate-video", h.GenerateSectionVideo)
 		r.Post("/{jobID}/finalize", h.Finalize)
 		r.Post("/{jobID}/regenerate-zip", h.RegenerateZip)

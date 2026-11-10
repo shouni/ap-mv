@@ -60,7 +60,7 @@ func TestFlowMusicBriefStatesTheCharacterOnce(t *testing.T) {
 		"pleated skirt. Keep this appearance",
 		"[0:12 - 0:20] Verse: Close-up of Tsumugi, sprinting down the boulevard.\n  Music: Verse - steady kick\n",
 		"[0:40 - 0:48] Chorus: Wide shot of Tsumugi, singing toward the camera.\n  Music: Chorus - drop\n  Lyrics: 弾けろ / ブラスト・サマー\n",
-		// 共通の描写を持たないカットはそのまま残り、全体の畳み込みも止めない。
+		// A cut without the shared description stays as-is and does not stop folding for the whole.
 		"[0:48 - 0:55] Chorus: The empty boulevard at night.\n",
 		"- No text, captions, subtitles, lyrics, logos, or watermarks in frame.",
 	} {
@@ -68,7 +68,7 @@ func TestFlowMusicBriefStatesTheCharacterOnce(t *testing.T) {
 			t.Errorf("brief missing %q:\n%s", want, got)
 		}
 	}
-	// audio_cue が歌詞を引用しているカットでは、同じ行を Lyrics で繰り返さない。
+	// For a cut whose audio_cue quotes the lyrics, the same line is not repeated under Lyrics.
 	if strings.Contains(got, "Lyrics: 夜を走れ") {
 		t.Errorf("lyrics already quoted in the audio cue were repeated:\n%s", got)
 	}

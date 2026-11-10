@@ -1,4 +1,4 @@
-// Package repository は、生成履歴（History）の永続化・一覧整形と、ジョブ状態の読み書きを行います。
+// Package repository persists generation history, formats its listings, and reads and writes job status.
 package repository
 
 import (
@@ -6,11 +6,11 @@ import (
 	"github.com/shouni/go-utils/jst"
 )
 
-// formatHistoryCreatedAt は、jobID に埋め込まれた作成時刻を履歴表示用の文字列にします。
-// 時刻を取り出せない ID では空文字を返し、一覧では日時なしとして扱われます。
+// formatHistoryCreatedAt turns the creation time embedded in jobID into a string for the history display.
+// For an ID the time cannot be taken from, it returns an empty string and the listing shows no date.
 //
-// 採番は UTC、JST への変換は表示の直前だけです。実行環境のタイムゾーン設定
-// （コンテナの TZ など）には依存しません。
+// Minting is UTC and conversion to JST happens only just before display. It does not depend on
+// the runtime's time zone setting (the container's TZ and the like).
 func formatHistoryCreatedAt(jobID string) string {
 	createdAt, err := jobid.CreatedAt(jobID)
 	if err != nil {

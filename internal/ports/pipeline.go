@@ -7,7 +7,7 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// Pipeline は worker task を実行し、保持する実行時リソースを解放できる境界です。
+// Pipeline is the boundary that runs worker tasks and can release the run-time resources it holds.
 type Pipeline interface {
 	Execute(context.Context, domain.Task) error
 	io.Closer

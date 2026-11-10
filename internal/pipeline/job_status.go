@@ -9,19 +9,19 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// statusRecorder はジョブ状態の記録を担当します。
+// statusRecorder is responsible for recording job status.
 //
-// 再実行ガード・前回記録からの引き継ぎ・記録失敗を握り潰す振る舞いは jobstatus.Recorder に
-// 集約しており、ここが与えるのは ap-mv 固有の状態の組み立てだけです。
-// 記録先が未設定でもパイプラインは動作し、記録だけが行われません。
+// The re-run guard, carrying over from the previous record and swallowing record failures are
+// gathered in jobstatus.Recorder; all this supplies is building ap-mv's own state.
+// The pipeline works even with no recorder configured; only the recording is skipped.
 type statusRecorder struct {
 	recorder *jobstatus.Recorder[domain.JobStatus]
 }
 
-// newStatusRecorder は ports.JobStatusStore を裏付けとした statusRecorder を構築します。
-// store が nil の場合、記録は行われません。
+// newStatusRecorder builds a statusRecorder backed by a ports.JobStatusStore.
+// When store is nil, nothing is recorded.
 //
-// ports.JobStatusStore は jobstatus.StatusStore と同じシグネチャなので、そのまま渡せます。
+// ports.JobStatusStore has the same signature as jobstatus.StatusStore, so it can be passed as-is.
 func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 	if store == nil {
 		return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](nil)}
@@ -29,30 +29,30 @@ func newStatusRecorder(store ports.JobStatusStore) statusRecorder {
 	return statusRecorder{recorder: jobstatus.NewRecorder[domain.JobStatus](store)}
 }
 
-// begin は、そのジョブが既に完了していれば true を返し、未完了なら処理開始を記録して
-// false を返します。判定と記録を前回の記録の 1 回の読みで行うので、間に別の配信が
-// 割り込む隙がありません。試行回数はここで 1 つ進みます。
+// begin returns true when the job is already complete; otherwise it records the start of
+// processing and returns false. The check and the record use one read of the previous record, so
+// no other delivery can slip in between. The attempt count advances by one here.
 //
-// 状態を読めなかった場合はエラーを返し、記録もしません。呼び出し側はそのままエラーを
-// 返して Cloud Tasks の再配信に委ねてください。ここで「未完了」に倒すと、完了済みジョブを
-// 作り直してこのガードが防ぐはずのコストを発生させ、「完了済み」に倒すと未完了の
-// ジョブがタスクごと ACK されて二度と実行されません。
+// When the status cannot be read it returns an error and records nothing. The caller should
+// return that error as-is and leave it to Cloud Tasks' redelivery. Falling to "unfinished" here
+// would remake a finished job and incur the very cost this guard is meant to prevent; falling to
+// "finished" would ACK an unfinished job's task and it would never run again.
 func (s statusRecorder) begin(ctx context.Context, task *domain.Task) (bool, error) {
 	if task == nil {
 		return false, nil
 	}
-	// 継続タスクはレシピをペイロードで持ち回るため、ここで見出しが進みます。
-	// 終端の記録まで待つと、継続を繰り返している間の一覧が投入時のまま止まります。
+	// Continuation tasks carry the recipe in the payload, so the headline advances here.
+	// Waiting for the terminal record would freeze the listing at its submission state while continuations repeat.
 	return s.recorder.Begin(ctx, task.JobID, domain.NewJobStatus(task, domain.JobStateRunning),
 		func(next, _ *domain.JobStatus) { next.Attempts++ },
 	)
 }
 
-// markSucceeded は成功と成果物の保存先を記録します。
+// markSucceeded records success and where the artifacts are stored.
 //
-// recipe は実行後のレシピです。一覧の見出しはここで最後に塗り直します。タスクの
-// ペイロードに載っていたレシピは実行前のものなので、これを渡さないと完了したジョブが
-// 一覧では 1 つ手前の段階のまま止まります。
+// recipe is the recipe after the run. The listing headline is repainted here one last time. The
+// recipe in the task payload is from before the run, so without passing this a finished job would
+// stay one stage short in the listing.
 func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, req domain.NotificationRequest, recipe *domain.VideoRecipe) {
 	s.record(ctx, task, domain.JobStateSucceeded, func(next, _ *domain.JobStatus) {
 		next.ApplyVideoRecipe(recipe)
@@ -63,10 +63,10 @@ func (s statusRecorder) markSucceeded(ctx context.Context, task *domain.Task, re
 	})
 }
 
-// markFailed は失敗と理由を記録します。
+// markFailed records the failure and its reason.
 //
-// 失敗しても、そこまでに進んだぶんの見出しは残します（キーフレームまで焼けて動画で
-// 落ちたジョブが、一覧では台本のみに見えてしまわないようにするためです）。
+// Even on failure the headline keeps what was reached (so a job that rendered its keyframes and
+// failed at video does not look script-only in the listing).
 func (s statusRecorder) markFailed(ctx context.Context, task *domain.Task, cause error, recipe *domain.VideoRecipe) {
 	if cause == nil {
 		return
@@ -77,9 +77,9 @@ func (s statusRecorder) markFailed(ctx context.Context, task *domain.Task, cause
 	})
 }
 
-// record は今回の記録ぶんの状態を組み立てて保存します。
-// Attempts・QueuedAt と、レシピから題目が取れなかったときの Title は Recorder が
-// 前回の記録から引き継ぎます。apply はその引き継ぎの後に呼ばれます。
+// record builds and saves the state for this record.
+// Recorder carries Attempts, QueuedAt and, when no title could be taken from the recipe, Title
+// over from the previous record. apply is called after that carry-over.
 func (s statusRecorder) record(
 	ctx context.Context,
 	task *domain.Task,

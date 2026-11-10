@@ -12,14 +12,14 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// ChainFinalizeStep は、全カット生成後に継続チェーンをハードカットで1本の完成動画へ
-// 結合するパイプラインステップです。videoGenの直後・PublishingStepの直前で実行され、
-// 動画生成を伴わないコマンド（画像のみ生成するパス）には含まれません。
+// ChainFinalizeStep is the pipeline step that joins the continuation chains into one finished
+// video with hard cuts after every cut is generated. It runs right after videoGen and right before
+// PublishingStep, and is not part of commands without video generation (the image-only paths).
 type ChainFinalizeStep struct {
 	VideoProcessor ports.VideoProcessor
-	// UsePreviousVideo は VideoGenerationStep.UsePreviousVideo と一致させます。
-	// false のときはカットが video-to-video で繋がらず、IsChainStart も立たないため、
-	// 結合対象の選び方が変わります（chainEndVideoURLs 参照）。
+	// UsePreviousVideo must match VideoGenerationStep.UsePreviousVideo.
+	// When false, cuts are not linked video-to-video and IsChainStart is never set, so how the
+	// join targets are chosen changes (see chainEndVideoURLs).
 	UsePreviousVideo bool
 }
 
@@ -51,41 +51,42 @@ func (f ChainFinalizeStep) Execute(ctx context.Context, sc *Context) error {
 	return nil
 }
 
-// finalDurationToleranceSeconds は、台本の総尺と完成動画の実尺として許すズレです。
+// finalDurationToleranceSeconds is the allowed gap between the script's total length and the
+// finished video's actual length.
 //
-// Veo が返すクリップの尺はリクエストどおりぴったりにはならず、結合時の再エンコードでも
-// 端数が動きます。数秒のズレは正常なので、明らかな取りこぼし（カットの欠落や
-// 生成失敗による短縮）だけを拾える幅にしています。
+// The length of clips Veo returns is never exactly what was requested, and re-encoding on the join
+// moves the fractions too. A few seconds of gap is normal, so the width only catches obvious losses
+// (missing cuts or shortening from failed generation).
 const finalDurationToleranceSeconds = 5.0
 
-// inspectFinalVideo は完成動画を実測し、台本と食い違っていれば警告を残します。
+// inspectFinalVideo measures the finished video and logs a warning when it disagrees with the script.
 //
-// ここで失敗にはしません。動画自体は生成できており、再生もできる状態なので、
-// 破棄の判断は運用側に委ねます。無言で通すと、尺が足りない、音が入っていないといった
-// 破綻に気付けるのが「完成品を再生したとき」だけになります。
+// It does not fail here. The video itself was generated and plays, so the decision to discard it
+// is left to operations. Passing silently would leave breakage such as too short a length or no
+// audio noticeable only "when the finished piece is played".
 func (f ChainFinalizeStep) inspectFinalVideo(ctx context.Context, recipe *video.Recipe, finalURL string) {
 	stats, err := f.VideoProcessor.Probe(ctx, finalURL)
 	if err != nil {
-		slog.WarnContext(ctx, "完成動画の解析に失敗しました", "url", finalURL, "err", err)
+		slog.WarnContext(ctx, "failed to analyse the final video", "url", finalURL, "err", err)
 		return
 	}
 
-	slog.InfoContext(ctx, "完成動画を解析しました",
+	slog.InfoContext(ctx, "analysed the final video",
 		"url", finalURL, "duration_sec", stats.DurationSeconds, "has_audio", stats.HasAudio)
 
 	if !stats.HasAudio {
-		slog.WarnContext(ctx, "完成動画に音声トラックがありません", "url", finalURL)
+		slog.WarnContext(ctx, "the final video has no audio track", "url", finalURL)
 	}
 	if expected := expectedDurationSeconds(recipe); expected > 0 {
 		if diff := math.Abs(stats.DurationSeconds - expected); diff > finalDurationToleranceSeconds {
-			slog.WarnContext(ctx, "完成動画の尺が台本と一致しません",
+			slog.WarnContext(ctx, "the final video's length does not match the script",
 				"url", finalURL, "expected_sec", expected, "actual_sec", stats.DurationSeconds, "diff_sec", diff)
 		}
 	}
 }
 
-// expectedDurationSeconds は台本が想定する総尺を返します。
-// 最終カットの EndSec は Normalize が各カットの尺から積み上げた値です。
+// expectedDurationSeconds returns the total length the script expects.
+// The last cut's EndSec is the value Normalize accumulated from each cut's duration.
 func expectedDurationSeconds(recipe *video.Recipe) float64 {
 	if recipe == nil || len(recipe.Cuts) == 0 {
 		return 0
@@ -93,17 +94,17 @@ func expectedDurationSeconds(recipe *video.Recipe) float64 {
 	return recipe.Cuts[len(recipe.Cuts)-1].EndSec
 }
 
-// chainEndVideoURLs は結合すべき動画のURLを、カットの登場順に返します。
+// chainEndVideoURLs returns the URLs of the videos to join, in the order the cuts appear.
 //
-// usePreviousVideo が true のとき、カットは video-to-video で数珠つなぎに生成され、
-// チェーンの最終カットの動画がそのチェーン全体を含みます。そのため結合対象は各チェーンの
-// 最終カットだけで、「次のカットがチェーンの新規起点(IsChainStart)、または自身が最終カット」
-// の位置をチェーン境界として判定します（video_gen.goのIsChainStartマーキングと対）。
+// When usePreviousVideo is true, cuts are generated chained video-to-video, and the video of a
+// chain's last cut contains the whole chain. So only each chain's last cut is joined, and a chain
+// boundary is where "the next cut is a new chain start (IsChainStart), or this is the last cut"
+// (the counterpart of the IsChainStart marking in video_gen.go).
 //
-// usePreviousVideo が false のときはチェーンが存在せず、各カットが自身のキーフレームから
-// 独立に生成された8秒前後のクリップです。IsChainStart を立てる経路も usePreviousVideo の
-// 内側にあるため誰にも印が付きません。この判定を共有すると境界が最終カットだけになり、
-// 完成動画が末尾1カットぶんに縮みます。ここでは全カットが結合対象です。
+// When usePreviousVideo is false there are no chains, and each cut is a clip of about 8 seconds
+// generated independently from its own keyframe. The path that sets IsChainStart is also inside
+// usePreviousVideo, so nothing is marked. Sharing that check would leave only the last cut as a
+// boundary, and the finished video would shrink to the last cut alone. Here every cut is joined.
 func chainEndVideoURLs(cuts []video.Cut, usePreviousVideo bool) []string {
 	var urls []string
 	for i, cut := range cuts {
@@ -115,7 +116,7 @@ func chainEndVideoURLs(cuts []video.Cut, usePreviousVideo bool) []string {
 	return urls
 }
 
-// finalVideoDestURI は結合済み完成動画の保存先URIを組み立てます。
+// finalVideoDestURI builds the destination URI of the joined finished video.
 func finalVideoDestURI(outputPath string) string {
 	outputPath = strings.TrimRight(strings.TrimSpace(outputPath), "/")
 	if outputPath == "" {

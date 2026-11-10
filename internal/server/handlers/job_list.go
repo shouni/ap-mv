@@ -8,7 +8,7 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// JobList はジョブ一覧を返します（GET /jobs?stage=）。Accept で HTML と JSON を切り替えます。
+// JobList returns the job listing (GET /jobs?stage=). Accept switches between HTML and JSON.
 func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 	if h.HistoryRepository == nil {
 		h.renderPage(w, r, PageData{Title: "History", Message: "history storage adapter is not configured yet"}, "history.html")
@@ -19,7 +19,7 @@ func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 		respond.ServerError(w, r, http.StatusInternalServerError, err, "failed to list history")
 		return
 	}
-	// 単価は保存せず表示時に解決するため、JSON 応答にも同じ値が乗るよう分岐の前で適用する。
+	// The price is resolved at display time rather than stored, so apply it before the branch so the JSON response carries the same values.
 	domain.ApplyVeoCostEstimateToHistories(page.Items, h.ModelOptions.DefaultVeoModel, h.VeoPricing)
 	if respond.WantsJSON(w, r) {
 		respond.JSON(w, r, http.StatusOK, page)
@@ -29,9 +29,9 @@ func (h *Handler) JobList(w http.ResponseWriter, r *http.Request) {
 		Title:        "History",
 		HistoryItems: page.Items,
 		PageMeta:     page.PageMeta,
-		// 成果物の残っていないジョブは一覧から直接消せます（削除は fetch の DELETE なので
-		// トークンが要ります）。詳細画面を開けないジョブがあるため、ここに口が無いと
-		// 画面からは二度と消せません。
+		// Jobs with no artifacts left can be deleted straight from the listing (delete is a fetch DELETE,
+		// so it needs the token). Some jobs cannot open their detail page, so without an entrance here
+		// they could never be removed from the UI.
 		CSRFToken: csrfTokenFromContext(r.Context()),
 	}, "history.html")
 }

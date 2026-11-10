@@ -9,22 +9,22 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// videoRequestBuilder は runner.VideoRequestBuilder を満たし、このアプリのプロンプトを
-// 載せた Veo リクエストを組み立てます。
+// videoRequestBuilder satisfies runner.VideoRequestBuilder and builds Veo requests carrying this
+// app's prompt.
 //
-// ライブラリの既定ビルダー（runner.NewVideoRequestBuilderWithCharacters）を使わないのは
-// プロンプトのためです。既定は VisualAnchor / AudioCue / Mood / Timeline を素直に並べる
-// だけで、このアプリは生成モード別のガイダンス（assets/prompts/video_gen）を足します。
-// シードも既定とは違い、キーフレームの UsedSeed ではなくキャラクターのシードを使います
-// （keyframe.Generator が常に char.Seed で描くのと揃えるため。videoSeed 参照）。
+// The library's default builder (runner.NewVideoRequestBuilderWithCharacters) is not used because
+// of the prompt. The default just lines up VisualAnchor / AudioCue / Mood / Timeline, while this app
+// adds guidance per generation mode (assets/prompts/video_gen). The seed differs from the default
+// too: it uses the character's seed rather than the keyframe's UsedSeed (to match keyframe.Generator,
+// which always draws with char.Seed; see videoSeed).
 type videoRequestBuilder struct {
 	characters *characterkit.Characters
-	// usePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定です。分類に渡す値であって、
-	// このカットに実際に引き継ぐ動画があるかどうか（in.PreviousVideoURI）とは別物です。
+	// usePreviousVideo is the VEO_USE_PREVIOUS_VIDEO setting. It is the value passed to classification,
+	// distinct from whether this cut actually has a video to carry over (in.PreviousVideoURI).
 	usePreviousVideo bool
 }
 
-// Build はカット 1 件分の Veo リクエストを組み立てます。
+// Build builds the Veo request for one cut.
 func (b videoRequestBuilder) Build(in runner.BuildInput) video.GenerationRequest {
 	cut := in.Cut
 	req := video.GenerationRequest{
@@ -38,12 +38,12 @@ func (b videoRequestBuilder) Build(in runner.BuildInput) video.GenerationRequest
 		AudioReference:     cut.AudioReference,
 	}
 	mode := veo.ClassifyRequest(req, b.usePreviousVideo, in.Capabilities)
-	// このモードで実際には使われない参照はリクエストに残さない。理由は 2 つあります。
+	// References this mode does not actually use are not left in the request, for two reasons.
 	//
-	// ログ・再現時のリクエスト内容が adapter の送る内容と一致すること。そして、
-	// 引き継がないと決めた PreviousVideoURI を残すと、リクエスト自身から分類し直す側
-	// （runner の尺検証、adapter の組み立て）がここでの判断と食い違うことです。
-	// 実際、VEO_USE_PREVIOUS_VIDEO が無効なのに前カットの URI が載り続けていました。
+	// The request contents in logs and reproductions should match what the adapter sends. And leaving
+	// a PreviousVideoURI we decided not to carry over makes those who re-classify from the request
+	// itself (the runner's duration check, the adapter's assembly) disagree with the decision here.
+	// In fact, the previous cut's URI kept riding along even with VEO_USE_PREVIOUS_VIDEO disabled.
 	if mode != veo.ModeFramesToVideo {
 		req.LastFrameReference = ""
 	}
@@ -54,12 +54,12 @@ func (b videoRequestBuilder) Build(in runner.BuildInput) video.GenerationRequest
 	return req
 }
 
-// characterSeed はカットのキャラクターに紐づくシードを返します。
+// characterSeed returns the seed tied to the cut's character.
 //
-// キーフレーム画像生成と同じ値です（keyframe.Generator が常に char.Seed のみを使います）。
-// シード無し（0 = Veo リクエストから省略）の独立生成はチェーン起点ごとに見た目が確率的に
-// ブレるため、少なくともキャラクター単位で固定したシードを常に渡すことで、同一ジョブ内・
-// ジョブ間のキャラ一貫性を高めます。キャラクターにシードが無い場合のみ 0 を返します。
+// It is the same value as keyframe image generation (keyframe.Generator always uses only char.Seed).
+// Independent generation with no seed (0 = omitted from the Veo request) varies the look randomly
+// at every chain start, so always passing a seed fixed at least per character improves character
+// consistency within and across jobs. It returns 0 only when the character has no seed.
 func characterSeed(characters *characterkit.Characters, cut video.Cut) int64 {
 	if characters != nil {
 		if char := characters.GetCharacter(cut.CharacterID); char != nil && char.Seed != nil {

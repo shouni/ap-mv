@@ -8,60 +8,61 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// Planner は、タスクに応じて実行すべきステップ列（実行計画）を決定します。
-// Runner は計画の取得と順次実行だけを担い、コマンドごとのステップ構成の知識は
-// Planner 側に集約されます。
+// Planner decides the step sequence (execution plan) to run for a task.
+// Runner only fetches the plan and runs it in order; the knowledge of which steps each
+// command consists of is gathered in Planner.
 type Planner interface {
 	Plan(task *domain.Task, videoRunner ports.VideoRunner) ([]step.Step, error)
 }
 
-// DefaultPlanner は、タスクコマンドごとの標準ステップ列を返す本番用の Planner です。
+// DefaultPlanner is the production Planner that returns the standard step sequence per task command.
 type DefaultPlanner struct {
-	// UsePreviousVideo は VEO_USE_PREVIOUS_VIDEO 設定を反映します。
+	// UsePreviousVideo reflects the VEO_USE_PREVIOUS_VIDEO setting.
 	UsePreviousVideo bool
-	// VideoProcessor は、継続チェーンのフレーム引き継ぎ・ハードカット結合に使います。
+	// VideoProcessor is used for frame hand-over in continuation chains and for hard-cut joins.
 	VideoProcessor ports.VideoProcessor
 }
 
-// Plan はタスクコマンドに応じた標準ステップ列を返します。各ケースがそのコマンドの
-// 完全なステップ列を返すため、コマンドごとの違いは1箇所を見れば分かります。
+// Plan returns the standard step sequence for the task command. Each case returns the
+// command's complete step sequence, so the differences between commands are visible in one place.
 //
-// video_recipe_create はスクリプト生成から始め、recipe 入力系は既存 recipe の読み込みから始めます。
-// video_recipe_create はキーフレーム生成までで停止し、動画生成と公開は実行しません。
-// video_recipe_draft はさらに手前、カット割り（scene_split）までで停止して VideoRecipe を
-// 下書き保存します。キーフレーム画像はカット数だけ焼かれるため、その手前に確認の余地を残します。
-// regenerate_cut_keyframe は指定カット 1 枚、regenerate_section_keyframes は指定セクションの
-// 全カットのキーフレームのみ再生成します。
-// video_gen_continuation は VideoGenerationStep が生成済み VideoRecipe を引き継いで内部的に
-// enqueue するコマンドのため、scripting/keyframe/zip/section-select は再実行しません。継続は
-// Command を上書きしてしまうので、元の計画は OriginCommand から復元します。
+// video_recipe_create starts from script generation, while the recipe-input commands start by loading an existing recipe.
+// video_recipe_create stops after keyframe generation and runs neither video generation nor publishing.
+// video_recipe_draft stops even earlier, after cut splitting (scene_split), and saves the VideoRecipe
+// as a draft. Keyframe images are rendered once per cut, so this leaves room to check before that.
+// regenerate_cut_keyframe regenerates only the given cut's keyframe, regenerate_section_keyframes
+// only the keyframes of every cut in the given section.
+// video_gen_continuation is the command VideoGenerationStep enqueues internally, carrying the
+// generated VideoRecipe on, so scripting/keyframe/zip/section-select are not re-run. A continuation
+// overwrites Command, so the original plan is restored from OriginCommand.
 //
-// 動画を作る計画は「どの範囲を作るか」と「結合するか」の2軸で分かれます。
-// mv_from_keyframe_video_recipe（全カット）・regenerate_cut_video（1カット）・
-// short_video_from_section（セクションを独立ショートとして新ジョブへ）はいずれも結合まで
-// 通しますが、section_video は結合しません。1本の MV をセクションずつ積み上げる操作なので、
-// 焼くたびに結合すると final_video_url が「途中まで繋がった動画」になり、完成品と区別が
-// つかなくなるためです。仕上げは finalize_video が担当し、こちらは生成を一切行いません。
+// Plans that make video split along two axes: "which range to make" and "whether to join".
+// mv_from_keyframe_video_recipe (every cut), regenerate_cut_video (one cut) and
+// short_video_from_section (a section as a standalone short in a new job) all go through to the
+// join, but section_video does not. It builds one MV up a section at a time, so joining after
+// every render would make final_video_url a "video joined up to some point", impossible to tell
+// from the finished one. finalize_video does the finishing, and generates nothing.
 //
-// 未知のコマンドは（domain.Task.Validate が先に弾くのが原則ですが、Validate にだけ追加されて
-// 実行計画が未登録の新コマンドが黙って既定のチェーンへ流れないよう）明示的にエラーを返します。
+// An unknown command returns an explicit error (domain.Task.Validate is meant to reject it first,
+// but this keeps a new command added only to Validate, with no registered plan, from silently
+// flowing into the default chain).
 func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) ([]step.Step, error) {
 	videoGen := step.VideoGenerationStep{Runner: videoRunner, UsePreviousVideo: p.UsePreviousVideo, VideoProcessor: p.VideoProcessor}
 	sceneSplit := step.SceneSplitStep{UsePreviousVideo: p.UsePreviousVideo, Runner: videoRunner}
-	// chainFinalize は全カット生成完了後（videoGenがErrPipelineDeferredを返さず正常終了した
-	// 回のみ）に1度だけ実行され、継続チェーンをハードカットで1本の完成動画へ結合します。
+	// chainFinalize runs exactly once after every cut is generated (only on the run where videoGen
+	// finished normally rather than returning ErrPipelineDeferred) and joins the continuation chain into one finished video with hard cuts.
 	chainFinalize := step.ChainFinalizeStep{VideoProcessor: p.VideoProcessor, UsePreviousVideo: p.UsePreviousVideo}
-	// section_video は結合しない代わりに生成対象をセクションへ絞ります。レシピは削らず、
-	// 対象外のカットを飛ばすだけです（VideoGenerationStep.SectionScoped 参照）。
+	// section_video does not join; instead it narrows generation to the section. The recipe is not
+	// trimmed; cuts outside the target are only skipped (see VideoGenerationStep.SectionScoped).
 	sectionVideoGen := videoGen
 	sectionVideoGen.SectionScoped = true
 	switch command := taskCommand(task); command {
 	case domain.CommandVideoGenContinuation:
-		// 継続タスクは元のコマンドの実行計画を引き継ぎます。Command は上書きされているため、
-		// 「どのコマンドの続きか」は OriginCommand でしか分かりません。
+		// A continuation task carries on the original command's plan. Command has been overwritten,
+		// so "which command this continues" is known only from OriginCommand.
 		if originCommand(task) == domain.CommandSectionVideo {
-			// section_video の続きも結合しません。ここで chainFinalize を通すと、
-			// セクションを1つ焼き終えるたびに中途半端な final_video_url が生まれます。
+			// A section_video continuation does not join either. Going through chainFinalize here would
+			// produce a half-finished final_video_url every time a section finished rendering.
 			return []step.Step{
 				step.OriginalJobOutputStep{},
 				sectionVideoGen,
@@ -70,9 +71,9 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 		}
 		return []step.Step{videoGen, chainFinalize, step.PublishingStep{}}, nil
 	case domain.CommandSectionVideo:
-		// 「キーフレーム → 動画」をセクション単位で一続きに進める計画です。出力先を元ジョブへ
-		// 戻したうえで、キーフレームは足りないぶんだけ焼き、動画はそのセクションだけ生成し、
-		// レシピ**全体**を元ジョブへ保存し直します。結合は finalize_video が別途担当します。
+		// The plan that advances "keyframes → video" in one go per section. With the output pointed
+		// back at the original job, it renders only the missing keyframes, generates video for that
+		// section only, and saves the **whole** recipe back to the original job. finalize_video joins separately.
 		return []step.Step{
 			step.RecipeLoadStep{},
 			step.OriginalJobOutputStep{},
@@ -82,8 +83,8 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			step.PublishingStep{},
 		}, nil
 	case domain.CommandFinalizeVideo:
-		// 生成を一切行わず、生成済みカットを1本へ結合し直すだけの計画です。
-		// videoGen を通さないため、未生成カットが残っていても課金は発生しません。
+		// A plan that generates nothing and only re-joins the generated cuts into one.
+		// It does not go through videoGen, so nothing is charged even if ungenerated cuts remain.
 		return []step.Step{
 			step.RecipeLoadStep{},
 			step.OriginalJobOutputStep{},
@@ -91,8 +92,8 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			step.PublishingStep{},
 		}, nil
 	case domain.CommandRegenerateCutKeyframe, domain.CommandRegenerateSectionKeyframes:
-		// 対象が1カットかセクション内の全カットかは RegenerateCutKeyframeStep が
-		// Task の cut_index / section_index から解決するため、実行計画は共通です。
+		// Whether the target is one cut or every cut in a section is resolved by RegenerateCutKeyframeStep
+		// from the Task's cut_index / section_index, so the plan is shared.
 		return []step.Step{
 			step.RecipeLoadStep{},
 			step.RegenerateCutKeyframeStep{},
@@ -104,10 +105,10 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			step.ZipUploadStep{},
 		}, nil
 	case domain.CommandRegenerateCutVideo:
-		// scene_split を通さないのが要点。保存済みのカット割りをそのまま使い、
-		// CutVideoSelectStep が対象カット（と同じチェーンの残り）だけを未生成へ戻す。
-		// 他のカットは status=generated のままなので videoGen がスキップし、
-		// chainFinalize が既存の動画と合わせて 1 本へ結合し直す。
+		// The point is not going through scene_split. The saved cut list is used as-is, and
+		// CutVideoSelectStep resets only the target cut (and the rest of its chain) to ungenerated.
+		// The other cuts stay status=generated, so videoGen skips them and
+		// chainFinalize re-joins them with the existing videos into one.
 		return []step.Step{
 			step.RecipeLoadStep{},
 			step.CutVideoSelectStep{UsePreviousVideo: p.UsePreviousVideo},
@@ -124,10 +125,10 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 			step.PublishingStep{},
 		}, nil
 	case domain.CommandVideoRecipeDraft:
-		// キーフレームを1枚も焼かずに終わる唯一の生成系コマンド。scene_split まで通すのは
-		// カット割りを確定させてから見せるためで、台本直後のカット列は尺が未確定です。
-		// 保存先は完成ジョブと同じ video_music_meta.json で、段階は JobProgress が
-		// カット数から導きます（script 段階として履歴に並びます）。
+		// The only generating command that ends without rendering a single keyframe. It goes through
+		// scene_split so the cut list is settled before being shown; right after the script, the cuts'
+		// durations are not settled yet. It is saved to the same video_music_meta.json as a finished job,
+		// and JobProgress derives the stage from the cut count (it is listed in history at the script stage).
 		return []step.Step{
 			step.ScriptingStep{},
 			sceneSplit,
@@ -155,7 +156,7 @@ func (p DefaultPlanner) Plan(task *domain.Task, videoRunner ports.VideoRunner) (
 	}
 }
 
-// taskCommand は nil タスクを空コマンドとして扱い、Plan の switch を単純に保ちます。
+// taskCommand treats a nil task as the empty command, keeping Plan's switch simple.
 func taskCommand(task *domain.Task) domain.TaskCommand {
 	if task == nil {
 		return ""
@@ -163,8 +164,8 @@ func taskCommand(task *domain.Task) domain.TaskCommand {
 	return task.Command
 }
 
-// originCommand は、継続タスクを生んだ元のコマンドを返します。空（旧タスクや継続以外）は
-// 空コマンドとして扱い、従来どおりの実行計画へフォールバックします。
+// originCommand returns the command that spawned a continuation task. Empty (old tasks or
+// non-continuations) is treated as the empty command and falls back to the usual plan.
 func originCommand(task *domain.Task) domain.TaskCommand {
 	if task == nil {
 		return ""
@@ -172,10 +173,10 @@ func originCommand(task *domain.Task) domain.TaskCommand {
 	return task.OriginCommand
 }
 
-// StaticPlanner は、常に固定のステップ列を返すテスト用の Planner です。
+// StaticPlanner is a test Planner that always returns a fixed step sequence.
 type StaticPlanner []step.Step
 
-// Plan は保持しているステップ列をそのまま返します。
+// Plan returns the step sequence it holds as-is.
 func (p StaticPlanner) Plan(*domain.Task, ports.VideoRunner) ([]step.Step, error) {
 	return p, nil
 }

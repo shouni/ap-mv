@@ -1,4 +1,4 @@
-// Package app は、設定値から各種クライアントを組み立てて保持する DI コンテナを提供します。
+// Package app provides the DI container that builds and holds the clients from the configuration.
 package app
 
 import (
@@ -15,14 +15,14 @@ import (
 	"github.com/shouni/ap-mv/internal/ports"
 )
 
-// Container はアプリケーションの依存関係（DIコンテナ）を保持します。
+// Container holds the application's dependencies (the DI container).
 type Container struct {
 	Config *config.Config
 
 	// I/O and Storage
-	// Storage は GCS クライアントの寿命を持ちます。
+	// Storage owns the GCS client's lifetime.
 	Storage remoteio.Factory
-	// Store は Storage から取り出した読み書き・署名の窓口です。
+	// Store is the window for reads, writes and signing taken from Storage.
 	Store remoteio.Store
 
 	// Foundation clients
@@ -31,7 +31,7 @@ type Container struct {
 	// Asynchronous Task
 	TaskEnqueuer *tasks.Enqueuer[domain.Task]
 	TaskQueue    ports.TaskQueue
-	// SessionStore はログインセッションの保存先です。
+	// SessionStore is where login sessions are stored.
 	SessionStore session.Store
 
 	// Worker pipeline
@@ -41,16 +41,16 @@ type Container struct {
 	HistoryRepository ports.HistoryRepository
 	JobStatus         ports.JobStatusStore
 
-	// Closers は、組み立て時に開いた資源です。Container.Close がまとめて閉じます。
-	// Close が個々のフィールドを見ないのは、資源が増えたときに builder が append
-	// するだけで済ませるためです。
+	// Closers are the resources opened during assembly; Container.Close closes them together.
+	// Close does not look at individual fields so that when resources are added the builder only
+	// needs to append.
 	Closers []io.Closer
 }
 
-// Close は、Container が保持するすべての外部接続リソースを安全に解放します。
+// Close safely releases every external connection resource the Container holds.
 //
-// エラーを返さないのは、呼び出し元が server.Run の defer 1 箇所きりで、返したところで
-// slog.Error 以外の行き先が無いためです。
+// It returns no error because its only caller is the single defer in server.Run, and a returned
+// error would have nowhere to go but slog.Error.
 func (c *Container) Close() {
 	for _, closer := range c.Closers {
 		if closer == nil {

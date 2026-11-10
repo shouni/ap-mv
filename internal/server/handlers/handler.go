@@ -19,33 +19,35 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// Handler は、Web UIのハンドラーが共有する依存関係とフォーム選択肢を保持します。
+// Handler holds the dependencies and form options shared by the web UI handlers.
 type Handler struct {
 	Queue             ports.TaskQueue
 	HistoryRepository ports.HistoryRepository
-	// JobStatus はジョブ進行状況の記録・参照先です。未設定なら状態機能は無効です。
+	// JobStatus is where job progress is recorded and read. When unset, the status features are disabled.
 	JobStatus        ports.JobStatusStore
 	Templates        map[string]*template.Template
 	ModelOptions     ModelOptions
 	CharacterOptions CharacterOptions
 	VisualOptions    VisualModeOptions
-	// MusicBucket は、Video Recipe Create フォームの Music Job ID から
-	// レシピJSON（gs://<MusicBucket>/music/<jobID>/recipe.json）を解決するためのGCSバケット名です。
+	// MusicBucket is the GCS bucket name used to resolve the recipe JSON
+	// (gs://<MusicBucket>/music/<jobID>/recipe.json) from the Video Recipe Create form's Music Job ID.
 	MusicBucket string
-	// VeoPricing は履歴画面に出す概算コストの単価表です。nil のときは
-	// domain.DefaultVeoPriceUSDPerSecond へフォールバックするため、未設定でも表示は壊れません。
+	// VeoPricing is the price table for the estimated cost on the history page. When nil it falls
+	// back to domain.DefaultVeoPriceUSDPerSecond, so the display does not break when unset.
 	VeoPricing domain.VeoPricing
-	// Characters は、Flow Music へ貼る本文（JobPrompt）でキャラクターの名前と立ち絵を引く
-	// ためのカタログです。nil なら名前は character_id のまま、立ち絵は返しません。
+	// Characters is the catalogue used to look up the character's name and art for the Flow Music
+	// paste text (JobPrompt). When nil, the name stays the character_id and no art is returned.
 	Characters *characterkit.Characters
 }
 
-// applyCostEstimate は履歴詳細に概算コストを埋めます。
+// applyCostEstimate fills the estimated cost into the history detail.
 //
-// 実績記録（veo_usage.json）があればそこに残ったモデルで単価を引き、実際に投げた秒数との
-// 差＝再生成ロスも埋めます。記録が無いジョブ（実績記録の導入前、またはキーフレームのみ）では
-// レシピから算出した完成尺ベースの概算だけを出し、単価は現在の既定モデルで代用します。
-// 実績の読み取り失敗でページ全体を落とす価値は無いので、警告を残して概算のみで続けます。
+// When there is a usage record (veo_usage.json), the price is looked up by the model recorded
+// there, and the regeneration loss — the difference from the seconds actually submitted — is
+// filled in too. For jobs without a record (from before usage records, or keyframes only) only
+// the estimate based on the finished length computed from the recipe is shown, using the current
+// default model's price. Failing to read the record is not worth failing the whole page, so it
+// logs a warning and continues with the estimate only.
 func (h *Handler) applyCostEstimate(ctx context.Context, jobID string, detail *domain.VideoHistoryDetail) {
 	var usage *domain.VeoUsage
 	if h.HistoryRepository != nil {
@@ -66,16 +68,16 @@ func (h *Handler) applyCostEstimate(ctx context.Context, jobID string, detail *d
 	domain.ApplyVeoUsage(detail, usage)
 }
 
-// PageData は、HTMLテンプレートに渡す共通の描画データです。
+// PageData is the common rendering data passed to HTML templates.
 type PageData struct {
 	Title     string
 	CSRFToken string
-	// JS はこのページで追加読み込みする JavaScript のパスです。renderPage が
-	// pageScripts から埋めるため、各ハンドラは指定しません。
+	// JS is the paths of JavaScript this page additionally loads. renderPage fills it from
+	// pageScripts, so handlers do not set it.
 	JS []string
-	// NavPath はナビの現在地を示すキーです。renderPage がリクエストから埋めるため、
-	// 各ハンドラは指定しません。履歴一覧は ?stage=script のときだけ Scripts を
-	// 現在地にするので、パスだけでは決まりません。
+	// NavPath is the key marking the current place in the nav. renderPage fills it from the request,
+	// so handlers do not set it. The history listing makes Scripts current only with ?stage=script,
+	// so the path alone does not decide it.
 	NavPath               string
 	JobID                 string
 	Status                string
@@ -99,7 +101,7 @@ type PageData struct {
 	LatestVideo           *HomeLatestVideo
 }
 
-// HomeLatestVideo は、ホームに埋め込む最新ジョブの動画再生情報です。
+// HomeLatestVideo is the playback information of the latest job's video embedded on the home page.
 type HomeLatestVideo struct {
 	JobID     string
 	Title     string
@@ -185,11 +187,11 @@ func pageFromQuery(r *http.Request) int {
 
 // enqueue validates and submits a task to the configured queue.
 //
-// 検証 → queued の記録 → 投入、の順です。Cloud Tasks は数十ミリ秒で届くため、
-// 記録を投入の後に回すと Worker が書いた running を遅れてきた queued が上書きし、
-// 実行中のジョブが履歴では受付済みのまま止まって見えます（兄弟アプリが本番で踏んだ
-// 順序で、public-docs のワーカー規約 2.1 が固定しています）。投入に失敗したときは
-// 記録を取り消し、積めなかったジョブが履歴に残らないようにします。
+// The order is validate → record queued → enqueue. Cloud Tasks delivers within tens of
+// milliseconds, so recording after enqueueing lets a late queued overwrite the running the worker
+// wrote, and a running job looks stuck at accepted in history (the order a sibling app hit in
+// production, pinned by section 2.1 of the worker conventions in public-docs). When enqueueing
+// fails the record is withdrawn, so a job that could not be queued does not stay in history.
 func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.Task) {
 	if err := task.Validate(); err != nil {
 		respond.Error(w, r, http.StatusBadRequest, err.Error())
@@ -203,8 +205,8 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 			return
 		}
 	}
-	// Location は進捗のポーリング先です。本文を読まなくても次に叩く URL が分かるよう、
-	// 画面向けの応答にも同じヘッダを付けます。
+	// Location is where to poll for progress. The page-facing response carries the same header too,
+	// so the next URL to call is known without reading the body.
 	w.Header().Set("Location", "/jobs/"+url.PathEscape(task.JobID))
 	if !respond.WantsJSON(w, r) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -219,12 +221,12 @@ func (h *Handler) enqueue(w http.ResponseWriter, r *http.Request, task *domain.T
 	respond.JSON(w, r, http.StatusAccepted, map[string]string{"job_id": task.JobID, "status": "queued"})
 }
 
-// pageScripts は、ページごとに追加で読み込む JavaScript です。
+// pageScripts is the JavaScript each page additionally loads.
 //
-// スクリプトは以前テンプレート内に直接書かれていましたが、そうすると
-// {{.JobID}} のようなテンプレート値を JS の中へ埋め込むことになり、画面の構造と
-// 振る舞いが 1 ファイルに混ざります。外部ファイルにした分の受け渡しは data 属性で行います。
-// ページとスクリプトの対応は固定なので、各ハンドラに書かせずここで一元的に決めます。
+// Scripts used to be written directly in the templates, but that meant embedding template values
+// such as {{.JobID}} inside JS, mixing the page's structure and behaviour in one file. With
+// external files, values are handed over through data attributes. Which page uses which script
+// is fixed, so it is decided centrally here rather than in each handler.
 var pageScripts = map[string][]string{
 	"queued.html":             {"/static/js/job_status.js"},
 	"history_detail.html":     {"/static/js/history_detail.js", "/static/js/flow_prompt.js"},
@@ -243,8 +245,8 @@ func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, data PageDa
 
 	data.JS = pageScripts[templateName]
 	data.NavPath = navPathFor(r)
-	// ナビの表示に使うモデル名は、フォームを持たないページ（履歴・受付など）でも必要です。
-	// 選択肢を組み立てるハンドラだけが埋めるため、未設定ならここで既定値に落とします。
+	// The model names shown in the nav are needed even on pages without a form (history, accepted, etc.).
+	// Only handlers that build the options fill them, so when unset fall back to the default here.
 	if data.SelectedGeminiModel == "" {
 		data.SelectedGeminiModel = h.ModelOptions.DefaultGeminiModel
 	}
@@ -253,10 +255,10 @@ func (h *Handler) renderPage(w http.ResponseWriter, r *http.Request, data PageDa
 	}
 }
 
-// navPathFor はナビの現在地キーを返します。
+// navPathFor returns the nav's current-place key.
 //
-// ジョブ一覧は ?stage=script のとき Scripts、それ以外は History を現在地にします。
-// 同じテンプレートを 2 つのナビ項目が指すため、パスだけでは決まりません。
+// The job listing makes Scripts current with ?stage=script and History otherwise.
+// Two nav items point at the same template, so the path alone does not decide it.
 func navPathFor(r *http.Request) string {
 	if r == nil {
 		return ""

@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// SectionKeyframeStep は、対象セクションのカットのうち **まだキーフレームを持たない**
-// ものだけを焼くパイプラインステップです。section_video の前段として、台本だけの状態から
-// 「キーフレーム → 動画」をセクション単位で一続きに進めるために使います。
+// SectionKeyframeStep is the pipeline step that renders only those cuts of the target section
+// that **do not have a keyframe yet**. As the stage before section_video, it is used to advance
+// "keyframes → video" per section in one go from a script-only state.
 //
-// RegenerateCutKeyframeStep との違いは、既に焼けているカットを触らないことです。あちらは
-// 「気に入らない絵を作り直す」操作なので対象を必ず焼き直しますが、こちらは「まだ無いものを
-// 埋める」操作です。セクションを焼いた後に動画生成だけやり直したくなる場面は普通にあり、
-// そこで毎回画像に課金し直すのは無駄なうえ、確認済みの絵が黙って別物に変わってしまいます。
+// It differs from RegenerateCutKeyframeStep in not touching cuts already rendered. That one is the
+// "remake a picture I don't like" operation and always re-renders its target; this one "fills in
+// what is missing". Wanting to redo only the video generation after rendering a section is common,
+// and paying for images again every time would be wasteful and silently replace pictures already approved.
 type SectionKeyframeStep struct{}
 
 // Name returns the receiver name.
@@ -31,11 +31,11 @@ func (SectionKeyframeStep) Execute(ctx context.Context, sc *Context) error {
 		return err
 	}
 	applyTaskCharacterIDToVideoRecipe(sc.Task, sc.VideoRecipe)
-	// 保存済みレシピに歌詞由来の dialogue が未設定の場合（台本だけの下書き含む）に備えて補完する。
+	// Fill in lyric-derived dialogue in case the stored recipe lacks it (script-only drafts included).
 	applyLyricsToVideoRecipeCuts(sc.VideoRecipe)
 
-	// cut_index は使わないコマンドなので、resolveRegenTargets は section_index 経路を通り、
-	// セクション範囲外・該当カット無しの検証もそこで一括して行われる。
+	// This command does not use cut_index, so resolveRegenTargets takes the section_index path, and
+	// checking for an out-of-range section or no matching cut happens there in one go.
 	targets, label, err := resolveRegenTargets(sc)
 	if err != nil {
 		return err
@@ -48,12 +48,12 @@ func (SectionKeyframeStep) Execute(ctx context.Context, sc *Context) error {
 		}
 	}
 	if len(missing) == 0 {
-		// 既に全部揃っている。課金も保存もせずそのまま動画生成へ渡す。
+		// Everything is already there. Pass on to video generation without charging or saving.
 		return nil
 	}
 
-	// 出力先を regens/ ではなく sections/ に分けるのは、これが焼き直しではなく初回の
-	// 焼き付けだからです。パスがそのまま「なぜこの画像が生まれたか」の記録になります。
+	// The output goes to sections/ rather than regens/ because this is a first render, not a re-render.
+	// The path itself becomes the record of "why this image came to be".
 	basePath := fmt.Sprintf("%ssections/%s/", sc.OutputPath, label)
 	generated, err := regenerateTargetKeyframes(ctx, sc, missing, basePath)
 	if err != nil {

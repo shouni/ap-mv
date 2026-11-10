@@ -6,12 +6,12 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// TaskQueue はWeb受付と非同期実行基盤を分離する境界です。
+// TaskQueue is the boundary separating web intake from the asynchronous execution platform.
 type TaskQueue interface {
 	Enqueue(ctx context.Context, task *domain.Task) error
-	// EnqueueWithName は taskID から導出した決定的な名前でタスクを投入します。
-	// 同じ taskID で複数回呼び出しても、実際に作られるタスクは1つだけです
-	// （Cloud Tasks が2回目以降を ALREADY_EXISTS で拒否し、実装側はそれを成功として扱います）。
-	// 呼び出し元の再試行等で同じ論理的なタスクが重複して作られてはいけない場合に使います。
+	// EnqueueWithName enqueues a task under a deterministic name derived from taskID.
+	// Calling it several times with the same taskID creates only one task (Cloud Tasks rejects the
+	// second and later with ALREADY_EXISTS, and the implementation treats that as success).
+	// Use it when the same logical task must not be created twice, e.g. on caller retries.
 	EnqueueWithName(ctx context.Context, taskID string, task *domain.Task) error
 }

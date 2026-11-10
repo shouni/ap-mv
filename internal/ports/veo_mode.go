@@ -4,67 +4,65 @@ import (
 	"github.com/shouni/go-veo-orchestrator/veo"
 )
 
-// このファイルは Veo リクエスト分類を go-veo-orchestrator へ委譲します。
+// This file delegates Veo request classification to go-veo-orchestrator.
 //
-// 以前はここに ClassifyVeoRequest の実装をそのまま持っていましたが、同じ判定が
-// ライブラリの ports/veo_mode.go にもあり、ロジックが1行も違わない複製になっていました。
-// 分類結果はライブラリ側の runner/video.go が送信前の尺検証にも使うため（不一致は
-// ErrUnsupportedCutDuration になる）、片方だけ変えると壊れます。定義はライブラリに1つ、
-// ap-mv 側は呼び出し名を保つための別名だけ、という形にしています。
-// 尺の定数・候補と尺プランナー（ImageToVideoDurationsSec / ChainDurations /
-// ExpandCutsToSupportedDurations 等）も同じ理由でライブラリの ports を直接使います。
+// ClassifyVeoRequest's implementation used to live here as-is, but the same decision existed in
+// the library's ports/veo_mode.go, a duplicate that did not differ by a single line. The
+// library's runner/video.go also uses the classification for the pre-send duration check (a
+// mismatch becomes ErrUnsupportedCutDuration), so changing only one breaks things. The definition
+// lives once in the library, and ap-mv keeps only aliases to preserve the call names.
+// The duration constants and candidates and the duration planner (ImageToVideoDurationsSec /
+// ChainDurations / ExpandCutsToSupportedDurations and so on) use the library's ports directly for the same reason.
 
-// VeoGenerationMode は、1つの動画生成リクエストが Veo のどの生成機能で解釈されるかを
-// 表します。値は assets/prompts/video_gen/ 配下のプロンプトファイル名（拡張子なし）と
-// 一致します。
+// VeoGenerationMode is which Veo generation feature interprets one video-generation request.
+// The values match the prompt file names (without extension) under assets/prompts/video_gen/.
 type VeoGenerationMode = veo.GenerationMode
 
 const (
-	// VeoModeImageToVideo はキーフレーム画像を image 入力とする image_to_video です。
+	// VeoModeImageToVideo is image_to_video, with the keyframe image as the image input.
 	VeoModeImageToVideo = veo.ModeImageToVideo
-	// VeoModeFramesToVideo は開始フレームを image 入力、終了フレームを lastFrame 入力と
-	// する first/last frame 補間です（Veo 2 / Veo 3.1 系のみ、Fast も対応）。
+	// VeoModeFramesToVideo is first/last frame interpolation, with the start frame as the image input
+	// and the end frame as the lastFrame input (Veo 2 / Veo 3.1 only, Fast included).
 	VeoModeFramesToVideo = veo.ModeFramesToVideo
-	// VeoModeReferenceToVideo は [キャラ立ち絵, キーフレーム] を referenceImages とする
-	// reference_to_video です（Veo 3 系の非Fastモデルのみ、8秒固定）。
+	// VeoModeReferenceToVideo is reference_to_video, with [character art, keyframe] as referenceImages
+	// (Veo 3 non-Fast models only, fixed at 8 seconds).
 	VeoModeReferenceToVideo = veo.ModeReferenceToVideo
-	// VeoModeVideoExtension は前カット動画を video 入力とする video_extension
-	// （video-to-video継続）です。このモードでは画像参照は一切送られません。
+	// VeoModeVideoExtension is video_extension (video-to-video continuation), with the previous cut's
+	// video as the video input. No image references at all are sent in this mode.
 	VeoModeVideoExtension = veo.ModeVideoExtension
 )
 
-// VeoCapabilities は、実際に使われる Runner／モデルが Veo のオプション機能に対応して
-// いるかを表します。ClassifyVeoRequest の入力で、adapter はモデル名から、filter は
-// Runner のオプションインターフェースから導出します。
+// VeoCapabilities is whether the Runner/model actually used supports Veo's optional features.
+// It is ClassifyVeoRequest's input; the adapter derives it from the model name, the filter from
+// the Runner's optional interfaces.
 type VeoCapabilities = veo.Capabilities
 
-// RunnerCapabilities は Runner のオプションインターフェース
-// （ReferenceImagesSupporter / LastFrameSupporter）から VeoCapabilities を導出します。
-// インターフェースを実装しない Runner（テストダブル等）は各機能とも false になり、
-// image_to_video 側へ倒れます。
+// RunnerCapabilities derives VeoCapabilities from the Runner's optional interfaces
+// (ReferenceImagesSupporter / LastFrameSupporter). A Runner that implements none (test doubles and
+// the like) gets false for every feature and falls to the image_to_video side.
 func RunnerCapabilities(runner VideoRunner) VeoCapabilities {
 	return veo.RunnerCapabilities(runner)
 }
 
-// ClassifyVeoRequest は、このリクエストが Veo のどの生成機能で解釈されるかを判定します。
-// adapter のリクエスト本文構築と filter のプロンプト・尺選択が同じ判定を共有するための
-// 唯一の分岐点で、優先順位は次のとおりです:
+// ClassifyVeoRequest decides which Veo generation feature interprets this request.
+// It is the single branch point shared by the adapter's request-body construction and the
+// filter's prompt and duration choice, with this priority:
 //
-//  1. video_extension — usePreviousVideo が有効で、PreviousVideoURI が gs:// 参照のとき。
-//     Veo は video と referenceImages / image を併用できないため、以降の画像参照は
-//     すべて無視されます。
-//  2. reference_to_video — 参照画像 URI が1つ以上あり、モデルが referenceImages に
-//     対応しているとき。
-//  3. frames_to_video — 開始フレーム（ImageReference または InputImage）と
-//     LastFrameReference が両方あり、モデルが lastFrame に対応しているとき
-//     （Veo の lastFrame は image とセットでのみ有効）。
-//  4. image_to_video — それ以外すべて。
+//  1. video_extension — when usePreviousVideo is on and PreviousVideoURI is a gs:// reference.
+//     Veo cannot combine video with referenceImages / image, so every later image reference is
+//     ignored.
+//  2. reference_to_video — when there is at least one reference image URI and the model supports
+//     referenceImages.
+//  3. frames_to_video — when both a start frame (ImageReference or InputImage) and
+//     LastFrameReference exist and the model supports lastFrame
+//     (Veo's lastFrame is valid only together with image).
+//  4. image_to_video — everything else.
 func ClassifyVeoRequest(req VideoGenerationRequest, usePreviousVideo bool, caps VeoCapabilities) VeoGenerationMode {
 	return veo.ClassifyRequest(req, usePreviousVideo, caps)
 }
 
-// VeoModelCapabilities は、Veo のモデル名からオプション機能への対応を導出します。
-// モデル名→対応機能の規則はライブラリ側が唯一の定義元です。
+// VeoModelCapabilities derives support for optional features from a Veo model name.
+// The library is the single definition of the model name → feature rule.
 func VeoModelCapabilities(model string) VeoCapabilities {
 	return veo.ModelCapabilities(model)
 }

@@ -137,14 +137,14 @@ func TestCapCutsTotalDuration(t *testing.T) {
 		t.Fatalf("capped cuts = %d, want 7 (7*8=56s <= 60s)", len(capped))
 	}
 
-	// 56s + 4s = 60s ちょうどは収まる。
+	// 56s + 4s = exactly 60s fits.
 	cuts = append(cuts[:7], video.Cut{CutIndex: 8, DurationSec: 4})
 	capped = veo.CapCutsTotalDuration(cuts, 60)
 	if len(capped) != 8 {
 		t.Fatalf("capped cuts = %d, want 8 (56s+4s=60s)", len(capped))
 	}
 
-	// 上限超えの単独カットでも先頭は必ず残す。
+	// Even a single cut over the limit always keeps the first one.
 	capped = veo.CapCutsTotalDuration([]video.Cut{{CutIndex: 1, DurationSec: 90}}, 60)
 	if len(capped) != 1 {
 		t.Fatalf("capped cuts = %d, want 1 (first cut always kept)", len(capped))
@@ -198,7 +198,7 @@ func TestSectionSelectStepRejectsOutOfRangeSection(t *testing.T) {
 func TestSectionSelectStepRejectsEmptySection(t *testing.T) {
 	sectionIndex := 1
 	recipe := newSectionSelectRecipe()
-	recipe.Cuts = recipe.Cuts[:1] // サビのカットを取り除く
+	recipe.Cuts = recipe.Cuts[:1] // remove the サビ (chorus) cuts
 	sc := &Context{
 		Task: &domain.Task{
 			JobID:        "short-1",

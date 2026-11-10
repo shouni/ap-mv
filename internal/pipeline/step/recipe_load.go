@@ -1,5 +1,5 @@
-// Package step は、動画生成ワーカーのパイプラインを構成する各ステップ（Step）の
-// 実装を提供します。
+// Package step provides the implementations of the steps (Step) that make up the
+// video-generation worker's pipeline.
 package step
 
 import (
@@ -15,8 +15,7 @@ import (
 
 const maxRecipeJSONSize = 5 * 1024 * 1024
 
-// RecipeLoadStep は、タスクからレシピ（VideoRecipe/MusicRecipe）を読み込む
-// パイプラインの最初のステップです。
+// RecipeLoadStep is the pipeline's first step, loading the recipe (VideoRecipe/MusicRecipe)
 type RecipeLoadStep struct{}
 
 // Name returns the receiver name.
@@ -30,12 +29,12 @@ func (RecipeLoadStep) Execute(ctx context.Context, sc *Context) error {
 	if sc.VideoRecipe == nil {
 		sc.VideoRecipe = sc.Task.VideoRecipe
 	}
-	// レシピの入手経路は3通り（既存の VideoRecipe / ストレージからデコードした
-	// VideoRecipe / MusicRecipe からの変換）だが、いずれも最終的に sc.VideoRecipe を
-	// 確定させたうえで、末尾で一度だけタスク由来の audio_url / character_id を適用する。
+	// There are three ways the recipe arrives (an existing VideoRecipe / a VideoRecipe decoded from
+	// storage / converted from a MusicRecipe), but each settles sc.VideoRecipe and then applies the
+	// task's audio_url / character_id once at the end.
 	switch {
 	case sc.VideoRecipe != nil:
-		// 既に VideoRecipe を持っている。ドメインレシピが未設定なら派生させる。
+		// A VideoRecipe is already there. Derive the domain recipe if it is unset.
 		if sc.Recipe == nil {
 			recipe, err := toDomainRecipe(sc.VideoRecipe)
 			if err != nil {
@@ -44,7 +43,7 @@ func (RecipeLoadStep) Execute(ctx context.Context, sc *Context) error {
 			sc.Recipe = recipe
 		}
 	case sc.Recipe == nil:
-		// VideoRecipe も MusicRecipe も無いので RecipeURL から読み込む。
+		// Neither VideoRecipe nor MusicRecipe, so load from RecipeURL.
 		if strings.TrimSpace(sc.Task.RecipeURL) == "" {
 			return fmt.Errorf("recipe or recipe_url is required")
 		}
@@ -65,11 +64,11 @@ func (RecipeLoadStep) Execute(ctx context.Context, sc *Context) error {
 			}
 			sc.Recipe = recipe
 		} else {
-			// MusicRecipe をデコードした。下の変換ブロックで VideoRecipe を組む。
+			// Decoded a MusicRecipe. The conversion block below builds the VideoRecipe.
 			sc.Recipe = recipe
 		}
 	}
-	// ここまでで VideoRecipe が未確定なら（MusicRecipe 経路）変換して確定させる。
+	// If the VideoRecipe is still unsettled here (the MusicRecipe path), convert to settle it.
 	if sc.VideoRecipe == nil {
 		if err := domain.NormalizeMusicRecipe(sc.Recipe); err != nil {
 			return err
@@ -86,15 +85,16 @@ func (RecipeLoadStep) Execute(ctx context.Context, sc *Context) error {
 	return nil
 }
 
-// absolutizeKeyframeReferences は、元ジョブ相対で保存された keyframe_reference を
-// そのジョブのルートで絶対 URI 化します。
+// absolutizeKeyframeReferences makes keyframe_reference values stored relative to the original
+// job into absolute URIs from that job's root.
 //
-// 保存済みレシピは新しいジョブとして実行されるため、相対参照のままだと新ジョブの出力パスを
-// 基準に解決されて別のオブジェクト（たいていは存在しないもの）を指します。ここで直しておくのは、
-// 下流の CutKeyframeRunner が「keyframe_reference が空でない = 焼き直さない」で判断するためです。
-// 解決前に渡すと、指し先の壊れた参照をそのまま再利用してしまいます。
+// A stored recipe runs as a new job, so a relative reference would resolve against the new job's
+// output path and point at a different object (usually one that does not exist). It is fixed here
+// because the downstream CutKeyframeRunner decides "non-empty keyframe_reference = do not
+// re-render". Passing it on unresolved would reuse a reference whose target is broken.
 //
-// base が空（レシピ JSON を直接渡された場合など）や、すでにスキーム付きの参照はそのままです。
+// An empty base (when recipe JSON is passed directly, for example) and references that already
+// have a scheme are left as they are.
 func absolutizeKeyframeReferences(recipe *video.Recipe, base string) {
 	if recipe == nil || base == "" {
 		return

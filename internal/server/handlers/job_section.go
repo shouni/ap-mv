@@ -14,17 +14,17 @@ import (
 	"github.com/shouni/go-serve-kit/respond"
 )
 
-// GenerateSectionVideo は、指定セクションのカットだけを「キーフレーム → 動画」の順に生成し、
-// 結果を**元のジョブへ書き戻す**タスクを投入します。
+// GenerateSectionVideo enqueues a task that generates only the given section's cuts in the order
+// "keyframes → video" and **writes the result back to the original job**.
 //
-// 履歴詳細の「動画生成（target=セクション）」との違いは出力先です。あちらは 60 秒に収めた
-// 独立したショート動画を新しいジョブとして作りますが、こちらは 1 本の MV を 1 セクションずつ
-// 積み上げる操作で、同じジョブのレシピが少しずつ埋まっていきます。台本だけのジョブから
-// セクション 1 で画作りを確かめ、良ければ次へ進む、という進め方ができます。
+// It differs from the history detail's "video generation (target=section)" in where it writes.
+// That one makes a standalone short fitted into 60 seconds as a new job; this one builds one MV up
+// a section at a time, filling in the same job's recipe bit by bit. From a script-only job you can
+// check the visuals on section 1 and move on if they look right.
 //
-// 結合（final_video_url の作成）は行いません。セクションを 1 つ焼くたびに結合し直すと、
-// 完成品と途中経過が同じ URL で見分けられなくなるためです。全セクションが揃ったら
-// Finalize で 1 本にまとめます。
+// It does not join (create final_video_url). Re-joining every time a section is rendered would make
+// the finished piece and work in progress indistinguishable under the same URL. Once every section
+// is in place, Finalize puts them into one.
 func (h *Handler) GenerateSectionVideo(w http.ResponseWriter, r *http.Request) {
 	jobID, sectionIndex, err := parseJobIDAndSectionIndex(r)
 	if err != nil {
@@ -40,14 +40,14 @@ func (h *Handler) GenerateSectionVideo(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, http.StatusNotFound, "section not found")
 		return
 	}
-	// 投入前に確認しておく。ここで弾かないと、何も生成しないまま失敗したジョブとしてしか現れない。
+	// Check before enqueueing. Without rejecting here, it would only show up as a job that failed having generated nothing.
 	if len(group.Cuts) == 0 {
 		respond.Error(w, r, http.StatusBadRequest, "section has no cuts to generate")
 		return
 	}
-	// タスク自身の JobID は Cloud Tasks のタスク名を衝突させないため新規に採番します。
-	// 成果物の保存先は OriginalJobOutputFilter が元ジョブへ戻すため、ここでの採番は
-	// キューの都合だけで、GCS 上に新しいジョブのディレクトリが生えることはありません。
+	// The task's own JobID is newly minted so Cloud Tasks task names never collide. The artifacts'
+	// destination is pointed back at the original job by OriginalJobOutputFilter, so minting here is
+	// only for the queue's sake, and no new job directory appears on GCS.
 	newJobID, ok := mintJobID(w, r, "section-video")
 	if !ok {
 		return
@@ -58,8 +58,8 @@ func (h *Handler) GenerateSectionVideo(w http.ResponseWriter, r *http.Request) {
 		RecipeURL:    history.StorageURI,
 		SectionIndex: &sectionIndex,
 		VeoModel:     h.veoModelFromForm(r),
-		// アスペクト比はキーフレーム作成時に1回だけ決まった値を必ず引き継ぎます
-		// （RegenerateCutVideo と同じ理由）。
+		// The aspect ratio always carries over the value decided once when the keyframes were made
+		// (the same reason as RegenerateCutVideo).
 		VeoAspectRatio: history.AspectRatio,
 		OriginalJobID:  jobID,
 		CreatedAt:      time.Now().UTC(),
@@ -67,8 +67,8 @@ func (h *Handler) GenerateSectionVideo(w http.ResponseWriter, r *http.Request) {
 	h.enqueue(w, r, task)
 }
 
-// Finalize は、生成済みカットの動画を1本の完成動画へ結合するタスクを投入します。
-// 生成は行わないため追加の課金は発生せず、section_video で積み上げた結果の仕上げに使います。
+// Finalize enqueues a task that joins the generated cuts' videos into one finished video.
+// It generates nothing, so there is no extra charge; it finishes what section_video built up.
 func (h *Handler) Finalize(w http.ResponseWriter, r *http.Request) {
 	jobID := strings.TrimSpace(chi.URLParam(r, "jobID"))
 	if err := jobid.Validate(jobID); err != nil {

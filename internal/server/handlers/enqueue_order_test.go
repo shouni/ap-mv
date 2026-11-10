@@ -14,10 +14,10 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// orderLog は、状態の記録と投入がどの順で呼ばれたかを 1 本の列に残します。
+// orderLog keeps, in one sequence, the order in which status records and enqueues were called.
 type orderLog struct{ events []string }
 
-// orderedStatusStore は JobStatusStore のフェイクで、Save / Delete を orderLog へ流します。
+// orderedStatusStore is a JobStatusStore fake that feeds Save / Delete into orderLog.
 type orderedStatusStore struct{ log *orderLog }
 
 func (s orderedStatusStore) Save(_ context.Context, _ string, _ domain.JobStatus) error {
@@ -38,7 +38,7 @@ func (s orderedStatusStore) List(context.Context, int, int, ...jobstatus.ListOpt
 	return nil, domain.PageMeta{}, nil
 }
 
-// orderedQueue は TaskQueue のフェイクで、投入を orderLog へ流し、err があれば失敗します。
+// orderedQueue is a TaskQueue fake that feeds enqueues into orderLog and fails when err is set.
 type orderedQueue struct {
 	log *orderLog
 	err error
@@ -68,11 +68,11 @@ func orderTestTask() *domain.Task {
 	return &domain.Task{JobID: "job-1", Command: domain.CommandVideoRecipeDraft, Text: "歌詞"}
 }
 
-// TestEnqueueRecordsQueuedBeforeEnqueue は、queued の記録が投入より先であることを固定します。
+// TestEnqueueRecordsQueuedBeforeEnqueue pins that the queued record comes before the enqueue.
 //
-// Cloud Tasks は数十ミリ秒で届くため、逆順だと Worker が書いた running を遅れてきた
-// queued が上書きし、実行中のジョブが履歴では受付済みのまま止まって見えます
-// （public-docs のワーカー規約 2.1）。
+// Cloud Tasks delivers within tens of milliseconds, so in the reverse order a late queued
+// overwrites the running the worker wrote, and a running job looks stuck at accepted in history
+// (section 2.1 of the worker conventions in public-docs).
 func TestEnqueueRecordsQueuedBeforeEnqueue(t *testing.T) {
 	log := &orderLog{}
 	h := newOrderTestHandler(t, log, nil)
@@ -89,9 +89,9 @@ func TestEnqueueRecordsQueuedBeforeEnqueue(t *testing.T) {
 	}
 }
 
-// TestEnqueueDiscardsQueuedWhenEnqueueFails は、投入に失敗したジョブが履歴に残らないことを
-// 固定します。queued の記録を先に書く以上、積めなかったときは取り消さないと
-// 誰も処理しない行が一覧に並びます。
+// TestEnqueueDiscardsQueuedWhenEnqueueFails pins that a job that failed to enqueue does not stay
+// in history. Since the queued record is written first, it must be withdrawn when the task could
+// not be queued, or rows nobody will process line up in the listing.
 func TestEnqueueDiscardsQueuedWhenEnqueueFails(t *testing.T) {
 	log := &orderLog{}
 	h := newOrderTestHandler(t, log, errors.New("queue unavailable"))

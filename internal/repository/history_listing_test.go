@@ -8,8 +8,8 @@ import (
 	"github.com/shouni/ap-mv/internal/domain"
 )
 
-// newMappingTestRepository は、変換だけを見るためのリポジトリを返します。
-// 保存先の組み立てに BaseURI だけが要り、ストレージへは触れません。
+// newMappingTestRepository returns a repository for looking only at the conversion.
+// Building storage locations needs only BaseURI; storage is never touched.
 func newMappingTestRepository() *VideoHistoryRepository {
 	return NewVideoHistoryRepository(VideoHistoryRepositoryConfig{BaseURI: "gs://bucket/jobs"})
 }
@@ -75,7 +75,7 @@ func TestVideoHistoryFromRecipeSumsGeneratedSeconds(t *testing.T) {
 	if got.GeneratedSeconds != 8 {
 		t.Errorf("GeneratedSeconds = %v, want 8 (the pending cut never reached Veo)", got.GeneratedSeconds)
 	}
-	// 単価はリポジトリの責務ではない。キャッシュへ焼き込まないことをここで固定する。
+	// The price is not the repository's responsibility. This pins that it is not baked into the cache.
 	if got.Cost.HasCost() {
 		t.Errorf("Cost = %+v, want it left empty for the handler to fill from config", got.Cost)
 	}

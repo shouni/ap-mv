@@ -1,5 +1,5 @@
 {{define "content"}}
-<!-- 削除は fetch で送るため、フォームの外からも読める形で CSRF トークンを置きます。 -->
+<!-- Delete is sent via fetch, so the CSRF token is placed where it can be read from outside the form. -->
 <input type="hidden" id="csrf_token" value="{{.CSRFToken}}">
 <div class="card border-0 shadow-sm">
     <div class="card-body p-4">
@@ -62,10 +62,10 @@
                         {{if .Progress.TotalCuts}}
                         <a class="btn btn-sm btn-primary" href="/jobs/{{.JobID}}">Detail</a>
                         {{else}}
-                        {{/* カットが 1 つも無いジョブ。詳細は video_music_meta.json を読むので開けません
-                             （成果物を 1 つも残せずに失敗したジョブ、投入直後のジョブがこれです）。
-                             残っている情報は状態と失敗理由だけで、どちらもこの行に出ています。
-                             ここに口を置かないと、画面からは二度と消せません。 */}}
+                        {{/* A job with no cuts at all. Its detail reads video_music_meta.json, so it cannot be opened
+                             (jobs that failed without leaving any artifact, and jobs just submitted, are these).
+                             What remains is the state and the failure reason, both shown in this row.
+                             Without an entrance here, it could never be removed from the UI. */}}
                         <button type="button" class="btn btn-sm btn-outline-danger"
                                 data-delete-url="/jobs/{{.JobID}}"
                                 data-delete-confirm="Delete job {{.JobID}}? (成果物は残っていません)">Delete</button>
