@@ -136,7 +136,7 @@ func (f VideoGenerationStep) runDirect(ctx context.Context, sc *Context) error {
 
 	if _, err := timeline.Run(ctx, sc.VideoRecipe); err != nil {
 		// Stopping after dispatching a continuation task is not a failure. Run wraps the observer's
-		// error as "stopped while post-processing cut N", so returning it as-is would record a failure
+		// error as "cut N: stopped in post-processing", so returning it as-is would record a failure
 		// and mark the job failed even though a continuation task will resume it. Return only the marker.
 		if errors.Is(err, ErrPipelineDeferred) {
 			return ErrPipelineDeferred
