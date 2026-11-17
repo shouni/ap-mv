@@ -9,7 +9,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/shouni/gcp-kit v1.21.4
 	github.com/shouni/genai-kit v1.8.2
-	github.com/shouni/go-character-kit v1.3.2
+	github.com/shouni/go-character-kit v1.4.0
 	github.com/shouni/go-http-kit v1.13.6
 	github.com/shouni/go-notify v1.6.6
 	github.com/shouni/go-prompt-kit v1.7.3
