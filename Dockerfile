@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/main ./main.go
 
 # A statically linked ffmpeg binary (no shell or shared-library dependencies).
 # Only this one binary is copied into the scratch-based final image.
-FROM mwader/static-ffmpeg:9.0 AS ffmpeg
+FROM mwader/static-ffmpeg:9.1 AS ffmpeg
 
 FROM scratch
 
