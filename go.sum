@@ -149,8 +149,8 @@ github.com/shouni/go-serve-kit v1.3.1 h1:JZ8P1KyFIJfGbsug0SbA5yglSz2UiuH1/I5tY39
 github.com/shouni/go-serve-kit v1.3.1/go.mod h1:Mmy3q40YTCejIKYcKqid+7xfQBkcMz/OtdVo1wPAxlQ=
 github.com/shouni/go-utils v1.8.2 h1:L4c9In0R/0Iqb4BNmPhLHuhW4lD42ESHs7z/9VCBsvA=
 github.com/shouni/go-utils v1.8.2/go.mod h1:z35gD3jCEREuezx2ZnVk44XbJoN0GF35OACYlbrxcAc=
-github.com/shouni/go-veo-orchestrator v1.16.15 h1:AQzt2l47nm6PH0V1FNMvk3FDAXYX2vA0ghk+x9Bcq/s=
-github.com/shouni/go-veo-orchestrator v1.16.15/go.mod h1:97WS7z/kiB3+WuJUbblmZi0LpDuEqGHBMNSmNzJMwPM=
+github.com/shouni/go-veo-orchestrator v1.16.16 h1:Sdy1FJKnG7xxajyxdcwkZGCyJgRscs/bsri+X277V90=
+github.com/shouni/go-veo-orchestrator v1.16.16/go.mod h1:zt/w6AwQHc1NGeEZXt4v8BUgFstg2Jr3xK/JfF+nJJg=
 github.com/shouni/netarmor v1.4.4 h1:NTLJvCOYRLmIX4BwELTIWpRBW3Or1bXfcNrobXsuJ60=
 github.com/shouni/netarmor v1.4.4/go.mod h1:BeqmhJtYfJ4bw0OpT5pu4HUXHkHHY6y5Wu0BDjsyr28=
 github.com/spiffe/go-spiffe/v2 v2.9.0 h1:g5qTg3qIP1HXV+GzuyEfSJFVxUCpEP5Ui1OINVJHPB4=
