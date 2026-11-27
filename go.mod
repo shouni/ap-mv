@@ -16,7 +16,7 @@ require (
 	github.com/shouni/go-remote-io v1.13.22
 	github.com/shouni/go-serve-kit v1.3.1
 	github.com/shouni/go-utils v1.8.2
-	github.com/shouni/go-veo-orchestrator v1.16.15
+	github.com/shouni/go-veo-orchestrator v1.16.16
 	github.com/shouni/netarmor v1.4.4
 	golang.org/x/sync v0.25.0
 )
